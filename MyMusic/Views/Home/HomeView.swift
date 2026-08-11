@@ -4,6 +4,8 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @State private var isRecentTracksExpanded = false
+    @State private var isFavoriteTracksExpanded = false
 
     private var recentTracks: [Track] {
         playbackHistoryStore.recentTracks(from: libraryStore.tracks, limit: 10)
@@ -36,7 +38,7 @@ struct HomeView: View {
 
     private var libraryContent: some View {
         List {
-            Section("最近再生した曲") {
+            Section {
                 if recentTracks.isEmpty {
                     ContentUnavailableView(
                         "再生履歴はありません",
@@ -44,11 +46,20 @@ struct HomeView: View {
                         description: Text("再生した曲がここに表示されます。")
                     )
                 } else {
-                    trackButtons(recentTracks)
+                    trackButtons(
+                        isRecentTracksExpanded ? recentTracks : Array(recentTracks.prefix(3)),
+                        queue: recentTracks
+                    )
                 }
+            } header: {
+                expandableSectionHeader(
+                    title: "最近再生した曲",
+                    isExpanded: $isRecentTracksExpanded,
+                    showsButton: recentTracks.count > 3
+                )
             }
 
-            Section("お気に入り") {
+            Section {
                 if favoriteTracks.isEmpty {
                     ContentUnavailableView(
                         "お気に入りはありません",
@@ -56,8 +67,17 @@ struct HomeView: View {
                         description: Text("お気に入りに追加した曲がここに表示されます。")
                     )
                 } else {
-                    trackButtons(favoriteTracks)
+                    trackButtons(
+                        isFavoriteTracksExpanded ? favoriteTracks : Array(favoriteTracks.prefix(3)),
+                        queue: favoriteTracks
+                    )
                 }
+            } header: {
+                expandableSectionHeader(
+                    title: "お気に入り",
+                    isExpanded: $isFavoriteTracksExpanded,
+                    showsButton: favoriteTracks.count > 3
+                )
             }
 
 
@@ -76,10 +96,33 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func trackButtons(_ tracks: [Track]) -> some View {
+    private func expandableSectionHeader(
+        title: String,
+        isExpanded: Binding<Bool>,
+        showsButton: Bool
+    ) -> some View {
+        HStack {
+            Text(title)
+
+            Spacer()
+
+            if showsButton {
+                Button(isExpanded.wrappedValue ? "閉じる" : "すべて表示") {
+                    isExpanded.wrappedValue.toggle()
+                }
+                .textCase(nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func trackButtons(_ tracks: [Track], queue: [Track]? = nil) -> some View {
+        let queueTracks = queue ?? tracks
+
         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
             Button {
-                playerStore.playQueue(tracks, startingAt: index)
+                let queueIndex = queueTracks.firstIndex(where: { $0.id == track.id }) ?? index
+                playerStore.playQueue(queueTracks, startingAt: queueIndex)
             } label: {
                 TrackRowView(track: track)
                     .contentShape(Rectangle())
