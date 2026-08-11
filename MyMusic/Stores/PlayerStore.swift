@@ -66,7 +66,7 @@ final class PlayerStore {
         playbackHistoryStore: PlaybackHistoryStore? = nil,
         nowPlayingService: NowPlayingServicing? = nil,
         remoteCommandService: RemoteCommandServicing? = nil,
-        audioInformationService: AudioInformationServicing? = AudioInformationService()
+        audioInformationService: AudioInformationServicing?
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
@@ -90,6 +90,21 @@ final class PlayerStore {
             seek: { [weak self] time in self?.seek(to: time) }
         ))
         updateRemoteCommandAvailability()
+    }
+
+    convenience init(
+        audioPlayer: AudioPlayerServicing? = nil,
+        playbackHistoryStore: PlaybackHistoryStore? = nil,
+        nowPlayingService: NowPlayingServicing? = nil,
+        remoteCommandService: RemoteCommandServicing? = nil
+    ) {
+        self.init(
+            audioPlayer: audioPlayer,
+            playbackHistoryStore: playbackHistoryStore,
+            nowPlayingService: nowPlayingService,
+            remoteCommandService: remoteCommandService,
+            audioInformationService: AudioInformationService()
+        )
     }
 
     /// Starts a one-item queue for callers that do not provide playback context.
