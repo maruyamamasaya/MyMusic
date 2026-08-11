@@ -14,43 +14,49 @@ struct PlaybackControlsView: View {
     let onRepeat: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            HStack(spacing: 36) {
-                Button("Previous", systemImage: "backward.end.fill", action: onPrevious)
-                    .disabled(!canGoPrevious || isLoading)
+        HStack {
+            Button("Shuffle", systemImage: "shuffle", action: onShuffle)
+                .foregroundStyle(isShuffleEnabled ? Color.accentColor : Color.secondary)
+                .accessibilityValue(isShuffleEnabled ? "On" : "Off")
 
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.large)
-                        .frame(width: 64, height: 64)
-                        .accessibilityLabel("Loading audio")
-                } else {
-                    Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
-                        onPlayPause()
-                    }
-                    .font(.system(size: 64))
-                    .contentTransition(.symbolEffect(.replace))
-                    .accessibilityLabel(isPlaying ? "Pause" : "Play")
+            Spacer()
+
+            Button("Previous", systemImage: "backward.end.fill", action: onPrevious)
+                .font(.system(size: 27))
+                .disabled(!canGoPrevious || isLoading)
+
+            Spacer()
+
+            if isLoading {
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(width: 62, height: 62)
+                    .accessibilityLabel("Loading audio")
+            } else {
+                Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
+                    onPlayPause()
                 }
-
-                Button("Next", systemImage: "forward.end.fill", action: onNext)
-                    .disabled(!canGoNext || isLoading)
+                .font(.system(size: 62))
+                .contentTransition(.symbolEffect(.replace))
+                .accessibilityLabel(isPlaying ? "Pause" : "Play")
             }
-            .font(.title)
 
-            HStack {
-                Button("Shuffle", systemImage: "shuffle", action: onShuffle)
-                    .foregroundStyle(isShuffleEnabled ? Color.accentColor : Color.secondary)
-                    .accessibilityValue(isShuffleEnabled ? "On" : "Off")
-                Spacer()
-                Button(repeatLabel, systemImage: repeatSymbol, action: onRepeat)
-                    .foregroundStyle(repeatMode == .off ? Color.secondary : Color.accentColor)
-                    .accessibilityValue(repeatLabel)
-            }
-            .font(.title3)
+            Spacer()
+
+            Button("Next", systemImage: "forward.end.fill", action: onNext)
+                .font(.system(size: 27))
+                .disabled(!canGoNext || isLoading)
+
+            Spacer()
+
+            Button(repeatLabel, systemImage: repeatSymbol, action: onRepeat)
+                .foregroundStyle(repeatMode == .off ? Color.secondary : Color.accentColor)
+                .accessibilityValue(repeatLabel)
         }
+        .font(.system(size: 20))
         .labelStyle(.iconOnly)
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 
     private var repeatSymbol: String {
