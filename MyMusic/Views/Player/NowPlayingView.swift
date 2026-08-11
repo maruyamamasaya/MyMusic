@@ -54,6 +54,10 @@ struct NowPlayingView: View {
                         onSeek: playerStore.seek
                     )
 
+                    if playerStore.currentTrack != nil {
+                        AudioInformationView(information: playerStore.audioInformation)
+                    }
+
                     PlaybackControlsView(
                         isPlaying: playerStore.isPlaying,
                         isLoading: playerStore.isLoading,
@@ -88,5 +92,42 @@ struct NowPlayingView: View {
                 QueueView()
             }
         }
+    }
+}
+
+private struct AudioInformationView: View {
+    let information: AudioInformation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("オーディオ情報")
+                .font(.headline)
+            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 6) {
+                row("コーデック", information.codec)
+                row("サンプルレート", rate(information.sampleRate))
+                row("ビット深度", information.bitDepth.map { "\($0) bit" } ?? "Unknown")
+                row("ビットレート", information.bitRate.map { "\($0 / 1_000) kbps" } ?? "Unknown")
+                row("チャンネル", information.channels.map(String.init) ?? "Unknown")
+                row("出力先", information.outputName)
+                row("出力サンプルレート", rate(information.outputSampleRate))
+            }
+            .font(.subheadline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    @ViewBuilder
+    private func row(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).lineLimit(1).minimumScaleFactor(0.8)
+        }
+    }
+
+    private func rate(_ value: Double?) -> String {
+        guard let value else { return "Unknown" }
+        return String(format: "%.1f kHz", value / 1_000)
     }
 }

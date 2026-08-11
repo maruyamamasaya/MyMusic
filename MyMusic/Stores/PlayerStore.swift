@@ -29,6 +29,7 @@ final class PlayerStore {
     private(set) var playbackOrder: [Int] = []
     private(set) var isShuffleEnabled = false
     private(set) var repeatMode: RepeatMode = .off
+    private(set) var audioInformation = AudioInformation.unknown
 
     var hasNext: Bool {
         guard currentPlaybackPosition != nil else { return false }
@@ -50,7 +51,9 @@ final class PlayerStore {
     private let playbackHistoryStore: PlaybackHistoryStore
     private let nowPlayingService: NowPlayingServicing
     private let remoteCommandService: RemoteCommandServicing
+    private let audioInformationService: AudioInformationServicing?
     private var playbackTask: Task<Void, Never>?
+    private var audioInformationTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
     private var hasRecordedPlaybackStart = false
     private var hasCountedCurrentPlay = false
@@ -62,15 +65,21 @@ final class PlayerStore {
         audioPlayer: AudioPlayerServicing? = nil,
         playbackHistoryStore: PlaybackHistoryStore? = nil,
         nowPlayingService: NowPlayingServicing? = nil,
-        remoteCommandService: RemoteCommandServicing? = nil
+        remoteCommandService: RemoteCommandServicing? = nil,
+        audioInformationService: AudioInformationServicing? = AudioInformationService()
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
         self.playbackHistoryStore = playbackHistoryStore ?? PlaybackHistoryStore()
         self.nowPlayingService = nowPlayingService ?? NowPlayingService()
         self.remoteCommandService = remoteCommandService ?? RemoteCommandService()
+        self.audioInformationService = audioInformationService
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
+        }
+        self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate in
+            self?.audioInformation.outputName = name
+            self?.audioInformation.outputSampleRate = sampleRate
         }
         self.remoteCommandService.configure(actions: RemoteCommandActions(
             play: { [weak self] in self?.resume() },
@@ -181,13 +190,16 @@ final class PlayerStore {
 
     func stop() {
         playbackTask?.cancel()
+        audioInformationTask?.cancel()
         playbackTask = nil
+        audioInformationTask = nil
         playbackRequestID = UUID()
         audioPlayer.stop()
         queue = []
         playbackOrder = []
         currentIndex = nil
         currentTrack = nil
+        audioInformation = .unknown
         isPlaying = false
         currentTime = 0
         duration = 0
@@ -205,6 +217,7 @@ final class PlayerStore {
         let track = queue[index]
         currentIndex = index
         currentTrack = track
+        loadAudioInformation(for: track)
         resetPlaybackSession()
         currentTime = 0
         duration = track.duration
@@ -235,6 +248,17 @@ final class PlayerStore {
         let requestID = UUID()
         playbackRequestID = requestID
         return requestID
+    }
+
+    private func loadAudioInformation(for track: Track) {
+        audioInformationTask?.cancel()
+        audioInformation = .unknown
+        guard let audioInformationService else { return }
+        audioInformationTask = Task { [weak self] in
+            let information = await audioInformationService.information(for: track)
+            guard !Task.isCancelled, self?.currentTrack?.id == track.id else { return }
+            self?.audioInformation = information
+        }
     }
 
     private func rebuildPlaybackOrder(keepingCurrentIndex index: Int?) {
