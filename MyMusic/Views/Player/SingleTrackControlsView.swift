@@ -2,9 +2,6 @@ import SwiftUI
 
 struct SingleTrackControlsView: View {
     @Environment(PlayerStore.self) private var playerStore
-    @State private var seekValue: TimeInterval = 0
-    @State private var isSeeking = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -29,31 +26,11 @@ struct SingleTrackControlsView: View {
                 }
             }
 
-            Slider(
-                value: $seekValue,
-                in: 0...max(playerStore.duration, 1),
-                onEditingChanged: { editing in
-                    isSeeking = editing
-                    if !editing { playerStore.seek(to: seekValue) }
-                }
+            ProgressBarView(
+                currentTime: playerStore.currentTime,
+                duration: playerStore.duration,
+                onSeek: playerStore.seek
             )
-            .disabled(playerStore.duration <= 0)
-
-            HStack {
-                Text(TimeFormatter.string(from: isSeeking ? seekValue : playerStore.currentTime))
-                Spacer()
-                Text(TimeFormatter.string(from: playerStore.duration))
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-        }
-        .onAppear { seekValue = playerStore.currentTime }
-        .onChange(of: playerStore.currentTime) { _, newValue in
-            if !isSeeking { seekValue = newValue }
-        }
-        .onChange(of: playerStore.currentTrack?.id) { _, _ in
-            seekValue = 0
         }
     }
 }

@@ -6,28 +6,46 @@ struct NowPlayingView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
-                AlbumArtworkView(artworkIdentifier: playerStore.currentTrack?.artworkIdentifier)
-                    .frame(maxWidth: 320)
+            ScrollView {
+                VStack(spacing: 28) {
+                    AlbumArtworkView(artworkIdentifier: playerStore.currentTrack?.artworkIdentifier)
+                        .containerRelativeFrame(.horizontal) { availableWidth, _ in
+                            min(availableWidth * 0.82, 360)
+                        }
+                        .accessibilityLabel("Artwork for \(playerStore.currentTrack?.title ?? "current track")")
 
-                VStack(spacing: 6) {
-                    Text(playerStore.currentTrack?.title ?? "Not Playing")
-                        .font(.title2.bold())
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                    Text(playerStore.currentTrack?.artistName ?? "")
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(playerStore.currentTrack?.title ?? "Not Playing")
+                            .font(.title2.bold())
+                            .lineLimit(2)
+                        Text(playerStore.currentTrack?.artistName ?? "")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    ProgressBarView(
+                        currentTime: playerStore.currentTime,
+                        duration: playerStore.duration,
+                        onSeek: playerStore.seek
+                    )
+
+                    PlaybackControlsView(
+                        isPlaying: playerStore.isPlaying,
+                        isLoading: playerStore.isLoading,
+                        onPlayPause: playerStore.togglePlayPause
+                    )
                 }
-                Spacer()
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
             }
-            .padding()
             .navigationTitle("Now Playing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityLabel("Close Now Playing")
                 }
             }
         }

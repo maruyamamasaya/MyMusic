@@ -2,7 +2,28 @@ import SwiftUI
 
 struct PlaybackControlsView: View {
     let isPlaying: Bool
+    let isLoading: Bool
+    let onPlayPause: () -> Void
+
     var body: some View {
-        HStack { Button("Shuffle", systemImage: "shuffle") {}; Spacer(); Button("Previous", systemImage: "backward.fill") {}; Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {}.font(.largeTitle); Button("Next", systemImage: "forward.fill") {}; Spacer(); Button("Repeat", systemImage: "repeat") {} }.labelStyle(.iconOnly).buttonStyle(.plain)
+        HStack {
+            Spacer()
+            if isLoading {
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(width: 64, height: 64)
+                    .accessibilityLabel("Loading audio")
+            } else {
+                Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
+                    onPlayPause()
+                }
+                .labelStyle(.iconOnly)
+                .font(.system(size: 64))
+                .buttonStyle(.plain)
+                .contentTransition(.symbolEffect(.replace))
+                .accessibilityLabel(isPlaying ? "Pause" : "Play")
+            }
+            Spacer()
+        }
     }
 }
