@@ -10,9 +10,23 @@ final class PlayerStore {
     private(set) var duration: TimeInterval = 0
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    private(set) var queue: [Track] = []
+    private(set) var currentIndex: Int?
 
+    var hasNext: Bool {
+        guard let currentIndex else { return false }
+        return queue.indices.contains(currentIndex + 1)
+    }
+
+    var hasPrevious: Bool {
+        guard let currentIndex else { return false }
+        return currentTime > 0 || queue.indices.contains(currentIndex - 1)
+    }
+
+    private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
     private var playbackTask: Task<Void, Never>?
+    private var playbackRequestID = UUID()
 
     init(audioPlayer: AudioPlayerServicing? = nil) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
@@ -22,26 +36,47 @@ final class PlayerStore {
         }
     }
 
+    /// Starts a one-item queue for callers that do not provide playback context.
     func play(_ track: Track) {
-        playbackTask?.cancel()
-        currentTrack = track
-        currentTime = 0
-        duration = track.duration
-        isPlaying = false
-        isLoading = true
-        errorMessage = nil
+        playQueue([track], startingAt: 0)
+    }
 
-        playbackTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await audioPlayer.play(track)
-            } catch is CancellationError {
-                return
-            } catch {
-                isPlaying = false
-                errorMessage = error.localizedDescription
-            }
-            isLoading = false
+    func playQueue(_ tracks: [Track], startingAt index: Int) {
+        guard tracks.indices.contains(index) else {
+            if tracks.isEmpty { stop() }
+            return
+        }
+        queue = tracks
+        startPlayback(at: index)
+    }
+
+    func playQueue(_ tracks: [Track], startingWith track: Track) {
+        guard let index = tracks.firstIndex(where: { $0.id == track.id }) else { return }
+        playQueue(tracks, startingAt: index)
+    }
+
+    func playQueueItem(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        startPlayback(at: index)
+    }
+
+    func next() {
+        guard let currentIndex else { return }
+        let nextIndex = currentIndex + 1
+        guard queue.indices.contains(nextIndex) else {
+            audioPlayer.pause()
+            isPlaying = false
+            return
+        }
+        startPlayback(at: nextIndex)
+    }
+
+    func previous() {
+        guard let currentIndex else { return }
+        if currentTime >= previousRestartThreshold || !queue.indices.contains(currentIndex - 1) {
+            seek(to: 0)
+        } else {
+            startPlayback(at: currentIndex - 1)
         }
     }
 
@@ -52,6 +87,7 @@ final class PlayerStore {
     func resume() {
         guard currentTrack != nil else { return }
         playbackTask?.cancel()
+        let requestID = beginPlaybackRequest()
         isLoading = true
         errorMessage = nil
         playbackTask = Task { [weak self] in
@@ -61,10 +97,11 @@ final class PlayerStore {
             } catch is CancellationError {
                 return
             } catch {
+                guard playbackRequestID == requestID else { return }
                 isPlaying = false
                 errorMessage = error.localizedDescription
             }
-            isLoading = false
+            if playbackRequestID == requestID { isLoading = false }
         }
     }
 
@@ -79,7 +116,10 @@ final class PlayerStore {
     func stop() {
         playbackTask?.cancel()
         playbackTask = nil
+        playbackRequestID = UUID()
         audioPlayer.stop()
+        queue = []
+        currentIndex = nil
         currentTrack = nil
         isPlaying = false
         currentTime = 0
@@ -88,6 +128,40 @@ final class PlayerStore {
     }
 
     func dismissError() { errorMessage = nil }
+
+    private func startPlayback(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        playbackTask?.cancel()
+        let requestID = beginPlaybackRequest()
+        let track = queue[index]
+        currentIndex = index
+        currentTrack = track
+        currentTime = 0
+        duration = track.duration
+        isPlaying = false
+        isLoading = true
+        errorMessage = nil
+
+        playbackTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await audioPlayer.play(track)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard playbackRequestID == requestID else { return }
+                isPlaying = false
+                errorMessage = error.localizedDescription
+            }
+            if playbackRequestID == requestID { isLoading = false }
+        }
+    }
+
+    private func beginPlaybackRequest() -> UUID {
+        let requestID = UUID()
+        playbackRequestID = requestID
+        return requestID
+    }
 
     private func handle(_ event: AudioPlaybackEvent) {
         switch event {
@@ -101,6 +175,7 @@ final class PlayerStore {
         case .ended:
             isPlaying = false
             currentTime = duration
+            next()
         case let .failed(message):
             isPlaying = false
             isLoading = false

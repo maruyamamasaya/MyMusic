@@ -17,9 +17,9 @@ struct SongsView: View {
             }
 
             Section("Songs") {
-                ForEach(tracks) { track in
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     Button {
-                        playerStore.play(track)
+                        playerStore.playQueue(tracks, startingAt: index)
                     } label: {
                         HStack(spacing: 8) {
                             if playerStore.currentTrack?.id == track.id {

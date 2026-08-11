@@ -3,6 +3,7 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(\.dismiss) private var dismiss
+    @State private var isQueuePresented = false
 
     var body: some View {
         NavigationStack {
@@ -34,8 +35,17 @@ struct NowPlayingView: View {
                     PlaybackControlsView(
                         isPlaying: playerStore.isPlaying,
                         isLoading: playerStore.isLoading,
-                        onPlayPause: playerStore.togglePlayPause
+                        canGoPrevious: playerStore.hasPrevious,
+                        canGoNext: playerStore.hasNext,
+                        onPrevious: playerStore.previous,
+                        onPlayPause: playerStore.togglePlayPause,
+                        onNext: playerStore.next
                     )
+
+                    Button("Show Queue", systemImage: "list.bullet") {
+                        isQueuePresented = true
+                    }
+                    .buttonStyle(.bordered)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
@@ -47,6 +57,9 @@ struct NowPlayingView: View {
                     Button("Done") { dismiss() }
                         .accessibilityLabel("Close Now Playing")
                 }
+            }
+            .sheet(isPresented: $isQueuePresented) {
+                QueueView()
             }
         }
     }

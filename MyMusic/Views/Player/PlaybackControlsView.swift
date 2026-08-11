@@ -3,11 +3,17 @@ import SwiftUI
 struct PlaybackControlsView: View {
     let isPlaying: Bool
     let isLoading: Bool
+    let canGoPrevious: Bool
+    let canGoNext: Bool
+    let onPrevious: () -> Void
     let onPlayPause: () -> Void
+    let onNext: () -> Void
 
     var body: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: 36) {
+            Button("Previous", systemImage: "backward.end.fill", action: onPrevious)
+                .disabled(!canGoPrevious || isLoading)
+
             if isLoading {
                 ProgressView()
                     .controlSize(.large)
@@ -17,13 +23,16 @@ struct PlaybackControlsView: View {
                 Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
                     onPlayPause()
                 }
-                .labelStyle(.iconOnly)
                 .font(.system(size: 64))
-                .buttonStyle(.plain)
                 .contentTransition(.symbolEffect(.replace))
                 .accessibilityLabel(isPlaying ? "Pause" : "Play")
             }
-            Spacer()
+
+            Button("Next", systemImage: "forward.end.fill", action: onNext)
+                .disabled(!canGoNext || isLoading)
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.plain)
+        .font(.title)
     }
 }
