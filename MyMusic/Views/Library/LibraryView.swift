@@ -8,22 +8,22 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Music Library") {
+                Section("音楽ライブラリ") {
                     if libraryStore.hasLibraryFolder {
-                        Label(libraryStore.selectedFolderName ?? "Music Folder", systemImage: "folder")
+                        Label(libraryStore.selectedFolderName ?? "音楽フォルダ", systemImage: "folder")
                     } else {
                         ContentUnavailableView(
-                            "No Music Folder Selected",
+                            "音楽フォルダが未選択です",
                             systemImage: "folder.badge.questionmark",
-                            description: Text("Choose the Artists folder from Files or iCloud Drive.")
+                            description: Text("“ファイル”またはiCloud Driveから、読み込みたい音楽フォルダを選択してください。")
                         )
                     }
 
                     if libraryStore.isLoading {
                         VStack(alignment: .leading, spacing: 8) {
                             ProgressView()
-                            Text("Scanning Music Library…")
-                            Text("\(libraryStore.scanProgress) tracks currently in library")
+                            Text("音楽ライブラリを読み込み中…")
+                            Text("現在 \(libraryStore.scanProgress) 曲")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -31,29 +31,29 @@ struct LibraryView: View {
                 }
 
                 if libraryStore.hasLibraryFolder {
-                    Section("Browse") {
-                        NavigationLink(value: LibraryDestination.songs) { countRow("Songs", systemImage: "music.note", count: libraryStore.tracks.count) }
-                        NavigationLink(value: LibraryDestination.albums) { countRow("Albums", systemImage: "square.stack", count: libraryStore.albums.count) }
-                        NavigationLink(value: LibraryDestination.artists) { countRow("Artists", systemImage: "music.mic", count: libraryStore.artists.count) }
+                    Section("ライブラリ") {
+                        NavigationLink(value: LibraryDestination.songs) { countRow("曲", systemImage: "music.note", count: libraryStore.tracks.count) }
+                        NavigationLink(value: LibraryDestination.albums) { countRow("アルバム", systemImage: "square.stack", count: libraryStore.albums.count) }
+                        NavigationLink(value: LibraryDestination.artists) { countRow("アーティスト", systemImage: "music.mic", count: libraryStore.artists.count) }
                     }
 
                     Section {
-                        Button("Rescan Library", systemImage: "arrow.clockwise") {
+                        Button("ライブラリを再読み込み", systemImage: "arrow.clockwise") {
                             Task { await libraryStore.rescan() }
                         }
                         .disabled(libraryStore.isLoading)
-                        Button("Change Music Folder", systemImage: "folder.badge.gearshape") {
+                        Button("音楽フォルダを変更", systemImage: "folder.badge.gearshape") {
                             isFolderImporterPresented = true
                         }
                         .disabled(libraryStore.isLoading)
                     }
                 } else {
-                    Button("Select Music Folder", systemImage: "folder.badge.plus") {
+                    Button("音楽フォルダを選択", systemImage: "folder.badge.plus") {
                         isFolderImporterPresented = true
                     }
                 }
             }
-            .navigationTitle("Library")
+            .navigationTitle("ライブラリ")
             .navigationDestination(for: LibraryDestination.self) { destination in
                 switch destination {
                 case .songs: SongsView(tracks: libraryStore.tracks)
@@ -61,16 +61,23 @@ struct LibraryView: View {
                 case .artists: ArtistsView(artists: libraryStore.artists)
                 }
             }
-            .fileImporter(isPresented: $isFolderImporterPresented, allowedContentTypes: [.folder]) { result in
-                if case let .success(url) = result {
-                    Task { await libraryStore.selectFolder(url) }
+            .fileImporter(
+                isPresented: $isFolderImporterPresented,
+                allowedContentTypes: [UTType.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case let .success(urls):
+                    guard let folderURL = urls.first else { return }
+                    Task { await libraryStore.selectFolder(folderURL) }
+                case let .failure(error):
+                    libraryStore.reportFolderImportFailure(error)
                 }
-                // Cancellation intentionally leaves the current library unchanged.
             }
-            .alert("Music Library Error", isPresented: errorIsPresented) {
-                Button("OK") { libraryStore.dismissError() }
+            .alert("音楽ライブラリのエラー", isPresented: errorIsPresented) {
+                Button("閉じる") { libraryStore.dismissError() }
             } message: {
-                Text(libraryStore.errorMessage ?? "An unknown error occurred.")
+                Text(libraryStore.errorMessage ?? "不明なエラーが発生しました。")
             }
             .task { await libraryStore.restoreAndLoadIfNeeded() }
         }

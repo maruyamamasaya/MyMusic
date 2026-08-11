@@ -11,7 +11,7 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         List {
-            if let playlist {
+            if playlist != nil {
                 Section {
                     HStack(spacing: 12) {
                         Button("Play", systemImage: "play.fill") { play(shuffled: false) }

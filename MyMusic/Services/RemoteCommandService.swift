@@ -26,7 +26,7 @@ final class RemoteCommandService: RemoteCommandServicing {
         self.commandCenter = commandCenter
     }
 
-    deinit {
+    isolated deinit {
         commandTargets.forEach { command, target in command.removeTarget(target) }
     }
 

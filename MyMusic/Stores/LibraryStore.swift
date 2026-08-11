@@ -56,13 +56,19 @@ final class LibraryStore {
 
     func rescan() async {
         guard let selectedFolderURL else {
-            errorMessage = "Select a music folder first."
+            errorMessage = "先に音楽フォルダを選択してください。"
             return
         }
         await scan(selectedFolderURL)
     }
 
     func dismissError() { errorMessage = nil }
+
+    func reportFolderImportFailure(_ error: Error) {
+        let nsError = error as NSError
+        guard nsError.code != NSUserCancelledError else { return }
+        errorMessage = "フォルダを選択できませんでした: \(error.localizedDescription)"
+    }
 
     private func scan(_ folderURL: URL) async {
         isLoading = true

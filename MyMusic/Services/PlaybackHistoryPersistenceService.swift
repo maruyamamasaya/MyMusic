@@ -6,20 +6,19 @@ protocol PlaybackHistoryPersistenceServicing: Sendable {
 }
 
 actor PlaybackHistoryPersistenceService: PlaybackHistoryPersistenceServicing {
-    private let fileManager: FileManager
     private let fileURL: URL
 
-    init(fileManager: FileManager = .default, fileURL: URL? = nil) {
-        self.fileManager = fileManager
+    init(fileURL: URL? = nil) {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             self.fileURL = applicationSupport.appending(path: "MyMusic/playback-history.json")
         }
     }
 
     func load() async throws -> [PlaybackHistory] {
+        let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: fileURL.path) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -27,6 +26,7 @@ actor PlaybackHistoryPersistenceService: PlaybackHistoryPersistenceServicing {
     }
 
     func save(_ history: [PlaybackHistory]) async throws {
+        let fileManager = FileManager.default
         try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

@@ -6,26 +6,26 @@ protocol PlaylistPersistenceServicing: Sendable {
 }
 
 actor PlaylistPersistenceService: PlaylistPersistenceServicing {
-    private let fileManager: FileManager
     private let fileURL: URL
 
-    init(fileManager: FileManager = .default, fileURL: URL? = nil) {
-        self.fileManager = fileManager
+    init(fileURL: URL? = nil) {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             self.fileURL = applicationSupport.appending(path: "MyMusic/playlists.json")
         }
     }
 
     func load() async throws -> [Playlist] {
+        let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: fileURL.path) else { return [] }
         let data = try Data(contentsOf: fileURL)
         return try JSONDecoder().decode([Playlist].self, from: data)
     }
 
     func save(_ playlists: [Playlist]) async throws {
+        let fileManager = FileManager.default
         let directoryURL = fileURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let encoder = JSONEncoder()

@@ -8,10 +8,10 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            Tab("Home", systemImage: "house") { HomeView() }
-            Tab("Library", systemImage: "music.note.list") { LibraryView() }
-            Tab("Playlists", systemImage: "list.bullet.rectangle") { PlaylistView() }
-            Tab("Search", systemImage: "magnifyingglass") { SearchView() }
+            Tab("ホーム", systemImage: "house") { HomeView() }
+            Tab("ライブラリ", systemImage: "music.note.list") { LibraryView() }
+            Tab("プレイリスト", systemImage: "list.bullet.rectangle") { PlaylistView() }
+            Tab("検索", systemImage: "magnifyingglass") { SearchView() }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playerStore.currentTrack != nil {
