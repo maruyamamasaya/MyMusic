@@ -20,15 +20,22 @@ final class LibraryStore {
     private let service: MusicLibraryServicing
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
+    private let identityService: TrackIdentityServicing
 
     init(
         service: MusicLibraryServicing? = nil,
         fileImportService: FileImportServicing? = nil,
-        persistence: LibraryPersistenceServicing? = nil
+        persistence: LibraryPersistenceServicing? = nil,
+        identityService: TrackIdentityServicing? = nil
     ) {
         let resolvedFileImportService = fileImportService ?? FileImportService()
+        let resolvedIdentityService = identityService ?? TrackIdentityService.shared
         self.fileImportService = resolvedFileImportService
-        self.service = service ?? MusicLibraryService(fileImportService: resolvedFileImportService)
+        self.identityService = resolvedIdentityService
+        self.service = service ?? MusicLibraryService(
+            fileImportService: resolvedFileImportService,
+            metadataService: MetadataService(identityService: resolvedIdentityService)
+        )
         self.persistence = persistence ?? LibraryPersistenceService()
     }
 
@@ -42,6 +49,9 @@ final class LibraryStore {
             selectedFolderName = displayName(for: folderURL)
             if let cachedLibrary = try? await persistence.load(for: folderURL) {
                 apply(cachedLibrary)
+                Task { [identityService] in
+                    await identityService.registerExistingTracks(cachedLibrary.tracks, in: folderURL)
+                }
             } else {
                 await scan(folderURL)
             }

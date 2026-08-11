@@ -7,9 +7,14 @@ protocol MetadataServicing: Sendable {
 
 final class MetadataService: MetadataServicing, Sendable {
     private let artworkService: ArtworkServicing
+    private let identityService: TrackIdentityServicing
 
-    init(artworkService: ArtworkServicing = ArtworkService.shared) {
+    init(
+        artworkService: ArtworkServicing = ArtworkService.shared,
+        identityService: TrackIdentityServicing = TrackIdentityService.shared
+    ) {
         self.artworkService = artworkService
+        self.identityService = identityService
     }
 
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL) async throws -> Track {
@@ -24,7 +29,11 @@ final class MetadataService: MetadataServicing, Sendable {
 
         let pathFallback = folderFallback(for: fileURL, relativeTo: libraryFolder)
         let relativePath = StableTrackIdentifier.relativePath(for: fileURL, relativeTo: libraryFolder)
-        let trackID = StableTrackIdentifier.id(for: relativePath)
+        let trackID = await identityService.resolveID(
+            for: fileURL,
+            relativePath: relativePath,
+            duration: duration.isFinite ? duration : 0
+        )
         let artworkIdentifier = await cacheArtwork(in: metadata, trackID: trackID)
         return Track(
             id: trackID,

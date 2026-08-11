@@ -77,6 +77,18 @@ final class PlaybackHistoryStore {
         entries[trackID]?.playCount ?? 0
     }
 
+    func mostPlayedTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
+        tracks
+            .filter { playCount(for: $0.id) > 0 }
+            .sorted {
+                let lhsCount = playCount(for: $0.id)
+                let rhsCount = playCount(for: $1.id)
+                if lhsCount != rhsCount { return lhsCount > rhsCount }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+            .limited(to: limit)
+    }
+
     func dismissError() { errorMessage = nil }
 
     private func entry(for trackID: Track.ID) -> PlaybackHistory {

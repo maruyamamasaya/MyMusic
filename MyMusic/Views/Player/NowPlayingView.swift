@@ -28,6 +28,11 @@ struct NowPlayingView: View {
                                 .font(.title3)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                            if let track = playerStore.currentTrack {
+                                Text("再生回数 \(playbackHistoryStore.playCount(for: track.id))回")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         Spacer(minLength: 0)
                         if let track = playerStore.currentTrack {

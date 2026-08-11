@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 enum StableTrackIdentifier {
-    static func relativePath(for fileURL: URL, relativeTo rootURL: URL) -> String {
+    nonisolated static func relativePath(for fileURL: URL, relativeTo rootURL: URL) -> String {
         let rootComponents = rootURL.standardizedFileURL.pathComponents
         let fileComponents = fileURL.standardizedFileURL.pathComponents
         guard fileComponents.starts(with: rootComponents) else {
@@ -14,7 +14,7 @@ enum StableTrackIdentifier {
             .precomposedStringWithCanonicalMapping
     }
 
-    static func id(for relativePath: String) -> UUID {
+    nonisolated static func id(for relativePath: String) -> UUID {
         let digest = SHA256.hash(data: Data(relativePath.utf8))
         var bytes = Array(digest.prefix(16))
         bytes[6] = (bytes[6] & 0x0F) | 0x50

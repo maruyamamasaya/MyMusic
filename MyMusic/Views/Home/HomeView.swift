@@ -13,6 +13,10 @@ struct HomeView: View {
         playbackHistoryStore.favoriteTracks(from: libraryStore.tracks, limit: 10)
     }
 
+    private var mostPlayedTracks: [Track] {
+        playbackHistoryStore.mostPlayedTracks(from: libraryStore.tracks, limit: 10)
+    }
+
     private var isReady: Bool {
         libraryStore.isInitialLoadComplete && playbackHistoryStore.isLoaded
     }
@@ -53,6 +57,19 @@ struct HomeView: View {
                     )
                 } else {
                     trackButtons(favoriteTracks)
+                }
+            }
+
+
+            Section("よく再生する曲") {
+                if mostPlayedTracks.isEmpty {
+                    ContentUnavailableView(
+                        "再生回数の記録はありません",
+                        systemImage: "chart.bar",
+                        description: Text("一定時間再生した曲がここに表示されます。")
+                    )
+                } else {
+                    trackButtons(mostPlayedTracks)
                 }
             }
         }
