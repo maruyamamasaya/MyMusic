@@ -20,12 +20,26 @@ final class MetadataService: MetadataServicing, Sendable {
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL) async throws -> Track {
         let asset = AVURLAsset(url: fileURL)
         let duration = try await asset.load(.duration).seconds
-        let metadata = try await asset.load(.commonMetadata)
+        let commonMetadata = try await asset.load(.commonMetadata)
+        let formatMetadata = try await asset.load(.metadata)
+        let metadata = commonMetadata + formatMetadata
 
         let title = await stringValue(for: .commonIdentifierTitle, in: metadata)
         let artist = await stringValue(for: .commonIdentifierArtist, in: metadata)
         let album = await stringValue(for: .commonIdentifierAlbumName, in: metadata)
-        let genre = await stringValue(for: .commonIdentifierType, in: metadata)
+        let genre = await joinedStringValues(
+            for: [
+                .iTunesMetadataUserGenre,
+                .id3MetadataContentType,
+                .commonIdentifierType,
+                .iTunesMetadataPredefinedGenre
+            ],
+            in: metadata
+        )
+        let composer = await joinedStringValues(
+            for: [.iTunesMetadataComposer, .id3MetadataComposer],
+            in: metadata
+        )
 
         let pathFallback = folderFallback(for: fileURL, relativeTo: libraryFolder)
         let relativePath = StableTrackIdentifier.relativePath(for: fileURL, relativeTo: libraryFolder)
@@ -55,6 +69,7 @@ final class MetadataService: MetadataServicing, Sendable {
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),
             year: await yearValue(in: metadata),
             genre: genre,
+            composer: composer,
             audioFormat: format(for: fileURL)
         )
     }
@@ -69,6 +84,32 @@ final class MetadataService: MetadataServicing, Sendable {
     private func stringValue(for identifier: AVMetadataIdentifier, in items: [AVMetadataItem]) async -> String? {
         guard let item = AVMetadataItem.metadataItems(from: items, filteredByIdentifier: identifier).first else { return nil }
         return try? await item.load(.stringValue)
+    }
+
+    private func joinedStringValues(
+        for identifiers: [AVMetadataIdentifier],
+        in items: [AVMetadataItem]
+    ) async -> String? {
+        var values: [String] = []
+
+        for identifier in identifiers {
+            for item in AVMetadataItem.metadataItems(from: items, filteredByIdentifier: identifier) {
+                guard let value = try? await item.load(.stringValue) else { continue }
+                for component in metadataComponents(from: value) where !values.contains(component) {
+                    values.append(component)
+                }
+            }
+            if !values.isEmpty { break }
+        }
+
+        return values.isEmpty ? nil : values.joined(separator: "; ")
+    }
+
+    private func metadataComponents(from value: String) -> [String] {
+        value
+            .split(whereSeparator: { $0 == ";" || $0 == "\0" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private func integerValue(for identifier: AVMetadataIdentifier, in items: [AVMetadataItem]) async -> Int? {

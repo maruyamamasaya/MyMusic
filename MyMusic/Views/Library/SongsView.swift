@@ -5,9 +5,11 @@ struct SongsView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var trackToAddToPlaylist: Track?
     let tracks: [Track]
+    let title: String
 
-    init(tracks: [Track] = PreviewData.tracks) {
+    init(tracks: [Track] = PreviewData.tracks, title: String = "Songs") {
         self.tracks = tracks
+        self.title = title
     }
 
     var body: some View {
@@ -18,7 +20,7 @@ struct SongsView: View {
                 }
             }
 
-            Section("Songs") {
+            Section(title) {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     Button {
                         playerStore.playQueue(tracks, startingAt: index)
@@ -48,7 +50,7 @@ struct SongsView: View {
                 }
             }
         }
-        .navigationTitle("Songs")
+        .navigationTitle(title)
         .sheet(item: $trackToAddToPlaylist) { track in
             AddToPlaylistSheet(track: track)
         }

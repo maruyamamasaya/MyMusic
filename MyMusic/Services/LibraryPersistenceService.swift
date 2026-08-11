@@ -34,7 +34,13 @@ actor LibraryPersistenceService: LibraryPersistenceServicing {
             }
             return restoredTrack
         }
-        return MusicLibrary(tracks: tracks, albums: snapshot.library.albums, artists: snapshot.library.artists)
+        return MusicLibrary(
+            tracks: tracks,
+            albums: snapshot.library.albums,
+            artists: snapshot.library.artists,
+            genres: snapshot.library.genres,
+            composers: snapshot.library.composers
+        )
     }
 
     func save(_ library: MusicLibrary, for folderURL: URL) async throws {

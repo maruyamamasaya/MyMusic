@@ -35,6 +35,8 @@ struct LibraryView: View {
                         NavigationLink(value: LibraryDestination.songs) { countRow("曲", systemImage: "music.note", count: libraryStore.tracks.count) }
                         NavigationLink(value: LibraryDestination.albums) { countRow("アルバム", systemImage: "square.stack", count: libraryStore.albums.count) }
                         NavigationLink(value: LibraryDestination.artists) { countRow("アーティスト", systemImage: "music.mic", count: libraryStore.artists.count) }
+                        NavigationLink(value: LibraryDestination.genres) { countRow("ジャンル", systemImage: "guitars", count: libraryStore.genres.count) }
+                        NavigationLink(value: LibraryDestination.composers) { countRow("作曲者", systemImage: "music.quarternote.3", count: libraryStore.composers.count) }
                     }
 
                     Section {
@@ -59,6 +61,8 @@ struct LibraryView: View {
                 case .songs: SongsView(tracks: libraryStore.tracks)
                 case .albums: AlbumsView(albums: libraryStore.albums)
                 case .artists: ArtistsView(artists: libraryStore.artists)
+                case .genres: GenresView(genres: libraryStore.genres)
+                case .composers: ComposersView(composers: libraryStore.composers)
                 }
             }
             .fileImporter(
@@ -100,5 +104,5 @@ struct LibraryView: View {
 }
 
 private enum LibraryDestination: Hashable {
-    case songs, albums, artists
+    case songs, albums, artists, genres, composers
 }

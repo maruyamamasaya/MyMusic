@@ -7,6 +7,8 @@ final class LibraryStore {
     private(set) var tracks: [Track] = []
     private(set) var albums: [Album] = []
     private(set) var artists: [Artist] = []
+    private(set) var genres: [Genre] = []
+    private(set) var composers: [Composer] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var selectedFolderName: String?
@@ -113,6 +115,8 @@ final class LibraryStore {
         tracks = library.tracks
         albums = library.albums
         artists = library.artists
+        genres = library.genres
+        composers = library.composers
     }
 
     private func displayName(for url: URL) -> String {

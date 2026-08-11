@@ -4,6 +4,8 @@ struct MusicLibrary: Codable, Sendable {
     let tracks: [Track]
     let albums: [Album]
     let artists: [Artist]
+    let genres: [Genre]
+    let composers: [Composer]
 }
 
 protocol MusicLibraryServicing: Sendable {
@@ -109,6 +111,43 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
             Artist(id: UUID(), name: name, albumIDs: albumsByArtist[name, default: []].map(\.id), trackIDs: tracks.map(\.id))
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 
-        return MusicLibrary(tracks: tracks, albums: albums, artists: artists)
+        let genres = groupedTracks(tracks, value: \.genre).map { name, tracks in
+            Genre(id: UUID(), name: name, trackIDs: tracks.map(\.id))
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        let composers = groupedTracks(tracks, value: \.composer).map { name, tracks in
+            Composer(id: UUID(), name: name, trackIDs: tracks.map(\.id))
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        return MusicLibrary(
+            tracks: tracks,
+            albums: albums,
+            artists: artists,
+            genres: genres,
+            composers: composers
+        )
+    }
+
+    private func groupedTracks(
+        _ tracks: [Track],
+        value: KeyPath<Track, String?>
+    ) -> [String: [Track]] {
+        var groups: [String: [Track]] = [:]
+
+        for track in tracks {
+            for name in metadataComponents(from: track[keyPath: value]) {
+                groups[name, default: []].append(track)
+            }
+        }
+
+        return groups
+    }
+
+    private func metadataComponents(from value: String?) -> [String] {
+        guard let value else { return [] }
+        return value
+            .split(whereSeparator: { $0 == ";" || $0 == "\0" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }

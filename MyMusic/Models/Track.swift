@@ -15,5 +15,6 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     var discNumber: Int? = nil
     var year: Int? = nil
     var genre: String? = nil
+    var composer: String? = nil
     var audioFormat: AudioFormat? = nil
 }
