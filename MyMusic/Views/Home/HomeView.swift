@@ -6,6 +6,11 @@ struct HomeView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var isRecentTracksExpanded = false
     @State private var isFavoriteTracksExpanded = false
+    @State private var isMostPlayedTracksExpanded = false
+
+    private var quickPlayTracks: [Track] {
+        playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
+    }
 
     private var recentTracks: [Track] {
         playbackHistoryStore.recentTracks(from: libraryStore.tracks, limit: 10)
@@ -47,6 +52,18 @@ struct HomeView: View {
 
     private var libraryContent: some View {
         List {
+            Section("クイック再生") {
+                if quickPlayTracks.isEmpty {
+                    ContentUnavailableView(
+                        "再生履歴はありません",
+                        systemImage: "play.circle",
+                        description: Text("曲を再生すると、好みに合った曲がここに表示されます。")
+                    )
+                } else {
+                    quickPlayButtons(quickPlayTracks)
+                }
+            }
+
             Section {
                 if recentTracks.isEmpty {
                     ContentUnavailableView(
@@ -89,8 +106,7 @@ struct HomeView: View {
                 )
             }
 
-
-            Section("よく再生する曲") {
+            Section {
                 if mostPlayedTracks.isEmpty {
                     ContentUnavailableView(
                         "再生回数の記録はありません",
@@ -98,8 +114,17 @@ struct HomeView: View {
                         description: Text("一定時間再生した曲がここに表示されます。")
                     )
                 } else {
-                    trackButtons(mostPlayedTracks)
+                    trackButtons(
+                        isMostPlayedTracksExpanded ? mostPlayedTracks : Array(mostPlayedTracks.prefix(3)),
+                        queue: mostPlayedTracks
+                    )
                 }
+            } header: {
+                expandableSectionHeader(
+                    title: "よく再生する曲",
+                    isExpanded: $isMostPlayedTracksExpanded,
+                    showsButton: mostPlayedTracks.count > 3
+                )
             }
         }
     }
@@ -138,5 +163,71 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    @ViewBuilder
+    private func quickPlayButtons(_ tracks: [Track]) -> some View {
+        ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+            HStack(spacing: 8) {
+                Button {
+                    playerStore.playQueue(tracks, startingAt: index)
+                } label: {
+                    TrackRowView(track: track)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                preferenceButton(
+                    systemImage: "hand.thumbsdown",
+                    accessibilityLabel: "再生頻度を減らす",
+                    track: track,
+                    isIncrease: false
+                )
+
+                preferenceButton(
+                    systemImage: "hand.thumbsup",
+                    accessibilityLabel: "再生頻度を増やす",
+                    track: track,
+                    isIncrease: true
+                )
+            }
+        }
+    }
+
+    private func preferenceButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        track: Track,
+        isIncrease: Bool
+    ) -> some View {
+        let preference = playbackHistoryStore.playbackPreference(for: track.id)
+        let isActive = isIncrease ? preference > 0 : preference < 0
+
+        return Button {
+            if isIncrease {
+                playbackHistoryStore.increasePlaybackPreference(for: track.id)
+            } else {
+                playbackHistoryStore.decreasePlaybackPreference(for: track.id)
+            }
+        } label: {
+            Image(systemName: isActive ? "\(systemImage).fill" : systemImage)
+                .font(.body)
+                .frame(width: 30, height: 36)
+                .foregroundStyle(
+                    isActive
+                        ? LinearGradient(
+                            colors: isIncrease ? [.cyan, .blue] : [.orange, .pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        : LinearGradient(
+                            colors: [.secondary, .secondary],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }

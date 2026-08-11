@@ -77,6 +77,33 @@ final class PlaybackHistoryStore {
         entries[trackID]?.playCount ?? 0
     }
 
+    func playbackPreference(for trackID: Track.ID) -> Int {
+        entries[trackID]?.playbackPreference ?? 0
+    }
+
+    func increasePlaybackPreference(for trackID: Track.ID) {
+        adjustPlaybackPreference(for: trackID, by: 1)
+    }
+
+    func decreasePlaybackPreference(for trackID: Track.ID) {
+        adjustPlaybackPreference(for: trackID, by: -1)
+    }
+
+    func quickPlayTracks(from tracks: [Track], limit: Int = 3) -> [Track] {
+        tracks
+            .filter { playCount(for: $0.id) > 0 }
+            .sorted {
+                let lhsScore = playCount(for: $0.id) + playbackPreference(for: $0.id)
+                let rhsScore = playCount(for: $1.id) + playbackPreference(for: $1.id)
+                if lhsScore != rhsScore { return lhsScore > rhsScore }
+                let lhsDate = entries[$0.id]?.lastPlayedAt ?? .distantPast
+                let rhsDate = entries[$1.id]?.lastPlayedAt ?? .distantPast
+                if lhsDate != rhsDate { return lhsDate > rhsDate }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+            .limited(to: limit)
+    }
+
     func mostPlayedTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
         tracks
             .filter { playCount(for: $0.id) > 0 }
@@ -90,6 +117,13 @@ final class PlaybackHistoryStore {
     }
 
     func dismissError() { errorMessage = nil }
+
+    private func adjustPlaybackPreference(for trackID: Track.ID, by adjustment: Int) {
+        var entry = entry(for: trackID)
+        entry.playbackPreference = min(2, max(-2, entry.playbackPreference + adjustment))
+        entries[trackID] = entry
+        persist()
+    }
 
     private func entry(for trackID: Track.ID) -> PlaybackHistory {
         entries[trackID] ?? PlaybackHistory(trackID: trackID, isFavorite: false, playCount: 0, lastPlayedAt: nil)
