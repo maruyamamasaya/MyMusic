@@ -33,6 +33,15 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("ホーム")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Label("設定", systemImage: "gearshape")
+                    }
+                }
+            }
         }
     }
 
