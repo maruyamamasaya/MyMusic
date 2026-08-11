@@ -135,7 +135,9 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         var groups: [String: [Track]] = [:]
 
         for track in tracks {
-            for name in metadataComponents(from: track[keyPath: value]) {
+            // A file can expose the same value through multiple metadata items.
+            // Count a track only once per exact, trimmed Genre/Composer spelling.
+            for name in Set(metadataComponents(from: track[keyPath: value])) {
                 groups[name, default: []].append(track)
             }
         }
