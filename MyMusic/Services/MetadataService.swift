@@ -6,6 +6,12 @@ protocol MetadataServicing: Sendable {
 }
 
 final class MetadataService: MetadataServicing, Sendable {
+    private let artworkService: ArtworkServicing
+
+    init(artworkService: ArtworkServicing = ArtworkService.shared) {
+        self.artworkService = artworkService
+    }
+
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL) async throws -> Track {
         let asset = AVURLAsset(url: fileURL)
         let duration = try await asset.load(.duration).seconds
@@ -18,20 +24,30 @@ final class MetadataService: MetadataServicing, Sendable {
 
         let pathFallback = folderFallback(for: fileURL, relativeTo: libraryFolder)
         let relativePath = StableTrackIdentifier.relativePath(for: fileURL, relativeTo: libraryFolder)
+        let trackID = StableTrackIdentifier.id(for: relativePath)
+        let artworkIdentifier = await cacheArtwork(in: metadata, trackID: trackID)
         return Track(
-            id: StableTrackIdentifier.id(for: relativePath),
+            id: trackID,
             title: title ?? fileURL.deletingPathExtension().lastPathComponent,
             artistName: artist ?? pathFallback.artist ?? "Unknown Artist",
             albumTitle: album ?? pathFallback.album ?? "Unknown Album",
             duration: duration.isFinite ? duration : 0,
             fileURL: fileURL,
             relativePath: relativePath,
+            artworkIdentifier: artworkIdentifier,
             trackNumber: await integerValue(for: .iTunesMetadataTrackNumber, in: metadata),
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),
             year: await yearValue(in: metadata),
             genre: genre,
             audioFormat: format(for: fileURL)
         )
+    }
+
+    private func cacheArtwork(in items: [AVMetadataItem], trackID: Track.ID) async -> String? {
+        guard let item = AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .commonIdentifierArtwork).first,
+              let data = try? await item.load(.dataValue),
+              !data.isEmpty else { return nil }
+        return try? await artworkService.storeArtwork(data, identifier: trackID.uuidString)
     }
 
     private func stringValue(for identifier: AVMetadataIdentifier, in items: [AVMetadataItem]) async -> String? {

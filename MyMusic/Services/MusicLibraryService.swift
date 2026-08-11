@@ -53,7 +53,14 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
             AlbumKey(title: $0.albumTitle ?? "Unknown Album", artist: $0.artistName)
         }
         let albums = albumGroups.map { key, tracks in
-            Album(id: UUID(), title: key.title, artistName: key.artist, year: tracks.compactMap(\.year).first, trackIDs: tracks.map(\.id))
+            Album(
+                id: UUID(),
+                title: key.title,
+                artistName: key.artist,
+                artworkIdentifier: tracks.compactMap(\.artworkIdentifier).first,
+                year: tracks.compactMap(\.year).first,
+                trackIDs: tracks.map(\.id)
+            )
         }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
 
         let albumsByArtist = Dictionary(grouping: albums, by: \.artistName)
