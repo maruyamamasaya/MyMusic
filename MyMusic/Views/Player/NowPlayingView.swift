@@ -63,7 +63,7 @@ struct NowPlayingView: View {
                         onRepeat: playerStore.cycleRepeatMode
                     )
 
-                    Button("Show Queue", systemImage: "list.bullet") {
+                    Button("再生キューを表示", systemImage: "list.bullet") {
                         isQueuePresented = true
                     }
                     .buttonStyle(.bordered)
@@ -71,12 +71,12 @@ struct NowPlayingView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
             }
-            .navigationTitle("Now Playing")
+            .navigationTitle("再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .accessibilityLabel("Close Now Playing")
+                    Button("完了") { dismiss() }
+                        .accessibilityLabel("再生画面を閉じる")
                 }
             }
             .sheet(isPresented: $isQueuePresented) {

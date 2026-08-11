@@ -10,14 +10,19 @@ final class PlaybackHistoryStore {
 
     private let persistence: PlaybackHistoryPersistenceServicing
     private var saveTask: Task<Void, Never>?
+    private var isLoading = false
 
     init(persistence: PlaybackHistoryPersistenceServicing? = nil) {
         self.persistence = persistence ?? PlaybackHistoryPersistenceService()
     }
 
     func loadIfNeeded() async {
-        guard !isLoaded else { return }
-        isLoaded = true
+        guard !isLoaded, !isLoading else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+            isLoaded = true
+        }
         do {
             let loaded = try await persistence.load()
             var merged = Dictionary(uniqueKeysWithValues: loaded.map { ($0.trackID, $0) })

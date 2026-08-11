@@ -10,6 +10,7 @@ final class LibraryStore {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var selectedFolderName: String?
+    private(set) var isInitialLoadComplete = false
 
     var hasLibraryFolder: Bool { selectedFolderURL != nil }
     var scanProgress: Int { tracks.count }
@@ -34,6 +35,7 @@ final class LibraryStore {
     func restoreAndLoadIfNeeded() async {
         guard !hasRestoredFolder else { return }
         hasRestoredFolder = true
+        defer { isInitialLoadComplete = true }
         do {
             guard let folderURL = try fileImportService.restoreLibraryFolder() else { return }
             selectedFolderURL = folderURL

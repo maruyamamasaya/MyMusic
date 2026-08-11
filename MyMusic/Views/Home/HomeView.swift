@@ -13,34 +13,48 @@ struct HomeView: View {
         playbackHistoryStore.favoriteTracks(from: libraryStore.tracks, limit: 10)
     }
 
+    private var isReady: Bool {
+        libraryStore.isInitialLoadComplete && playbackHistoryStore.isLoaded
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section("最近再生した曲") {
-                    if recentTracks.isEmpty {
-                        ContentUnavailableView(
-                            "再生履歴はありません",
-                            systemImage: "clock",
-                            description: Text("再生した曲がここに表示されます。")
-                        )
-                    } else {
-                        trackButtons(recentTracks)
-                    }
-                }
-
-                Section("お気に入り") {
-                    if favoriteTracks.isEmpty {
-                        ContentUnavailableView(
-                            "お気に入りはありません",
-                            systemImage: "heart",
-                            description: Text("お気に入りに追加した曲がここに表示されます。")
-                        )
-                    } else {
-                        trackButtons(favoriteTracks)
-                    }
+            Group {
+                if isReady {
+                    libraryContent
+                } else {
+                    ProgressView("ライブラリを読み込み中…")
                 }
             }
             .navigationTitle("ホーム")
+        }
+    }
+
+    private var libraryContent: some View {
+        List {
+            Section("最近再生した曲") {
+                if recentTracks.isEmpty {
+                    ContentUnavailableView(
+                        "再生履歴はありません",
+                        systemImage: "clock",
+                        description: Text("再生した曲がここに表示されます。")
+                    )
+                } else {
+                    trackButtons(recentTracks)
+                }
+            }
+
+            Section("お気に入り") {
+                if favoriteTracks.isEmpty {
+                    ContentUnavailableView(
+                        "お気に入りはありません",
+                        systemImage: "heart",
+                        description: Text("お気に入りに追加した曲がここに表示されます。")
+                    )
+                } else {
+                    trackButtons(favoriteTracks)
+                }
+            }
         }
     }
 

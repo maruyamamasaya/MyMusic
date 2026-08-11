@@ -4,6 +4,7 @@ struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(LibraryStore.self) private var libraryStore
     @State private var isNowPlayingPresented = false
 
     var body: some View {
@@ -33,6 +34,7 @@ struct RootView: View {
         }
         .task { await playlistStore.loadIfNeeded() }
         .task { await playbackHistoryStore.loadIfNeeded() }
+        .task { await libraryStore.restoreAndLoadIfNeeded() }
     }
 
     private var errorIsPresented: Binding<Bool> {
