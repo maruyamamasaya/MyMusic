@@ -1,7 +1,13 @@
 import SwiftUI
 
+enum AlbumArtworkDisplayMode {
+    case fill
+    case fitWithBlurredBackground
+}
+
 struct AlbumArtworkView: View {
     let artworkIdentifier: String?
+    var displayMode: AlbumArtworkDisplayMode = .fill
     @State private var image: UIImage?
 
     var body: some View {
@@ -11,10 +17,26 @@ struct AlbumArtworkView: View {
                     .fill(.secondary.opacity(0.15))
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
+                    switch displayMode {
+                    case .fill:
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    case .fitWithBlurredBackground:
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .scaleEffect(1.12)
+                            .blur(radius: 20)
+                            .overlay(.black.opacity(0.12))
+
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
                 } else {
                     Image(systemName: "music.note")
                         .font(.largeTitle)

@@ -13,14 +13,9 @@ struct RootView: View {
             Tab("プレイリスト", systemImage: "list.bullet.rectangle") { PlaylistView() }
             Tab("検索", systemImage: "magnifyingglass") { SearchView() }
         }
-        .tabViewBottomAccessory {
-            if playerStore.currentTrack != nil {
-                MiniPlayerView {
-                    isNowPlayingPresented = true
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
+        .modifier(MiniPlayerAccessoryModifier(isPresented: playerStore.currentTrack != nil) {
+            isNowPlayingPresented = true
+        })
         .animation(.default, value: playerStore.currentTrack?.id)
         .sheet(isPresented: $isNowPlayingPresented) {
             NowPlayingView()
@@ -52,5 +47,22 @@ struct RootView: View {
             get: { playbackHistoryStore.errorMessage != nil },
             set: { if !$0 { playbackHistoryStore.dismissError() } }
         )
+    }
+}
+
+private struct MiniPlayerAccessoryModifier: ViewModifier {
+    let isPresented: Bool
+    let onOpen: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPresented {
+            content.tabViewBottomAccessory {
+                MiniPlayerView(onOpen: onOpen)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        } else {
+            content
+        }
     }
 }

@@ -10,7 +10,10 @@ struct NowPlayingView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 28) {
-                    AlbumArtworkView(artworkIdentifier: playerStore.currentTrack?.artworkIdentifier)
+                    AlbumArtworkView(
+                        artworkIdentifier: playerStore.currentTrack?.artworkIdentifier,
+                        displayMode: .fitWithBlurredBackground
+                    )
                         .containerRelativeFrame(.horizontal) { availableWidth, _ in
                             min(availableWidth * 0.82, 360)
                         }
