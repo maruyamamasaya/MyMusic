@@ -26,15 +26,15 @@ struct RootView: View {
             NowPlayingView()
                 .presentationDragIndicator(.visible)
         }
-        .alert("Playback Error", isPresented: errorIsPresented) {
-            Button("OK") { playerStore.dismissError() }
+        .alert("再生エラー", isPresented: errorIsPresented) {
+            Button("閉じる") { playerStore.dismissError() }
         } message: {
-            Text(playerStore.errorMessage ?? "Playback failed.")
+            Text(playerStore.errorMessage ?? "再生できませんでした。")
         }
-        .alert("History Error", isPresented: historyErrorIsPresented) {
-            Button("OK") { playbackHistoryStore.dismissError() }
+        .alert("再生履歴のエラー", isPresented: historyErrorIsPresented) {
+            Button("閉じる") { playbackHistoryStore.dismissError() }
         } message: {
-            Text(playbackHistoryStore.errorMessage ?? "Playback history could not be saved.")
+            Text(playbackHistoryStore.errorMessage ?? "再生履歴を保存できませんでした。")
         }
         .task { await playlistStore.loadIfNeeded() }
         .task { await playbackHistoryStore.loadIfNeeded() }

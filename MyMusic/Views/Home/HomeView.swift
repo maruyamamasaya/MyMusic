@@ -16,23 +16,31 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Recently Played") {
+                Section("最近再生した曲") {
                     if recentTracks.isEmpty {
-                        ContentUnavailableView("Nothing Played Yet", systemImage: "clock", description: Text("Songs you play will appear here."))
+                        ContentUnavailableView(
+                            "再生履歴はありません",
+                            systemImage: "clock",
+                            description: Text("再生した曲がここに表示されます。")
+                        )
                     } else {
                         trackButtons(recentTracks)
                     }
                 }
 
-                Section("Favorites") {
+                Section("お気に入り") {
                     if favoriteTracks.isEmpty {
-                        ContentUnavailableView("No Favorites", systemImage: "heart", description: Text("Favorite songs will appear here."))
+                        ContentUnavailableView(
+                            "お気に入りはありません",
+                            systemImage: "heart",
+                            description: Text("お気に入りに追加した曲がここに表示されます。")
+                        )
                     } else {
                         trackButtons(favoriteTracks)
                     }
                 }
             }
-                .navigationTitle("Home")
+            .navigationTitle("ホーム")
         }
     }
 

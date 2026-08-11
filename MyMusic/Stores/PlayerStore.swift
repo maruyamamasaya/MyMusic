@@ -218,6 +218,8 @@ final class PlayerStore {
             guard let self else { return }
             do {
                 try await audioPlayer.play(track)
+                guard playbackRequestID == requestID else { return }
+                recordPlaybackStartIfNeeded()
             } catch is CancellationError {
                 return
             } catch {
@@ -276,10 +278,7 @@ final class PlayerStore {
             currentTime = safeTime
         case let .playingChanged(isPlaying):
             self.isPlaying = isPlaying
-            if isPlaying, let currentTrack, !hasRecordedPlaybackStart {
-                playbackHistoryStore.recordPlaybackStarted(trackID: currentTrack.id)
-                hasRecordedPlaybackStart = true
-            }
+            if isPlaying { recordPlaybackStartIfNeeded() }
             lastObservedPlaybackTime = isPlaying ? currentTime : nil
             nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
             updateRemoteCommandAvailability()
@@ -310,6 +309,12 @@ final class PlayerStore {
         hasCountedCurrentPlay = false
         listenedTime = 0
         lastObservedPlaybackTime = nil
+    }
+
+    private func recordPlaybackStartIfNeeded() {
+        guard let currentTrack, !hasRecordedPlaybackStart else { return }
+        playbackHistoryStore.recordPlaybackStarted(trackID: currentTrack.id)
+        hasRecordedPlaybackStart = true
     }
 
     private func recordListenedTime(at time: TimeInterval) {

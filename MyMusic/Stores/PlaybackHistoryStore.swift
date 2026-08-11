@@ -20,9 +20,14 @@ final class PlaybackHistoryStore {
         isLoaded = true
         do {
             let loaded = try await persistence.load()
-            entries = Dictionary(uniqueKeysWithValues: loaded.map { ($0.trackID, $0) })
+            var merged = Dictionary(uniqueKeysWithValues: loaded.map { ($0.trackID, $0) })
+            // Preserve favorites or playback events recorded while disk loading was in flight.
+            for (trackID, currentEntry) in entries {
+                merged[trackID] = currentEntry
+            }
+            entries = merged
         } catch {
-            errorMessage = "Playback history could not be loaded: \(error.localizedDescription)"
+            errorMessage = "再生履歴を読み込めませんでした: \(error.localizedDescription)"
         }
     }
 
@@ -86,7 +91,7 @@ final class PlaybackHistoryStore {
             } catch is CancellationError {
                 return
             } catch {
-                self?.errorMessage = "Playback history could not be saved: \(error.localizedDescription)"
+                self?.errorMessage = "再生履歴を保存できませんでした: \(error.localizedDescription)"
             }
         }
     }
