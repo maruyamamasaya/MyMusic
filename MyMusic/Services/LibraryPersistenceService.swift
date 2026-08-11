@@ -34,13 +34,9 @@ actor LibraryPersistenceService: LibraryPersistenceServicing {
             }
             return restoredTrack
         }
-        return MusicLibrary(
-            tracks: tracks,
-            albums: snapshot.library.albums,
-            artists: snapshot.library.artists,
-            genres: snapshot.library.genres,
-            composers: snapshot.library.composers
-        )
+        // Album/Artist/Genre/Composer are derived from tracks. Rebuilding here
+        // migrates cached random IDs and keeps every relationship consistent.
+        return MusicLibrary.build(from: tracks)
     }
 
     func save(_ library: MusicLibrary, for folderURL: URL) async throws {

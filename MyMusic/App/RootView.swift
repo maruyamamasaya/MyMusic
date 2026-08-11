@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(LibraryStore.self) private var libraryStore
+    @Environment(FavoriteStore.self) private var favoriteStore
     @State private var isNowPlayingPresented = false
 
     var body: some View {
@@ -32,8 +33,14 @@ struct RootView: View {
         } message: {
             Text(playbackHistoryStore.errorMessage ?? "再生履歴を保存できませんでした。")
         }
+        .alert("お気に入りのエラー", isPresented: favoriteErrorIsPresented) {
+            Button("閉じる") { favoriteStore.dismissError() }
+        } message: {
+            Text(favoriteStore.errorMessage ?? "お気に入りを保存できませんでした。")
+        }
         .task { await playlistStore.loadIfNeeded() }
         .task { await playbackHistoryStore.loadIfNeeded() }
+        .task { await favoriteStore.loadIfNeeded() }
         .task { await libraryStore.restoreAndLoadIfNeeded() }
     }
 
@@ -48,6 +55,13 @@ struct RootView: View {
         Binding(
             get: { playbackHistoryStore.errorMessage != nil },
             set: { if !$0 { playbackHistoryStore.dismissError() } }
+        )
+    }
+
+    private var favoriteErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { favoriteStore.errorMessage != nil },
+            set: { if !$0 { favoriteStore.dismissError() } }
         )
     }
 }

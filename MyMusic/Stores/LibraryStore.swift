@@ -86,6 +86,32 @@ final class LibraryStore {
 
     func dismissError() { errorMessage = nil }
 
+    func tracks(for album: Album) -> [Track] {
+        resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder)
+    }
+
+    func tracks(for artist: Artist) -> [Track] {
+        let artistTracks = resolvedTracks(for: artist.trackIDs)
+        let albumOrder = Dictionary(uniqueKeysWithValues: artist.albumIDs.enumerated().map { ($0.element, $0.offset) })
+        var albumByTrackID: [Track.ID: Album.ID] = [:]
+        for album in albums {
+            for trackID in album.trackIDs where albumByTrackID[trackID] == nil {
+                albumByTrackID[trackID] = album.id
+            }
+        }
+        return artistTracks.sorted { lhs, rhs in
+            let lhsAlbum = albumByTrackID[lhs.id].flatMap { albumOrder[$0] } ?? Int.max
+            let rhsAlbum = albumByTrackID[rhs.id].flatMap { albumOrder[$0] } ?? Int.max
+            if lhsAlbum != rhsAlbum { return lhsAlbum < rhsAlbum }
+            return Self.albumTrackOrder(lhs, rhs)
+        }
+    }
+
+    func albums(for artist: Artist) -> [Album] {
+        let albumsByID = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
+        return artist.albumIDs.compactMap { albumsByID[$0] }
+    }
+
     func reportFolderImportFailure(_ error: Error) {
         let nsError = error as NSError
         guard nsError.code != NSUserCancelledError else { return }
@@ -117,6 +143,31 @@ final class LibraryStore {
         artists = library.artists
         genres = library.genres
         composers = library.composers
+    }
+
+    private func resolvedTracks(for trackIDs: [Track.ID]) -> [Track] {
+        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        var seen: Set<Track.ID> = []
+        return trackIDs.compactMap { id in
+            guard seen.insert(id).inserted else { return nil }
+            return tracksByID[id]
+        }
+    }
+
+    private static func albumTrackOrder(_ lhs: Track, _ rhs: Track) -> Bool {
+        let lhsDisc = lhs.discNumber ?? 1
+        let rhsDisc = rhs.discNumber ?? 1
+        if lhsDisc != rhsDisc { return lhsDisc < rhsDisc }
+        switch (lhs.trackNumber, rhs.trackNumber) {
+        case let (lhsNumber?, rhsNumber?) where lhsNumber != rhsNumber:
+            return lhsNumber < rhsNumber
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+        }
     }
 
     private func displayName(for url: URL) -> String {

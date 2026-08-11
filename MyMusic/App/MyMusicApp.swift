@@ -6,6 +6,7 @@ struct MyMusicApp: App {
     @State private var playbackHistoryStore: PlaybackHistoryStore
     @State private var libraryStore = LibraryStore()
     @State private var playlistStore = PlaylistStore()
+    @State private var favoriteStore = FavoriteStore()
     @State private var settingsStore = SettingsStore()
 
     init() {
@@ -20,6 +21,7 @@ struct MyMusicApp: App {
                 .environment(playerStore)
                 .environment(libraryStore)
                 .environment(playlistStore)
+                .environment(favoriteStore)
                 .environment(playbackHistoryStore)
                 .environment(settingsStore)
         }

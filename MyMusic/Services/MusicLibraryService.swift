@@ -81,7 +81,7 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
             ($0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending) ||
             ($0.artistName == $1.artistName && $0.title.localizedStandardCompare($1.title) == .orderedAscending)
         }
-        return buildLibrary(from: tracks)
+        return MusicLibrary.build(from: tracks)
     }
 
     private func isUnchanged(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
@@ -90,25 +90,39 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         return oldSize == fileSize && abs(oldDate.timeIntervalSince(modificationDate ?? .distantPast)) < 0.001
     }
 
-    private func buildLibrary(from tracks: [Track]) -> MusicLibrary {
+}
+
+extension MusicLibrary {
+    static func build(from tracks: [Track]) -> MusicLibrary {
         struct AlbumKey: Hashable { let title: String; let artist: String }
         let albumGroups = Dictionary(grouping: tracks) {
             AlbumKey(title: $0.albumTitle ?? "Unknown Album", artist: $0.artistName)
         }
         let albums = albumGroups.map { key, tracks in
             Album(
-                id: UUID(),
+                id: StableLibraryIdentifier.albumID(title: key.title, artistName: key.artist),
                 title: key.title,
                 artistName: key.artist,
                 artworkIdentifier: tracks.compactMap(\.artworkIdentifier).first,
                 year: tracks.compactMap(\.year).first,
                 trackIDs: tracks.map(\.id)
             )
-        }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }.sorted {
+            let titleOrder = $0.title.localizedStandardCompare($1.title)
+            if titleOrder != .orderedSame { return titleOrder == .orderedAscending }
+            return $0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending
+        }
 
         let albumsByArtist = Dictionary(grouping: albums, by: \.artistName)
         let artists = Dictionary(grouping: tracks, by: \.artistName).map { name, tracks in
-            Artist(id: UUID(), name: name, albumIDs: albumsByArtist[name, default: []].map(\.id), trackIDs: tracks.map(\.id))
+            Artist(
+                id: StableLibraryIdentifier.artistID(name: name),
+                name: name,
+                albumIDs: albumsByArtist[name, default: []]
+                    .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                    .map(\.id),
+                trackIDs: tracks.map(\.id)
+            )
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 
         let genres = groupedTracks(tracks, value: \.genre).map { name, tracks in
@@ -128,7 +142,7 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         )
     }
 
-    private func groupedTracks(
+    private static func groupedTracks(
         _ tracks: [Track],
         value: KeyPath<Track, String?>
     ) -> [String: [Track]] {
@@ -145,7 +159,7 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         return groups
     }
 
-    private func metadataComponents(from value: String?) -> [String] {
+    private static func metadataComponents(from value: String?) -> [String] {
         guard let value else { return [] }
         return value
             .split(whereSeparator: { $0 == ";" || $0 == "\0" })
