@@ -13,7 +13,7 @@ struct RootView: View {
             Tab("プレイリスト", systemImage: "list.bullet.rectangle") { PlaylistView() }
             Tab("検索", systemImage: "magnifyingglass") { SearchView() }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .tabViewBottomAccessory {
             if playerStore.currentTrack != nil {
                 MiniPlayerView {
                     isNowPlayingPresented = true

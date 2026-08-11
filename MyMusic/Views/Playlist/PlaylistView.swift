@@ -10,83 +10,86 @@ struct PlaylistView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if playlistStore.playlists.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Playlists", systemImage: "music.note.list")
-                    } description: {
-                        Text("Create playlists to organize your favorite music.")
-                    } actions: {
-                        Button("New Playlist", systemImage: "plus") { presentCreatePlaylist() }
-                            .buttonStyle(.borderedProminent)
+            List {
+                Section {
+                    NavigationLink {
+                        FavoritesView()
+                    } label: {
+                        Label("お気に入り", systemImage: "heart.fill")
                     }
-                } else {
-                    List {
+                }
+
+                Section("プレイリスト") {
+                    if playlistStore.playlists.isEmpty {
+                        ContentUnavailableView(
+                            "プレイリストはありません",
+                            systemImage: "music.note.list",
+                            description: Text("＋ボタンからプレイリストを作成できます。")
+                        )
+                    } else {
                         ForEach(playlistStore.playlists) { playlist in
                             NavigationLink(value: playlist.id) {
                                 HStack {
                                     Label(playlist.name, systemImage: "music.note.list")
                                         .lineLimit(1)
                                     Spacer()
-                                    Text(playlist.trackIDs.count, format: .number)
-                                        .foregroundStyle(.secondary)
-                                    Text(playlist.trackIDs.count == 1 ? "song" : "songs")
+                                    Text("\(playlist.trackIDs.count)曲")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
                             .contextMenu {
-                                Button("Rename", systemImage: "pencil") { presentRename(playlist) }
-                                Button("Delete", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
+                                Button("名前を変更", systemImage: "pencil") { presentRename(playlist) }
+                                Button("削除", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
                             }
                             .swipeActions {
-                                Button("Delete", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
+                                Button("削除", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Playlists")
+            .navigationTitle("プレイリスト")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("New Playlist", systemImage: "plus") { presentCreatePlaylist() }
+                    Button("新規プレイリスト", systemImage: "plus") { presentCreatePlaylist() }
                 }
             }
             .navigationDestination(for: Playlist.ID.self) { playlistID in
                 PlaylistDetailView(playlistID: playlistID)
             }
-            .alert("New Playlist", isPresented: $isCreatingPlaylist) {
-                TextField("Playlist Name", text: $newPlaylistName)
-                Button("Cancel", role: .cancel) {}
-                Button("Create") { playlistStore.createPlaylist(named: newPlaylistName) }
+            .alert("新規プレイリスト", isPresented: $isCreatingPlaylist) {
+                TextField("プレイリスト名", text: $newPlaylistName)
+                Button("キャンセル", role: .cancel) {}
+                Button("作成") { playlistStore.createPlaylist(named: newPlaylistName) }
                     .disabled(trimmed(newPlaylistName).isEmpty)
             }
-            .alert("Rename Playlist", isPresented: renameIsPresented) {
-                TextField("Playlist Name", text: $renameText)
-                Button("Cancel", role: .cancel) { playlistToRename = nil }
-                Button("Save") {
+            .alert("プレイリスト名を変更", isPresented: renameIsPresented) {
+                TextField("プレイリスト名", text: $renameText)
+                Button("キャンセル", role: .cancel) { playlistToRename = nil }
+                Button("保存") {
                     if let playlistToRename { playlistStore.renamePlaylist(id: playlistToRename.id, to: renameText) }
                     playlistToRename = nil
                 }
                 .disabled(trimmed(renameText).isEmpty)
             }
             .confirmationDialog(
-                "Delete \(playlistToDelete?.name ?? "Playlist")?",
+                "「\(playlistToDelete?.name ?? "プレイリスト")」を削除しますか？",
                 isPresented: deleteIsPresented,
                 titleVisibility: .visible
             ) {
-                Button("Delete Playlist", role: .destructive) {
+                Button("プレイリストを削除", role: .destructive) {
                     if let playlistToDelete { playlistStore.deletePlaylist(id: playlistToDelete.id) }
                     playlistToDelete = nil
                 }
-                Button("Cancel", role: .cancel) { playlistToDelete = nil }
+                Button("キャンセル", role: .cancel) { playlistToDelete = nil }
             } message: {
-                Text("The playlist will be deleted. Music files will not be affected.")
+                Text("プレイリストだけを削除します。音楽ファイルは削除されません。")
             }
-            .alert("Playlist Error", isPresented: errorIsPresented) {
-                Button("OK") { playlistStore.dismissError() }
+            .alert("プレイリストのエラー", isPresented: errorIsPresented) {
+                Button("閉じる") { playlistStore.dismissError() }
             } message: {
-                Text(playlistStore.errorMessage ?? "An unknown error occurred.")
+                Text(playlistStore.errorMessage ?? "不明なエラーが発生しました。")
             }
             .task { await playlistStore.loadIfNeeded() }
         }
