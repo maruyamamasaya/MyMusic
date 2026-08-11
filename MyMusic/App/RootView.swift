@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaylistStore.self) private var playlistStore
     @State private var isNowPlayingPresented = false
 
     var body: some View {
@@ -29,6 +30,7 @@ struct RootView: View {
         } message: {
             Text(playerStore.errorMessage ?? "Playback failed.")
         }
+        .task { await playlistStore.loadIfNeeded() }
     }
 
     private var errorIsPresented: Binding<Bool> {

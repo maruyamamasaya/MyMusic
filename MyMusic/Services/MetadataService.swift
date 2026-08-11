@@ -17,13 +17,15 @@ final class MetadataService: MetadataServicing, Sendable {
         let genre = await stringValue(for: .commonIdentifierType, in: metadata)
 
         let pathFallback = folderFallback(for: fileURL, relativeTo: libraryFolder)
+        let relativePath = StableTrackIdentifier.relativePath(for: fileURL, relativeTo: libraryFolder)
         return Track(
-            id: UUID(),
+            id: StableTrackIdentifier.id(for: relativePath),
             title: title ?? fileURL.deletingPathExtension().lastPathComponent,
             artistName: artist ?? pathFallback.artist ?? "Unknown Artist",
             albumTitle: album ?? pathFallback.album ?? "Unknown Album",
             duration: duration.isFinite ? duration : 0,
             fileURL: fileURL,
+            relativePath: relativePath,
             trackNumber: await integerValue(for: .iTunesMetadataTrackNumber, in: metadata),
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),
             year: await yearValue(in: metadata),

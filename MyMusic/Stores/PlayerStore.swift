@@ -103,7 +103,12 @@ final class PlayerStore {
     }
 
     func toggleShuffle() {
-        isShuffleEnabled.toggle()
+        setShuffleEnabled(!isShuffleEnabled)
+    }
+
+    func setShuffleEnabled(_ isEnabled: Bool) {
+        guard isShuffleEnabled != isEnabled else { return }
+        isShuffleEnabled = isEnabled
         rebuildPlaybackOrder(keepingCurrentIndex: currentIndex)
     }
 

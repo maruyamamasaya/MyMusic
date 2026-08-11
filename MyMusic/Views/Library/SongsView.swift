@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SongsView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @State private var trackToAddToPlaylist: Track?
     let tracks: [Track]
 
     init(tracks: [Track] = PreviewData.tracks) {
@@ -32,9 +33,17 @@ struct SongsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Add to Playlist", systemImage: "text.badge.plus") {
+                            trackToAddToPlaylist = track
+                        }
+                    }
                 }
             }
         }
         .navigationTitle("Songs")
+        .sheet(item: $trackToAddToPlaylist) { track in
+            AddToPlaylistSheet(track: track)
+        }
     }
 }
