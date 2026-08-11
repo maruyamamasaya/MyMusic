@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NowPlayingView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(\.dismiss) private var dismiss
     @State private var isQueuePresented = false
 
@@ -15,14 +16,27 @@ struct NowPlayingView: View {
                         }
                         .accessibilityLabel("Artwork for \(playerStore.currentTrack?.title ?? "current track")")
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(playerStore.currentTrack?.title ?? "Not Playing")
-                            .font(.title2.bold())
-                            .lineLimit(2)
-                        Text(playerStore.currentTrack?.artistName ?? "")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(playerStore.currentTrack?.title ?? "Not Playing")
+                                .font(.title2.bold())
+                                .lineLimit(2)
+                            Text(playerStore.currentTrack?.artistName ?? "")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        if let track = playerStore.currentTrack {
+                            Button {
+                                playbackHistoryStore.toggleFavorite(trackID: track.id)
+                            } label: {
+                                Image(systemName: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.fill" : "heart")
+                                    .font(.title2)
+                                    .foregroundStyle(.tint)
+                            }
+                            .accessibilityLabel(playbackHistoryStore.isFavorite(trackID: track.id) ? "Remove from Favorites" : "Add to Favorites")
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 

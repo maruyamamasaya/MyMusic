@@ -47,12 +47,21 @@ final class PlayerStore {
 
     private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
+    private let playbackHistoryStore: PlaybackHistoryStore
     private var playbackTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
+    private var hasRecordedPlaybackStart = false
+    private var hasCountedCurrentPlay = false
+    private var listenedTime: TimeInterval = 0
+    private var lastObservedPlaybackTime: TimeInterval?
 
-    init(audioPlayer: AudioPlayerServicing? = nil) {
+    init(
+        audioPlayer: AudioPlayerServicing? = nil,
+        playbackHistoryStore: PlaybackHistoryStore? = nil
+    ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
+        self.playbackHistoryStore = playbackHistoryStore ?? PlaybackHistoryStore()
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
         }
@@ -173,6 +182,7 @@ final class PlayerStore {
         let track = queue[index]
         currentIndex = index
         currentTrack = track
+        resetPlaybackSession()
         currentTime = 0
         duration = track.duration
         isPlaying = false
@@ -235,9 +245,16 @@ final class PlayerStore {
             self.duration = duration
             isLoading = false
         case let .timeChanged(time):
-            currentTime = time.isFinite ? time : 0
+            let safeTime = time.isFinite ? time : 0
+            recordListenedTime(at: safeTime)
+            currentTime = safeTime
         case let .playingChanged(isPlaying):
             self.isPlaying = isPlaying
+            if isPlaying, let currentTrack, !hasRecordedPlaybackStart {
+                playbackHistoryStore.recordPlaybackStarted(trackID: currentTrack.id)
+                hasRecordedPlaybackStart = true
+            }
+            lastObservedPlaybackTime = isPlaying ? currentTime : nil
         case .ended:
             isPlaying = false
             currentTime = duration
@@ -247,5 +264,24 @@ final class PlayerStore {
             isLoading = false
             errorMessage = message
         }
+    }
+
+    private func resetPlaybackSession() {
+        hasRecordedPlaybackStart = false
+        hasCountedCurrentPlay = false
+        listenedTime = 0
+        lastObservedPlaybackTime = nil
+    }
+
+    private func recordListenedTime(at time: TimeInterval) {
+        defer { lastObservedPlaybackTime = isPlaying ? time : nil }
+        guard isPlaying, !hasCountedCurrentPlay, let previous = lastObservedPlaybackTime else { return }
+        let delta = time - previous
+        guard delta > 0, delta <= 1.5 else { return }
+        listenedTime += delta
+        let threshold = min(30, duration * 0.5)
+        guard threshold > 0, listenedTime >= threshold, let currentTrack else { return }
+        playbackHistoryStore.recordPlaybackCompleted(trackID: currentTrack.id)
+        hasCountedCurrentPlay = true
     }
 }

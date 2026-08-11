@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SongsView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var trackToAddToPlaylist: Track?
     let tracks: [Track]
 
@@ -34,6 +35,12 @@ struct SongsView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        Button(
+                            playbackHistoryStore.isFavorite(trackID: track.id) ? "Remove from Favorites" : "Add to Favorites",
+                            systemImage: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
+                        ) {
+                            playbackHistoryStore.toggleFavorite(trackID: track.id)
+                        }
                         Button("Add to Playlist", systemImage: "text.badge.plus") {
                             trackToAddToPlaylist = track
                         }

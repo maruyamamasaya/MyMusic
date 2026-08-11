@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var isNowPlayingPresented = false
 
     var body: some View {
@@ -30,13 +31,26 @@ struct RootView: View {
         } message: {
             Text(playerStore.errorMessage ?? "Playback failed.")
         }
+        .alert("History Error", isPresented: historyErrorIsPresented) {
+            Button("OK") { playbackHistoryStore.dismissError() }
+        } message: {
+            Text(playbackHistoryStore.errorMessage ?? "Playback history could not be saved.")
+        }
         .task { await playlistStore.loadIfNeeded() }
+        .task { await playbackHistoryStore.loadIfNeeded() }
     }
 
     private var errorIsPresented: Binding<Bool> {
         Binding(
             get: { playerStore.errorMessage != nil },
             set: { if !$0 { playerStore.dismissError() } }
+        )
+    }
+
+    private var historyErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { playbackHistoryStore.errorMessage != nil },
+            set: { if !$0 { playbackHistoryStore.dismissError() } }
         )
     }
 }
