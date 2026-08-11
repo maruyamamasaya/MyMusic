@@ -154,14 +154,10 @@ struct HomeView: View {
         let queueTracks = queue ?? tracks
 
         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-            Button {
+            PlayableTrackRowView(track: track) {
                 let queueIndex = queueTracks.firstIndex(where: { $0.id == track.id }) ?? index
                 playerStore.playQueue(queueTracks, startingAt: queueIndex)
-            } label: {
-                TrackRowView(track: track)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
         }
     }
 

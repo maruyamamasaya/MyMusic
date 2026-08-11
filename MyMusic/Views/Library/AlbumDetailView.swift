@@ -36,10 +36,9 @@ struct AlbumDetailView: View {
                     EmptyStateView(icon: "music.note.list", title: "No Songs", message: "Album tracks could not be found.")
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        Button { playerStore.playQueue(tracks, startingAt: index) } label: {
-                            TrackRowView(track: track).contentShape(Rectangle())
+                        PlayableTrackRowView(track: track) {
+                            playerStore.playQueue(tracks, startingAt: index)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }

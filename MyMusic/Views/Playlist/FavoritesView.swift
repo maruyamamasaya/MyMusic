@@ -31,13 +31,9 @@ struct FavoritesView: View {
 
                 Section("曲") {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        Button {
+                        PlayableTrackRowView(track: track) {
                             playerStore.playQueue(tracks, startingAt: index)
-                        } label: {
-                            TrackRowView(track: track)
-                                .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
                                 playbackHistoryStore.toggleFavorite(trackID: track.id)

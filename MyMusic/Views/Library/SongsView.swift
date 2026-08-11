@@ -22,20 +22,16 @@ struct SongsView: View {
 
             Section(title) {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                    Button {
-                        playerStore.playQueue(tracks, startingAt: index)
-                    } label: {
-                        HStack(spacing: 8) {
-                            if playerStore.currentTrack?.id == track.id {
-                                Image(systemName: playerStore.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                    .foregroundStyle(.tint)
-                                    .frame(width: 18)
-                            }
-                            TrackRowView(track: track)
+                    HStack(spacing: 4) {
+                        if playerStore.currentTrack?.id == track.id {
+                            Image(systemName: playerStore.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                                .foregroundStyle(.tint)
+                                .frame(width: 18)
                         }
-                        .contentShape(Rectangle())
+                        PlayableTrackRowView(track: track) {
+                            playerStore.playQueue(tracks, startingAt: index)
+                        }
                     }
-                    .buttonStyle(.plain)
                     .contextMenu {
                         Button(
                             playbackHistoryStore.isFavorite(trackID: track.id) ? "Remove from Favorites" : "Add to Favorites",

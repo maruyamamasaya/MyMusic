@@ -34,11 +34,9 @@ struct PlaylistDetailView: View {
                         )
                     } else {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                            Button { playerStore.playQueue(tracks, startingAt: index) } label: {
-                                TrackRowView(track: track)
-                                    .contentShape(Rectangle())
+                            PlayableTrackRowView(track: track) {
+                                playerStore.playQueue(tracks, startingAt: index)
                             }
-                            .buttonStyle(.plain)
                             .swipeActions {
                                 Button("Remove", systemImage: "trash", role: .destructive) {
                                     playlistStore.removeTrack(track.id, from: playlistID)

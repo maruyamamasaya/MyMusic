@@ -33,13 +33,9 @@ struct SearchView: View {
                 } else {
                     List {
                         ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
-                            Button {
+                            PlayableTrackRowView(track: track) {
                                 playerStore.playQueue(results, startingAt: index)
-                            } label: {
-                                TrackRowView(track: track)
-                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }

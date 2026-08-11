@@ -47,6 +47,23 @@ struct NowPlayingView: View {
 
             trackInformation
 
+            if let track = playerStore.currentTrack {
+                HStack(spacing: 28) {
+                    preferenceButton(
+                        systemImage: "hand.thumbsdown",
+                        accessibilityLabel: "再生頻度を減らす",
+                        track: track,
+                        isIncrease: false
+                    )
+                    preferenceButton(
+                        systemImage: "hand.thumbsup",
+                        accessibilityLabel: "再生頻度を増やす",
+                        track: track,
+                        isIncrease: true
+                    )
+                }
+            }
+
             Spacer(minLength: 8)
 
             ProgressBarView(
@@ -110,6 +127,40 @@ struct NowPlayingView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func preferenceButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        track: Track,
+        isIncrease: Bool
+    ) -> some View {
+        let preference = playbackHistoryStore.playbackPreference(for: track.id)
+        let isActive = isIncrease ? preference > 0 : preference < 0
+
+        return Button {
+            if isIncrease {
+                playbackHistoryStore.increasePlaybackPreference(for: track.id)
+            } else {
+                playbackHistoryStore.decreasePlaybackPreference(for: track.id)
+            }
+        } label: {
+            Label(accessibilityLabel, systemImage: isActive ? "\(systemImage).fill" : systemImage)
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .frame(width: 42, height: 36)
+                .foregroundStyle(
+                    isActive
+                        ? LinearGradient(
+                            colors: isIncrease ? [.cyan, .blue] : [.orange, .pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        : LinearGradient(colors: [.secondary, .secondary], startPoint: .top, endPoint: .bottom)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
