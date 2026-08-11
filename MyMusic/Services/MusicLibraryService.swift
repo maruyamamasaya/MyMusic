@@ -1,6 +1,6 @@
 import Foundation
 
-struct MusicLibrary: Sendable {
+struct MusicLibrary: Codable, Sendable {
     let tracks: [Track]
     let albums: [Album]
     let artists: [Artist]

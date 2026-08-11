@@ -18,14 +18,17 @@ final class LibraryStore {
     private var hasRestoredFolder = false
     private let service: MusicLibraryServicing
     private let fileImportService: FileImportServicing
+    private let persistence: LibraryPersistenceServicing
 
     init(
         service: MusicLibraryServicing? = nil,
-        fileImportService: FileImportServicing? = nil
+        fileImportService: FileImportServicing? = nil,
+        persistence: LibraryPersistenceServicing? = nil
     ) {
         let resolvedFileImportService = fileImportService ?? FileImportService()
         self.fileImportService = resolvedFileImportService
         self.service = service ?? MusicLibraryService(fileImportService: resolvedFileImportService)
+        self.persistence = persistence ?? LibraryPersistenceService()
     }
 
     func restoreAndLoadIfNeeded() async {
@@ -35,7 +38,11 @@ final class LibraryStore {
             guard let folderURL = try fileImportService.restoreLibraryFolder() else { return }
             selectedFolderURL = folderURL
             selectedFolderName = displayName(for: folderURL)
-            await scan(folderURL)
+            if let cachedLibrary = try? await persistence.load(for: folderURL) {
+                apply(cachedLibrary)
+            } else {
+                await scan(folderURL)
+            }
         } catch {
             fileImportService.removeLibraryFolder()
             errorMessage = error.localizedDescription
@@ -76,14 +83,23 @@ final class LibraryStore {
         defer { isLoading = false }
         do {
             let library = try await service.loadLibrary(from: folderURL)
-            tracks = library.tracks
-            albums = library.albums
-            artists = library.artists
+            apply(library)
+            do {
+                try await persistence.save(library, for: folderURL)
+            } catch {
+                errorMessage = "ライブラリ情報を保存できませんでした: \(error.localizedDescription)"
+            }
         } catch is CancellationError {
             return
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func apply(_ library: MusicLibrary) {
+        tracks = library.tracks
+        albums = library.albums
+        artists = library.artists
     }
 
     private func displayName(for url: URL) -> String {
