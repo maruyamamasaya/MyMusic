@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+enum RepeatMode: String, CaseIterable, Sendable {
+    case off
+    case all
+    case one
+
+    var next: RepeatMode {
+        switch self {
+        case .off: .all
+        case .all: .one
+        case .one: .off
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class PlayerStore {
@@ -12,15 +26,23 @@ final class PlayerStore {
     private(set) var errorMessage: String?
     private(set) var queue: [Track] = []
     private(set) var currentIndex: Int?
+    private(set) var playbackOrder: [Int] = []
+    private(set) var isShuffleEnabled = false
+    private(set) var repeatMode: RepeatMode = .off
 
     var hasNext: Bool {
-        guard let currentIndex else { return false }
-        return queue.indices.contains(currentIndex + 1)
+        guard currentPlaybackPosition != nil else { return false }
+        return nextPlaybackPosition(wrapping: repeatMode == .all) != nil
     }
 
     var hasPrevious: Bool {
-        guard let currentIndex else { return false }
-        return currentTime > 0 || queue.indices.contains(currentIndex - 1)
+        guard let position = currentPlaybackPosition else { return false }
+        return currentTime > 0 || position > 0
+    }
+
+    private var currentPlaybackPosition: Int? {
+        guard let currentIndex else { return nil }
+        return playbackOrder.firstIndex(of: currentIndex)
     }
 
     private let previousRestartThreshold: TimeInterval = 3
@@ -47,6 +69,8 @@ final class PlayerStore {
             return
         }
         queue = tracks
+        currentIndex = nil
+        rebuildPlaybackOrder(keepingCurrentIndex: index)
         startPlayback(at: index)
     }
 
@@ -61,23 +85,30 @@ final class PlayerStore {
     }
 
     func next() {
-        guard let currentIndex else { return }
-        let nextIndex = currentIndex + 1
-        guard queue.indices.contains(nextIndex) else {
+        guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
             audioPlayer.pause()
             isPlaying = false
             return
         }
-        startPlayback(at: nextIndex)
+        startPlayback(at: playbackOrder[nextPosition])
     }
 
     func previous() {
-        guard let currentIndex else { return }
-        if currentTime >= previousRestartThreshold || !queue.indices.contains(currentIndex - 1) {
+        guard let position = currentPlaybackPosition else { return }
+        if currentTime >= previousRestartThreshold || position == 0 {
             seek(to: 0)
         } else {
-            startPlayback(at: currentIndex - 1)
+            startPlayback(at: playbackOrder[position - 1])
         }
+    }
+
+    func toggleShuffle() {
+        isShuffleEnabled.toggle()
+        rebuildPlaybackOrder(keepingCurrentIndex: currentIndex)
+    }
+
+    func cycleRepeatMode() {
+        repeatMode = repeatMode.next
     }
 
     func pause() {
@@ -119,6 +150,7 @@ final class PlayerStore {
         playbackRequestID = UUID()
         audioPlayer.stop()
         queue = []
+        playbackOrder = []
         currentIndex = nil
         currentTrack = nil
         isPlaying = false
@@ -130,7 +162,7 @@ final class PlayerStore {
     func dismissError() { errorMessage = nil }
 
     private func startPlayback(at index: Int) {
-        guard queue.indices.contains(index) else { return }
+        guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         let track = queue[index]
@@ -163,6 +195,35 @@ final class PlayerStore {
         return requestID
     }
 
+    private func rebuildPlaybackOrder(keepingCurrentIndex index: Int?) {
+        let naturalOrder = Array(queue.indices)
+        guard isShuffleEnabled, let index, queue.indices.contains(index) else {
+            playbackOrder = naturalOrder
+            return
+        }
+        playbackOrder = [index] + naturalOrder.filter { $0 != index }.shuffled()
+    }
+
+    private func nextPlaybackPosition(wrapping: Bool) -> Int? {
+        guard let position = currentPlaybackPosition, !playbackOrder.isEmpty else { return nil }
+        let nextPosition = position + 1
+        if playbackOrder.indices.contains(nextPosition) { return nextPosition }
+        return wrapping ? playbackOrder.startIndex : nil
+    }
+
+    private func advanceAfterTrackEnded() {
+        if repeatMode == .one, let currentIndex {
+            startPlayback(at: currentIndex)
+            return
+        }
+
+        guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
+            isPlaying = false
+            return
+        }
+        startPlayback(at: playbackOrder[nextPosition])
+    }
+
     private func handle(_ event: AudioPlaybackEvent) {
         switch event {
         case let .ready(duration):
@@ -175,7 +236,7 @@ final class PlayerStore {
         case .ended:
             isPlaying = false
             currentTime = duration
-            next()
+            advanceAfterTrackEnded()
         case let .failed(message):
             isPlaying = false
             isLoading = false

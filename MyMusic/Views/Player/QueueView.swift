@@ -16,7 +16,8 @@ struct QueueView: View {
                 } else {
                     List {
                         Section("Up Next") {
-                            ForEach(Array(playerStore.queue.enumerated()), id: \.element.id) { index, track in
+                            ForEach(playerStore.playbackOrder, id: \.self) { index in
+                                let track = playerStore.queue[index]
                                 Button {
                                     playerStore.playQueueItem(at: index)
                                 } label: {

@@ -35,11 +35,15 @@ struct NowPlayingView: View {
                     PlaybackControlsView(
                         isPlaying: playerStore.isPlaying,
                         isLoading: playerStore.isLoading,
+                        isShuffleEnabled: playerStore.isShuffleEnabled,
+                        repeatMode: playerStore.repeatMode,
                         canGoPrevious: playerStore.hasPrevious,
                         canGoNext: playerStore.hasNext,
                         onPrevious: playerStore.previous,
                         onPlayPause: playerStore.togglePlayPause,
-                        onNext: playerStore.next
+                        onNext: playerStore.next,
+                        onShuffle: playerStore.toggleShuffle,
+                        onRepeat: playerStore.cycleRepeatMode
                     )
 
                     Button("Show Queue", systemImage: "list.bullet") {
