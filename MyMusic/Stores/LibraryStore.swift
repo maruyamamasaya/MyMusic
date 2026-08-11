@@ -34,7 +34,8 @@ final class LibraryStore {
         self.identityService = resolvedIdentityService
         self.service = service ?? MusicLibraryService(
             fileImportService: resolvedFileImportService,
-            metadataService: MetadataService(identityService: resolvedIdentityService)
+            metadataService: MetadataService(identityService: resolvedIdentityService),
+            identityService: resolvedIdentityService
         )
         self.persistence = persistence ?? LibraryPersistenceService()
     }
@@ -94,7 +95,7 @@ final class LibraryStore {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let library = try await service.loadLibrary(from: folderURL)
+            let library = try await service.loadLibrary(from: folderURL, previousTracks: tracks)
             apply(library)
             do {
                 try await persistence.save(library, for: folderURL)

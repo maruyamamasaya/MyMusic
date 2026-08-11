@@ -29,9 +29,14 @@ final class MetadataService: MetadataServicing, Sendable {
 
         let pathFallback = folderFallback(for: fileURL, relativeTo: libraryFolder)
         let relativePath = StableTrackIdentifier.relativePath(for: fileURL, relativeTo: libraryFolder)
+        let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let fileSize = resourceValues?.fileSize.map(Int64.init)
+        let modificationDate = resourceValues?.contentModificationDate
         let trackID = await identityService.resolveID(
             for: fileURL,
             relativePath: relativePath,
+            fileSize: fileSize,
+            modificationDate: modificationDate,
             duration: duration.isFinite ? duration : 0
         )
         let artworkIdentifier = await cacheArtwork(in: metadata, trackID: trackID)
@@ -43,6 +48,8 @@ final class MetadataService: MetadataServicing, Sendable {
             duration: duration.isFinite ? duration : 0,
             fileURL: fileURL,
             relativePath: relativePath,
+            fileSize: fileSize,
+            modificationDate: modificationDate,
             artworkIdentifier: artworkIdentifier,
             trackNumber: await integerValue(for: .iTunesMetadataTrackNumber, in: metadata),
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),

@@ -7,44 +7,85 @@ struct MusicLibrary: Codable, Sendable {
 }
 
 protocol MusicLibraryServicing: Sendable {
-    func loadLibrary(from folderURL: URL) async throws -> MusicLibrary
+    func loadLibrary(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibrary
 }
 
 final class MusicLibraryService: MusicLibraryServicing, Sendable {
     private let fileImportService: FileImportServicing
     private let metadataService: MetadataServicing
+    private let identityService: TrackIdentityServicing
 
     init(
         fileImportService: FileImportServicing = FileImportService(),
-        metadataService: MetadataServicing = MetadataService()
+        metadataService: MetadataServicing = MetadataService(),
+        identityService: TrackIdentityServicing = TrackIdentityService.shared
     ) {
         self.fileImportService = fileImportService
         self.metadataService = metadataService
+        self.identityService = identityService
     }
 
-    func loadLibrary(from folderURL: URL) async throws -> MusicLibrary {
+    func loadLibrary(from folderURL: URL, previousTracks: [Track] = []) async throws -> MusicLibrary {
         let hasAccess = folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
         guard hasAccess || FileManager.default.isReadableFile(atPath: folderURL.path) else {
             throw FileImportServiceError.accessDenied
         }
         let files = try await fileImportService.audioFiles(in: folderURL)
+        let filesByPath = files.map { fileURL in
+            (fileURL, StableTrackIdentifier.relativePath(for: fileURL, relativeTo: folderURL))
+        }
+        await identityService.prepareForScan(relativePaths: Set(filesByPath.map(\.1)))
+        do {
+            let library = try await scanFiles(filesByPath, previousTracks: previousTracks, folderURL: folderURL)
+            await identityService.finishScan()
+            return library
+        } catch {
+            await identityService.finishScan()
+            throw error
+        }
+    }
+
+    private func scanFiles(
+        _ filesByPath: [(URL, String)],
+        previousTracks: [Track],
+        folderURL: URL
+    ) async throws -> MusicLibrary {
+        let previousByPath = Dictionary(uniqueKeysWithValues: previousTracks.compactMap { track in
+            track.relativePath.map { ($0, track) }
+        })
         var tracks: [Track] = []
-        tracks.reserveCapacity(files.count)
+        tracks.reserveCapacity(filesByPath.count)
 
         // A corrupt, unsupported, or temporarily unavailable iCloud item does not abort the scan.
-        for file in files {
+        for (file, relativePath) in filesByPath {
             try Task.checkCancellation()
+            let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let fileSize = values?.fileSize.map(Int64.init)
+            let modificationDate = values?.contentModificationDate
+            if var existing = previousByPath[relativePath],
+               isUnchanged(existing, fileSize: fileSize, modificationDate: modificationDate) {
+                existing.fileURL = file
+                existing.fileSize = fileSize
+                existing.modificationDate = modificationDate
+                tracks.append(existing)
+                continue
+            }
             if let track = try? await metadataService.metadata(for: file, relativeTo: folderURL) {
                 tracks.append(track)
             }
         }
-
         tracks.sort {
             ($0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending) ||
             ($0.artistName == $1.artistName && $0.title.localizedStandardCompare($1.title) == .orderedAscending)
         }
         return buildLibrary(from: tracks)
+    }
+
+    private func isUnchanged(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
+        // Older cached indexes have no lightweight fields. Adopt them without re-reading audio metadata.
+        guard let oldSize = track.fileSize, let oldDate = track.modificationDate else { return true }
+        return oldSize == fileSize && abs(oldDate.timeIntervalSince(modificationDate ?? .distantPast)) < 0.001
     }
 
     private func buildLibrary(from tracks: [Track]) -> MusicLibrary {

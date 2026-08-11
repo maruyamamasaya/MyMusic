@@ -3,7 +3,15 @@ import CryptoKit
 import Foundation
 
 protocol TrackIdentityServicing: Sendable {
-    func resolveID(for fileURL: URL, relativePath: String, duration: TimeInterval) async -> Track.ID
+    func prepareForScan(relativePaths: Set<String>) async
+    func finishScan() async
+    func resolveID(
+        for fileURL: URL,
+        relativePath: String,
+        fileSize: Int64?,
+        modificationDate: Date?,
+        duration: TimeInterval
+    ) async -> Track.ID
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async
 }
 
@@ -15,10 +23,19 @@ actor TrackIdentityService: TrackIdentityServicing {
         var relativePath: String
         var resourceIdentifier: String?
         var audioFingerprint: String?
+        var fileSize: Int64?
+        var modificationDate: Date?
+        var duration: TimeInterval?
     }
 
     private let registryURL: URL
     private var records: [Record]?
+    private var pathIndex: [String: Int] = [:]
+    private var idIndex: [Track.ID: Int] = [:]
+    private var resourceIndex: [String: Int] = [:]
+    private var missingRecordIndices: Set<Int> = []
+    private var isScanActive = false
+    private var isDirty = false
 
     init(registryURL: URL? = nil) {
         if let registryURL {
@@ -29,44 +46,92 @@ actor TrackIdentityService: TrackIdentityServicing {
         }
     }
 
-    func resolveID(for fileURL: URL, relativePath: String, duration: TimeInterval) async -> Track.ID {
+    func prepareForScan(relativePaths: Set<String>) async {
+        await loadIfNeeded()
+        missingRecordIndices = Set((records ?? []).indices.filter { !relativePaths.contains(records?[$0].relativePath ?? "") })
+        isScanActive = true
+    }
+
+    func finishScan() async {
+        isScanActive = false
+        if isDirty { persistNow() }
+    }
+
+    func resolveID(
+        for fileURL: URL,
+        relativePath: String,
+        fileSize: Int64?,
+        modificationDate: Date?,
+        duration: TimeInterval
+    ) async -> Track.ID {
         await loadIfNeeded()
         let resourceIdentifier = Self.resourceIdentifier(for: fileURL)
 
-        if let index = records?.firstIndex(where: { $0.relativePath == relativePath }) {
-            if records?[index].resourceIdentifier == nil { records?[index].resourceIdentifier = resourceIdentifier }
-            if records?[index].audioFingerprint == nil {
-                records?[index].audioFingerprint = await Self.audioFingerprint(for: fileURL, duration: duration)
-            }
-            persist()
+        if let index = pathIndex[relativePath] {
+            updateResourceIdentifier(resourceIdentifier, at: index)
+            records?[index].fileSize = fileSize
+            records?[index].modificationDate = modificationDate
+            records?[index].duration = duration
+            markDirty()
             return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
         }
 
         if let resourceIdentifier,
-           let index = records?.firstIndex(where: { $0.resourceIdentifier == resourceIdentifier }) {
-            records?[index].relativePath = relativePath
-            persist()
+           let index = resourceIndex[resourceIdentifier] {
+            updatePath(relativePath, at: index)
+            records?[index].fileSize = fileSize
+            records?[index].modificationDate = modificationDate
+            records?[index].duration = duration
+            missingRecordIndices.remove(index)
+            markDirty()
             return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
         }
 
-        let fingerprint = await Self.audioFingerprint(for: fileURL, duration: duration)
-        if let fingerprint,
-           let index = records?.firstIndex(where: { $0.audioFingerprint == fingerprint }) {
-            records?[index].relativePath = relativePath
-            records?[index].resourceIdentifier = resourceIdentifier
-            persist()
+        let moveCandidates = missingRecordIndices.filter { index in
+            let sizeMatches = fileSize != nil && records?[index].fileSize == fileSize
+            let oldDuration = records?[index].duration ?? -1
+            return sizeMatches && abs(oldDuration - duration) < 0.25
+        }
+
+        if moveCandidates.count == 1, let index = moveCandidates.first {
+            updatePath(relativePath, at: index)
+            updateResourceIdentifier(resourceIdentifier, at: index)
+            records?[index].fileSize = fileSize
+            records?[index].modificationDate = modificationDate
+            records?[index].duration = duration
+            missingRecordIndices.remove(index)
+            markDirty()
             return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+        }
+
+        var fingerprint: String?
+        if !moveCandidates.isEmpty {
+            fingerprint = await Self.audioFingerprint(for: fileURL, duration: duration)
+            if let fingerprint,
+               let index = moveCandidates.first(where: { records?[$0].audioFingerprint == fingerprint }) {
+                updatePath(relativePath, at: index)
+                updateResourceIdentifier(resourceIdentifier, at: index)
+                records?[index].fileSize = fileSize
+                records?[index].modificationDate = modificationDate
+                records?[index].duration = duration
+                missingRecordIndices.remove(index)
+                markDirty()
+                return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+            }
         }
 
         // Preserve the former path-derived UUID for a lossless first migration.
         let id = StableTrackIdentifier.id(for: relativePath)
-        records?.append(Record(
+        append(Record(
             id: id,
             relativePath: relativePath,
             resourceIdentifier: resourceIdentifier,
-            audioFingerprint: fingerprint
+            audioFingerprint: fingerprint,
+            fileSize: fileSize,
+            modificationDate: modificationDate,
+            duration: duration
         ))
-        persist()
+        markDirty()
         return id
     }
 
@@ -78,8 +143,31 @@ actor TrackIdentityService: TrackIdentityServicing {
         for track in tracks {
             if Task.isCancelled { return }
             guard let relativePath = track.relativePath else { continue }
-            _ = await resolveID(for: track.fileURL, relativePath: relativePath, duration: track.duration)
+            await loadIfNeeded()
+            let values = try? track.fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let fileSize = track.fileSize ?? values?.fileSize.map(Int64.init)
+            let modificationDate = track.modificationDate ?? values?.contentModificationDate
+            let resourceIdentifier = Self.resourceIdentifier(for: track.fileURL)
+            if let index = pathIndex[relativePath] ?? idIndex[track.id] {
+                updatePath(relativePath, at: index)
+                updateResourceIdentifier(resourceIdentifier, at: index)
+                records?[index].fileSize = fileSize
+                records?[index].modificationDate = modificationDate
+                records?[index].duration = track.duration
+            } else {
+                append(Record(
+                    id: track.id,
+                    relativePath: relativePath,
+                    resourceIdentifier: resourceIdentifier,
+                    audioFingerprint: nil,
+                    fileSize: fileSize,
+                    modificationDate: modificationDate,
+                    duration: track.duration
+                ))
+            }
         }
+        isDirty = true
+        persistNow()
     }
 
     private func loadIfNeeded() async {
@@ -90,17 +178,64 @@ actor TrackIdentityService: TrackIdentityServicing {
             return
         }
         records = decoded
+        rebuildIndexes()
     }
 
-    private func persist() {
+    private func markDirty() {
+        isDirty = true
+        if !isScanActive { persistNow() }
+    }
+
+    private func persistNow() {
         guard let records else { return }
         do {
             try FileManager.default.createDirectory(at: registryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(records).write(to: registryURL, options: .atomic)
+            isDirty = false
         } catch {
             // Identity resolution remains usable in memory; persistence retries on the next resolution.
+        }
+    }
+
+    private func rebuildIndexes() {
+        pathIndex.removeAll(keepingCapacity: true)
+        idIndex.removeAll(keepingCapacity: true)
+        resourceIndex.removeAll(keepingCapacity: true)
+        for (index, record) in (records ?? []).enumerated() {
+            pathIndex[record.relativePath] = index
+            idIndex[record.id] = index
+            if let resourceIdentifier = record.resourceIdentifier {
+                resourceIndex[resourceIdentifier] = index
+            }
+        }
+    }
+
+    private func updatePath(_ relativePath: String, at index: Int) {
+        if let oldPath = records?[index].relativePath { pathIndex.removeValue(forKey: oldPath) }
+        records?[index].relativePath = relativePath
+        pathIndex[relativePath] = index
+    }
+
+    private func updateResourceIdentifier(_ resourceIdentifier: String?, at index: Int) {
+        if let oldIdentifier = records?[index].resourceIdentifier {
+            resourceIndex.removeValue(forKey: oldIdentifier)
+        }
+        records?[index].resourceIdentifier = resourceIdentifier
+        if let resourceIdentifier {
+            resourceIndex[resourceIdentifier] = index
+        }
+    }
+
+    private func append(_ record: Record) {
+        if records == nil { records = [] }
+        records?.append(record)
+        guard let index = records?.indices.last else { return }
+        pathIndex[record.relativePath] = index
+        idIndex[record.id] = index
+        if let resourceIdentifier = record.resourceIdentifier {
+            resourceIndex[resourceIdentifier] = index
         }
     }
 

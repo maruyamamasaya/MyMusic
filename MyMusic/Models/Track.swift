@@ -8,6 +8,8 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     var duration: TimeInterval
     var fileURL: URL
     var relativePath: String? = nil
+    var fileSize: Int64? = nil
+    var modificationDate: Date? = nil
     var artworkIdentifier: String? = nil
     var trackNumber: Int? = nil
     var discNumber: Int? = nil
