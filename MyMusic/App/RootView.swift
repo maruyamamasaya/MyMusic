@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @State private var isNowPlayingPresented = false
+
     var body: some View {
         TabView {
             Tab("Home", systemImage: "house") { HomeView() }
@@ -9,6 +11,30 @@ struct RootView: View {
             Tab("Playlists", systemImage: "list.bullet.rectangle") { PlaylistView() }
             Tab("Search", systemImage: "magnifyingglass") { SearchView() }
         }
-        // A bottom safe-area inset can host MiniPlayerView when playback is enabled.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if playerStore.currentTrack != nil {
+                MiniPlayerView {
+                    isNowPlayingPresented = true
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: playerStore.currentTrack?.id)
+        .sheet(isPresented: $isNowPlayingPresented) {
+            NowPlayingView()
+                .presentationDragIndicator(.visible)
+        }
+        .alert("Playback Error", isPresented: errorIsPresented) {
+            Button("OK") { playerStore.dismissError() }
+        } message: {
+            Text(playerStore.errorMessage ?? "Playback failed.")
+        }
+    }
+
+    private var errorIsPresented: Binding<Bool> {
+        Binding(
+            get: { playerStore.errorMessage != nil },
+            set: { if !$0 { playerStore.dismissError() } }
+        )
     }
 }

@@ -36,17 +36,5 @@ struct SongsView: View {
             }
         }
         .navigationTitle("Songs")
-        .alert("Playback Error", isPresented: errorIsPresented) {
-            Button("OK") { playerStore.dismissError() }
-        } message: {
-            Text(playerStore.errorMessage ?? "Playback failed.")
-        }
-    }
-
-    private var errorIsPresented: Binding<Bool> {
-        Binding(
-            get: { playerStore.errorMessage != nil },
-            set: { if !$0 { playerStore.dismissError() } }
-        )
     }
 }
