@@ -1,5 +1,5 @@
 import SwiftUI
 
 struct PlaylistView: View {
-    var body: some View { NavigationStack { List { NavigationLink("Favorites", systemImage: "heart", destination: PlaylistDetailView(title: "Favorites")); NavigationLink("Recently Played", systemImage: "clock", destination: PlaylistDetailView(title: "Recently Played")) }.navigationTitle("Playlists") } }
+    var body: some View { NavigationStack { List { NavigationLink(destination: PlaylistDetailView(title: "Favorites")) { Label("Favorites", systemImage: "heart") }; NavigationLink(destination: PlaylistDetailView(title: "Recently Played")) { Label("Recently Played", systemImage: "clock") } }.navigationTitle("Playlists") } }
 }
