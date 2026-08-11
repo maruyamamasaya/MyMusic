@@ -57,6 +57,7 @@ final class PlaybackHistoryStore {
     func recordPlaybackCompleted(trackID: Track.ID) {
         var entry = entry(for: trackID)
         entry.playCount += 1
+        entry.playbackEvents.append(Date())
         entries[trackID] = entry
         persist()
     }

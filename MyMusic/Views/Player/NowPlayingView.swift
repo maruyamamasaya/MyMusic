@@ -34,7 +34,7 @@ struct NowPlayingView: View {
     }
 
     private var nowPlayingContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
             ArtworkAudioDetailsView(
                 artworkIdentifier: playerStore.currentTrack?.artworkIdentifier,
                 trackTitle: playerStore.currentTrack?.title,
@@ -42,10 +42,12 @@ struct NowPlayingView: View {
                 showsAudioDetails: $showsAudioDetails
             )
             .containerRelativeFrame(.horizontal) { availableWidth, _ in
-                min(availableWidth * 0.72, 300)
+                min(availableWidth, 360)
             }
 
             trackInformation
+
+            Spacer(minLength: 8)
 
             ProgressBarView(
                 currentTime: playerStore.currentTime,
@@ -73,7 +75,9 @@ struct NowPlayingView: View {
             .buttonStyle(.bordered)
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+        .frame(maxHeight: .infinity)
     }
 
     private var trackInformation: some View {
