@@ -133,6 +133,53 @@ final class PlayerStore {
         startPlayback(at: index)
     }
 
+    /// Removes queue entries at positions in the currently displayed playback order.
+    /// The track that is currently playing is intentionally kept in the queue.
+    func removeQueueItems(atOffsets offsets: IndexSet) {
+        let indexesToRemove: Set<Int> = Set(offsets.compactMap { position -> Int? in
+            guard playbackOrder.indices.contains(position) else { return nil }
+            let queueIndex = playbackOrder[position]
+            return queueIndex == currentIndex ? nil : queueIndex
+        })
+        guard !indexesToRemove.isEmpty else { return }
+
+        let oldCurrentIndex = currentIndex
+        queue = queue.enumerated().compactMap { index, track in
+            indexesToRemove.contains(index) ? nil : track
+        }
+        playbackOrder = playbackOrder
+            .filter { !indexesToRemove.contains($0) }
+            .map { oldIndex in
+                oldIndex - indexesToRemove.filter { $0 < oldIndex }.count
+            }
+        if let oldCurrentIndex {
+            currentIndex = oldCurrentIndex - indexesToRemove.filter { $0 < oldCurrentIndex }.count
+        }
+        updateRemoteCommandAvailability()
+    }
+
+    /// Moves queue entries using positions from the currently displayed playback order.
+    func moveQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let validSource = source.filter { playbackOrder.indices.contains($0) }
+        guard !validSource.isEmpty else { return }
+
+        let movedIndexes = validSource.sorted().map { playbackOrder[$0] }
+        var reorderedIndexes = playbackOrder.enumerated()
+            .filter { !validSource.contains($0.offset) }
+            .map(\.element)
+        let insertionIndex = min(
+            max(destination - validSource.filter { $0 < destination }.count, 0),
+            reorderedIndexes.count
+        )
+        reorderedIndexes.insert(contentsOf: movedIndexes, at: insertionIndex)
+
+        let oldCurrentIndex = currentIndex
+        queue = reorderedIndexes.map { queue[$0] }
+        currentIndex = oldCurrentIndex.flatMap { reorderedIndexes.firstIndex(of: $0) }
+        playbackOrder = Array(queue.indices)
+        updateRemoteCommandAvailability()
+    }
+
     func next() {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
             audioPlayer.pause()

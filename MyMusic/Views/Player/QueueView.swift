@@ -42,7 +42,10 @@ struct QueueView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
+                                .deleteDisabled(index == playerStore.currentIndex)
                             }
+                            .onDelete(perform: playerStore.removeQueueItems)
+                            .onMove(perform: playerStore.moveQueueItems)
                         }
                     }
                 }
@@ -50,6 +53,9 @@ struct QueueView: View {
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
