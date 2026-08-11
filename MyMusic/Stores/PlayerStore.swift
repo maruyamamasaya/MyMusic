@@ -48,23 +48,39 @@ final class PlayerStore {
     private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
     private let playbackHistoryStore: PlaybackHistoryStore
+    private let nowPlayingService: NowPlayingServicing
+    private let remoteCommandService: RemoteCommandServicing
     private var playbackTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
     private var hasRecordedPlaybackStart = false
     private var hasCountedCurrentPlay = false
     private var listenedTime: TimeInterval = 0
     private var lastObservedPlaybackTime: TimeInterval?
+    private var wasPlayingBeforeInterruption = false
 
     init(
         audioPlayer: AudioPlayerServicing? = nil,
-        playbackHistoryStore: PlaybackHistoryStore? = nil
+        playbackHistoryStore: PlaybackHistoryStore? = nil,
+        nowPlayingService: NowPlayingServicing? = nil,
+        remoteCommandService: RemoteCommandServicing? = nil
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
         self.playbackHistoryStore = playbackHistoryStore ?? PlaybackHistoryStore()
+        self.nowPlayingService = nowPlayingService ?? NowPlayingService()
+        self.remoteCommandService = remoteCommandService ?? RemoteCommandService()
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
         }
+        self.remoteCommandService.configure(actions: RemoteCommandActions(
+            play: { [weak self] in self?.resume() },
+            pause: { [weak self] in self?.pause() },
+            togglePlayPause: { [weak self] in self?.togglePlayPause() },
+            next: { [weak self] in self?.next() },
+            previous: { [weak self] in self?.previous() },
+            seek: { [weak self] time in self?.seek(to: time) }
+        ))
+        updateRemoteCommandAvailability()
     }
 
     /// Starts a one-item queue for callers that do not provide playback context.
@@ -97,6 +113,8 @@ final class PlayerStore {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
             audioPlayer.pause()
             isPlaying = false
+            nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: false)
+            updateRemoteCommandAvailability()
             return
         }
         startPlayback(at: playbackOrder[nextPosition])
@@ -119,10 +137,12 @@ final class PlayerStore {
         guard isShuffleEnabled != isEnabled else { return }
         isShuffleEnabled = isEnabled
         rebuildPlaybackOrder(keepingCurrentIndex: currentIndex)
+        updateRemoteCommandAvailability()
     }
 
     func cycleRepeatMode() {
         repeatMode = repeatMode.next
+        updateRemoteCommandAvailability()
     }
 
     func pause() {
@@ -156,6 +176,7 @@ final class PlayerStore {
 
     func seek(to time: TimeInterval) {
         audioPlayer.seek(to: time)
+        nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
     }
 
     func stop() {
@@ -171,6 +192,8 @@ final class PlayerStore {
         currentTime = 0
         duration = 0
         isLoading = false
+        nowPlayingService.clear()
+        updateRemoteCommandAvailability()
     }
 
     func dismissError() { errorMessage = nil }
@@ -188,6 +211,8 @@ final class PlayerStore {
         isPlaying = false
         isLoading = true
         errorMessage = nil
+        nowPlayingService.setTrack(track, duration: track.duration, elapsedTime: 0, isPlaying: false)
+        updateRemoteCommandAvailability()
 
         playbackTask = Task { [weak self] in
             guard let self else { return }
@@ -244,6 +269,7 @@ final class PlayerStore {
         case let .ready(duration):
             self.duration = duration
             isLoading = false
+            nowPlayingService.updateDuration(duration, elapsedTime: currentTime, isPlaying: isPlaying)
         case let .timeChanged(time):
             let safeTime = time.isFinite ? time : 0
             recordListenedTime(at: safeTime)
@@ -255,14 +281,27 @@ final class PlayerStore {
                 hasRecordedPlaybackStart = true
             }
             lastObservedPlaybackTime = isPlaying ? currentTime : nil
+            nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
+            updateRemoteCommandAvailability()
         case .ended:
             isPlaying = false
             currentTime = duration
+            nowPlayingService.updatePlayback(elapsedTime: duration, isPlaying: false)
             advanceAfterTrackEnded()
+            updateRemoteCommandAvailability()
         case let .failed(message):
             isPlaying = false
             isLoading = false
             errorMessage = message
+            nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: false)
+        case .interruptionBegan:
+            wasPlayingBeforeInterruption = isPlaying
+            if isPlaying { pause() }
+        case let .interruptionEnded(shouldResume):
+            if shouldResume, wasPlayingBeforeInterruption { resume() }
+            wasPlayingBeforeInterruption = false
+        case .oldAudioDeviceUnavailable:
+            if isPlaying { pause() }
         }
     }
 
@@ -283,5 +322,13 @@ final class PlayerStore {
         guard threshold > 0, listenedTime >= threshold, let currentTrack else { return }
         playbackHistoryStore.recordPlaybackCompleted(trackID: currentTrack.id)
         hasCountedCurrentPlay = true
+    }
+
+    private func updateRemoteCommandAvailability() {
+        remoteCommandService.updateAvailability(
+            hasTrack: currentTrack != nil,
+            canGoNext: hasNext,
+            canGoPrevious: currentTrack != nil
+        )
     }
 }

@@ -7,6 +7,9 @@ enum AudioPlaybackEvent {
     case playingChanged(Bool)
     case ended
     case failed(String)
+    case interruptionBegan
+    case interruptionEnded(shouldResume: Bool)
+    case oldAudioDeviceUnavailable
 }
 
 enum AudioPlayerServiceError: LocalizedError {
@@ -41,17 +44,20 @@ final class AudioPlayerService: AudioPlayerServicing {
     private var player: AVPlayer?
     private var currentTrack: Track?
     private var timeObserver: Any?
-    private var notificationTokens: [NSObjectProtocol] = []
+    private var itemNotificationTokens: [NSObjectProtocol] = []
+    private var audioSessionNotificationTokens: [NSObjectProtocol] = []
     private var accessedURL: URL?
     private var isAccessingSecurityScope = false
 
     init(fileImportService: FileImportServicing? = nil) {
         self.fileImportService = fileImportService ?? FileImportService()
+        observeAudioSession()
     }
 
     deinit {
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
-        notificationTokens.forEach(NotificationCenter.default.removeObserver)
+        itemNotificationTokens.forEach(NotificationCenter.default.removeObserver)
+        audioSessionNotificationTokens.forEach(NotificationCenter.default.removeObserver)
         if isAccessingSecurityScope { accessedURL?.stopAccessingSecurityScopedResource() }
     }
 
@@ -126,13 +132,13 @@ final class AudioPlayerService: AudioPlayerServicing {
         }
 
         let center = NotificationCenter.default
-        notificationTokens.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+        itemNotificationTokens.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.eventHandler?(.ended)
                 self?.endFileAccess()
             }
         })
-        notificationTokens.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] notification in
+        itemNotificationTokens.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] notification in
             MainActor.assumeIsolated {
                 let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
                 self?.eventHandler?(.failed(error?.localizedDescription ?? "Playback failed."))
@@ -163,8 +169,8 @@ final class AudioPlayerService: AudioPlayerServicing {
         player?.pause()
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         timeObserver = nil
-        notificationTokens.forEach(NotificationCenter.default.removeObserver)
-        notificationTokens.removeAll()
+        itemNotificationTokens.forEach(NotificationCenter.default.removeObserver)
+        itemNotificationTokens.removeAll()
         player = nil
         if clearTrack { currentTrack = nil }
         endFileAccess()
@@ -174,5 +180,44 @@ final class AudioPlayerService: AudioPlayerServicing {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
         try session.setActive(true)
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        let session = AVAudioSession.sharedInstance()
+        audioSessionNotificationTokens.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] notification in
+            MainActor.assumeIsolated { self?.handleInterruption(notification) }
+        })
+        audioSessionNotificationTokens.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] notification in
+            MainActor.assumeIsolated { self?.handleRouteChange(notification) }
+        })
+    }
+
+    private func handleInterruption(_ notification: Notification) {
+        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+        switch type {
+        case .began:
+            eventHandler?(.interruptionBegan)
+        case .ended:
+            let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            eventHandler?(.interruptionEnded(shouldResume: AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume)))
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRouteChange(_ notification: Notification) {
+        guard let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable else { return }
+        eventHandler?(.oldAudioDeviceUnavailable)
     }
 }
