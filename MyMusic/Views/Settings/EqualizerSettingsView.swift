@@ -105,25 +105,23 @@ struct EqualizerSettingsView: View {
     }
 
     private func presetMenu(title: String, presets: [EqualizerPreset]) -> some View {
-        Menu {
+        Picker(title, selection: presetSelection(in: presets)) {
+            Text("選択").tag(EqualizerPreset.ID?.none)
             ForEach(presets) { preset in
-                Button {
-                    settingsStore.applyPreset(preset)
-                } label: {
-                    if matchesCurrentSettings(preset) {
-                        Label(preset.name, systemImage: "checkmark")
-                    } else {
-                        Text(preset.name)
-                    }
-                }
+                Text(preset.name).tag(Optional(preset.id))
             }
-        } label: {
-            LabeledContent(title, value: currentPresetName(in: presets) ?? "選択")
         }
+        .pickerStyle(.menu)
     }
 
-    private func currentPresetName(in presets: [EqualizerPreset]) -> String? {
-        presets.first(where: matchesCurrentSettings)?.name
+    private func presetSelection(in presets: [EqualizerPreset]) -> Binding<EqualizerPreset.ID?> {
+        Binding(
+            get: { presets.first(where: matchesCurrentSettings)?.id },
+            set: { selectedID in
+                guard let selectedID, let preset = presets.first(where: { $0.id == selectedID }) else { return }
+                settingsStore.applyPreset(preset)
+            }
+        )
     }
 
     private func matchesCurrentSettings(_ preset: EqualizerPreset) -> Bool {
