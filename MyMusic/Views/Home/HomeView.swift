@@ -18,12 +18,14 @@ struct HomeView: View {
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
-                            HomePlaylistSection(
-                                playlists: Array(playlistStore.playlists.sorted { $0.createdAt > $1.createdAt }.prefix(5)),
-                                showsMore: playlistStore.playlists.count > 5,
-                                tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
-                                onPlay: playPlaylist
-                            )
+                            if playlistStore.playlists.isEmpty || !homePlaylists.isEmpty {
+                                HomePlaylistSection(
+                                    playlists: Array(homePlaylists.prefix(5)),
+                                    showsMore: homePlaylists.count > 5,
+                                    tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
+                                    onPlay: playPlaylist
+                                )
+                            }
                         }
                     }
                 }
@@ -43,6 +45,15 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private var homePlaylists: [Playlist] {
+        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
+        return playlistStore.playlists
+            .filter { playlist in
+                playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
+            }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     private func playPlaylist(_ playlist: Playlist) {
