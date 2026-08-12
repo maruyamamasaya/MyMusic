@@ -1,9 +1,8 @@
 import Foundation
 
 protocol FileImportServicing: Sendable {
-    func saveLibraryFolder(_ url: URL) throws
-    func restoreLibraryFolder() throws -> URL?
-    func removeLibraryFolder()
+    func saveLibraryFolders(_ urls: [URL]) throws
+    func restoreLibraryFolders() throws -> [URL]
     func audioFiles(in folderURL: URL) async throws -> [URL]
 }
 
@@ -26,30 +25,36 @@ enum FileImportServiceError: LocalizedError {
 final class FileImportService: FileImportServicing, @unchecked Sendable {
     private let defaults: UserDefaults
     private let bookmarkKey = "musicLibraryFolderBookmark"
+    private let bookmarksKey = "musicLibraryFolderBookmarks"
     private nonisolated static let supportedExtensions: Set<String> = ["m4a", "mp3", "flac", "wav", "aiff", "aif", "aac"]
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
-    func saveLibraryFolder(_ url: URL) throws {
-        let hasAccess = url.startAccessingSecurityScopedResource()
-        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
-
-        guard hasAccess || FileManager.default.isReadableFile(atPath: url.path) else {
-            throw FileImportServiceError.accessDenied
+    func saveLibraryFolders(_ urls: [URL]) throws {
+        var bookmarks: [Data] = []
+        for url in urls {
+            let hasAccess = url.startAccessingSecurityScopedResource()
+            defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+            guard hasAccess || FileManager.default.isReadableFile(atPath: url.path) else {
+                throw FileImportServiceError.accessDenied
+            }
+            do {
+                bookmarks.append(try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil))
+            } catch {
+                throw FileImportServiceError.bookmarkCreationFailed
+            }
         }
-        do {
-            let data = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-            defaults.set(data, forKey: bookmarkKey)
-        } catch {
-            throw FileImportServiceError.bookmarkCreationFailed
-        }
+        defaults.set(bookmarks, forKey: bookmarksKey)
+        defaults.removeObject(forKey: bookmarkKey)
     }
 
-    func restoreLibraryFolder() throws -> URL? {
-        guard let data = defaults.data(forKey: bookmarkKey) else { return nil }
-        do {
+    func restoreLibraryFolders() throws -> [URL] {
+        let bookmarks = (defaults.array(forKey: bookmarksKey) as? [Data])
+            ?? defaults.data(forKey: bookmarkKey).map { [$0] }
+            ?? []
+        return try bookmarks.map { data in
             var isStale = false
             let url = try URL(
                 resolvingBookmarkData: data,
@@ -63,17 +68,8 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
                   FileManager.default.fileExists(atPath: url.path) else {
                 throw FileImportServiceError.folderUnavailable
             }
-            if isStale { try saveLibraryFolder(url) }
             return url
-        } catch let error as FileImportServiceError {
-            throw error
-        } catch {
-            throw FileImportServiceError.bookmarkResolutionFailed
         }
-    }
-
-    func removeLibraryFolder() {
-        defaults.removeObject(forKey: bookmarkKey)
     }
 
     func audioFiles(in folderURL: URL) async throws -> [URL] {

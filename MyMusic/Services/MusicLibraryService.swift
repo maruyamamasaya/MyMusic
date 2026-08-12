@@ -37,9 +37,10 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         let filesByPath = files.map { fileURL in
             (fileURL, StableTrackIdentifier.relativePath(for: fileURL, relativeTo: folderURL))
         }
-        await identityService.prepareForScan(relativePaths: Set(filesByPath.map(\.1)))
+        let identityPrefix = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping
+        await identityService.prepareForScan(relativePaths: Set(filesByPath.map { identityPrefix + "/" + $0.1 }))
         do {
-            let library = try await scanFiles(filesByPath, previousTracks: previousTracks, folderURL: folderURL)
+            let library = try await scanFiles(filesByPath, previousTracks: previousTracks, folderURL: folderURL, identityPrefix: identityPrefix)
             await identityService.finishScan()
             return library
         } catch {
@@ -51,7 +52,8 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
     private func scanFiles(
         _ filesByPath: [(URL, String)],
         previousTracks: [Track],
-        folderURL: URL
+        folderURL: URL,
+        identityPrefix: String
     ) async throws -> MusicLibrary {
         let previousByPath = Dictionary(uniqueKeysWithValues: previousTracks.compactMap { track in
             track.relativePath.map { ($0, track) }

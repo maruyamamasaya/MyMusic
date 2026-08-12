@@ -10,7 +10,17 @@ struct LibraryView: View {
             List {
                 Section("音楽ライブラリ") {
                     if libraryStore.hasLibraryFolder {
-                        Label(libraryStore.selectedFolderName ?? "音楽フォルダ", systemImage: "folder")
+                        ForEach(libraryStore.libraryFolders) { folder in
+                            HStack {
+                                Label(folder.name, systemImage: "folder")
+                                Spacer()
+                                Button(role: .destructive) {
+                                    Task { await libraryStore.removeFolder(folder) }
+                                } label: { Image(systemName: "minus.circle") }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("\(folder.name)を解除")
+                            }
+                        }
                     } else {
                         ContentUnavailableView(
                             "音楽フォルダが未選択です",
@@ -44,7 +54,7 @@ struct LibraryView: View {
                             Task { await libraryStore.rescan() }
                         }
                         .disabled(libraryStore.isLoading)
-                        Button("音楽フォルダを変更", systemImage: "folder.badge.gearshape") {
+                        Button("音楽フォルダを追加", systemImage: "folder.badge.plus") {
                             isFolderImporterPresented = true
                         }
                         .disabled(libraryStore.isLoading)
@@ -68,12 +78,11 @@ struct LibraryView: View {
             .fileImporter(
                 isPresented: $isFolderImporterPresented,
                 allowedContentTypes: [UTType.folder],
-                allowsMultipleSelection: false
+                allowsMultipleSelection: true
             ) { result in
                 switch result {
                 case let .success(urls):
-                    guard let folderURL = urls.first else { return }
-                    Task { await libraryStore.selectFolder(folderURL) }
+                    Task { await libraryStore.addFolders(urls) }
                 case let .failure(error):
                     libraryStore.reportFolderImportFailure(error)
                 }

@@ -48,7 +48,7 @@ final class MetadataService: MetadataServicing, Sendable {
         let modificationDate = resourceValues?.contentModificationDate
         let trackID = await identityService.resolveID(
             for: fileURL,
-            relativePath: relativePath,
+            relativePath: libraryFolder.standardizedFileURL.path.precomposedStringWithCanonicalMapping + "/" + relativePath,
             fileSize: fileSize,
             modificationDate: modificationDate,
             duration: duration.isFinite ? duration : 0

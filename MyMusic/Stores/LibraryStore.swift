@@ -1,6 +1,15 @@
 import Foundation
 import Observation
 
+struct LibraryFolder: Identifiable, Hashable {
+    let url: URL
+    var id: String { url.standardizedFileURL.path }
+    var name: String {
+        let parent = url.deletingLastPathComponent().lastPathComponent
+        return parent.isEmpty ? url.lastPathComponent : "\(parent) / \(url.lastPathComponent)"
+    }
+}
+
 @MainActor
 @Observable
 final class LibraryStore {
@@ -9,36 +18,29 @@ final class LibraryStore {
     private(set) var artists: [Artist] = []
     private(set) var genres: [Genre] = []
     private(set) var composers: [Composer] = []
+    private(set) var libraryFolders: [LibraryFolder] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
-    private(set) var selectedFolderName: String?
     private(set) var isInitialLoadComplete = false
 
-    var hasLibraryFolder: Bool { selectedFolderURL != nil }
+    var hasLibraryFolder: Bool { !libraryFolders.isEmpty }
     var scanProgress: Int { tracks.count }
 
-    private var selectedFolderURL: URL?
+    private var librariesByFolderID: [String: MusicLibrary] = [:]
     private var hasRestoredFolder = false
     private let service: MusicLibraryServicing
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
     private let identityService: TrackIdentityServicing
 
-    init(
-        service: MusicLibraryServicing? = nil,
-        fileImportService: FileImportServicing? = nil,
-        persistence: LibraryPersistenceServicing? = nil,
-        identityService: TrackIdentityServicing? = nil
-    ) {
-        let resolvedFileImportService = fileImportService ?? FileImportService()
-        let resolvedIdentityService = identityService ?? TrackIdentityService.shared
-        self.fileImportService = resolvedFileImportService
-        self.identityService = resolvedIdentityService
-        self.service = service ?? MusicLibraryService(
-            fileImportService: resolvedFileImportService,
-            metadataService: MetadataService(identityService: resolvedIdentityService),
-            identityService: resolvedIdentityService
-        )
+    init(service: MusicLibraryServicing? = nil, fileImportService: FileImportServicing? = nil,
+         persistence: LibraryPersistenceServicing? = nil, identityService: TrackIdentityServicing? = nil) {
+        let importer = fileImportService ?? FileImportService()
+        let identities = identityService ?? TrackIdentityService.shared
+        self.fileImportService = importer
+        self.identityService = identities
+        self.service = service ?? MusicLibraryService(fileImportService: importer,
+            metadataService: MetadataService(identityService: identities), identityService: identities)
         self.persistence = persistence ?? LibraryPersistenceService()
     }
 
@@ -47,131 +49,113 @@ final class LibraryStore {
         hasRestoredFolder = true
         defer { isInitialLoadComplete = true }
         do {
-            guard let folderURL = try fileImportService.restoreLibraryFolder() else { return }
-            selectedFolderURL = folderURL
-            selectedFolderName = displayName(for: folderURL)
-            if let cachedLibrary = try? await persistence.load(for: folderURL) {
-                apply(cachedLibrary)
-                Task { [identityService] in
-                    await identityService.registerExistingTracks(cachedLibrary.tracks, in: folderURL)
+            libraryFolders = normalized(try fileImportService.restoreLibraryFolders()).map(LibraryFolder.init)
+            for folder in libraryFolders {
+                if let cached = try? await persistence.load(for: folder.url) {
+                    librariesByFolderID[folder.id] = cached
+                    Task { [identityService] in await identityService.registerExistingTracks(cached.tracks, in: folder.url) }
+                } else {
+                    await scan(folder)
                 }
-            } else {
-                await scan(folderURL)
             }
+            rebuildCombinedLibrary()
         } catch {
-            fileImportService.removeLibraryFolder()
             errorMessage = error.localizedDescription
         }
     }
 
-    func selectFolder(_ folderURL: URL) async {
+    func addFolders(_ urls: [URL]) async {
         errorMessage = nil
+        let oldIDs = Set(libraryFolders.map(\.id))
+        let normalizedURLs = normalized(libraryFolders.map(\.url) + urls)
+        let newFolders = normalizedURLs.map(LibraryFolder.init)
         do {
-            try fileImportService.saveLibraryFolder(folderURL)
-            selectedFolderURL = folderURL
-            selectedFolderName = displayName(for: folderURL)
-            await scan(folderURL)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+            try fileImportService.saveLibraryFolders(normalizedURLs)
+            libraryFolders = newFolders
+            librariesByFolderID = librariesByFolderID.filter { newFolders.map(\.id).contains($0.key) }
+            for folder in newFolders where !oldIDs.contains(folder.id) { await scan(folder) }
+            rebuildCombinedLibrary()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func removeFolder(_ folder: LibraryFolder) async {
+        let remaining = libraryFolders.filter { $0.id != folder.id }
+        do {
+            try fileImportService.saveLibraryFolders(remaining.map(\.url))
+            libraryFolders = remaining
+            librariesByFolderID.removeValue(forKey: folder.id)
+            rebuildCombinedLibrary()
+        } catch { errorMessage = error.localizedDescription }
     }
 
     func rescan() async {
-        guard let selectedFolderURL else {
-            errorMessage = "先に音楽フォルダを選択してください。"
-            return
-        }
-        await scan(selectedFolderURL)
+        guard !libraryFolders.isEmpty else { errorMessage = "先に音楽フォルダを選択してください。"; return }
+        for folder in libraryFolders { await scan(folder) }
+        rebuildCombinedLibrary()
     }
 
     func dismissError() { errorMessage = nil }
-
-    func tracks(for album: Album) -> [Track] {
-        resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder)
-    }
-
+    func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for artist: Artist) -> [Track] {
         let artistTracks = resolvedTracks(for: artist.trackIDs)
         let albumOrder = Dictionary(uniqueKeysWithValues: artist.albumIDs.enumerated().map { ($0.element, $0.offset) })
         var albumByTrackID: [Track.ID: Album.ID] = [:]
-        for album in albums {
-            for trackID in album.trackIDs where albumByTrackID[trackID] == nil {
-                albumByTrackID[trackID] = album.id
-            }
-        }
-        return artistTracks.sorted { lhs, rhs in
-            let lhsAlbum = albumByTrackID[lhs.id].flatMap { albumOrder[$0] } ?? Int.max
-            let rhsAlbum = albumByTrackID[rhs.id].flatMap { albumOrder[$0] } ?? Int.max
-            if lhsAlbum != rhsAlbum { return lhsAlbum < rhsAlbum }
-            return Self.albumTrackOrder(lhs, rhs)
+        for album in albums { for id in album.trackIDs where albumByTrackID[id] == nil { albumByTrackID[id] = album.id } }
+        return artistTracks.sorted {
+            let lhs = albumByTrackID[$0.id].flatMap { albumOrder[$0] } ?? .max
+            let rhs = albumByTrackID[$1.id].flatMap { albumOrder[$0] } ?? .max
+            return lhs != rhs ? lhs < rhs : Self.albumTrackOrder($0, $1)
         }
     }
-
     func albums(for artist: Artist) -> [Album] {
-        let albumsByID = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
-        return artist.albumIDs.compactMap { albumsByID[$0] }
+        let byID = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
+        return artist.albumIDs.compactMap { byID[$0] }
     }
-
     func reportFolderImportFailure(_ error: Error) {
-        let nsError = error as NSError
-        guard nsError.code != NSUserCancelledError else { return }
+        guard (error as NSError).code != NSUserCancelledError else { return }
         errorMessage = "フォルダを選択できませんでした: \(error.localizedDescription)"
     }
 
-    private func scan(_ folderURL: URL) async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
+    private func scan(_ folder: LibraryFolder) async {
+        isLoading = true; defer { isLoading = false }
         do {
-            let library = try await service.loadLibrary(from: folderURL, previousTracks: tracks)
-            apply(library)
-            do {
-                try await persistence.save(library, for: folderURL)
-            } catch {
-                errorMessage = "ライブラリ情報を保存できませんでした: \(error.localizedDescription)"
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+            let previous = librariesByFolderID[folder.id]?.tracks ?? []
+            let library = try await service.loadLibrary(from: folder.url, previousTracks: previous)
+            librariesByFolderID[folder.id] = library
+            try await persistence.save(library, for: folder.url)
+            rebuildCombinedLibrary()
+        } catch is CancellationError { return }
+        catch { errorMessage = error.localizedDescription }
     }
 
+    private func rebuildCombinedLibrary() {
+        var seenPaths: Set<String> = []
+        let combined = libraryFolders.flatMap { librariesByFolderID[$0.id]?.tracks ?? [] }.filter {
+            seenPaths.insert($0.fileURL.resolvingSymlinksInPath().standardizedFileURL.path).inserted
+        }
+        apply(MusicLibrary.build(from: combined))
+    }
     private func apply(_ library: MusicLibrary) {
-        tracks = library.tracks
-        albums = library.albums
-        artists = library.artists
-        genres = library.genres
-        composers = library.composers
+        tracks = library.tracks; albums = library.albums; artists = library.artists
+        genres = library.genres; composers = library.composers
     }
-
-    private func resolvedTracks(for trackIDs: [Track.ID]) -> [Track] {
-        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
-        var seen: Set<Track.ID> = []
-        return trackIDs.compactMap { id in
-            guard seen.insert(id).inserted else { return nil }
-            return tracksByID[id]
+    private func resolvedTracks(for ids: [Track.ID]) -> [Track] {
+        let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); var seen: Set<Track.ID> = []
+        return ids.compactMap { seen.insert($0).inserted ? byID[$0] : nil }
+    }
+    private func normalized(_ urls: [URL]) -> [URL] {
+        let unique = Dictionary(urls.map { ($0.resolvingSymlinksInPath().standardizedFileURL.path, $0) }, uniquingKeysWith: { first, _ in first })
+        return unique.sorted { $0.key.count < $1.key.count }.reduce(into: [URL]()) { result, item in
+            let candidate = item.value.resolvingSymlinksInPath().standardizedFileURL
+            guard !result.contains(where: { candidate.pathComponents.starts(with: $0.pathComponents) }) else { return }
+            result.append(candidate)
         }
     }
-
     private static func albumTrackOrder(_ lhs: Track, _ rhs: Track) -> Bool {
-        let lhsDisc = lhs.discNumber ?? 1
-        let rhsDisc = rhs.discNumber ?? 1
-        if lhsDisc != rhsDisc { return lhsDisc < rhsDisc }
-        switch (lhs.trackNumber, rhs.trackNumber) {
-        case let (lhsNumber?, rhsNumber?) where lhsNumber != rhsNumber:
-            return lhsNumber < rhsNumber
-        case (_?, nil):
-            return true
-        case (nil, _?):
-            return false
-        default:
-            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-        }
-    }
-
-    private func displayName(for url: URL) -> String {
-        let parent = url.deletingLastPathComponent().lastPathComponent
-        return parent.isEmpty ? url.lastPathComponent : "\(parent) / \(url.lastPathComponent)"
+        if (lhs.discNumber ?? 1) != (rhs.discNumber ?? 1) { return (lhs.discNumber ?? 1) < (rhs.discNumber ?? 1) }
+        if let l = lhs.trackNumber, let r = rhs.trackNumber, l != r { return l < r }
+        if lhs.trackNumber != nil && rhs.trackNumber == nil { return true }
+        if lhs.trackNumber == nil && rhs.trackNumber != nil { return false }
+        return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
     }
 }

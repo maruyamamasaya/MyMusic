@@ -13,6 +13,10 @@ actor LibraryPersistenceService: LibraryPersistenceServicing {
 
     private let fileURL: URL
 
+    private struct Store: Codable {
+        var snapshots: [Snapshot]
+    }
+
     init(fileURL: URL? = nil) {
         if let fileURL {
             self.fileURL = fileURL
@@ -24,8 +28,14 @@ actor LibraryPersistenceService: LibraryPersistenceServicing {
 
     func load(for folderURL: URL) async throws -> MusicLibrary? {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
-        let snapshot = try JSONDecoder().decode(Snapshot.self, from: Data(contentsOf: fileURL))
-        guard snapshot.folderPath == folderURL.standardizedFileURL.path else { return nil }
+        let data = try Data(contentsOf: fileURL)
+        let snapshots: [Snapshot]
+        if let store = try? JSONDecoder().decode(Store.self, from: data) {
+            snapshots = store.snapshots
+        } else {
+            snapshots = [try JSONDecoder().decode(Snapshot.self, from: data)]
+        }
+        guard let snapshot = snapshots.first(where: { $0.folderPath == folderURL.standardizedFileURL.path }) else { return nil }
 
         let tracks = snapshot.library.tracks.map { track in
             var restoredTrack = track
@@ -42,9 +52,18 @@ actor LibraryPersistenceService: LibraryPersistenceServicing {
     func save(_ library: MusicLibrary, for folderURL: URL) async throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var snapshots: [Snapshot] = []
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            let data = try Data(contentsOf: fileURL)
+            snapshots = (try? JSONDecoder().decode(Store.self, from: data).snapshots)
+                ?? (try? [JSONDecoder().decode(Snapshot.self, from: data)])
+                ?? []
+        }
         let snapshot = Snapshot(folderPath: folderURL.standardizedFileURL.path, library: library)
+        snapshots.removeAll { $0.folderPath == snapshot.folderPath }
+        snapshots.append(snapshot)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(snapshot).write(to: fileURL, options: .atomic)
+        try encoder.encode(Store(snapshots: snapshots)).write(to: fileURL, options: .atomic)
     }
 }
