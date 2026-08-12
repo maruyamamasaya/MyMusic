@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
+    static let maximumPreference = 10
 
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var isLoaded = false
@@ -92,6 +93,20 @@ final class PlaybackHistoryStore {
         adjustPlaybackPreference(for: trackID, by: -1)
     }
 
+    /// Returns every track once, ordered by a preference-weighted random draw.
+    /// Positive preferences are more likely to appear early, while negative
+    /// preferences use the reciprocal weight and remain eligible for playback.
+    func preferenceWeightedShuffle(_ tracks: [Track]) -> [Track] {
+        tracks
+            .map { track in
+                let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
+                let key = -log(unitRandom) / playbackSelectionWeight(for: track.id)
+                return (track: track, key: key)
+            }
+            .sorted { $0.key < $1.key }
+            .map(\.track)
+    }
+
     func quickPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
         guard limit > 0 else { return [] }
 
@@ -105,25 +120,21 @@ final class PlaybackHistoryStore {
         let pairCount = min(limit / 2, recentFavorites.count, otherTracks.count)
 
         guard pairCount > 0 else {
-            return Array((recentFavorites + otherTracks).shuffled().prefix(limit))
+            return Array(preferenceWeightedShuffle(recentFavorites + otherTracks).prefix(limit))
         }
 
-        let favorites = Array(recentFavorites.prefix(pairCount)).shuffled()
-        let others = Array(otherTracks.shuffled().prefix(pairCount))
+        let favorites = preferenceWeightedShuffle(Array(recentFavorites.prefix(pairCount)))
+        let others = Array(preferenceWeightedShuffle(otherTracks).prefix(pairCount))
         return zip(favorites, others).flatMap { [$0, $1] }
     }
 
     func discoveryPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
-        Array(tracks.filter { playCount(for: $0.id) == 0 }.shuffled().prefix(limit))
+        Array(preferenceWeightedShuffle(tracks.filter { playCount(for: $0.id) == 0 }).prefix(limit))
     }
 
     func repeatPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
-        return Array(
-            tracks
-                .filter { playCount(for: $0.id) >= Self.repeatPlayMinimumCount }
-                .shuffled()
-                .prefix(limit)
-        )
+        let candidates = tracks.filter { playCount(for: $0.id) >= Self.repeatPlayMinimumCount }
+        return Array(preferenceWeightedShuffle(candidates).prefix(limit))
     }
 
     func mostPlayedTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
@@ -142,9 +153,19 @@ final class PlaybackHistoryStore {
 
     private func adjustPlaybackPreference(for trackID: Track.ID, by adjustment: Int) {
         var entry = entry(for: trackID)
-        entry.playbackPreference = min(2, max(-2, entry.playbackPreference + adjustment))
+        entry.playbackPreference = min(
+            Self.maximumPreference,
+            max(-Self.maximumPreference, entry.playbackPreference + adjustment)
+        )
         entries[trackID] = entry
         persist()
+    }
+
+    func playbackSelectionWeight(for trackID: Track.ID) -> Double {
+        let preference = playbackPreference(for: trackID)
+        if preference > 0 { return Double(preference + 1) }
+        if preference < 0 { return 1 / Double(abs(preference) + 1) }
+        return 1
     }
 
     private func entry(for trackID: Track.ID) -> PlaybackHistory {

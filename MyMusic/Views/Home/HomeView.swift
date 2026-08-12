@@ -60,7 +60,9 @@ struct HomeView: View {
         case .repeatPlay:
             tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
         case .favorites:
-            tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks).shuffled()
+            tracks = playbackHistoryStore.preferenceWeightedShuffle(
+                playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+            )
         default:
             return
         }

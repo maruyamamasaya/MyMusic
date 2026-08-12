@@ -334,7 +334,16 @@ final class PlayerStore {
             playbackOrder = naturalOrder
             return
         }
-        playbackOrder = [index] + naturalOrder.filter { $0 != index }.shuffled()
+        let weightedIndexes = naturalOrder
+            .filter { $0 != index }
+            .map { queueIndex in
+                let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
+                let weight = playbackHistoryStore.playbackSelectionWeight(for: queue[queueIndex].id)
+                return (index: queueIndex, key: -log(unitRandom) / weight)
+            }
+            .sorted { $0.key < $1.key }
+            .map(\.index)
+        playbackOrder = [index] + weightedIndexes
     }
 
     private func nextPlaybackPosition(wrapping: Bool) -> Int? {

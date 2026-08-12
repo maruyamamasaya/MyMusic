@@ -150,8 +150,8 @@ private struct QuickPlayView: View {
                         }
                         .buttonStyle(.plain)
 
-                        preferenceButton(systemImage: "hand.thumbsdown", label: "再生頻度を減らす", track: track, increase: false)
-                        preferenceButton(systemImage: "hand.thumbsup", label: "再生頻度を増やす", track: track, increase: true)
+                        PlaybackPreferenceButton(track: track, direction: .decrease, compact: true)
+                        PlaybackPreferenceButton(track: track, direction: .increase, compact: true)
                     }
                 }
             }
@@ -159,29 +159,6 @@ private struct QuickPlayView: View {
         .navigationTitle("クイック再生")
     }
 
-    private func preferenceButton(
-        systemImage: String,
-        label: String,
-        track: Track,
-        increase: Bool
-    ) -> some View {
-        let preference = playbackHistoryStore.playbackPreference(for: track.id)
-        let isActive = increase ? preference > 0 : preference < 0
-
-        return Button {
-            if increase {
-                playbackHistoryStore.increasePlaybackPreference(for: track.id)
-            } else {
-                playbackHistoryStore.decreasePlaybackPreference(for: track.id)
-            }
-        } label: {
-            Image(systemName: isActive ? "\(systemImage).fill" : systemImage)
-                .frame(width: 30, height: 36)
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
 }
 
 private struct HomeTrackListView: View {
