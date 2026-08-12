@@ -5,6 +5,7 @@ struct AnalyticsSnapshot {
         let track: Track
         let playCount: Int
         let lastPlayedAt: Date?
+        let playbackPreference: Int
         var id: Track.ID { track.id }
     }
 
@@ -33,6 +34,7 @@ struct AnalyticsSnapshot {
     let playlistCount: Int
     let mostPlayedTrack: TrackItem?
     let mostPlayedTracks: [TrackItem]
+    let preferenceRatedTracks: [TrackItem]
     let playbackMonths: [MonthGroup]
 }
 
@@ -49,7 +51,8 @@ final class AnalyticsService {
             return AnalyticsSnapshot.TrackItem(
                 track: track,
                 playCount: history?.playCount ?? 0,
-                lastPlayedAt: history?.lastPlayedAt
+                lastPlayedAt: history?.lastPlayedAt,
+                playbackPreference: history?.playbackPreference ?? 0
             )
         }
         let playCounts = trackItems.filter { $0.playCount > 0 }.sorted(by: playCountSort)
@@ -68,6 +71,9 @@ final class AnalyticsService {
             playlistCount: playlists.count,
             mostPlayedTrack: playCounts.first,
             mostPlayedTracks: playCounts,
+            preferenceRatedTracks: trackItems
+                .filter { $0.playbackPreference != 0 }
+                .sorted(by: titleSort),
             playbackMonths: groupedEvents(events)
         )
     }
@@ -88,6 +94,16 @@ final class AnalyticsService {
         }
         for item in snapshot.mostPlayedTracks {
             rows.append(["楽曲別再生回数", "", item.track.title, item.track.artistName, "\(item.playCount)", ""].map(csvField).joined(separator: ","))
+        }
+        for item in snapshot.preferenceRatedTracks {
+            rows.append([
+                "再生傾向評価",
+                "",
+                item.track.title,
+                item.track.artistName,
+                "",
+                String(format: "%+d", item.playbackPreference)
+            ].map(csvField).joined(separator: ","))
         }
         rows.append(["集計", "", "お気に入り", "", "", "\(snapshot.favoriteCount)"].map(csvField).joined(separator: ","))
         rows.append(["集計", "", "プレイリスト", "", "", "\(snapshot.playlistCount)"].map(csvField).joined(separator: ","))
@@ -130,6 +146,12 @@ final class AnalyticsService {
     private func playCountSort(_ lhs: AnalyticsSnapshot.TrackItem, _ rhs: AnalyticsSnapshot.TrackItem) -> Bool {
         if lhs.playCount != rhs.playCount { return lhs.playCount > rhs.playCount }
         return lhs.track.title.localizedStandardCompare(rhs.track.title) == .orderedAscending
+    }
+
+    private func titleSort(_ lhs: AnalyticsSnapshot.TrackItem, _ rhs: AnalyticsSnapshot.TrackItem) -> Bool {
+        let titleComparison = lhs.track.title.localizedStandardCompare(rhs.track.title)
+        if titleComparison != .orderedSame { return titleComparison == .orderedAscending }
+        return lhs.track.artistName.localizedStandardCompare(rhs.track.artistName) == .orderedAscending
     }
 
     private func csvField(_ value: String) -> String {

@@ -29,6 +29,7 @@ struct AnalyticsView: View {
         List {
             overviewSection
             playbackHistorySection
+            preferenceRatingsSection
             mostPlayedSection
         }
         .navigationTitle("分析")
@@ -87,6 +88,20 @@ struct AnalyticsView: View {
         }
     }
 
+    private var preferenceRatingsSection: some View {
+        Section("いいね評価") {
+            if snapshot.preferenceRatedTracks.isEmpty {
+                emptyMessage("評価した曲はありません。")
+            } else {
+                NavigationLink {
+                    PreferenceRatingsView(items: snapshot.preferenceRatedTracks)
+                } label: {
+                    LabeledContent("評価リスト", value: "\(snapshot.preferenceRatedTracks.count)曲")
+                }
+            }
+        }
+    }
+
     private func expandableHeader(_ title: String, isExpanded: Binding<Bool>, count: Int) -> some View {
         HStack {
             Text(title)
@@ -107,6 +122,147 @@ struct AnalyticsView: View {
 
     private func emptyMessage(_ message: String) -> some View {
         Text(message).foregroundStyle(.secondary)
+    }
+}
+
+private struct PreferenceRatingsView: View {
+    let items: [AnalyticsSnapshot.TrackItem]
+
+    @State private var filter = RatingFilter.all
+    @State private var sortOrder = RatingSortOrder.title
+
+    private var displayedItems: [AnalyticsSnapshot.TrackItem] {
+        items
+            .filter { filter.includes($0.playbackPreference) }
+            .sorted { lhs, rhs in sortOrder.isOrderedBefore(lhs, rhs) }
+    }
+
+    var body: some View {
+        List {
+            if displayedItems.isEmpty {
+                ContentUnavailableView(
+                    "該当する評価はありません",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
+            } else {
+                ForEach(displayedItems) { item in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.track.title).lineLimit(1)
+                            Text(item.track.artistName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Text(String(format: "%+d", item.playbackPreference))
+                            .font(.body.bold().monospacedDigit())
+                            .foregroundStyle(item.playbackPreference > 0 ? Color.blue : Color.brown)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                (item.playbackPreference > 0 ? Color.blue : Color.brown).opacity(0.12),
+                                in: Capsule()
+                            )
+                    }
+                }
+            }
+        }
+        .navigationTitle("いいね評価リスト")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    Picker("評価フィルター", selection: $filter) {
+                        ForEach(RatingFilter.allCases) { option in
+                            Label(option.title, systemImage: option.systemImage).tag(option)
+                        }
+                    }
+                } label: {
+                    Label("評価を絞り込む", systemImage: filter == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                }
+
+                Menu {
+                    Picker("並び順", selection: $sortOrder) {
+                        ForEach(RatingSortOrder.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                } label: {
+                    Label("曲順を変更", systemImage: "arrow.up.arrow.down")
+                }
+            }
+        }
+    }
+}
+
+private enum RatingFilter: String, CaseIterable, Identifiable {
+    case all
+    case good
+    case bad
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .all: "すべて"
+        case .good: "グッド"
+        case .bad: "バッド"
+        }
+    }
+    var systemImage: String {
+        switch self {
+        case .all: "list.bullet"
+        case .good: "hand.thumbsup.fill"
+        case .bad: "hand.thumbsdown.fill"
+        }
+    }
+    func includes(_ preference: Int) -> Bool {
+        switch self {
+        case .all: true
+        case .good: preference > 0
+        case .bad: preference < 0
+        }
+    }
+}
+
+private enum RatingSortOrder: String, CaseIterable, Identifiable {
+    case title
+    case rating
+    case albumTrack
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .title: "曲名順"
+        case .rating: "評価順"
+        case .albumTrack: "アルバム曲順"
+        }
+    }
+
+    func isOrderedBefore(_ lhs: AnalyticsSnapshot.TrackItem, _ rhs: AnalyticsSnapshot.TrackItem) -> Bool {
+        switch self {
+        case .title:
+            let comparison = lhs.track.title.localizedStandardCompare(rhs.track.title)
+            if comparison != .orderedSame { return comparison == .orderedAscending }
+            return lhs.track.artistName.localizedStandardCompare(rhs.track.artistName) == .orderedAscending
+        case .rating:
+            if lhs.playbackPreference != rhs.playbackPreference {
+                return lhs.playbackPreference > rhs.playbackPreference
+            }
+            return lhs.track.title.localizedStandardCompare(rhs.track.title) == .orderedAscending
+        case .albumTrack:
+            let lhsAlbum = lhs.track.albumTitle ?? ""
+            let rhsAlbum = rhs.track.albumTitle ?? ""
+            let albumComparison = lhsAlbum.localizedStandardCompare(rhsAlbum)
+            if albumComparison != .orderedSame { return albumComparison == .orderedAscending }
+            if (lhs.track.discNumber ?? 1) != (rhs.track.discNumber ?? 1) {
+                return (lhs.track.discNumber ?? 1) < (rhs.track.discNumber ?? 1)
+            }
+            if (lhs.track.trackNumber ?? Int.max) != (rhs.track.trackNumber ?? Int.max) {
+                return (lhs.track.trackNumber ?? Int.max) < (rhs.track.trackNumber ?? Int.max)
+            }
+            return lhs.track.title.localizedStandardCompare(rhs.track.title) == .orderedAscending
+        }
     }
 }
 
