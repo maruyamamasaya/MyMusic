@@ -4,6 +4,8 @@ import Observation
 @MainActor
 @Observable
 final class PlaybackHistoryStore {
+    private static let repeatPlayMinimumCount = 2
+
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
@@ -90,19 +92,38 @@ final class PlaybackHistoryStore {
         adjustPlaybackPreference(for: trackID, by: -1)
     }
 
-    func quickPlayTracks(from tracks: [Track], limit: Int = 3) -> [Track] {
-        tracks
-            .filter { playCount(for: $0.id) > 0 }
+    func quickPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
+        guard limit > 0 else { return [] }
+
+        let recentFavorites = tracks
+            .filter { isFavorite(trackID: $0.id) }
             .sorted {
-                let lhsScore = playCount(for: $0.id) + playbackPreference(for: $0.id)
-                let rhsScore = playCount(for: $1.id) + playbackPreference(for: $1.id)
-                if lhsScore != rhsScore { return lhsScore > rhsScore }
-                let lhsDate = entries[$0.id]?.lastPlayedAt ?? .distantPast
-                let rhsDate = entries[$1.id]?.lastPlayedAt ?? .distantPast
-                if lhsDate != rhsDate { return lhsDate > rhsDate }
-                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                (entries[$0.id]?.lastPlayedAt ?? .distantPast) >
+                    (entries[$1.id]?.lastPlayedAt ?? .distantPast)
             }
-            .limited(to: limit)
+        let otherTracks = tracks.filter { !isFavorite(trackID: $0.id) }
+        let pairCount = min(limit / 2, recentFavorites.count, otherTracks.count)
+
+        guard pairCount > 0 else {
+            return Array((recentFavorites + otherTracks).shuffled().prefix(limit))
+        }
+
+        let favorites = Array(recentFavorites.prefix(pairCount)).shuffled()
+        let others = Array(otherTracks.shuffled().prefix(pairCount))
+        return zip(favorites, others).flatMap { [$0, $1] }
+    }
+
+    func discoveryPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
+        Array(tracks.filter { playCount(for: $0.id) == 0 }.shuffled().prefix(limit))
+    }
+
+    func repeatPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
+        return Array(
+            tracks
+                .filter { playCount(for: $0.id) >= Self.repeatPlayMinimumCount }
+                .shuffled()
+                .prefix(limit)
+        )
     }
 
     func mostPlayedTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {

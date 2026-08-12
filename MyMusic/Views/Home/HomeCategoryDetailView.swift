@@ -73,6 +73,22 @@ struct HomeCategoryDetailView: View {
         switch destination {
         case .quickPlay:
             QuickPlayView(tracks: playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks))
+        case .discoveryPlay:
+            GeneratedQueueView(
+                title: "未発見再生",
+                emptyTitle: "未再生の曲はありません",
+                emptyDescription: "ライブラリ内のすべての曲が再生済みです。",
+                systemImage: "sparkles",
+                tracks: playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
+            )
+        case .repeatPlay:
+            GeneratedQueueView(
+                title: "リピート曲再生",
+                emptyTitle: "対象の曲はありません",
+                emptyDescription: "2回以上再生した曲がここに表示されます。",
+                systemImage: "repeat",
+                tracks: playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
+            )
         case .favorites:
             FavoritesView()
         case .recentTracks:
@@ -114,9 +130,9 @@ private struct QuickPlayView: View {
         List {
             if tracks.isEmpty {
                 ContentUnavailableView(
-                    "再生履歴はありません",
+                    "再生できる曲がありません",
                     systemImage: "play.circle",
-                    description: Text("曲を再生すると、好みに合った曲がここに表示されます。")
+                    description: Text("ライブラリに曲を追加すると、キューが作成されます。")
                 )
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
@@ -177,6 +193,35 @@ private struct HomeTrackListView: View {
                 ContentUnavailableView(
                     emptyTitle,
                     systemImage: "clock",
+                    description: Text(emptyDescription)
+                )
+            } else {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    PlayableTrackRowView(track: track) {
+                        playerStore.playQueue(tracks, startingAt: index)
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+    }
+}
+
+private struct GeneratedQueueView: View {
+    @Environment(PlayerStore.self) private var playerStore
+
+    let title: String
+    let emptyTitle: String
+    let emptyDescription: String
+    let systemImage: String
+    let tracks: [Track]
+
+    var body: some View {
+        List {
+            if tracks.isEmpty {
+                ContentUnavailableView(
+                    emptyTitle,
+                    systemImage: systemImage,
                     description: Text(emptyDescription)
                 )
             } else {
