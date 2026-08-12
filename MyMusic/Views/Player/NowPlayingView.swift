@@ -3,8 +3,10 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(SettingsStore.self) private var settingsStore
     @Environment(\.dismiss) private var dismiss
     @State private var isQueuePresented = false
+    @State private var isEqualizerPresented = false
     @State private var showsAudioDetails = false
 
     var body: some View {
@@ -26,6 +28,16 @@ struct NowPlayingView: View {
             }
             .sheet(isPresented: $isQueuePresented) {
                 QueueView()
+            }
+            .sheet(isPresented: $isEqualizerPresented) {
+                NavigationStack {
+                    EqualizerSettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完了") { isEqualizerPresented = false }
+                            }
+                        }
+                }
             }
             .onChange(of: playerStore.currentTrack?.id) { _, _ in
                 showsAudioDetails = false
@@ -72,6 +84,18 @@ struct NowPlayingView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("再生キューを表示")
+
+                    Button {
+                        isEqualizerPresented = true
+                    } label: {
+                        Image(systemName: "slider.vertical.3")
+                            .font(.title3)
+                            .frame(width: 42, height: 36)
+                            .foregroundStyle(settingsStore.equalizer.isEnabled ? Color.accentColor : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("イコライザ設定を表示")
+                    .accessibilityValue(settingsStore.equalizer.isEnabled ? "オン" : "オフ")
                 }
             }
 

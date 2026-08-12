@@ -5,6 +5,7 @@ struct AnalyticsView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(SettingsStore.self) private var settingsStore
     @State private var showsAllHistory = false
     @State private var showsAllMostPlayed = false
 
@@ -17,7 +18,12 @@ struct AnalyticsView: View {
     }
 
     private var export: AnalyticsExport {
-        AnalyticsExport(csv: AnalyticsService().csv(snapshot: snapshot, playlists: playlistStore.playlists))
+        AnalyticsExport(csv: AnalyticsService().csv(
+            snapshot: snapshot,
+            playlists: playlistStore.playlists,
+            equalizer: settingsStore.equalizer,
+            customEqualizerPresets: settingsStore.customEqualizerPresets
+        ))
     }
 
     var body: some View {

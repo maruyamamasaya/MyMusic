@@ -74,7 +74,9 @@ final class AnalyticsService {
 
     func csv(
         snapshot: AnalyticsSnapshot,
-        playlists: [Playlist]
+        playlists: [Playlist],
+        equalizer: EqualizerSettings? = nil,
+        customEqualizerPresets: [EqualizerPreset] = []
     ) -> String {
         var rows = ["種類,日時,曲名,アーティスト,再生回数,値"]
         for month in snapshot.playbackMonths {
@@ -91,6 +93,15 @@ final class AnalyticsService {
         rows.append(["集計", "", "プレイリスト", "", "", "\(snapshot.playlistCount)"].map(csvField).joined(separator: ","))
         for playlist in playlists {
             rows.append(["プレイリスト", Self.dateTimeFormatter.string(from: playlist.updatedAt), playlist.name, "", "", "\(playlist.trackIDs.count)曲"].map(csvField).joined(separator: ","))
+        }
+        if let equalizer {
+            rows.append(["EQ設定", "", "現在の設定", "", "", equalizer.isEnabled ? "ON" : "OFF"].map(csvField).joined(separator: ","))
+            rows.append(["EQ設定", "", "現在の設定", "プリアンプ", "", Self.gainString(equalizer.preamp)].map(csvField).joined(separator: ","))
+            appendEqualizerBands(equalizer.bands, type: "EQ設定", name: "現在の設定", to: &rows)
+        }
+        for preset in customEqualizerPresets {
+            rows.append(["EQプリセット", "", preset.name, "プリアンプ", "", Self.gainString(preset.preamp)].map(csvField).joined(separator: ","))
+            appendEqualizerBands(preset.settings().bands, type: "EQプリセット", name: preset.name, to: &rows)
         }
         return rows.joined(separator: "\n")
     }
@@ -123,5 +134,15 @@ final class AnalyticsService {
 
     private func csvField(_ value: String) -> String {
         "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+
+    private func appendEqualizerBands(_ bands: [EqualizerBand], type: String, name: String, to rows: inout [String]) {
+        for band in bands {
+            rows.append([type, "", name, "\(Int(band.frequency)) Hz", "", Self.gainString(band.gain)].map(csvField).joined(separator: ","))
+        }
+    }
+
+    private static func gainString(_ gain: Float) -> String {
+        String(format: "%+.1f dB", gain)
     }
 }
