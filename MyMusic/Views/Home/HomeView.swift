@@ -41,6 +41,10 @@ struct HomeView: View {
             !libraryStore.tracks.isEmpty
         case .discoveryPlay:
             libraryStore.tracks.contains { playbackHistoryStore.playCount(for: $0.id) == 0 }
+        case .repeatPlay:
+            !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
+        case .favorites:
+            !playbackHistoryStore.favoriteTracks(from: libraryStore.tracks, limit: 1).isEmpty
         default:
             true
         }
@@ -53,6 +57,10 @@ struct HomeView: View {
             tracks = playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
         case .discoveryPlay:
             tracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
+        case .repeatPlay:
+            tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
+        case .favorites:
+            tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks).shuffled()
         default:
             return
         }
@@ -142,7 +150,12 @@ private struct HomeCarouselSection: View {
     }
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
-        destination == .quickPlay || destination == .discoveryPlay
+        switch destination {
+        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites:
+            true
+        default:
+            false
+        }
     }
 }
 
