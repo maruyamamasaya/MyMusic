@@ -38,7 +38,10 @@ final class AudioInformationService: AudioInformationServicing {
     func information(for track: Track) async -> AudioInformation {
         let output = currentOutput()
         var information = AudioInformation(outputName: output.name, outputSampleRate: output.sampleRate)
-        let scopeURL = (try? fileImportService.restoreLibraryFolder()) ?? track.fileURL
+        let folders = (try? fileImportService.restoreLibraryFolders()) ?? []
+        let scopeURL = folders.first {
+            track.fileURL.standardizedFileURL.pathComponents.starts(with: $0.standardizedFileURL.pathComponents)
+        } ?? track.fileURL
         let hasAccess = scopeURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { scopeURL.stopAccessingSecurityScopedResource() } }
         guard hasAccess || FileManager.default.isReadableFile(atPath: track.fileURL.path) else { return information }

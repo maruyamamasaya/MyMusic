@@ -1,0 +1,194 @@
+import SwiftUI
+
+struct HomeCategoryDetailView: View {
+    @Environment(LibraryStore.self) private var libraryStore
+    @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @State private var presentedPlaybackDestination: HomeDestination?
+
+    let category: HomeCategory
+
+    var body: some View {
+        List(category.items) { item in
+            if isPlaybackDestination(item.destination) {
+                Button {
+                    presentedPlaybackDestination = item.destination
+                } label: {
+                    itemRow(item)
+                }
+                .buttonStyle(.plain)
+                .disabled(playerStore.currentTrack == nil)
+            } else {
+                NavigationLink(value: item.destination) {
+                    itemRow(item)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(category.title)
+        .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(for: HomeDestination.self) { destination in
+            destinationView(destination)
+        }
+        .sheet(item: $presentedPlaybackDestination) { destination in
+            switch destination {
+            case .nowPlaying:
+                NowPlayingView()
+            case .queue:
+                QueueView()
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func itemRow(_ item: HomeCategoryItem) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: item.systemImage)
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .frame(width: 36, height: 36)
+                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(item.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+    }
+
+    private func isPlaybackDestination(_ destination: HomeDestination) -> Bool {
+        destination == .nowPlaying || destination == .queue
+    }
+
+    @ViewBuilder
+    private func destinationView(_ destination: HomeDestination) -> some View {
+        switch destination {
+        case .quickPlay:
+            QuickPlayView(tracks: playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks))
+        case .favorites:
+            FavoritesView()
+        case .recentTracks:
+            HomeTrackListView(
+                title: "最近再生した曲",
+                emptyTitle: "再生履歴はありません",
+                emptyDescription: "曲を再生すると、ここに表示されます。",
+                tracks: playbackHistoryStore.recentTracks(from: libraryStore.tracks)
+            )
+        case .playlists:
+            PlaylistView()
+        case .songs:
+            SongsView(tracks: libraryStore.tracks)
+        case .albums:
+            AlbumsView(albums: libraryStore.albums)
+        case .artists:
+            ArtistsView(artists: libraryStore.artists)
+        case .genres:
+            GenresView(genres: libraryStore.genres)
+        case .composers:
+            ComposersView(composers: libraryStore.composers)
+        case .analytics:
+            AnalyticsView()
+        case .nowPlaying, .queue:
+            EmptyView()
+        }
+    }
+}
+
+private struct QuickPlayView: View {
+    @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+
+    let tracks: [Track]
+
+    var body: some View {
+        List {
+            if tracks.isEmpty {
+                ContentUnavailableView(
+                    "再生履歴はありません",
+                    systemImage: "play.circle",
+                    description: Text("曲を再生すると、好みに合った曲がここに表示されます。")
+                )
+            } else {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    HStack(spacing: 8) {
+                        Button {
+                            playerStore.playQueue(tracks, startingAt: index)
+                        } label: {
+                            TrackRowView(track: track)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        preferenceButton(systemImage: "hand.thumbsdown", label: "再生頻度を減らす", track: track, increase: false)
+                        preferenceButton(systemImage: "hand.thumbsup", label: "再生頻度を増やす", track: track, increase: true)
+                    }
+                }
+            }
+        }
+        .navigationTitle("クイック再生")
+    }
+
+    private func preferenceButton(
+        systemImage: String,
+        label: String,
+        track: Track,
+        increase: Bool
+    ) -> some View {
+        let preference = playbackHistoryStore.playbackPreference(for: track.id)
+        let isActive = increase ? preference > 0 : preference < 0
+
+        return Button {
+            if increase {
+                playbackHistoryStore.increasePlaybackPreference(for: track.id)
+            } else {
+                playbackHistoryStore.decreasePlaybackPreference(for: track.id)
+            }
+        } label: {
+            Image(systemName: isActive ? "\(systemImage).fill" : systemImage)
+                .frame(width: 30, height: 36)
+                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct HomeTrackListView: View {
+    @Environment(PlayerStore.self) private var playerStore
+
+    let title: String
+    let emptyTitle: String
+    let emptyDescription: String
+    let tracks: [Track]
+
+    var body: some View {
+        List {
+            if tracks.isEmpty {
+                ContentUnavailableView(
+                    emptyTitle,
+                    systemImage: "clock",
+                    description: Text(emptyDescription)
+                )
+            } else {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    PlayableTrackRowView(track: track) {
+                        playerStore.playQueue(tracks, startingAt: index)
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+    }
+}
+
+extension HomeDestination: Identifiable {
+    var id: Self { self }
+}

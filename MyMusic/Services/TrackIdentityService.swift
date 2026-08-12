@@ -143,13 +143,14 @@ actor TrackIdentityService: TrackIdentityServicing {
         for track in tracks {
             if Task.isCancelled { return }
             guard let relativePath = track.relativePath else { continue }
+            let scopedPath = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping + "/" + relativePath
             await loadIfNeeded()
             let values = try? track.fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let fileSize = track.fileSize ?? values?.fileSize.map(Int64.init)
             let modificationDate = track.modificationDate ?? values?.contentModificationDate
             let resourceIdentifier = Self.resourceIdentifier(for: track.fileURL)
-            if let index = pathIndex[relativePath] ?? idIndex[track.id] {
-                updatePath(relativePath, at: index)
+            if let index = idIndex[track.id] ?? pathIndex[scopedPath] ?? pathIndex[relativePath] {
+                updatePath(scopedPath, at: index)
                 updateResourceIdentifier(resourceIdentifier, at: index)
                 records?[index].fileSize = fileSize
                 records?[index].modificationDate = modificationDate
@@ -157,7 +158,7 @@ actor TrackIdentityService: TrackIdentityServicing {
             } else {
                 append(Record(
                     id: track.id,
-                    relativePath: relativePath,
+                    relativePath: scopedPath,
                     resourceIdentifier: resourceIdentifier,
                     audioFingerprint: nil,
                     fileSize: fileSize,

@@ -150,8 +150,10 @@ final class AudioPlayerService: AudioPlayerServicing {
 
     private func beginFileAccess(for fileURL: URL) throws {
         endFileAccess()
-        let libraryFolder = try fileImportService.restoreLibraryFolder()
-        let scopeURL = libraryFolder ?? fileURL
+        let libraryFolders = try fileImportService.restoreLibraryFolders()
+        let scopeURL = libraryFolders.first {
+            fileURL.standardizedFileURL.pathComponents.starts(with: $0.standardizedFileURL.pathComponents)
+        } ?? fileURL
         let hasAccess = scopeURL.startAccessingSecurityScopedResource()
         guard hasAccess || FileManager.default.isReadableFile(atPath: fileURL.path) else {
             throw AudioPlayerServiceError.accessDenied
