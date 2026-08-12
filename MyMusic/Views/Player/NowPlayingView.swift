@@ -61,6 +61,16 @@ struct NowPlayingView: View {
                         track: track,
                         isIncrease: true
                     )
+                    Button {
+                        isQueuePresented = true
+                    } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.title3)
+                            .frame(width: 42, height: 36)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("再生キューを表示")
                 }
             }
 
@@ -86,10 +96,6 @@ struct NowPlayingView: View {
                 onRepeat: playerStore.cycleRepeatMode
             )
 
-            Button("再生キューを表示", systemImage: "list.bullet") {
-                isQueuePresented = true
-            }
-            .buttonStyle(.bordered)
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
