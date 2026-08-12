@@ -6,7 +6,6 @@ struct AnalyticsView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
-    @State private var showsAllHistory = false
     @State private var showsAllMostPlayed = false
 
     private var snapshot: AnalyticsSnapshot {
@@ -54,20 +53,19 @@ struct AnalyticsView: View {
     }
 
     private var playbackHistorySection: some View {
-        Section {
+        Section("再生履歴") {
             if snapshot.playbackMonths.isEmpty {
                 emptyMessage("再生履歴はありません。")
             } else {
-                ForEach(showsAllHistory ? snapshot.playbackMonths : Array(snapshot.playbackMonths.prefix(10))) { month in
-                    NavigationLink {
-                        PlaybackMonthDetailView(month: month)
-                    } label: {
-                        LabeledContent(month.date.formatted(.dateTime.year().month(.wide)), value: "\(month.eventCount)件")
-                    }
+                NavigationLink {
+                    PlaybackHistoryCalendarView(months: snapshot.playbackMonths)
+                } label: {
+                    LabeledContent(
+                        "再生履歴カレンダー",
+                        value: "\(snapshot.playbackMonths.reduce(0) { $0 + $1.eventCount })件"
+                    )
                 }
             }
-        } header: {
-            expandableHeader("再生履歴", isExpanded: $showsAllHistory, count: snapshot.playbackMonths.count)
         }
     }
 
@@ -112,10 +110,15 @@ struct AnalyticsView: View {
     }
 }
 
-private struct PlaybackMonthDetailView: View {
-    let month: AnalyticsSnapshot.MonthGroup
+private struct PlaybackHistoryCalendarView: View {
+    let months: [AnalyticsSnapshot.MonthGroup]
+    @State private var displayedMonthIndex = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    private var month: AnalyticsSnapshot.MonthGroup {
+        calendarMonths[displayedMonthIndex]
+    }
 
     private var calendar: Calendar {
         var calendar = Calendar.current
@@ -127,6 +130,23 @@ private struct PlaybackMonthDetailView: View {
         let symbols = calendar.veryShortStandaloneWeekdaySymbols
         let firstIndex = calendar.firstWeekday - 1
         return Array(symbols[firstIndex...] + symbols[..<firstIndex])
+    }
+
+    private var calendarMonths: [AnalyticsSnapshot.MonthGroup] {
+        guard let oldestMonth = months.last else { return [] }
+
+        let groupsByMonth = Dictionary(uniqueKeysWithValues: months.map { (monthStart(for: $0.date), $0) })
+        let currentMonth = monthStart(for: Date())
+        var cursor = max(currentMonth, monthStart(for: months[0].date))
+        let oldestDate = monthStart(for: oldestMonth.date)
+        var result: [AnalyticsSnapshot.MonthGroup] = []
+
+        while cursor >= oldestDate {
+            result.append(groupsByMonth[cursor] ?? AnalyticsSnapshot.MonthGroup(date: cursor, days: []))
+            guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: cursor) else { break }
+            cursor = previousMonth
+        }
+        return result
     }
 
     private var calendarDays: [CalendarDay] {
@@ -152,37 +172,71 @@ private struct PlaybackMonthDetailView: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(weekdaySymbols, id: \.self) { symbol in
-                    Text(symbol)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
+            VStack(spacing: 18) {
+                monthPicker
 
-                ForEach(calendarDays) { calendarDay in
-                    if let day = calendarDay.group {
-                        NavigationLink {
-                            PlaybackDayDetailView(day: day)
-                        } label: {
-                            dayCell(dayNumber: calendarDay.dayNumber, eventCount: day.events.count)
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(weekdaySymbols, id: \.self) { symbol in
+                        Text(symbol)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    ForEach(calendarDays) { calendarDay in
+                        if let day = calendarDay.group {
+                            NavigationLink {
+                                PlaybackDayDetailView(day: day)
+                            } label: {
+                                dayCell(dayNumber: calendarDay.dayNumber, eventCount: day.events.count)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(calendarDay.dayNumber ?? 0)日、\(day.events.count)件")
+                            .accessibilityHint("再生した曲の一覧を表示")
+                        } else if let dayNumber = calendarDay.dayNumber {
+                            dayCell(dayNumber: dayNumber, eventCount: nil)
+                        } else {
+                            Color.clear
+                                .aspectRatio(0.82, contentMode: .fit)
+                                .accessibilityHidden(true)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(calendarDay.dayNumber ?? 0)日、\(day.events.count)件")
-                        .accessibilityHint("再生した曲の一覧を表示")
-                    } else if let dayNumber = calendarDay.dayNumber {
-                        dayCell(dayNumber: dayNumber, eventCount: nil)
-                    } else {
-                        Color.clear
-                            .aspectRatio(0.82, contentMode: .fit)
-                            .accessibilityHidden(true)
                     }
                 }
             }
             .padding()
         }
-        .navigationTitle(month.date.formatted(.dateTime.year().month(.wide)))
+        .navigationTitle("再生履歴カレンダー")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var monthPicker: some View {
+        HStack {
+            Button("前の月", systemImage: "chevron.left") {
+                displayedMonthIndex += 1
+            }
+            .labelStyle(.iconOnly)
+            .disabled(displayedMonthIndex == calendarMonths.count - 1)
+
+            Spacer()
+
+            Text(month.date.formatted(.dateTime.year().month(.wide)))
+                .font(.headline)
+                .contentTransition(.numericText())
+
+            Spacer()
+
+            Button("次の月", systemImage: "chevron.right") {
+                displayedMonthIndex -= 1
+            }
+            .labelStyle(.iconOnly)
+            .disabled(displayedMonthIndex == 0)
+        }
+        .font(.headline)
+        .padding(.horizontal, 8)
+    }
+
+    private func monthStart(for date: Date) -> Date {
+        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 
     private func dayCell(dayNumber: Int?, eventCount: Int?) -> some View {
