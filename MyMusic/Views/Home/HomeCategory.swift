@@ -18,15 +18,14 @@ struct HomeCategory: Identifiable, Hashable {
         HomeCategory(
             id: .myMusic,
             title: "マイミュージック",
-            description: "お気に入り・最近再生した曲・プレイリスト",
+            description: "お気に入り・最近再生した曲・おすすめ再生",
             systemImage: "heart.circle.fill",
             items: [
                 HomeCategoryItem(title: "クイック再生", description: "直近のお気に入りとその他の曲を1:1で再生", systemImage: "play.square.stack", destination: .quickPlay),
                 HomeCategoryItem(title: "未発見再生", description: "まだ再生していない曲をランダムに再生", systemImage: "sparkles", destination: .discoveryPlay),
                 HomeCategoryItem(title: "リピート曲再生", description: "よく聴く曲からランダムに再生", systemImage: "repeat", destination: .repeatPlay),
                 HomeCategoryItem(title: "お気に入り", description: "お気に入りに登録した曲", systemImage: "heart.fill", destination: .favorites),
-                HomeCategoryItem(title: "最近再生した曲", description: "最近聴いた曲を新しい順に表示", systemImage: "clock.arrow.circlepath", destination: .recentTracks),
-                HomeCategoryItem(title: "プレイリスト", description: "作成したプレイリストを管理", systemImage: "music.note.list", destination: .playlists)
+                HomeCategoryItem(title: "最近再生した曲", description: "最近聴いた曲を新しい順に表示", systemImage: "clock.arrow.circlepath", destination: .recentTracks)
             ]
         ),
         HomeCategory(

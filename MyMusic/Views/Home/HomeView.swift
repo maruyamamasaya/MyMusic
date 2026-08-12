@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(PlaylistStore.self) private var playlistStore
 
     var body: some View {
         NavigationStack {
@@ -16,6 +17,14 @@ struct HomeView: View {
                             instantPlaybackIsAvailable: instantPlaybackIsAvailable,
                             onInstantPlay: playImmediately
                         )
+                        if category.id == .myMusic {
+                            HomePlaylistSection(
+                                playlists: Array(playlistStore.playlists.sorted { $0.createdAt > $1.createdAt }.prefix(5)),
+                                showsMore: playlistStore.playlists.count > 5,
+                                tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
+                                onPlay: playPlaylist
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 12)
@@ -34,6 +43,13 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func playPlaylist(_ playlist: Playlist) {
+        let tracks = playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+        guard !tracks.isEmpty else { return }
+        playerStore.setShuffleEnabled(true)
+        playerStore.playQueue(tracks, startingAt: Int.random(in: tracks.indices))
     }
 
     private func artworkIdentifiers(for destination: HomeDestination) -> [String] {
@@ -89,6 +105,201 @@ struct HomeView: View {
 
         guard !tracks.isEmpty else { return }
         playerStore.playQueue(tracks, startingAt: 0)
+    }
+}
+
+private struct HomePlaylistSection: View {
+    let playlists: [Playlist]
+    let showsMore: Bool
+    let tracksForPlaylist: (Playlist) -> [Track]
+    let onPlay: (Playlist) -> Void
+
+    private let spacing: CGFloat = 12
+    private let horizontalPadding: CGFloat = 16
+    private let nextTilePeek: CGFloat = 28
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("プレイリスト")
+                    .font(.title3.weight(.bold))
+                Text("最近作成したプレイリストをランダム再生")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, horizontalPadding)
+
+            GeometryReader { proxy in
+                let tileWidth = tileWidth(for: proxy.size.width)
+
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: spacing) {
+                        if playlists.isEmpty {
+                            NavigationLink(value: HomeDestination.playlists) {
+                                HomePlaylistEmptyTile(width: tileWidth)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            ForEach(playlists) { playlist in
+                                let tracks = tracksForPlaylist(playlist)
+                                Button { onPlay(playlist) } label: {
+                                    HomePlaylistTile(
+                                        playlist: playlist,
+                                        artworkIdentifiers: playlistArtworkIdentifiers(playlist: playlist, tracks: tracks),
+                                        trackCount: tracks.count,
+                                        width: tileWidth
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(tracks.isEmpty)
+                                .opacity(tracks.isEmpty ? 0.55 : 1)
+                            }
+
+                            if showsMore {
+                                NavigationLink(value: HomeDestination.playlists) {
+                                    HomePlaylistMoreTile(width: tileWidth)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            }
+            .frame(height: 168)
+        }
+    }
+
+    private func playlistArtworkIdentifiers(playlist: Playlist, tracks: [Track]) -> [String] {
+        var identifiers = tracks.compactMap(\.artworkIdentifier)
+        if let artworkIdentifier = playlist.artworkIdentifier {
+            identifiers.insert(artworkIdentifier, at: 0)
+        }
+        return Array(Set(identifiers))
+    }
+
+    private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
+        let visibleTileCount: CGFloat
+        switch availableWidth {
+        case ..<600: visibleTileCount = 2
+        case ..<800: visibleTileCount = 3
+        case ..<1_100: visibleTileCount = 5
+        default: visibleTileCount = 6
+        }
+        let contentWidth = availableWidth - (horizontalPadding * 2) - nextTilePeek
+        return min(180, max(132, (contentWidth - spacing * (visibleTileCount - 1)) / visibleTileCount))
+    }
+}
+
+private struct HomePlaylistTile: View {
+    let playlist: Playlist
+    let artworkIdentifiers: [String]
+    let trackCount: Int
+    let width: CGFloat
+    @State private var selectedArtworkIdentifier: String?
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let selectedArtworkIdentifier {
+                HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
+            } else {
+                LinearGradient(
+                    colors: [Color(red: 0.25, green: 0.29, blue: 0.40), Color(red: 0.08, green: 0.09, blue: 0.14)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.20), location: 0),
+                    .init(color: .black.opacity(0.38), location: 0.48),
+                    .init(color: .black.opacity(0.88), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 0) {
+                Image(systemName: "music.note.list")
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+                Spacer()
+                Text(playlist.name)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text("\(trackCount)曲")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .padding(.top, 3)
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+        }
+        .frame(width: width, height: 168, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("プレイリストをランダム再生")
+        .task(id: artworkIdentifiers) {
+            selectedArtworkIdentifier = artworkIdentifiers.randomElement()
+        }
+    }
+}
+
+private struct HomePlaylistMoreTile: View {
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: "arrow.right.circle.fill")
+                .font(.largeTitle)
+            Spacer()
+            Text("続きを見る")
+                .font(.headline)
+            Text("すべてのプレイリスト")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.76))
+                .padding(.top, 3)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(width: width, height: 168, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.30, green: 0.24, blue: 0.62), Color(red: 0.08, green: 0.10, blue: 0.20)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .overlay(LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.42)], startPoint: .top, endPoint: .bottom))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+    }
+}
+
+private struct HomePlaylistEmptyTile: View {
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: "plus.circle.fill").font(.largeTitle)
+            Spacer()
+            Text("プレイリストを作成").font(.headline).lineLimit(2)
+            Text("曲をまとめて楽しむ").font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(width: width, height: 168, alignment: .leading)
+        .background(LinearGradient(colors: [Color.indigo, Color.black.opacity(0.84)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 
