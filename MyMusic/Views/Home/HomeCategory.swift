@@ -16,16 +16,6 @@ struct HomeCategory: Identifiable, Hashable {
 
     static let all: [HomeCategory] = [
         HomeCategory(
-            id: .playback,
-            title: "再生・オーディオ",
-            description: "再生中の曲や再生キューを確認します",
-            systemImage: "waveform.circle.fill",
-            items: [
-                HomeCategoryItem(title: "再生中", description: "現在の曲と再生操作を表示", systemImage: "play.circle", destination: .nowPlaying),
-                HomeCategoryItem(title: "再生キュー", description: "これから再生する曲を確認", systemImage: "text.line.last.and.arrowtriangle.forward", destination: .queue)
-            ]
-        ),
-        HomeCategory(
             id: .myMusic,
             title: "マイミュージック",
             description: "お気に入り・最近再生した曲・プレイリスト",

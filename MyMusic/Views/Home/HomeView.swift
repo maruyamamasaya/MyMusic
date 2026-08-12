@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
-    @State private var presentedPlaybackDestination: HomeDestination?
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
 
     var body: some View {
         NavigationStack {
@@ -11,8 +12,8 @@ struct HomeView: View {
                     ForEach(HomeCategory.all) { category in
                         HomeCarouselSection(
                             category: category,
-                            playbackIsAvailable: playerStore.currentTrack != nil,
-                            onPresentPlayback: { presentedPlaybackDestination = $0 }
+                            instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                            onInstantPlay: playImmediately
                         )
                     }
                 }
@@ -21,16 +22,6 @@ struct HomeView: View {
             .navigationTitle("ホーム")
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
-            }
-            .sheet(item: $presentedPlaybackDestination) { destination in
-                switch destination {
-                case .nowPlaying:
-                    NowPlayingView()
-                case .queue:
-                    QueueView()
-                default:
-                    EmptyView()
-                }
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -43,12 +34,38 @@ struct HomeView: View {
             }
         }
     }
+
+    private func instantPlaybackIsAvailable(_ destination: HomeDestination) -> Bool {
+        switch destination {
+        case .quickPlay:
+            !libraryStore.tracks.isEmpty
+        case .discoveryPlay:
+            libraryStore.tracks.contains { playbackHistoryStore.playCount(for: $0.id) == 0 }
+        default:
+            true
+        }
+    }
+
+    private func playImmediately(_ destination: HomeDestination) {
+        let tracks: [Track]
+        switch destination {
+        case .quickPlay:
+            tracks = playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
+        case .discoveryPlay:
+            tracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
+        default:
+            return
+        }
+
+        guard !tracks.isEmpty else { return }
+        playerStore.playQueue(tracks, startingAt: 0)
+    }
 }
 
 private struct HomeCarouselSection: View {
     let category: HomeCategory
-    let playbackIsAvailable: Bool
-    let onPresentPlayback: (HomeDestination) -> Void
+    let instantPlaybackIsAvailable: (HomeDestination) -> Bool
+    let onInstantPlay: (HomeDestination) -> Void
 
     private let spacing: CGFloat = 12
     private let horizontalPadding: CGFloat = 16
@@ -87,15 +104,15 @@ private struct HomeCarouselSection: View {
 
     @ViewBuilder
     private func tile(for item: HomeCategoryItem, width: CGFloat) -> some View {
-        if isPlaybackDestination(item.destination) {
+        if isInstantPlaybackDestination(item.destination) {
             Button {
-                onPresentPlayback(item.destination)
+                onInstantPlay(item.destination)
             } label: {
                 HomeItemTile(item: item, width: width)
             }
             .buttonStyle(.plain)
-            .disabled(!playbackIsAvailable)
-            .opacity(playbackIsAvailable ? 1 : 0.55)
+            .disabled(!instantPlaybackIsAvailable(item.destination))
+            .opacity(instantPlaybackIsAvailable(item.destination) ? 1 : 0.55)
         } else {
             NavigationLink(value: item.destination) {
                 HomeItemTile(item: item, width: width)
@@ -124,8 +141,8 @@ private struct HomeCarouselSection: View {
         return min(180, max(132, (contentWidth - interItemSpacing) / visibleTileCount))
     }
 
-    private func isPlaybackDestination(_ destination: HomeDestination) -> Bool {
-        destination == .nowPlaying || destination == .queue
+    private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
+        destination == .quickPlay || destination == .discoveryPlay
     }
 }
 
