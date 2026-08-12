@@ -5,6 +5,8 @@ struct LibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @State private var isFolderImporterPresented = false
     @State private var isGenreSettingsExpanded = false
+    @State private var isPresetNamePresented = false
+    @State private var presetName = ""
 
     var body: some View {
         NavigationStack {
@@ -53,6 +55,18 @@ struct LibraryView: View {
                     if !libraryStore.availableGenreNames.isEmpty {
                         Section {
                             DisclosureGroup(isExpanded: $isGenreSettingsExpanded) {
+                                if !libraryStore.genreDisplayPresets.isEmpty {
+                                    ForEach(libraryStore.genreDisplayPresets) { preset in
+                                        presetRow(preset)
+                                    }
+                                    Divider()
+                                }
+
+                                Button("現在の設定をプリセットに保存", systemImage: "plus.circle") {
+                                    presetName = ""
+                                    isPresetNamePresented = true
+                                }
+
                                 ForEach(libraryStore.availableGenreNames, id: \.self) { genreName in
                                     Toggle(genreName, isOn: genreBinding(for: genreName))
                                 }
@@ -107,6 +121,14 @@ struct LibraryView: View {
             } message: {
                 Text(libraryStore.errorMessage ?? "不明なエラーが発生しました。")
             }
+            .alert("プリセットを保存", isPresented: $isPresetNamePresented) {
+                TextField("プリセット名", text: $presetName)
+                Button("キャンセル", role: .cancel) {}
+                Button("保存") { libraryStore.saveGenreDisplayPreset(named: presetName) }
+                    .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } message: {
+                Text("現在のジャンルON/OFF設定に名前を付けます。同じ名前で保存すると上書きされます。")
+            }
             .task { await libraryStore.restoreAndLoadIfNeeded() }
         }
     }
@@ -131,6 +153,32 @@ struct LibraryView: View {
             get: { libraryStore.isGenreEnabled(genreName) },
             set: { libraryStore.setGenre(genreName, isEnabled: $0) }
         )
+    }
+
+    private func presetRow(_ preset: GenreDisplayPreset) -> some View {
+        HStack {
+            Button {
+                libraryStore.applyGenreDisplayPreset(preset)
+            } label: {
+                HStack {
+                    Image(systemName: libraryStore.isGenreDisplayPresetActive(preset) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(libraryStore.isGenreDisplayPresetActive(preset) ? Color.accentColor : .secondary)
+                    Text(preset.name)
+                        .foregroundStyle(.primary)
+                }
+            }
+            .buttonStyle(.borderless)
+
+            Spacer()
+
+            Button(role: .destructive) {
+                libraryStore.deleteGenreDisplayPreset(preset)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("\(preset.name)を削除")
+        }
     }
 }
 

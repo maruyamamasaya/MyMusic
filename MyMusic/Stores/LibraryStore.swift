@@ -22,6 +22,7 @@ final class LibraryStore {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var isInitialLoadComplete = false
+    private(set) var genreDisplayPresets: [GenreDisplayPreset]
 
     var availableGenreNames: [String] {
         allGenres.map(\.name)
@@ -41,6 +42,7 @@ final class LibraryStore {
     private let identityService: TrackIdentityServicing
     private let userDefaults: UserDefaults
     private static let disabledGenresKey = "library.disabledGenreNames"
+    private static let genrePresetsKey = "library.genreDisplayPresets"
 
     init(service: MusicLibraryServicing? = nil, fileImportService: FileImportServicing? = nil,
          persistence: LibraryPersistenceServicing? = nil, identityService: TrackIdentityServicing? = nil,
@@ -54,6 +56,8 @@ final class LibraryStore {
         self.persistence = persistence ?? LibraryPersistenceService()
         self.userDefaults = userDefaults
         self.disabledGenreNames = Set(userDefaults.stringArray(forKey: Self.disabledGenresKey) ?? [])
+        self.genreDisplayPresets = userDefaults.data(forKey: Self.genrePresetsKey)
+            .flatMap { try? JSONDecoder().decode([GenreDisplayPreset].self, from: $0) } ?? []
     }
 
     func restoreAndLoadIfNeeded() async {
@@ -114,8 +118,37 @@ final class LibraryStore {
         } else {
             disabledGenreNames.insert(genreName)
         }
-        userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)
+        saveDisabledGenres()
         applyGenreFilter()
+    }
+    func saveGenreDisplayPreset(named name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        let enabledGenreNames = Set(availableGenreNames.filter(isGenreEnabled))
+        if let index = genreDisplayPresets.firstIndex(where: {
+            $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
+        }) {
+            genreDisplayPresets[index].name = trimmedName
+            genreDisplayPresets[index].enabledGenreNames = enabledGenreNames
+        } else {
+            genreDisplayPresets.append(GenreDisplayPreset(
+                id: UUID(), name: trimmedName, enabledGenreNames: enabledGenreNames
+            ))
+        }
+        genreDisplayPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        saveGenreDisplayPresets()
+    }
+    func applyGenreDisplayPreset(_ preset: GenreDisplayPreset) {
+        disabledGenreNames = Set(availableGenreNames).subtracting(preset.enabledGenreNames)
+        saveDisabledGenres()
+        applyGenreFilter()
+    }
+    func deleteGenreDisplayPreset(_ preset: GenreDisplayPreset) {
+        genreDisplayPresets.removeAll { $0.id == preset.id }
+        saveGenreDisplayPresets()
+    }
+    func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
+        Set(availableGenreNames.filter(isGenreEnabled)) == preset.enabledGenreNames
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for artist: Artist) -> [Track] {
@@ -165,6 +198,13 @@ final class LibraryStore {
             disabledGenreNames.isDisjoint(with: Self.genreNames(in: track.genre))
         }
         apply(MusicLibrary.build(from: visibleTracks))
+    }
+    private func saveDisabledGenres() {
+        userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)
+    }
+    private func saveGenreDisplayPresets() {
+        guard let data = try? JSONEncoder().encode(genreDisplayPresets) else { return }
+        userDefaults.set(data, forKey: Self.genrePresetsKey)
     }
     private func apply(_ library: MusicLibrary) {
         tracks = library.tracks; albums = library.albums; artists = library.artists
