@@ -115,16 +115,100 @@ struct AnalyticsView: View {
 private struct PlaybackMonthDetailView: View {
     let month: AnalyticsSnapshot.MonthGroup
 
-    var body: some View {
-        List(month.days) { day in
-            NavigationLink {
-                PlaybackDayDetailView(day: day)
-            } label: {
-                LabeledContent(day.date.formatted(.dateTime.year().month().day()), value: "\(day.events.count)件")
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    private var calendar: Calendar {
+        var calendar = Calendar.current
+        calendar.locale = Locale(identifier: "ja_JP")
+        return calendar
+    }
+
+    private var weekdaySymbols: [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let firstIndex = calendar.firstWeekday - 1
+        return Array(symbols[firstIndex...] + symbols[..<firstIndex])
+    }
+
+    private var calendarDays: [CalendarDay] {
+        guard
+            let dayRange = calendar.range(of: .day, in: .month, for: month.date),
+            let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: month.date))
+        else { return [] }
+
+        let leadingEmptyDays = (calendar.component(.weekday, from: firstDay) - calendar.firstWeekday + 7) % 7
+        let groupsByDay = Dictionary(uniqueKeysWithValues: month.days.map {
+            (calendar.component(.day, from: $0.date), $0)
+        })
+
+        return (0..<leadingEmptyDays).map { CalendarDay(id: $0, dayNumber: nil, group: nil) }
+            + dayRange.map { dayNumber in
+                CalendarDay(
+                    id: leadingEmptyDays + dayNumber - 1,
+                    dayNumber: dayNumber,
+                    group: groupsByDay[dayNumber]
+                )
             }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+
+                ForEach(calendarDays) { calendarDay in
+                    if let day = calendarDay.group {
+                        NavigationLink {
+                            PlaybackDayDetailView(day: day)
+                        } label: {
+                            dayCell(dayNumber: calendarDay.dayNumber, eventCount: day.events.count)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(calendarDay.dayNumber ?? 0)日、\(day.events.count)件")
+                        .accessibilityHint("再生した曲の一覧を表示")
+                    } else if let dayNumber = calendarDay.dayNumber {
+                        dayCell(dayNumber: dayNumber, eventCount: nil)
+                    } else {
+                        Color.clear
+                            .aspectRatio(0.82, contentMode: .fit)
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+            .padding()
         }
         .navigationTitle(month.date.formatted(.dateTime.year().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func dayCell(dayNumber: Int?, eventCount: Int?) -> some View {
+        VStack(spacing: 5) {
+            Text(dayNumber.map(String.init) ?? "")
+                .font(.body.weight(eventCount == nil ? .regular : .semibold))
+
+            if let eventCount {
+                Text("\(eventCount)件")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.tint)
+                    .monospacedDigit()
+            } else {
+                Text(" ").font(.caption2)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(0.82, contentMode: .fit)
+        .background(eventCount == nil ? Color.clear : Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+    }
+
+    private struct CalendarDay: Identifiable {
+        let id: Int
+        let dayNumber: Int?
+        let group: AnalyticsSnapshot.DayGroup?
     }
 }
 
