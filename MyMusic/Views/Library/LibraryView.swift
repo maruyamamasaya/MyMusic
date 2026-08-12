@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @State private var isFolderImporterPresented = false
+    @State private var isGenreSettingsExpanded = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,20 @@ struct LibraryView: View {
                         NavigationLink(value: LibraryDestination.artists) { countRow("アーティスト", systemImage: "music.mic", count: libraryStore.artists.count) }
                         NavigationLink(value: LibraryDestination.genres) { countRow("ジャンル", systemImage: "guitars", count: libraryStore.genres.count) }
                         NavigationLink(value: LibraryDestination.composers) { countRow("作曲者", systemImage: "music.quarternote.3", count: libraryStore.composers.count) }
+                    }
+
+                    if !libraryStore.availableGenreNames.isEmpty {
+                        Section {
+                            DisclosureGroup(isExpanded: $isGenreSettingsExpanded) {
+                                ForEach(libraryStore.availableGenreNames, id: \.self) { genreName in
+                                    Toggle(genreName, isOn: genreBinding(for: genreName))
+                                }
+                            } label: {
+                                Label("ジャンルごとの表示", systemImage: "line.3.horizontal.decrease.circle")
+                            }
+                        } footer: {
+                            Text("OFFにしたジャンルはライブラリ、検索、シャッフルの対象から一時的に除外されます。楽曲ファイルは削除されません。")
+                        }
                     }
 
                     Section {
@@ -109,6 +124,13 @@ struct LibraryView: View {
             Spacer()
             Text(count, format: .number).foregroundStyle(.secondary)
         }
+    }
+
+    private func genreBinding(for genreName: String) -> Binding<Bool> {
+        Binding(
+            get: { libraryStore.isGenreEnabled(genreName) },
+            set: { libraryStore.setGenre(genreName, isEnabled: $0) }
+        )
     }
 }
 

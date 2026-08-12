@@ -23,18 +23,28 @@ final class LibraryStore {
     private(set) var errorMessage: String?
     private(set) var isInitialLoadComplete = false
 
+    var availableGenreNames: [String] {
+        allGenres.map(\.name)
+    }
+
     var hasLibraryFolder: Bool { !libraryFolders.isEmpty }
     var scanProgress: Int { tracks.count }
 
     private var librariesByFolderID: [String: MusicLibrary] = [:]
+    private var allTracks: [Track] = []
+    private var allGenres: [Genre] = []
+    private var disabledGenreNames: Set<String>
     private var hasRestoredFolder = false
     private let service: MusicLibraryServicing
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
     private let identityService: TrackIdentityServicing
+    private let userDefaults: UserDefaults
+    private static let disabledGenresKey = "library.disabledGenreNames"
 
     init(service: MusicLibraryServicing? = nil, fileImportService: FileImportServicing? = nil,
-         persistence: LibraryPersistenceServicing? = nil, identityService: TrackIdentityServicing? = nil) {
+         persistence: LibraryPersistenceServicing? = nil, identityService: TrackIdentityServicing? = nil,
+         userDefaults: UserDefaults = .standard) {
         let importer = fileImportService ?? FileImportService()
         let identities = identityService ?? TrackIdentityService.shared
         self.fileImportService = importer
@@ -42,6 +52,8 @@ final class LibraryStore {
         self.service = service ?? MusicLibraryService(fileImportService: importer,
             metadataService: MetadataService(identityService: identities), identityService: identities)
         self.persistence = persistence ?? LibraryPersistenceService()
+        self.userDefaults = userDefaults
+        self.disabledGenreNames = Set(userDefaults.stringArray(forKey: Self.disabledGenresKey) ?? [])
     }
 
     func restoreAndLoadIfNeeded() async {
@@ -95,6 +107,16 @@ final class LibraryStore {
     }
 
     func dismissError() { errorMessage = nil }
+    func isGenreEnabled(_ genreName: String) -> Bool { !disabledGenreNames.contains(genreName) }
+    func setGenre(_ genreName: String, isEnabled: Bool) {
+        if isEnabled {
+            disabledGenreNames.remove(genreName)
+        } else {
+            disabledGenreNames.insert(genreName)
+        }
+        userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)
+        applyGenreFilter()
+    }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for artist: Artist) -> [Track] {
         let artistTracks = resolvedTracks(for: artist.trackIDs)
@@ -133,7 +155,16 @@ final class LibraryStore {
         let combined = libraryFolders.flatMap { librariesByFolderID[$0.id]?.tracks ?? [] }.filter {
             seenPaths.insert($0.fileURL.resolvingSymlinksInPath().standardizedFileURL.path).inserted
         }
-        apply(MusicLibrary.build(from: combined))
+        let completeLibrary = MusicLibrary.build(from: combined)
+        allTracks = completeLibrary.tracks
+        allGenres = completeLibrary.genres
+        applyGenreFilter()
+    }
+    private func applyGenreFilter() {
+        let visibleTracks = allTracks.filter { track in
+            disabledGenreNames.isDisjoint(with: Self.genreNames(in: track.genre))
+        }
+        apply(MusicLibrary.build(from: visibleTracks))
     }
     private func apply(_ library: MusicLibrary) {
         tracks = library.tracks; albums = library.albums; artists = library.artists
@@ -157,5 +188,12 @@ final class LibraryStore {
         if lhs.trackNumber != nil && rhs.trackNumber == nil { return true }
         if lhs.trackNumber == nil && rhs.trackNumber != nil { return false }
         return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+    }
+    private static func genreNames(in value: String?) -> Set<String> {
+        guard let value else { return [] }
+        return Set(value
+            .split(whereSeparator: { $0 == ";" || $0 == "\0" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })
     }
 }
