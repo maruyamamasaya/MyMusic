@@ -16,7 +16,7 @@ struct GenresView: View {
                 }
             }
         }
-        .navigationTitle("Genres")
+        .navigationTitle("ジャンル")
         .navigationDestination(for: Genre.self) { genre in
             SongsView(tracks: tracks(for: genre.trackIDs), title: genre.name)
         }

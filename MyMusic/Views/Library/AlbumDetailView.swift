@@ -21,8 +21,8 @@ struct AlbumDetailView: View {
                         Text(String(year)).font(.subheadline).foregroundStyle(.secondary)
                     }
                     HStack {
-                        Button("Play", systemImage: "play.fill") { play(shuffled: false) }
-                        Button("Shuffle", systemImage: "shuffle") { play(shuffled: true) }
+                        Button("再生", systemImage: "play.fill") { play(shuffled: false) }
+                        Button("シャッフル", systemImage: "shuffle") { play(shuffled: true) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(tracks.isEmpty)
@@ -31,9 +31,9 @@ struct AlbumDetailView: View {
                 .listRowBackground(Color.clear)
             }
 
-            Section("Songs") {
+            Section("曲") {
                 if tracks.isEmpty {
-                    EmptyStateView(icon: "music.note.list", title: "No Songs", message: "Album tracks could not be found.")
+                    EmptyStateView(icon: "music.note.list", title: "曲がありません", message: "アルバムの曲が見つかりませんでした。")
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         PlayableTrackRowView(track: track) {
@@ -46,7 +46,7 @@ struct AlbumDetailView: View {
         .navigationTitle(album.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button(isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: isFavorite ? "heart.fill" : "heart") {
+            Button(isFavorite ? "お気に入りから削除" : "お気に入りに追加", systemImage: isFavorite ? "heart.fill" : "heart") {
                 favoriteStore.toggleFavorite(albumID: album.id)
             }
         }

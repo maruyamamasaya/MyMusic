@@ -60,6 +60,14 @@ final class PlaylistStore {
         }
     }
 
+    func toggleTrack(_ track: Track, in playlistID: Playlist.ID) {
+        if contains(track.id, in: playlistID) {
+            removeTrack(track.id, from: playlistID)
+        } else {
+            addTrack(track, to: playlistID)
+        }
+    }
+
     func addTracks(_ tracks: [Track], to playlistID: Playlist.ID) {
         update(playlistID) { playlist in
             var existing = Set(playlist.trackIDs)

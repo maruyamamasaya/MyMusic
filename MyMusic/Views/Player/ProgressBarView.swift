@@ -19,7 +19,7 @@ struct ProgressBarView: View {
                 }
             )
             .disabled(duration <= 0)
-            .accessibilityLabel("Playback position")
+            .accessibilityLabel("再生位置")
             .accessibilityValue(TimeFormatter.string(from: displayedTime))
 
             HStack {

@@ -145,7 +145,7 @@ struct NowPlayingView: View {
     private var trackInformation: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(playerStore.currentTrack?.title ?? "Not Playing")
+                Text(playerStore.currentTrack?.title ?? "未再生")
                     .font(.title2.bold())
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
@@ -168,7 +168,7 @@ struct NowPlayingView: View {
                         .font(.title2)
                         .foregroundStyle(.tint)
                 }
-                .accessibilityLabel(playbackHistoryStore.isFavorite(trackID: track.id) ? "Remove from Favorites" : "Add to Favorites")
+                .accessibilityLabel(playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,8 +236,8 @@ private struct ArtworkAudioDetailsView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(showsAudioDetails ? "Audio details" : "Artwork for \(trackTitle ?? "current track")")
-        .accessibilityHint(showsAudioDetails ? "Double tap to show artwork" : "Double tap to show audio details")
+        .accessibilityLabel(showsAudioDetails ? "オーディオ情報" : "\(trackTitle ?? "現在の曲")のアートワーク")
+        .accessibilityHint(showsAudioDetails ? "ダブルタップしてアートワークを表示" : "ダブルタップしてオーディオ情報を表示")
     }
 }
 
@@ -252,7 +252,7 @@ private struct AudioInformationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Audio Details", systemImage: "waveform")
+            Label("オーディオ情報", systemImage: "waveform")
                 .font(.headline)
 
             WaveformView(levels: spectrumLevels)
@@ -261,19 +261,19 @@ private struct AudioInformationView: View {
 
             if hasDetails {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    if information.codec != "Unknown" { row("Format / Codec", information.codec) }
-                    if let bitRate = information.bitRate { row("Bitrate", "\(bitRate / 1_000) kbps") }
-                    if let sampleRate = information.sampleRate { row("Sample Rate", rate(sampleRate)) }
-                    if let bitDepth = information.bitDepth { row("Bit Depth", "\(bitDepth) bit") }
-                    if let channels = information.channels { row("Channels", channelDescription(channels)) }
+                    if information.codec != "Unknown" { row("形式・コーデック", information.codec) }
+                    if let bitRate = information.bitRate { row("ビットレート", "\(bitRate / 1_000) kbps") }
+                    if let sampleRate = information.sampleRate { row("サンプルレート", rate(sampleRate)) }
+                    if let bitDepth = information.bitDepth { row("ビット深度", "\(bitDepth) bit") }
+                    if let channels = information.channels { row("チャンネル", channelDescription(channels)) }
                 }
                 .font(.subheadline)
             } else {
-                ContentUnavailableView("No Audio Details", systemImage: "waveform.slash")
+                ContentUnavailableView("オーディオ情報がありません", systemImage: "waveform.slash")
             }
 
             Spacer(minLength: 0)
-            Text("Tap to show artwork")
+            Text("タップしてアートワークを表示")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity)
@@ -296,8 +296,8 @@ private struct AudioInformationView: View {
 
     private func channelDescription(_ channels: Int) -> String {
         switch channels {
-        case 1: "Mono"
-        case 2: "Stereo"
+        case 1: "モノラル"
+        case 2: "ステレオ"
         default: "\(channels) ch"
         }
     }

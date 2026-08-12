@@ -23,7 +23,7 @@ struct SettingsView: View {
                 NavigationLink {
                     DataManagementView()
                 } label: {
-                    Label("Import / Export", systemImage: "externaldrive")
+                    Label("データの読み込み・書き出し", systemImage: "externaldrive")
                 }
             }
         }

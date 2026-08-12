@@ -13,7 +13,7 @@ struct MiniPlayerView: View {
                             .frame(width: 44, height: 44)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(playerStore.currentTrack?.title ?? "Not Playing")
+                            Text(playerStore.currentTrack?.title ?? "未再生")
                                 .font(.subheadline.weight(.semibold))
                                 .lineLimit(1)
                             Text(playerStore.currentTrack?.artistName ?? "")
@@ -32,7 +32,7 @@ struct MiniPlayerView: View {
                         .controlSize(.small)
                         .frame(width: 44, height: 44)
                 } else {
-                    Button(playerStore.isPlaying ? "Pause" : "Play", systemImage: playerStore.isPlaying ? "pause.fill" : "play.fill") {
+                    Button(playerStore.isPlaying ? "一時停止" : "再生", systemImage: playerStore.isPlaying ? "pause.fill" : "play.fill") {
                         playerStore.togglePlayPause()
                     }
                     .labelStyle(.iconOnly)
@@ -48,7 +48,7 @@ struct MiniPlayerView: View {
                 .progressViewStyle(.linear)
                 .tint(.accentColor)
                 .scaleEffect(x: 1, y: 0.6, anchor: .center)
-                .accessibilityLabel("Playback progress")
+                .accessibilityLabel("再生位置")
                 .accessibilityValue("\(Int(progress * 100)) percent")
         }
         .background(.bar)

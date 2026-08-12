@@ -16,7 +16,7 @@ struct ComposersView: View {
                 }
             }
         }
-        .navigationTitle("Composers")
+        .navigationTitle("作曲者")
         .navigationDestination(for: Composer.self) { composer in
             SongsView(tracks: tracks(for: composer.trackIDs), title: composer.name)
         }

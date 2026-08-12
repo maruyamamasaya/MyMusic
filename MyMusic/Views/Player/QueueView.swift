@@ -10,12 +10,12 @@ struct QueueView: View {
                 if playerStore.queue.isEmpty {
                     EmptyStateView(
                         icon: "text.line.last.and.arrowtriangle.forward",
-                        title: "Queue Is Empty",
-                        message: "Choose a song to start a playback queue."
+                        title: "再生キューは空です",
+                        message: "曲を選択すると再生キューが作成されます。"
                     )
                 } else {
                     List {
-                        Section("Up Next") {
+                        Section("次に再生") {
                             ForEach(playerStore.playbackOrder, id: \.self) { index in
                                 let track = playerStore.queue[index]
                                 Button {
@@ -34,7 +34,7 @@ struct QueueView: View {
                                         }
                                         Spacer()
                                         if index == playerStore.currentIndex {
-                                            Text("Playing")
+                                            Text("再生中")
                                                 .font(.caption)
                                                 .foregroundStyle(.tint)
                                         }
@@ -50,14 +50,14 @@ struct QueueView: View {
                     }
                 }
             }
-            .navigationTitle("Queue")
+            .navigationTitle("再生キュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("完了") { dismiss() }
                 }
             }
         }

@@ -15,13 +15,13 @@ struct PlaybackControlsView: View {
 
     var body: some View {
         HStack {
-            Button("Shuffle", systemImage: "shuffle", action: onShuffle)
+            Button("シャッフル", systemImage: "shuffle", action: onShuffle)
                 .foregroundStyle(isShuffleEnabled ? Color.accentColor : Color.secondary)
                 .accessibilityValue(isShuffleEnabled ? "On" : "Off")
 
             Spacer()
 
-            Button("Previous", systemImage: "backward.end.fill", action: onPrevious)
+            Button("前の曲", systemImage: "backward.end.fill", action: onPrevious)
                 .font(.system(size: 27))
                 .disabled(!canGoPrevious || isLoading)
 
@@ -31,19 +31,19 @@ struct PlaybackControlsView: View {
                 ProgressView()
                     .controlSize(.large)
                     .frame(width: 62, height: 62)
-                    .accessibilityLabel("Loading audio")
+                    .accessibilityLabel("オーディオを読み込み中")
             } else {
-                Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
+                Button(isPlaying ? "一時停止" : "再生", systemImage: isPlaying ? "pause.circle.fill" : "play.circle.fill") {
                     onPlayPause()
                 }
                 .font(.system(size: 62))
                 .contentTransition(.symbolEffect(.replace))
-                .accessibilityLabel(isPlaying ? "Pause" : "Play")
+                .accessibilityLabel(isPlaying ? "一時停止" : "再生")
             }
 
             Spacer()
 
-            Button("Next", systemImage: "forward.end.fill", action: onNext)
+            Button("次の曲", systemImage: "forward.end.fill", action: onNext)
                 .font(.system(size: 27))
                 .disabled(!canGoNext || isLoading)
 

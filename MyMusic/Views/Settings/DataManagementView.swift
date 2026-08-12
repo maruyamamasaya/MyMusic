@@ -37,10 +37,10 @@ struct DataManagementView: View {
             importFile(result)
         }
         .alert("インポート結果", isPresented: Binding(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } })) {
-            Button("OK") { resultMessage = nil }
+            Button("閉じる") { resultMessage = nil }
         } message: { Text(resultMessage ?? "") }
         .alert("データエラー", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
+            Button("閉じる") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
     }
 

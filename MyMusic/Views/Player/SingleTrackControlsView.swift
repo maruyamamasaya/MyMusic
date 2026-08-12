@@ -6,7 +6,7 @@ struct SingleTrackControlsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(playerStore.currentTrack?.title ?? "Not Playing")
+                    Text(playerStore.currentTrack?.title ?? "未再生")
                         .font(.headline)
                         .lineLimit(1)
                     Text(playerStore.currentTrack?.artistName ?? "")
@@ -18,7 +18,7 @@ struct SingleTrackControlsView: View {
                 if playerStore.isLoading {
                     ProgressView()
                 } else {
-                    Button(playerStore.isPlaying ? "Pause" : "Play", systemImage: playerStore.isPlaying ? "pause.fill" : "play.fill") {
+                    Button(playerStore.isPlaying ? "一時停止" : "再生", systemImage: playerStore.isPlaying ? "pause.fill" : "play.fill") {
                         playerStore.togglePlayPause()
                     }
                     .labelStyle(.iconOnly)

@@ -14,7 +14,7 @@ struct SongsView: View {
     let tracks: [Track]
     let title: String
 
-    init(tracks: [Track] = PreviewData.tracks, title: String = "Songs") {
+    init(tracks: [Track] = PreviewData.tracks, title: String = "曲") {
         self.tracks = tracks
         self.title = title
     }
@@ -100,12 +100,12 @@ struct SongsView: View {
         }
         .contextMenu {
             Button(
-                playbackHistoryStore.isFavorite(trackID: track.id) ? "Remove from Favorites" : "Add to Favorites",
+                playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
                 systemImage: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
             ) {
                 playbackHistoryStore.toggleFavorite(trackID: track.id)
             }
-            Button("Add to Playlist", systemImage: "text.badge.plus") {
+            Button("プレイリストに追加", systemImage: "text.badge.plus") {
                 trackToAddToPlaylist = track
             }
         }

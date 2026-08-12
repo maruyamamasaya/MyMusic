@@ -12,52 +12,50 @@ struct AddToPlaylistSheet: View {
         NavigationStack {
             List {
                 Section {
-                    Button("New Playlist", systemImage: "plus") {
+                    Button("新規プレイリスト", systemImage: "plus") {
                         newPlaylistName = ""
                         isCreatingPlaylist = true
                     }
                 }
 
-                Section("Choose Playlist") {
+                Section("プレイリストを選択") {
                     if playlistStore.playlists.isEmpty {
-                        Text("No playlists yet")
+                        Text("プレイリストはありません")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(playlistStore.playlists) { playlist in
                             let alreadyAdded = playlistStore.contains(track.id, in: playlist.id)
                             Button {
-                                playlistStore.addTrack(track, to: playlist.id)
-                                dismiss()
+                                playlistStore.toggleTrack(track, in: playlist.id)
                             } label: {
                                 HStack {
                                     Text(playlist.name).foregroundStyle(.primary)
                                     Spacer()
                                     if alreadyAdded {
-                                        Label("Added", systemImage: "checkmark")
+                                        Label("追加済み・タップで削除", systemImage: "checkmark.circle.fill")
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(.tint)
                                     }
                                 }
                             }
-                            .disabled(alreadyAdded)
+                            .accessibilityHint(alreadyAdded ? "このプレイリストから曲を削除します" : "このプレイリストへ曲を追加します")
                         }
                     }
                 }
             }
-            .navigationTitle("Add to Playlist")
+            .navigationTitle("プレイリストに追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
                 }
             }
-            .alert("New Playlist", isPresented: $isCreatingPlaylist) {
-                TextField("Playlist Name", text: $newPlaylistName)
-                Button("Cancel", role: .cancel) {}
-                Button("Create") {
+            .alert("新規プレイリスト", isPresented: $isCreatingPlaylist) {
+                TextField("プレイリスト名", text: $newPlaylistName)
+                Button("キャンセル", role: .cancel) {}
+                Button("作成") {
                     if let playlistID = playlistStore.createPlaylist(named: newPlaylistName) {
                         playlistStore.addTrack(track, to: playlistID)
-                        dismiss()
                     }
                 }
                 .disabled(newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
