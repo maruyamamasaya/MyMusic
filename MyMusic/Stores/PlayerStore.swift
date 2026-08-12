@@ -30,6 +30,7 @@ final class PlayerStore {
     private(set) var isShuffleEnabled = false
     private(set) var repeatMode: RepeatMode = .off
     private(set) var audioInformation = AudioInformation.unknown
+    private(set) var spectrumLevels: [Float] = Array(repeating: 0, count: 32)
 
     var hasNext: Bool {
         guard currentPlaybackPosition != nil else { return false }
@@ -76,6 +77,9 @@ final class PlayerStore {
         self.audioInformationService = audioInformationService
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
+        }
+        (resolvedPlayer as? EqualizerControlling)?.spectrumHandler = { [weak self] levels in
+            self?.spectrumLevels = levels
         }
         self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate in
             self?.audioInformation.outputName = name
@@ -262,6 +266,7 @@ final class PlayerStore {
         currentIndex = nil
         currentTrack = nil
         audioInformation = .unknown
+        spectrumLevels = Array(repeating: 0, count: 32)
         isPlaying = false
         currentTime = 0
         duration = 0

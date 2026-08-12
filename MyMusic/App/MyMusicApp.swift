@@ -7,12 +7,14 @@ struct MyMusicApp: App {
     @State private var libraryStore = LibraryStore()
     @State private var playlistStore = PlaylistStore()
     @State private var favoriteStore = FavoriteStore()
-    @State private var settingsStore = SettingsStore()
+    @State private var settingsStore: SettingsStore
 
     init() {
         let historyStore = PlaybackHistoryStore()
+        let audioPlayer = AudioPlayerService()
         _playbackHistoryStore = State(initialValue: historyStore)
-        _playerStore = State(initialValue: PlayerStore(playbackHistoryStore: historyStore))
+        _playerStore = State(initialValue: PlayerStore(audioPlayer: audioPlayer, playbackHistoryStore: historyStore))
+        _settingsStore = State(initialValue: SettingsStore(equalizerController: audioPlayer))
     }
 
     var body: some Scene {

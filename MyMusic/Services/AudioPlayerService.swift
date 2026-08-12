@@ -37,26 +37,45 @@ protocol AudioPlayerServicing: AnyObject {
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing {
+protocol EqualizerControlling: AnyObject {
+    var spectrumHandler: (([Float]) -> Void)? { get set }
+    func applyEqualizer(_ settings: EqualizerSettings)
+}
+
+@MainActor
+final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
+    var spectrumHandler: (([Float]) -> Void)?
 
     private let fileImportService: FileImportServicing
-    private var player: AVPlayer?
+    private let engine = AVAudioEngine()
+    private let playerNode = AVAudioPlayerNode()
+    private let equalizer = AVAudioUnitEQ(numberOfBands: EqualizerSettings.frequencies.count)
+    private var audioFile: AVAudioFile?
     private var currentTrack: Track?
-    private var timeObserver: Any?
-    private var itemNotificationTokens: [NSObjectProtocol] = []
+    private var playbackTimer: Timer?
     private var audioSessionNotificationTokens: [NSObjectProtocol] = []
     private var accessedURL: URL?
     private var isAccessingSecurityScope = false
+    private var scheduledStartFrame: AVAudioFramePosition = 0
+    private var scheduledLength: AVAudioFramePosition = 0
+    private var pausedFrame: AVAudioFramePosition = 0
+    private var scheduleID = UUID()
+    private var equalizerSettings = EqualizerSettings.flat
+    private var isSpectrumTapInstalled = false
 
     init(fileImportService: FileImportServicing? = nil) {
         self.fileImportService = fileImportService ?? FileImportService()
+        engine.attach(playerNode)
+        engine.attach(equalizer)
+        configureEqualizerBands()
+        applyEqualizer(equalizerSettings)
         observeAudioSession()
     }
 
     isolated deinit {
-        if let timeObserver { player?.removeTimeObserver(timeObserver) }
-        itemNotificationTokens.forEach(NotificationCenter.default.removeObserver)
+        playbackTimer?.invalidate()
+        if isSpectrumTapInstalled { engine.mainMixerNode.removeTap(onBus: 0) }
         audioSessionNotificationTokens.forEach(NotificationCenter.default.removeObserver)
         if isAccessingSecurityScope { accessedURL?.stopAccessingSecurityScopedResource() }
     }
@@ -71,19 +90,24 @@ final class AudioPlayerService: AudioPlayerServicing {
                 throw AudioPlayerServiceError.fileUnavailable
             }
 
-            let asset = AVURLAsset(url: track.fileURL)
-            let (isPlayable, duration) = try await asset.load(.isPlayable, .duration)
-            guard isPlayable else { throw AudioPlayerServiceError.unsupportedFormat }
-
             try configureAudioSession()
-            let item = AVPlayerItem(asset: asset)
-            let player = AVPlayer(playerItem: item)
-            self.player = player
-            observe(player: player, item: item)
+            let file: AVAudioFile
+            do {
+                file = try AVAudioFile(forReading: track.fileURL)
+            } catch {
+                throw AudioPlayerServiceError.unsupportedFormat
+            }
+            audioFile = file
+            try configureGraph(for: file.processingFormat)
+            schedule(from: 0)
+            installSpectrumTapIfNeeded()
+            engine.prepare()
+            if !engine.isRunning { try engine.start() }
 
-            let seconds = duration.seconds
+            let seconds = Double(file.length) / file.processingFormat.sampleRate
             eventHandler?(.ready(duration: seconds.isFinite ? seconds : track.duration))
-            player.play()
+            playerNode.play()
+            startPlaybackTimer()
             eventHandler?(.playingChanged(true))
         } catch {
             stopPlayback(clearTrack: false)
@@ -92,29 +116,41 @@ final class AudioPlayerService: AudioPlayerServicing {
     }
 
     func pause() {
-        player?.pause()
+        guard playerNode.isPlaying else { return }
+        pausedFrame = currentFrame()
+        playerNode.pause()
+        spectrumHandler?(Self.silentSpectrum)
         eventHandler?(.playingChanged(false))
     }
 
     func resume() async throws {
-        guard let player, let currentTrack else { return }
+        guard audioFile != nil, let currentTrack else { return }
         if !isAccessingSecurityScope { try beginFileAccess(for: currentTrack.fileURL) }
-
-        let duration = player.currentItem?.duration.seconds ?? 0
-        if duration.isFinite, duration > 0, player.currentTime().seconds >= duration - 0.05 {
-            await player.seek(to: .zero)
+        if pausedFrame >= scheduledLength {
+            schedule(from: 0)
             eventHandler?(.timeChanged(0))
         }
-        player.play()
+        if !engine.isRunning { try engine.start() }
+        playerNode.play()
+        startPlaybackTimer()
         eventHandler?(.playingChanged(true))
     }
 
     func seek(to time: TimeInterval) {
-        guard let player else { return }
-        let duration = player.currentItem?.duration.seconds ?? time
-        let clampedTime = min(max(time, 0), duration.isFinite ? duration : time)
-        player.seek(to: CMTime(seconds: clampedTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        guard let audioFile else { return }
+        let wasPlaying = playerNode.isPlaying
+        let duration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
+        let clampedTime = min(max(time, 0), duration)
+        let frame = AVAudioFramePosition(clampedTime * audioFile.processingFormat.sampleRate)
+        schedule(from: frame)
         eventHandler?(.timeChanged(clampedTime))
+        if wasPlaying, frame < audioFile.length {
+            playerNode.play()
+        } else if wasPlaying {
+            spectrumHandler?(Self.silentSpectrum)
+            eventHandler?(.ended)
+            endFileAccess()
+        }
     }
 
     func stop() {
@@ -123,29 +159,16 @@ final class AudioPlayerService: AudioPlayerServicing {
         eventHandler?(.timeChanged(0))
     }
 
-    private func observe(player: AVPlayer, item: AVPlayerItem) {
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            MainActor.assumeIsolated { self?.eventHandler?(.timeChanged(max(time.seconds, 0))) }
+    func applyEqualizer(_ settings: EqualizerSettings) {
+        var normalized = settings
+        normalized.normalize()
+        equalizerSettings = normalized
+        equalizer.bypass = !normalized.isEnabled
+        equalizer.globalGain = normalized.preamp
+        for (parameters, band) in zip(equalizer.bands, normalized.bands) {
+            parameters.gain = band.gain
+            parameters.bypass = false
         }
-
-        let center = NotificationCenter.default
-        itemNotificationTokens.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.eventHandler?(.ended)
-                self?.endFileAccess()
-            }
-        })
-        itemNotificationTokens.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] notification in
-            let message = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
-                ?? "Playback failed."
-            MainActor.assumeIsolated {
-                self?.eventHandler?(.failed(message))
-                self?.endFileAccess()
-            }
-        })
     }
 
     private func beginFileAccess(for fileURL: URL) throws {
@@ -169,15 +192,111 @@ final class AudioPlayerService: AudioPlayerServicing {
     }
 
     private func stopPlayback(clearTrack: Bool) {
-        player?.pause()
-        if let timeObserver { player?.removeTimeObserver(timeObserver) }
-        timeObserver = nil
-        itemNotificationTokens.forEach(NotificationCenter.default.removeObserver)
-        itemNotificationTokens.removeAll()
-        player = nil
+        scheduleID = UUID()
+        playerNode.stop()
+        engine.stop()
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        audioFile = nil
+        scheduledStartFrame = 0
+        scheduledLength = 0
+        pausedFrame = 0
+        spectrumHandler?(Self.silentSpectrum)
         if clearTrack { currentTrack = nil }
         endFileAccess()
     }
+
+    private func configureEqualizerBands() {
+        for (parameters, frequency) in zip(equalizer.bands, EqualizerSettings.frequencies) {
+            parameters.filterType = .parametric
+            parameters.frequency = Float(frequency)
+            parameters.bandwidth = 1
+        }
+    }
+
+    private func configureGraph(for format: AVAudioFormat) throws {
+        playerNode.stop()
+        if engine.isRunning { engine.stop() }
+        engine.disconnectNodeOutput(playerNode)
+        engine.disconnectNodeOutput(equalizer)
+        engine.connect(playerNode, to: equalizer, format: format)
+        engine.connect(equalizer, to: engine.mainMixerNode, format: format)
+    }
+
+    private func schedule(from requestedFrame: AVAudioFramePosition) {
+        guard let audioFile else { return }
+        scheduleID = UUID()
+        let activeScheduleID = scheduleID
+        playerNode.stop()
+        let startFrame = min(max(requestedFrame, 0), audioFile.length)
+        let remaining = max(audioFile.length - startFrame, 0)
+        scheduledStartFrame = startFrame
+        scheduledLength = audioFile.length
+        pausedFrame = startFrame
+        guard remaining > 0 else { return }
+        playerNode.scheduleSegment(
+            audioFile,
+            startingFrame: startFrame,
+            frameCount: AVAudioFrameCount(min(remaining, AVAudioFramePosition(UInt32.max))),
+            at: nil,
+            completionCallbackType: .dataPlayedBack
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, scheduleID == activeScheduleID else { return }
+                pausedFrame = scheduledLength
+                playbackTimer?.invalidate()
+                playbackTimer = nil
+                spectrumHandler?(Self.silentSpectrum)
+                eventHandler?(.ended)
+                endFileAccess()
+            }
+        }
+    }
+
+    private func currentFrame() -> AVAudioFramePosition {
+        guard playerNode.isPlaying,
+              let renderTime = playerNode.lastRenderTime,
+              let playerTime = playerNode.playerTime(forNodeTime: renderTime) else {
+            return pausedFrame
+        }
+        return min(scheduledStartFrame + playerTime.sampleTime, scheduledLength)
+    }
+
+    private func startPlaybackTimer() {
+        guard playbackTimer == nil else { return }
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let audioFile = self.audioFile else { return }
+                let time = Double(self.currentFrame()) / audioFile.processingFormat.sampleRate
+                self.eventHandler?(.timeChanged(max(time, 0)))
+            }
+        }
+    }
+
+    private func installSpectrumTapIfNeeded() {
+        let mixer = engine.mainMixerNode
+        if isSpectrumTapInstalled { mixer.removeTap(onBus: 0) }
+        mixer.installTap(onBus: 0, bufferSize: 2_048, format: nil) { [weak self] buffer, _ in
+            guard let channel = buffer.floatChannelData?.pointee else { return }
+            let frameCount = Int(buffer.frameLength)
+            guard frameCount > 0 else { return }
+            let barCount = 32
+            let framesPerBar = max(frameCount / barCount, 1)
+            var levels = [Float](repeating: 0, count: barCount)
+            for bar in levels.indices {
+                let start = bar * framesPerBar
+                guard start < frameCount else { break }
+                let end = min(start + framesPerBar, frameCount)
+                var peak: Float = 0
+                for index in start..<end { peak = max(peak, abs(channel[index])) }
+                levels[bar] = min(sqrt(peak), 1)
+            }
+            Task { @MainActor [weak self] in self?.spectrumHandler?(levels) }
+        }
+        isSpectrumTapInstalled = true
+    }
+
+    private static let silentSpectrum = Array(repeating: Float.zero, count: 32)
 
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()

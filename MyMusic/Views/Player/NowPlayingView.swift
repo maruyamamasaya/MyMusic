@@ -39,6 +39,7 @@ struct NowPlayingView: View {
                 artworkIdentifier: playerStore.currentTrack?.artworkIdentifier,
                 trackTitle: playerStore.currentTrack?.title,
                 information: playerStore.audioInformation,
+                spectrumLevels: playerStore.spectrumLevels,
                 showsAudioDetails: $showsAudioDetails
             )
             .containerRelativeFrame(.horizontal) { availableWidth, _ in
@@ -174,6 +175,7 @@ private struct ArtworkAudioDetailsView: View {
     let artworkIdentifier: String?
     let trackTitle: String?
     let information: AudioInformation
+    let spectrumLevels: [Float]
     @Binding var showsAudioDetails: Bool
 
     var body: some View {
@@ -182,7 +184,7 @@ private struct ArtworkAudioDetailsView: View {
         } label: {
             ZStack {
                 if showsAudioDetails {
-                    AudioInformationView(information: information)
+                    AudioInformationView(information: information, spectrumLevels: spectrumLevels)
                         .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 } else {
                     AlbumArtworkView(
@@ -203,6 +205,7 @@ private struct ArtworkAudioDetailsView: View {
 
 private struct AudioInformationView: View {
     let information: AudioInformation
+    let spectrumLevels: [Float]
 
     private var hasDetails: Bool {
         information.codec != "Unknown" || information.bitRate != nil || information.sampleRate != nil ||
@@ -213,6 +216,10 @@ private struct AudioInformationView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Audio Details", systemImage: "waveform")
                 .font(.headline)
+
+            WaveformView(levels: spectrumLevels)
+                .frame(height: 72)
+                .accessibilityHidden(true)
 
             if hasDetails {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
@@ -254,6 +261,37 @@ private struct AudioInformationView: View {
         case 1: "Mono"
         case 2: "Stereo"
         default: "\(channels) ch"
+        }
+    }
+}
+
+private struct WaveformView: View {
+    let levels: [Float]
+
+    var body: some View {
+        GeometryReader { proxy in
+            let count = max(levels.count, 1)
+            let spacing: CGFloat = 3
+            let width = max((proxy.size.width - spacing * CGFloat(count - 1)) / CGFloat(count), 1)
+
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(levels.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.cyan, .blue, .purple],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(
+                            width: width,
+                            height: max(3, proxy.size.height * CGFloat(levels[index]))
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.linear(duration: 0.08), value: levels)
         }
     }
 }
