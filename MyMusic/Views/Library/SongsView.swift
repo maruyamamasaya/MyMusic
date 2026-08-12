@@ -5,7 +5,7 @@ struct SongsView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var trackToAddToPlaylist: Track?
     @State private var query = ""
-    @State private var sortOrder: SongSortOrder = .title
+    @State private var sortOrder: SongSortOrder = .random
     @State private var displayedTrackCount = pageSize
     @State private var randomSeed = UInt64.random(in: .min ... .max)
 
