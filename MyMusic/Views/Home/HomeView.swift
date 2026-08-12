@@ -246,23 +246,92 @@ private struct HomeItemTile: View {
             HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
                 .opacity(colorScheme == .dark ? 0.68 : 0.58)
                 .overlay(readabilityMask)
-        } else if categoryID == .library {
-            LinearGradient(
-                colors: [Color(red: 0.98, green: 0.24, blue: 0.46), .orange, Color(red: 0.55, green: 0.16, blue: 0.93)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay(.black.opacity(0.12))
-        } else if categoryID == .activity {
-            LinearGradient(
-                colors: [Color(red: 0.03, green: 0.92, blue: 0.86), Color(red: 0.18, green: 0.12, blue: 0.28), Color(red: 1, green: 0.10, blue: 0.48)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay(.black.opacity(0.16))
+        } else if categoryID == .library || categoryID == .activity {
+            decorativeGradientBackground
         } else {
             RoundedRectangle(cornerRadius: 18).fill(.background.secondary)
         }
+    }
+
+    private var decorativeGradientBackground: some View {
+        LinearGradient(
+            colors: decorativeColors,
+            startPoint: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
+            endPoint: gradientStartsAtTopTrailing ? .bottomLeading : .bottomTrailing
+        )
+        .overlay {
+            RadialGradient(
+                colors: [.white.opacity(0.18), .clear],
+                center: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
+                startRadius: 0,
+                endRadius: 145
+            )
+        }
+        .overlay(decorativeReadabilityMask)
+    }
+
+    private var decorativeColors: [Color] {
+        switch item.destination {
+        case .songs:
+            // Electric blue settling into a deep indigo.
+            [
+                Color(red: 0.12, green: 0.58, blue: 0.96),
+                Color(red: 0.20, green: 0.28, blue: 0.78),
+                Color(red: 0.10, green: 0.08, blue: 0.30)
+            ]
+        case .albums:
+            // Warm coral and wine, kept darker than a social-media gradient.
+            [
+                Color(red: 0.96, green: 0.38, blue: 0.34),
+                Color(red: 0.68, green: 0.16, blue: 0.34),
+                Color(red: 0.27, green: 0.07, blue: 0.22)
+            ]
+        case .artists:
+            [
+                Color(red: 0.12, green: 0.72, blue: 0.61),
+                Color(red: 0.04, green: 0.43, blue: 0.45),
+                Color(red: 0.03, green: 0.18, blue: 0.25)
+            ]
+        case .genres:
+            [
+                Color(red: 0.96, green: 0.66, blue: 0.20),
+                Color(red: 0.88, green: 0.31, blue: 0.18),
+                Color(red: 0.35, green: 0.10, blue: 0.12)
+            ]
+        case .composers:
+            [
+                Color(red: 0.69, green: 0.42, blue: 0.95),
+                Color(red: 0.37, green: 0.20, blue: 0.66),
+                Color(red: 0.13, green: 0.08, blue: 0.28)
+            ]
+        case .analytics:
+            [
+                Color(red: 0.18, green: 0.78, blue: 0.88),
+                Color(red: 0.08, green: 0.42, blue: 0.68),
+                Color(red: 0.16, green: 0.12, blue: 0.38)
+            ]
+        default:
+            [Color.accentColor, Color.accentColor.opacity(0.65), Color.black.opacity(0.72)]
+        }
+    }
+
+    private var gradientStartsAtTopTrailing: Bool {
+        switch item.destination {
+        case .albums, .genres, .analytics: true
+        default: false
+        }
+    }
+
+    private var decorativeReadabilityMask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.08), location: 0),
+                .init(color: .black.opacity(0.18), location: 0.48),
+                .init(color: .black.opacity(0.46), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     private var readabilityMask: LinearGradient {
