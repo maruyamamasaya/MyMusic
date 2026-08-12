@@ -7,6 +7,7 @@ struct PlaylistDetailView: View {
     let playlistID: Playlist.ID
 
     @State private var isEditingPlaylist = false
+    @State private var editMode: EditMode = .inactive
     @State private var selectedTracks: Set<Track.ID> = []
     @State private var isAddingSongs = false
     @State private var isRenaming = false
@@ -42,13 +43,15 @@ struct PlaylistDetailView: View {
                 ContentUnavailableView("プレイリストが見つかりません", systemImage: "questionmark.folder")
             }
         }
-        .environment(\.editMode, .constant(isEditingPlaylist ? .active : .inactive))
+        .environment(\.editMode, $editMode)
         .navigationTitle(playlist?.name ?? "プレイリスト")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(isEditingPlaylist ? "完了" : "編集") {
-                    isEditingPlaylist.toggle(); if !isEditingPlaylist { selectedTracks.removeAll() }
+                    isEditingPlaylist.toggle()
+                    editMode = isEditingPlaylist ? .active : .inactive
+                    if !isEditingPlaylist { selectedTracks.removeAll() }
                 }.disabled(playlist == nil)
             }
             ToolbarItem(placement: .secondaryAction) {
@@ -70,6 +73,11 @@ struct PlaylistDetailView: View {
             Button("キャンセル", role: .cancel) { }
             Button("保存") { playlistStore.renamePlaylist(id: playlistID, to: renameText) }
                 .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .onDisappear {
+            isEditingPlaylist = false
+            editMode = .inactive
+            selectedTracks.removeAll()
         }
     }
 

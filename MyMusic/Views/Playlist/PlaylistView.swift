@@ -10,10 +10,23 @@ struct PlaylistView: View {
     @State private var isSelecting = false
     @State private var selection: Set<Playlist.ID> = []
     @State private var confirmsBulkDelete = false
+    private let createsNavigationStack: Bool
 
+    init(createsNavigationStack: Bool = true) {
+        self.createsNavigationStack = createsNavigationStack
+    }
+
+    @ViewBuilder
     var body: some View {
-        NavigationStack {
-            List {
+        if createsNavigationStack {
+            NavigationStack { content }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        List {
                 Section {
                     NavigationLink {
                         FavoritesView()
@@ -49,7 +62,7 @@ struct PlaylistView: View {
                         }.disabled(selection.isEmpty)
                     }
                 }
-            }
+        }
             .navigationTitle("プレイリスト")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -108,7 +121,10 @@ struct PlaylistView: View {
                 Text(playlistStore.errorMessage ?? "不明なエラーが発生しました。")
             }
             .task { await playlistStore.loadIfNeeded() }
-        }
+            .onDisappear {
+                if isSelecting { stopSelecting() }
+                confirmsBulkDelete = false
+            }
     }
 
     private var renameIsPresented: Binding<Bool> {

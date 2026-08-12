@@ -83,7 +83,9 @@ struct HomeCategoryDetailView: View {
                 tracks: playbackHistoryStore.recentTracks(from: libraryStore.tracks)
             )
         case .playlists:
-            PlaylistView()
+            // HomeView already owns the NavigationStack. Nesting another stack here
+            // can leave navigation gestures intercepting every touch after a push.
+            PlaylistView(createsNavigationStack: false)
         case .songs:
             SongsView(tracks: libraryStore.tracks)
         case .albums:
