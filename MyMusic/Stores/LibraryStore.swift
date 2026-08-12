@@ -24,8 +24,12 @@ final class LibraryStore {
     private(set) var isInitialLoadComplete = false
     private(set) var genreDisplayPresets: [GenreDisplayPreset]
 
-    var availableGenreNames: [String] {
-        allGenres.map(\.name)
+    var availableGenreOptions: [GenreDisplayOption] {
+        var options = allGenres.map { GenreDisplayOption(id: $0.name, name: $0.name) }
+        if allTracks.contains(where: { Self.genreNames(in: $0.genre).isEmpty }) {
+            options.append(GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定"))
+        }
+        return options
     }
 
     var hasLibraryFolder: Bool { !libraryFolders.isEmpty }
@@ -43,6 +47,7 @@ final class LibraryStore {
     private let userDefaults: UserDefaults
     private static let disabledGenresKey = "library.disabledGenreNames"
     private static let genrePresetsKey = "library.genreDisplayPresets"
+    private static let unassignedGenreKey = "maruyama.MyMusic.genre.unassigned"
 
     init(service: MusicLibraryServicing? = nil, fileImportService: FileImportServicing? = nil,
          persistence: LibraryPersistenceServicing? = nil, identityService: TrackIdentityServicing? = nil,
@@ -124,22 +129,24 @@ final class LibraryStore {
     func saveGenreDisplayPreset(named name: String) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        let enabledGenreNames = Set(availableGenreNames.filter(isGenreEnabled))
+        let enabledGenreNames = Set(availableGenreOptions.map(\.id).filter(isGenreEnabled))
         if let index = genreDisplayPresets.firstIndex(where: {
             $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
             genreDisplayPresets[index].name = trimmedName
             genreDisplayPresets[index].enabledGenreNames = enabledGenreNames
+            genreDisplayPresets[index].includesUnassignedGenreSetting = true
         } else {
             genreDisplayPresets.append(GenreDisplayPreset(
-                id: UUID(), name: trimmedName, enabledGenreNames: enabledGenreNames
+                id: UUID(), name: trimmedName, enabledGenreNames: enabledGenreNames,
+                includesUnassignedGenreSetting: true
             ))
         }
         genreDisplayPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         saveGenreDisplayPresets()
     }
     func applyGenreDisplayPreset(_ preset: GenreDisplayPreset) {
-        disabledGenreNames = Set(availableGenreNames).subtracting(preset.enabledGenreNames)
+        disabledGenreNames = Set(availableGenreOptions.map(\.id)).subtracting(enabledGenreKeys(for: preset))
         saveDisabledGenres()
         applyGenreFilter()
     }
@@ -148,7 +155,7 @@ final class LibraryStore {
         saveGenreDisplayPresets()
     }
     func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
-        Set(availableGenreNames.filter(isGenreEnabled)) == preset.enabledGenreNames
+        Set(availableGenreOptions.map(\.id).filter(isGenreEnabled)) == enabledGenreKeys(for: preset)
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for artist: Artist) -> [Track] {
@@ -195,7 +202,9 @@ final class LibraryStore {
     }
     private func applyGenreFilter() {
         let visibleTracks = allTracks.filter { track in
-            disabledGenreNames.isDisjoint(with: Self.genreNames(in: track.genre))
+            let genreNames = Self.genreNames(in: track.genre)
+            let filterKeys = genreNames.isEmpty ? Set([Self.unassignedGenreKey]) : genreNames
+            return disabledGenreNames.isDisjoint(with: filterKeys)
         }
         apply(MusicLibrary.build(from: visibleTracks))
     }
@@ -205,6 +214,12 @@ final class LibraryStore {
     private func saveGenreDisplayPresets() {
         guard let data = try? JSONEncoder().encode(genreDisplayPresets) else { return }
         userDefaults.set(data, forKey: Self.genrePresetsKey)
+    }
+    private func enabledGenreKeys(for preset: GenreDisplayPreset) -> Set<String> {
+        guard preset.includesUnassignedGenreSetting == true else {
+            return preset.enabledGenreNames.union([Self.unassignedGenreKey])
+        }
+        return preset.enabledGenreNames
     }
     private func apply(_ library: MusicLibrary) {
         tracks = library.tracks; albums = library.albums; artists = library.artists

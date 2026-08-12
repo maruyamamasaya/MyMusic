@@ -52,7 +52,7 @@ struct LibraryView: View {
                         NavigationLink(value: LibraryDestination.composers) { countRow("作曲者", systemImage: "music.quarternote.3", count: libraryStore.composers.count) }
                     }
 
-                    if !libraryStore.availableGenreNames.isEmpty {
+                    if !libraryStore.availableGenreOptions.isEmpty {
                         Section {
                             DisclosureGroup(isExpanded: $isGenreSettingsExpanded) {
                                 if !libraryStore.genreDisplayPresets.isEmpty {
@@ -67,8 +67,8 @@ struct LibraryView: View {
                                     isPresetNamePresented = true
                                 }
 
-                                ForEach(libraryStore.availableGenreNames, id: \.self) { genreName in
-                                    Toggle(genreName, isOn: genreBinding(for: genreName))
+                                ForEach(libraryStore.availableGenreOptions) { option in
+                                    Toggle(option.name, isOn: genreBinding(for: option.id))
                                 }
                             } label: {
                                 Label("ジャンルごとの表示", systemImage: "line.3.horizontal.decrease.circle")
