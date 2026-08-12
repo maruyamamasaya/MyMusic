@@ -41,6 +41,12 @@ final class PlaylistStore {
         persist()
     }
 
+    func deletePlaylists(ids: Set<Playlist.ID>) {
+        guard !ids.isEmpty else { return }
+        playlists.removeAll { ids.contains($0.id) }
+        persist()
+    }
+
     func renamePlaylist(id: Playlist.ID, to name: String) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
@@ -54,8 +60,37 @@ final class PlaylistStore {
         }
     }
 
+    func addTracks(_ tracks: [Track], to playlistID: Playlist.ID) {
+        update(playlistID) { playlist in
+            var existing = Set(playlist.trackIDs)
+            playlist.trackIDs.append(contentsOf: tracks.map(\.id).filter { existing.insert($0).inserted })
+        }
+    }
+
     func removeTrack(_ trackID: Track.ID, from playlistID: Playlist.ID) {
         update(playlistID) { $0.trackIDs.removeAll { $0 == trackID } }
+    }
+
+    func removeTracks(_ trackIDs: Set<Track.ID>, from playlistID: Playlist.ID) {
+        guard !trackIDs.isEmpty else { return }
+        update(playlistID) { $0.trackIDs.removeAll { trackIDs.contains($0) } }
+    }
+
+    func moveTracks(in playlistID: Playlist.ID, from source: IndexSet, to destination: Int) {
+        update(playlistID) { playlist in
+            let moved = source.sorted().map { playlist.trackIDs[$0] }
+            for index in source.sorted(by: >) { playlist.trackIDs.remove(at: index) }
+            let adjustedDestination = destination - source.filter { $0 < destination }.count
+            playlist.trackIDs.insert(contentsOf: moved, at: min(adjustedDestination, playlist.trackIDs.count))
+        }
+    }
+
+    @discardableResult
+    func importPlaylist(named name: String, trackIDs: [Track.ID]) -> Playlist.ID? {
+        guard let id = createPlaylist(named: name) else { return nil }
+        var seen: Set<Track.ID> = []
+        update(id) { $0.trackIDs = trackIDs.filter { seen.insert($0).inserted } }
+        return id
     }
 
     func playlist(id: Playlist.ID) -> Playlist? {

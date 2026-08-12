@@ -18,6 +18,14 @@ struct SettingsView: View {
                     Label("分析", systemImage: "chart.bar.xaxis")
                 }
             }
+
+            Section("データ管理") {
+                NavigationLink {
+                    DataManagementView()
+                } label: {
+                    Label("Import / Export", systemImage: "externaldrive")
+                }
+            }
         }
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)

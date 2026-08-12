@@ -7,6 +7,9 @@ struct PlaylistView: View {
     @State private var playlistToRename: Playlist?
     @State private var renameText = ""
     @State private var playlistToDelete: Playlist?
+    @State private var isSelecting = false
+    @State private var selection: Set<Playlist.ID> = []
+    @State private var confirmsBulkDelete = false
 
     var body: some View {
         NavigationStack {
@@ -28,16 +31,7 @@ struct PlaylistView: View {
                         )
                     } else {
                         ForEach(playlistStore.playlists) { playlist in
-                            NavigationLink(value: playlist.id) {
-                                HStack {
-                                    Label(playlist.name, systemImage: "music.note.list")
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text("\(playlist.trackIDs.count)曲")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            playlistRow(playlist)
                             .contextMenu {
                                 Button("名前を変更", systemImage: "pencil") { presentRename(playlist) }
                                 Button("削除", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
@@ -48,13 +42,35 @@ struct PlaylistView: View {
                         }
                     }
                 }
+                if isSelecting {
+                    Section {
+                        Button("選択した\(selection.count)件を削除", systemImage: "trash", role: .destructive) {
+                            confirmsBulkDelete = true
+                        }.disabled(selection.isEmpty)
+                    }
+                }
             }
             .navigationTitle("プレイリスト")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if isSelecting { Button("キャンセル") { stopSelecting() } }
+                }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("新規プレイリスト", systemImage: "plus") { presentCreatePlaylist() }
+                    if isSelecting {
+                        Button("すべて選択") { selection = Set(playlistStore.playlists.map(\.id)) }
+                    } else {
+                        Menu {
+                            Button("新規プレイリスト", systemImage: "plus") { presentCreatePlaylist() }
+                            Button("プレイリストを選択", systemImage: "checkmark.circle") { isSelecting = true }
+                        } label: { Label("プレイリスト操作", systemImage: "ellipsis.circle") }
+                    }
                 }
             }
+            .confirmationDialog("選択したプレイリストを削除しますか？", isPresented: $confirmsBulkDelete, titleVisibility: .visible) {
+                Button("\(selection.count)件を削除", role: .destructive) {
+                    playlistStore.deletePlaylists(ids: selection); stopSelecting()
+                }
+            } message: { Text("音楽ファイルやライブラリの曲は削除されません。") }
             .navigationDestination(for: Playlist.ID.self) { playlistID in
                 PlaylistDetailView(playlistID: playlistID)
             }
@@ -111,6 +127,27 @@ struct PlaylistView: View {
         newPlaylistName = ""
         isCreatingPlaylist = true
     }
+
+    @ViewBuilder private func playlistRow(_ playlist: Playlist) -> some View {
+        if isSelecting {
+            Button {
+                if !selection.insert(playlist.id).inserted { selection.remove(playlist.id) }
+            } label: { rowLabel(playlist, selected: selection.contains(playlist.id)) }
+        } else {
+            NavigationLink(value: playlist.id) { rowLabel(playlist, selected: nil) }
+        }
+    }
+
+    private func rowLabel(_ playlist: Playlist, selected: Bool?) -> some View {
+        HStack {
+            if let selected { Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.accentColor : .secondary) }
+            Label(playlist.name, systemImage: "music.note.list").lineLimit(1)
+            Spacer()
+            Text("\(playlist.trackIDs.count)曲").font(.caption).foregroundStyle(.secondary)
+        }.foregroundStyle(.primary)
+    }
+
+    private func stopSelecting() { isSelecting = false; selection.removeAll() }
 
     private func presentRename(_ playlist: Playlist) {
         renameText = playlist.name

@@ -7,6 +7,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isQueuePresented = false
     @State private var isEqualizerPresented = false
+    @State private var isAddToPlaylistPresented = false
     @State private var showsAudioDetails = false
 
     var body: some View {
@@ -38,6 +39,9 @@ struct NowPlayingView: View {
                             }
                         }
                 }
+            }
+            .sheet(isPresented: $isAddToPlaylistPresented) {
+                if let track = playerStore.currentTrack { AddToPlaylistSheet(track: track) }
             }
             .onChange(of: playerStore.currentTrack?.id) { _, _ in
                 showsAudioDetails = false
@@ -74,6 +78,16 @@ struct NowPlayingView: View {
                         track: track,
                         isIncrease: true
                     )
+                    Button {
+                        isAddToPlaylistPresented = true
+                    } label: {
+                        Image(systemName: "text.badge.plus")
+                            .font(.title3)
+                            .frame(width: 42, height: 36)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("プレイリストに追加")
                     Button {
                         isQueuePresented = true
                     } label: {
