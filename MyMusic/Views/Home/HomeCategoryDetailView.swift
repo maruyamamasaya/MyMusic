@@ -1,9 +1,7 @@
 import SwiftUI
 
 struct HomeCategoryDetailView: View {
-    @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
-    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var presentedPlaybackDestination: HomeDestination?
 
     let category: HomeCategory
@@ -28,7 +26,7 @@ struct HomeCategoryDetailView: View {
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: HomeDestination.self) { destination in
-            destinationView(destination)
+            HomeDestinationView(destination: destination)
         }
         .sheet(item: $presentedPlaybackDestination) { destination in
             switch destination {
@@ -67,9 +65,16 @@ struct HomeCategoryDetailView: View {
     private func isPlaybackDestination(_ destination: HomeDestination) -> Bool {
         destination == .nowPlaying || destination == .queue
     }
+}
+
+struct HomeDestinationView: View {
+    @Environment(LibraryStore.self) private var libraryStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+
+    let destination: HomeDestination
 
     @ViewBuilder
-    private func destinationView(_ destination: HomeDestination) -> some View {
+    var body: some View {
         switch destination {
         case .quickPlay:
             QuickPlayView(tracks: playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks))
