@@ -214,18 +214,22 @@ private struct HomeItemTile: View {
 
                 Spacer(minLength: 10)
 
-                Text(item.title)
-                    .font(.headline)
-                    .foregroundStyle(contentColor)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title)
+                        .font(.headline)
+                        .foregroundStyle(contentColor)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
 
-                Text(item.description)
-                    .font(.caption)
-                    .foregroundStyle(contentColor.opacity(0.78))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .padding(.top, 3)
+                    Text(item.description)
+                        .font(.caption)
+                        .foregroundStyle(contentColor.opacity(0.78))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
+                }
+                .frame(height: 71, alignment: .topLeading)
             }
             .padding(14)
         }
