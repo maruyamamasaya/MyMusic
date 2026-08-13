@@ -32,6 +32,8 @@ final class LibraryStore {
         return options
     }
 
+    var unfilteredTracks: [Track] { allTracks }
+
     var hasLibraryFolder: Bool { !libraryFolders.isEmpty }
     var scanProgress: Int { tracks.count }
 

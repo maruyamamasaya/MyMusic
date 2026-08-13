@@ -26,6 +26,14 @@ struct HomeView: View {
                                     onPlay: playPlaylist
                                 )
                             }
+                            if !libraryStore.genreDisplayPresets.isEmpty {
+                                HomeTuningSection(
+                                    presets: Array(libraryStore.genreDisplayPresets.prefix(10)),
+                                    showsMore: libraryStore.genreDisplayPresets.count > 10,
+                                    isActive: libraryStore.isGenreDisplayPresetActive,
+                                    onApply: libraryStore.applyGenreDisplayPreset
+                                )
+                            }
                         }
                     }
                 }
@@ -116,6 +124,111 @@ struct HomeView: View {
 
         guard !tracks.isEmpty else { return }
         playerStore.playQueue(tracks, startingAt: 0)
+    }
+}
+
+private struct HomeTuningSection: View {
+    let presets: [GenreDisplayPreset]
+    let showsMore: Bool
+    let isActive: (GenreDisplayPreset) -> Bool
+    let onApply: (GenreDisplayPreset) -> Void
+
+    private let spacing: CGFloat = 12
+    private let horizontalPadding: CGFloat = 16
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("チューニング").font(.title3.weight(.bold))
+                Text("シーンに合わせてライブラリの表示を切り替え")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, horizontalPadding)
+
+            GeometryReader { proxy in
+                let width = tileWidth(for: proxy.size.width)
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: spacing) {
+                        ForEach(presets) { preset in
+                            Button { onApply(preset) } label: {
+                                HomeTuningTile(preset: preset, isActive: isActive(preset), width: width)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if showsMore {
+                            NavigationLink(value: HomeDestination.tunings) {
+                                HomeTuningMoreTile(width: width)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            }
+            .frame(height: 140)
+        }
+    }
+
+    private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
+        let visibleCount: CGFloat = availableWidth < 600 ? 2 : (availableWidth < 800 ? 3 : 5)
+        return min(180, max(132, (availableWidth - horizontalPadding * 2 - 28 - spacing * (visibleCount - 1)) / visibleCount))
+    }
+}
+
+private struct HomeTuningTile: View {
+    let preset: GenreDisplayPreset
+    let isActive: Bool
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: isActive ? "slider.horizontal.3" : "tuningfork")
+                .font(.title2.weight(.semibold))
+                .frame(width: 42, height: 42)
+                .background(.white.opacity(0.17), in: RoundedRectangle(cornerRadius: 12))
+            Spacer()
+            Text(preset.name).font(.headline).lineLimit(2)
+            Text(isActive ? "適用中" : "タップして適用")
+                .font(.caption).foregroundStyle(.white.opacity(0.78)).padding(.top, 3)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(width: width, height: 140, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: isActive
+                    ? [Color.teal, Color.indigo.opacity(0.9)]
+                    : [Color(red: 0.38, green: 0.30, blue: 0.65), Color(red: 0.10, green: 0.10, blue: 0.22)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityLabel("チューニング、\(preset.name)")
+        .accessibilityHint(isActive ? "現在適用中です" : "ライブラリの表示を切り替えます")
+    }
+}
+
+private struct HomeTuningMoreTile: View {
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: "arrow.right.circle.fill").font(.largeTitle)
+            Spacer()
+            Text("続きを見る").font(.headline)
+            Text("すべてのシーン").font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
+        }
+        .foregroundStyle(.white).padding(14)
+        .frame(width: width, height: 140, alignment: .leading)
+        .background(LinearGradient(colors: [.indigo, .black.opacity(0.86)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 

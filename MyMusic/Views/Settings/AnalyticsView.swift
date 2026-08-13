@@ -10,7 +10,7 @@ struct AnalyticsView: View {
 
     private var snapshot: AnalyticsSnapshot {
         AnalyticsService().makeSnapshot(
-            tracks: libraryStore.tracks,
+            tracks: libraryStore.unfilteredTracks,
             historyEntries: playbackHistoryStore.entries,
             playlists: playlistStore.playlists
         )

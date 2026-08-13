@@ -71,6 +71,7 @@ enum HomeDestination: Hashable {
     case favorites
     case recentTracks
     case playlists
+    case tunings
     case songs
     case albums
     case artists

@@ -107,6 +107,8 @@ struct HomeDestinationView: View {
             // HomeView already owns the NavigationStack. Nesting another stack here
             // can leave navigation gestures intercepting every touch after a push.
             PlaylistView(createsNavigationStack: false)
+        case .tunings:
+            HomeTuningListView()
         case .songs:
             SongsView(tracks: libraryStore.tracks)
         case .albums:
@@ -122,6 +124,29 @@ struct HomeDestinationView: View {
         case .nowPlaying, .queue:
             EmptyView()
         }
+    }
+}
+
+private struct HomeTuningListView: View {
+    @Environment(LibraryStore.self) private var libraryStore
+
+    var body: some View {
+        List(libraryStore.genreDisplayPresets) { preset in
+            Button {
+                libraryStore.applyGenreDisplayPreset(preset)
+            } label: {
+                HStack {
+                    Label(preset.name, systemImage: "tuningfork")
+                    Spacer()
+                    if libraryStore.isGenreDisplayPresetActive(preset) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                    }
+                }
+                .foregroundStyle(.primary)
+            }
+        }
+        .navigationTitle("チューニング")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
