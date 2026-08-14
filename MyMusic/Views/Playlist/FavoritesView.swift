@@ -19,12 +19,11 @@ struct FavoritesView: View {
                 )
             } else {
                 Section {
-                    HStack(spacing: 12) {
-                        Button("再生", systemImage: "play.fill") { play(shuffled: false) }
-                            .buttonStyle(.borderedProminent)
-                        Button("シャッフル", systemImage: "shuffle") { play(shuffled: true) }
-                            .buttonStyle(.bordered)
-                    }
+                    PlayShuffleButtons(
+                        isDisabled: tracks.isEmpty,
+                        onPlay: { play(shuffled: false) },
+                        onShuffle: { play(shuffled: true) }
+                    )
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
                 }

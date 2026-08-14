@@ -106,10 +106,13 @@ struct PlaylistDetailView: View {
                     renameText = playlist?.name ?? ""; isRenaming = true
                 }
             } else {
-                HStack(spacing: 12) {
-                    Button("再生", systemImage: "play.fill") { play(shuffled: false) }.buttonStyle(.borderedProminent).disabled(tracks.isEmpty)
-                    Button("シャッフル", systemImage: "shuffle") { play(shuffled: true) }.buttonStyle(.bordered).disabled(tracks.isEmpty)
-                }.frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                PlayShuffleButtons(
+                    isDisabled: tracks.isEmpty,
+                    onPlay: { play(shuffled: false) },
+                    onShuffle: { play(shuffled: true) }
+                )
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
             }
         }
     }

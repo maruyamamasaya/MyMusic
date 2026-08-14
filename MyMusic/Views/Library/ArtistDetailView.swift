@@ -18,12 +18,11 @@ struct ArtistDetailView: View {
                         .font(.system(size: 100))
                         .foregroundStyle(.secondary)
                     Text(artist.name).font(.largeTitle.bold()).multilineTextAlignment(.center)
-                    HStack {
-                        Button("再生", systemImage: "play.fill") { play(shuffled: false) }
-                        Button("シャッフル", systemImage: "shuffle") { play(shuffled: true) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(tracks.isEmpty)
+                    PlayShuffleButtons(
+                        isDisabled: tracks.isEmpty,
+                        onPlay: { play(shuffled: false) },
+                        onShuffle: { play(shuffled: true) }
+                    )
                 }
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
