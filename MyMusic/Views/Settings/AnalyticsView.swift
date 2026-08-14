@@ -30,6 +30,7 @@ struct AnalyticsView: View {
             overviewSection
             playbackHistorySection
             preferenceRatingsSection
+            boredomSection
             mostPlayedSection
         }
         .navigationTitle("分析")
@@ -102,6 +103,26 @@ struct AnalyticsView: View {
         }
     }
 
+    private var boredomSection: some View {
+        Section("飽きた曲") {
+            NavigationLink {
+                BoredomTracksView(title: "現在非表示", items: snapshot.currentlyHiddenTracks, showsExpiration: true)
+            } label: {
+                LabeledContent("現在非表示", value: "\(snapshot.currentlyHiddenTracks.count)曲")
+            }
+            NavigationLink {
+                BoredomTracksView(title: "非表示解除済み", items: snapshot.previouslyHiddenTracks, showsExpiration: false)
+            } label: {
+                LabeledContent("非表示解除済み", value: "\(snapshot.previouslyHiddenTracks.count)曲")
+            }
+            NavigationLink {
+                BoredomTracksView(title: "永久非表示", items: snapshot.permanentlyHiddenTracks, showsExpiration: false)
+            } label: {
+                LabeledContent("永久非表示", value: "\(snapshot.permanentlyHiddenTracks.count)曲")
+            }
+        }
+    }
+
     private func expandableHeader(_ title: String, isExpanded: Binding<Bool>, count: Int) -> some View {
         HStack {
             Text(title)
@@ -122,6 +143,42 @@ struct AnalyticsView: View {
 
     private func emptyMessage(_ message: String) -> some View {
         Text(message).foregroundStyle(.secondary)
+    }
+}
+
+private struct BoredomTracksView: View {
+    let title: String
+    let items: [AnalyticsSnapshot.TrackItem]
+    let showsExpiration: Bool
+
+    var body: some View {
+        List {
+            if items.isEmpty {
+                ContentUnavailableView("該当する曲はありません", systemImage: "hourglass")
+            } else {
+                ForEach(items) { item in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.track.title).lineLimit(1)
+                            Text(item.track.artistName).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("飽き度 \(item.boredomLevel)")
+                                .font(.caption.bold())
+                                .foregroundStyle(item.boredomLevel == 3 ? Color.red : item.boredomLevel == 2 ? Color.orange : Color.yellow)
+                            if showsExpiration, let date = item.boredomHiddenUntil {
+                                Text(date, style: .relative)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

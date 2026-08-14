@@ -34,9 +34,9 @@ struct PlaybackPreferenceButton: View {
             ZStack(alignment: .topTrailing) {
                 if isBursting {
                     Circle()
-                        .stroke(effectColor.opacity(0.7), lineWidth: 2)
+                        .stroke(usesGradient ? AnyShapeStyle(effectGradient) : AnyShapeStyle(effectColor.opacity(0.75)), lineWidth: 2.5)
                         .frame(width: compact ? 28 : 36, height: compact ? 28 : 36)
-                        .scaleEffect(1.65)
+                        .scaleEffect(1.85)
                         .opacity(0)
                         .transition(.identity)
                 }
@@ -44,8 +44,8 @@ struct PlaybackPreferenceButton: View {
                 preferenceImage
                     .font(compact ? .body : .title3)
                     .frame(width: compact ? 30 : 42, height: 36)
-                    .symbolEffect(.bounce, value: effectTrigger)
-                    .scaleEffect(isBursting ? 1.16 : 1)
+                    .symbolEffect(.bounce, options: .speed(1.5), value: effectTrigger)
+                    .scaleEffect(isBursting ? 1.24 : 1)
 
                 if isActive {
                     Text("\(level)")
@@ -53,7 +53,7 @@ struct PlaybackPreferenceButton: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
                         .frame(minWidth: 16, minHeight: 16)
-                        .background(effectColor, in: Capsule())
+                        .background(usesGradient ? AnyShapeStyle(effectGradient) : AnyShapeStyle(effectColor), in: Capsule())
                         .offset(x: compact ? 2 : 0, y: -2)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -70,15 +70,30 @@ struct PlaybackPreferenceButton: View {
     private var preferenceImage: some View {
         let image = Image(systemName: isActive ? "\(direction.systemImage).fill" : direction.systemImage)
 
-        if direction == .increase, level == PlaybackHistoryStore.maximumPreference {
-            image.foregroundStyle(
-                AngularGradient(
-                    colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
-                    center: .center
-                )
-            )
+        if usesGradient {
+            image.foregroundStyle(effectGradient)
         } else {
             image.foregroundStyle(isActive ? effectColor : .secondary)
+        }
+    }
+
+    private var usesGradient: Bool { direction == .increase && level >= 3 }
+
+    private var effectGradient: AngularGradient {
+        AngularGradient(colors: gradientColors, center: .center)
+    }
+
+    private var gradientColors: [Color] {
+        switch level {
+        case 3: [.cyan, .teal, .blue, .cyan]
+        case 4: [.green, .mint, .cyan, .green]
+        case 5: [.yellow, .green, .orange, .yellow]
+        case 6: [.orange, .yellow, .red, .orange]
+        case 7: [.pink, .red, .purple, .pink]
+        case 8: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red]
+        case 9: [.pink, .red, .orange, .yellow, .green, .mint, .cyan, .blue, .indigo, .purple, .pink]
+        case 10: [.red, .orange, .yellow, .green, .mint, .cyan, .blue, .indigo, .purple, .pink, .red]
+        default: [effectColor, effectColor]
         }
     }
 
@@ -93,9 +108,9 @@ struct PlaybackPreferenceButton: View {
             )
         }
         return Color(
-            hue: 0.055,
-            saturation: 0.78 - progress * 0.53,
-            brightness: 0.92 - progress * 0.27
+            hue: 0.60,
+            saturation: 0.40 + progress * 0.55,
+            brightness: 0.96 - progress * 0.38
         )
     }
 
@@ -112,7 +127,7 @@ struct PlaybackPreferenceButton: View {
         }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(180))
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.38)) {
                 isBursting = false
             }
         }

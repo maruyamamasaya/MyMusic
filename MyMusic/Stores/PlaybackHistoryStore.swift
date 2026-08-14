@@ -93,11 +93,42 @@ final class PlaybackHistoryStore {
         adjustPlaybackPreference(for: trackID, by: -1)
     }
 
+    func boredomLevel(for trackID: Track.ID) -> Int {
+        guard let entry = entries[trackID] else { return 0 }
+        if entry.isPermanentlyHiddenFromShuffle { return 3 }
+        return min(entry.boredomCount, 2)
+    }
+
+    func markBored(for trackID: Track.ID, now: Date = Date()) {
+        var entry = entry(for: trackID)
+        entry.boredomCount += 1
+        let days = entry.boredomCount == 1 ? 1 : 7
+        entry.boredomHiddenUntil = Calendar.current.date(byAdding: .day, value: days, to: now)
+        entry.isPermanentlyHiddenFromShuffle = false
+        entries[trackID] = entry
+        persist()
+    }
+
+    func permanentlyHideFromShuffle(trackID: Track.ID) {
+        var entry = entry(for: trackID)
+        entry.boredomCount = max(1, entry.boredomCount)
+        entry.boredomHiddenUntil = nil
+        entry.isPermanentlyHiddenFromShuffle = true
+        entries[trackID] = entry
+        persist()
+    }
+
+    func isHiddenFromShuffle(trackID: Track.ID, now: Date = Date()) -> Bool {
+        guard let entry = entries[trackID] else { return false }
+        return entry.isPermanentlyHiddenFromShuffle || (entry.boredomHiddenUntil.map { $0 > now } ?? false)
+    }
+
     /// Returns every track once, ordered by a preference-weighted random draw.
     /// Positive preferences are more likely to appear early, while negative
     /// preferences use the reciprocal weight and remain eligible for playback.
     func preferenceWeightedShuffle(_ tracks: [Track]) -> [Track] {
         tracks
+            .filter { !isHiddenFromShuffle(trackID: $0.id) }
             .map { track in
                 let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
                 let key = -log(unitRandom) / playbackSelectionWeight(for: track.id)

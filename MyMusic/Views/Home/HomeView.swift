@@ -66,10 +66,12 @@ struct HomeView: View {
     }
 
     private func playPlaylist(_ playlist: Playlist) {
-        let tracks = playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+        let tracks = playbackHistoryStore.preferenceWeightedShuffle(
+            playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+        )
         guard !tracks.isEmpty else { return }
         playerStore.setShuffleEnabled(true)
-        playerStore.playQueue(tracks, startingAt: Int.random(in: tracks.indices))
+        playerStore.playQueue(tracks, startingAt: tracks.startIndex)
     }
 
     private func artworkIdentifiers(for destination: HomeDestination) -> [String] {

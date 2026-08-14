@@ -66,9 +66,10 @@ struct NowPlayingView: View {
             trackInformation
 
             if let track = playerStore.currentTrack {
-                HStack(spacing: 28) {
+                HStack(spacing: 18) {
                     PlaybackPreferenceButton(track: track, direction: .decrease)
                     PlaybackPreferenceButton(track: track, direction: .increase)
+                    BoredomButton(track: track)
                     Button {
                         isAddToPlaylistPresented = true
                     } label: {
@@ -182,14 +183,7 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             if let track = playerStore.currentTrack {
-                Button {
-                    playbackHistoryStore.toggleFavorite(trackID: track.id)
-                } label: {
-                    Image(systemName: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.fill" : "heart")
-                        .font(.title2)
-                        .foregroundStyle(.tint)
-                }
-                .accessibilityLabel(playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加")
+                TrackFavoriteButton(track: track, font: .title2, width: 36)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

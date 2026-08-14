@@ -7,6 +7,9 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
     var lastPlayedAt: Date?
     var playbackPreference: Int
     var playbackEvents: [Date]
+    var boredomCount: Int
+    var boredomHiddenUntil: Date?
+    var isPermanentlyHiddenFromShuffle: Bool
 
     init(
         trackID: Track.ID,
@@ -14,7 +17,10 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
         playCount: Int,
         lastPlayedAt: Date?,
         playbackPreference: Int = 0,
-        playbackEvents: [Date] = []
+        playbackEvents: [Date] = [],
+        boredomCount: Int = 0,
+        boredomHiddenUntil: Date? = nil,
+        isPermanentlyHiddenFromShuffle: Bool = false
     ) {
         self.trackID = trackID
         self.isFavorite = isFavorite
@@ -22,10 +28,14 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
         self.lastPlayedAt = lastPlayedAt
         self.playbackPreference = playbackPreference
         self.playbackEvents = playbackEvents
+        self.boredomCount = boredomCount
+        self.boredomHiddenUntil = boredomHiddenUntil
+        self.isPermanentlyHiddenFromShuffle = isPermanentlyHiddenFromShuffle
     }
 
     private enum CodingKeys: String, CodingKey {
         case trackID, isFavorite, playCount, lastPlayedAt, playbackPreference, playbackEvents
+        case boredomCount, boredomHiddenUntil, isPermanentlyHiddenFromShuffle
     }
 
     init(from decoder: Decoder) throws {
@@ -38,5 +48,8 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
         playbackEvents = try container.decodeIfPresent([Date].self, forKey: .playbackEvents)
             ?? lastPlayedAt.map { [$0] }
             ?? []
+        boredomCount = try container.decodeIfPresent(Int.self, forKey: .boredomCount) ?? 0
+        boredomHiddenUntil = try container.decodeIfPresent(Date.self, forKey: .boredomHiddenUntil)
+        isPermanentlyHiddenFromShuffle = try container.decodeIfPresent(Bool.self, forKey: .isPermanentlyHiddenFromShuffle) ?? false
     }
 }

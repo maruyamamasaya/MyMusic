@@ -6,6 +6,9 @@ struct AnalyticsSnapshot {
         let playCount: Int
         let lastPlayedAt: Date?
         let playbackPreference: Int
+        let boredomLevel: Int
+        let boredomHiddenUntil: Date?
+        let isPermanentlyHiddenFromShuffle: Bool
         var id: Track.ID { track.id }
     }
 
@@ -35,6 +38,9 @@ struct AnalyticsSnapshot {
     let mostPlayedTrack: TrackItem?
     let mostPlayedTracks: [TrackItem]
     let preferenceRatedTracks: [TrackItem]
+    let currentlyHiddenTracks: [TrackItem]
+    let previouslyHiddenTracks: [TrackItem]
+    let permanentlyHiddenTracks: [TrackItem]
     let playbackMonths: [MonthGroup]
 }
 
@@ -52,7 +58,10 @@ final class AnalyticsService {
                 track: track,
                 playCount: history?.playCount ?? 0,
                 lastPlayedAt: history?.lastPlayedAt,
-                playbackPreference: history?.playbackPreference ?? 0
+                playbackPreference: history?.playbackPreference ?? 0,
+                boredomLevel: history.map { $0.isPermanentlyHiddenFromShuffle ? 3 : min($0.boredomCount, 2) } ?? 0,
+                boredomHiddenUntil: history?.boredomHiddenUntil,
+                isPermanentlyHiddenFromShuffle: history?.isPermanentlyHiddenFromShuffle ?? false
             )
         }
         let playCounts = trackItems.filter { $0.playCount > 0 }.sorted(by: playCountSort)
@@ -73,6 +82,15 @@ final class AnalyticsService {
             mostPlayedTracks: playCounts,
             preferenceRatedTracks: trackItems
                 .filter { $0.playbackPreference != 0 }
+                .sorted(by: titleSort),
+            currentlyHiddenTracks: trackItems
+                .filter { !$0.isPermanentlyHiddenFromShuffle && ($0.boredomHiddenUntil.map { $0 > Date() } ?? false) }
+                .sorted(by: titleSort),
+            previouslyHiddenTracks: trackItems
+                .filter { $0.boredomLevel > 0 && !$0.isPermanentlyHiddenFromShuffle && !($0.boredomHiddenUntil.map { $0 > Date() } ?? false) }
+                .sorted(by: titleSort),
+            permanentlyHiddenTracks: trackItems
+                .filter(\.isPermanentlyHiddenFromShuffle)
                 .sorted(by: titleSort),
             playbackMonths: groupedEvents(events)
         )
@@ -104,6 +122,15 @@ final class AnalyticsService {
                 "",
                 String(format: "%+d", item.playbackPreference)
             ].map(csvField).joined(separator: ","))
+        }
+        for item in snapshot.currentlyHiddenTracks {
+            rows.append(["飽きた・現在非表示", item.boredomHiddenUntil.map(Self.dateTimeFormatter.string) ?? "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)"].map(csvField).joined(separator: ","))
+        }
+        for item in snapshot.previouslyHiddenTracks {
+            rows.append(["飽きた・解除済み", "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)"].map(csvField).joined(separator: ","))
+        }
+        for item in snapshot.permanentlyHiddenTracks {
+            rows.append(["飽きた・永久非表示", "", item.track.title, item.track.artistName, "", "飽き度3"].map(csvField).joined(separator: ","))
         }
         rows.append(["集計", "", "お気に入り", "", "", "\(snapshot.favoriteCount)"].map(csvField).joined(separator: ","))
         rows.append(["集計", "", "プレイリスト", "", "", "\(snapshot.playlistCount)"].map(csvField).joined(separator: ","))

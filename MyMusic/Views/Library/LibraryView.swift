@@ -4,13 +4,16 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @State private var isFolderImporterPresented = false
+    @State private var isShowingAllFolders = false
+
+    private let collapsedFolderLimit = 4
 
     var body: some View {
         NavigationStack {
             List {
                 Section("音楽ライブラリ") {
                     if libraryStore.hasLibraryFolder {
-                        ForEach(libraryStore.libraryFolders) { folder in
+                        ForEach(visibleLibraryFolders) { folder in
                             HStack {
                                 Label(folder.name, systemImage: "folder")
                                 Spacer()
@@ -19,6 +22,12 @@ struct LibraryView: View {
                                 } label: { Image(systemName: "minus.circle") }
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("\(folder.name)を解除")
+                            }
+                        }
+
+                        if hasHiddenLibraryFolders {
+                            Button("もっと見る", systemImage: "chevron.down") {
+                                isShowingAllFolders = true
                             }
                         }
                     } else {
@@ -130,6 +139,18 @@ struct LibraryView: View {
 
     private var enabledGenreCount: Int {
         libraryStore.availableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
+    }
+
+    private var visibleLibraryFolders: ArraySlice<LibraryFolder> {
+        if isShowingAllFolders {
+            libraryStore.libraryFolders.prefix(libraryStore.libraryFolders.count)
+        } else {
+            libraryStore.libraryFolders.prefix(collapsedFolderLimit)
+        }
+    }
+
+    private var hasHiddenLibraryFolders: Bool {
+        !isShowingAllFolders && libraryStore.libraryFolders.count > collapsedFolderLimit
     }
 }
 
