@@ -65,6 +65,17 @@ struct SearchView: View {
             .searchable(text: $query, prompt: "曲、アーティスト、アルバムなど")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        Picker("検索対象", selection: keywordField) {
+                            ForEach(TrackKeywordField.allCases) { field in
+                                Label(field.title, systemImage: field.systemImage).tag(field)
+                            }
+                        }
+                    } label: {
+                        Label("検索対象", systemImage: selectedKeywordField.systemImage)
+                    }
+                    .accessibilityValue(selectedKeywordField.title)
+
                     Button {
                         playlistName = suggestedPlaylistName
                         isSavingPlaylist = true
@@ -110,6 +121,17 @@ struct SearchView: View {
     private var suggestedPlaylistName: String {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedQuery.isEmpty ? "検索フィルターの結果" : "検索：\(trimmedQuery)"
+    }
+
+    private var selectedKeywordField: TrackKeywordField {
+        filter.keywordField ?? .title
+    }
+
+    private var keywordField: Binding<TrackKeywordField> {
+        Binding(
+            get: { filter.keywordField ?? .title },
+            set: { filter.keywordField = $0 }
+        )
     }
 
     private var savedPlaylistIsPresented: Binding<Bool> {

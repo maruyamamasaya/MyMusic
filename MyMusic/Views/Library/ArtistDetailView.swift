@@ -31,7 +31,9 @@ struct ArtistDetailView: View {
             if !albums.isEmpty {
                 Section("アルバム") {
                     ForEach(albums) { album in
-                        NavigationLink(value: album) {
+                        NavigationLink {
+                            AlbumDetailView(album: album)
+                        } label: {
                             HStack {
                                 AlbumArtworkView(artworkIdentifier: album.artworkIdentifier)
                                     .frame(width: 52, height: 52)
@@ -60,7 +62,6 @@ struct ArtistDetailView: View {
         }
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
         .toolbar {
             Button(isFavorite ? "お気に入りから削除" : "お気に入りに追加", systemImage: isFavorite ? "heart.fill" : "heart") {
                 favoriteStore.toggleFavorite(artistID: artist.id)

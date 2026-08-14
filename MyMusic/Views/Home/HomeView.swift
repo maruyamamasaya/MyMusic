@@ -170,6 +170,7 @@ private struct HomeTuningSection: View {
 
     private let spacing: CGFloat = 12
     private let horizontalPadding: CGFloat = 16
+    private let nextTilePeek: CGFloat = 28
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -204,13 +205,20 @@ private struct HomeTuningSection: View {
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
             }
-            .frame(height: 140)
+            .frame(height: 168)
         }
     }
 
     private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
-        let visibleCount: CGFloat = availableWidth < 600 ? 2 : (availableWidth < 800 ? 3 : 5)
-        return min(180, max(132, (availableWidth - horizontalPadding * 2 - 28 - spacing * (visibleCount - 1)) / visibleCount))
+        let visibleTileCount: CGFloat
+        switch availableWidth {
+        case ..<600: visibleTileCount = 2
+        case ..<800: visibleTileCount = 3
+        case ..<1_100: visibleTileCount = 5
+        default: visibleTileCount = 6
+        }
+        let contentWidth = availableWidth - (horizontalPadding * 2) - nextTilePeek
+        return min(180, max(132, (contentWidth - spacing * (visibleTileCount - 1)) / visibleTileCount))
     }
 }
 
@@ -232,7 +240,7 @@ private struct HomeTuningTile: View {
         }
         .foregroundStyle(.white)
         .padding(14)
-        .frame(width: width, height: 140, alignment: .leading)
+        .frame(width: width, height: 168, alignment: .leading)
         .background(tuningGradientBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
@@ -299,7 +307,7 @@ private struct HomeTuningMoreTile: View {
             Text("すべてのシーン").font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
         }
         .foregroundStyle(.white).padding(14)
-        .frame(width: width, height: 140, alignment: .leading)
+        .frame(width: width, height: 168, alignment: .leading)
         .background(LinearGradient(colors: [.indigo, .black.opacity(0.86)], startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .contentShape(RoundedRectangle(cornerRadius: 18))

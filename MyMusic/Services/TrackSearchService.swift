@@ -8,6 +8,30 @@ enum SearchMatchMode: String, CaseIterable, Identifiable, Codable, Hashable, Sen
     var title: String { rawValue.uppercased() }
 }
 
+enum TrackKeywordField: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
+    case title
+    case album
+    case artist
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .title: "曲名"
+        case .album: "アルバム名"
+        case .artist: "アーティスト名"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .title: "music.note"
+        case .album: "square.stack"
+        case .artist: "music.mic"
+        }
+    }
+}
+
 enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case genre
     case artist
@@ -86,6 +110,8 @@ struct TrackSearchCondition: Identifiable, Codable, Hashable, Sendable {
 
 struct TrackSearchFilter: Codable, Hashable, Sendable {
     var keywordMatchMode: SearchMatchMode = .and
+    // Optional so playlists saved before keyword fields were added remain decodable.
+    var keywordField: TrackKeywordField? = .title
     var conditionMatchMode: SearchMatchMode = .and
     var conditions: [TrackSearchCondition] = []
 
@@ -108,16 +134,29 @@ struct TrackSearchService {
         let terms = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
 
         return tracks.filter { track in
-            matchesText(track, terms: terms, mode: filter.keywordMatchMode)
+            matchesText(
+                track,
+                terms: terms,
+                mode: filter.keywordMatchMode,
+                field: filter.keywordField ?? .title
+            )
                 && matchesConditions(track, history: historyEntries[track.id], filter: filter)
         }
     }
 
-    private func matchesText(_ track: Track, terms: [String], mode: SearchMatchMode) -> Bool {
+    private func matchesText(
+        _ track: Track,
+        terms: [String],
+        mode: SearchMatchMode,
+        field: TrackKeywordField
+    ) -> Bool {
         guard !terms.isEmpty else { return true }
-        let values = [track.title, track.artistName, track.albumTitle, track.genre, track.composer]
-            .compactMap { $0 }
-        let matches = terms.map { term in values.contains { $0.localizedStandardContains(term) } }
+        let value = switch field {
+        case .title: track.title
+        case .album: track.albumTitle ?? ""
+        case .artist: track.artistName
+        }
+        let matches = terms.map { value.localizedStandardContains($0) }
         return combined(matches, mode: mode)
     }
 

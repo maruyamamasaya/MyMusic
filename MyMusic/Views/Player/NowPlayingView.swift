@@ -125,6 +125,7 @@ struct NowPlayingView: View {
                 onShuffle: playerStore.toggleShuffle,
                 onRepeat: playerStore.cycleRepeatMode
             )
+            .padding(.top, -5)
 
         }
         .padding(.horizontal, 24)
@@ -136,45 +137,42 @@ struct NowPlayingView: View {
     private var trackInformation: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(playerStore.currentTrack?.title ?? "未再生")
-                    .font(.title2.bold())
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+                MarqueeText(
+                    text: playerStore.currentTrack?.title ?? "未再生",
+                    font: .title2.bold(),
+                    lineHeight: 30
+                )
                 if let artist = currentArtist {
                     NavigationLink {
                         ArtistDetailView(artist: artist)
                     } label: {
-                        Text(artist.name)
-                            .font(.body)
+                        MarqueeText(text: artist.name, font: .body, lineHeight: 22)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("アーティストページを表示")
                 } else {
-                    Text(playerStore.currentTrack?.artistName ?? "")
-                        .font(.body)
+                    MarqueeText(
+                        text: playerStore.currentTrack?.artistName ?? "",
+                        font: .body,
+                        lineHeight: 22
+                    )
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
                 if let album = currentAlbum {
                     NavigationLink {
                         AlbumDetailView(album: album)
                     } label: {
-                        Text(album.title)
-                            .font(.caption)
+                        MarqueeText(text: album.title, font: .caption, lineHeight: 18)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("アルバム、\(album.title)")
                     .accessibilityHint("アルバムページを表示")
                 } else if let albumTitle = playerStore.currentTrack?.albumTitle,
                           !albumTitle.isEmpty {
-                    Text(albumTitle)
-                        .font(.caption)
+                    MarqueeText(text: albumTitle, font: .caption, lineHeight: 18)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
                 if let track = playerStore.currentTrack {
                     Text("再生回数 \(playbackHistoryStore.playCount(for: track.id))回")
