@@ -125,12 +125,12 @@ struct NowPlayingView: View {
                 onShuffle: playerStore.toggleShuffle,
                 onRepeat: playerStore.cycleRepeatMode
             )
-            .padding(.top, -10)
+            .padding(.top, -15)
 
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
-        .padding(.bottom, 24)
+        .padding(.bottom, 39)
         .frame(maxHeight: .infinity)
     }
 
