@@ -8,6 +8,7 @@ struct SongsView: View {
     @State private var sortOrder: SongSortOrder = .random
     @State private var displayedTrackCount = pageSize
     @State private var randomSeed = UInt64.random(in: .min ... .max)
+    @AppStorage("library.songsDisplayMode") private var displayMode = LibraryDisplayMode.artwork
 
     private static let pageSize = 100
 
@@ -75,6 +76,9 @@ struct SongsView: View {
         .searchable(text: $query, prompt: "曲、アーティスト、アルバム")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                LibraryDisplayModeMenu(selection: $displayMode)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
             }
         }
@@ -93,7 +97,7 @@ struct SongsView: View {
                     .foregroundStyle(.tint)
                     .frame(width: 18)
             }
-            PlayableTrackRowView(track: track) {
+            PlayableTrackRowView(track: track, showsArtwork: displayMode == .artwork) {
                 guard let index = arrangedTracks.firstIndex(where: { $0.id == track.id }) else { return }
                 playerStore.playQueue(arrangedTracks, startingAt: index)
             }

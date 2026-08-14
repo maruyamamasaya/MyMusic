@@ -8,4 +8,5 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
     var updatedAt: Date
     var description: String? = nil
     var artworkIdentifier: String? = nil
+    var searchDefinition: PlaylistSearchDefinition? = nil
 }

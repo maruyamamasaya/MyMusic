@@ -4,6 +4,7 @@ struct PlaylistDetailView: View {
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     let playlistID: Playlist.ID
 
     @State private var isEditingPlaylist = false
@@ -12,8 +13,10 @@ struct PlaylistDetailView: View {
     @State private var isAddingSongs = false
     @State private var isRenaming = false
     @State private var renameText = ""
+    @State private var syncResult: PlaylistSyncResult?
 
     private let exporter = MusicDataExportService()
+    private let searchService = TrackSearchService()
     private var playlist: Playlist? { playlistStore.playlist(id: playlistID) }
     private var tracks: [Track] { playlistStore.tracks(for: playlistID, in: libraryStore.tracks) }
 
@@ -55,6 +58,13 @@ struct PlaylistDetailView: View {
                 }.disabled(playlist == nil)
             }
             ToolbarItem(placement: .secondaryAction) {
+                if playlist?.searchDefinition != nil {
+                    Button("検索条件で更新", systemImage: "arrow.triangle.2.circlepath") {
+                        synchronizeWithSearch()
+                    }
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
                 if let playlist, let json = try? exporter.playlistJSON(playlist, tracks: tracks) {
                     ShareLink(item: json, preview: SharePreview("\(playlist.name).json")) { Label("JSONで書き出す", systemImage: "curlybraces") }
                 }
@@ -73,6 +83,13 @@ struct PlaylistDetailView: View {
             Button("キャンセル", role: .cancel) { }
             Button("保存") { playlistStore.renamePlaylist(id: playlistID, to: renameText) }
                 .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .alert("プレイリストを更新しました", isPresented: syncResultIsPresented) {
+            Button("閉じる", role: .cancel) { syncResult = nil }
+        } message: {
+            if let syncResult {
+                Text("追加 \(syncResult.addedCount)曲、削除 \(syncResult.removedCount)曲、合計 \(syncResult.totalCount)曲です。")
+            }
         }
         .onDisappear {
             isEditingPlaylist = false
@@ -116,5 +133,23 @@ struct PlaylistDetailView: View {
         guard !tracks.isEmpty else { return }
         playerStore.setShuffleEnabled(shuffled)
         playerStore.playQueue(tracks, startingAt: 0)
+    }
+
+    private var syncResultIsPresented: Binding<Bool> {
+        Binding(get: { syncResult != nil }, set: { if !$0 { syncResult = nil } })
+    }
+
+    private func synchronizeWithSearch() {
+        guard let definition = playlist?.searchDefinition else { return }
+        let matchedTracks = searchService.search(
+            tracks: libraryStore.tracks,
+            query: definition.query,
+            filter: definition.filter,
+            historyEntries: playbackHistoryStore.entries
+        )
+        syncResult = playlistStore.synchronizeSearchPlaylist(
+            id: playlistID,
+            with: matchedTracks.map(\.id)
+        )
     }
 }

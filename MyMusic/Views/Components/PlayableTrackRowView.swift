@@ -3,12 +3,13 @@ import SwiftUI
 struct PlayableTrackRowView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     let track: Track
+    var showsArtwork = true
     let onPlay: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
             Button(action: onPlay) {
-                TrackRowView(track: track)
+                TrackRowView(track: track, showsArtwork: showsArtwork)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

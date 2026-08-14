@@ -128,10 +128,18 @@ final class LibraryStore {
         saveDisabledGenres()
         applyGenreFilter()
     }
+    func setEnabledGenres(_ genreNames: Set<String>) {
+        disabledGenreNames = Set(availableGenreOptions.map(\.id)).subtracting(genreNames)
+        saveDisabledGenres()
+        applyGenreFilter()
+    }
     func saveGenreDisplayPreset(named name: String) {
+        let enabledGenreNames = Set(availableGenreOptions.map(\.id).filter(isGenreEnabled))
+        saveGenreDisplayPreset(named: name, enabledGenreNames: enabledGenreNames)
+    }
+    func saveGenreDisplayPreset(named name: String, enabledGenreNames: Set<String>) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        let enabledGenreNames = Set(availableGenreOptions.map(\.id).filter(isGenreEnabled))
         if let index = genreDisplayPresets.firstIndex(where: {
             $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
@@ -151,6 +159,16 @@ final class LibraryStore {
         disabledGenreNames = Set(availableGenreOptions.map(\.id)).subtracting(enabledGenreKeys(for: preset))
         saveDisabledGenres()
         applyGenreFilter()
+    }
+    func updateGenreDisplayPreset(_ preset: GenreDisplayPreset, name: String, enabledGenreNames: Set<String>) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              let index = genreDisplayPresets.firstIndex(where: { $0.id == preset.id }) else { return }
+        genreDisplayPresets[index].name = trimmedName
+        genreDisplayPresets[index].enabledGenreNames = enabledGenreNames
+        genreDisplayPresets[index].includesUnassignedGenreSetting = true
+        genreDisplayPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        saveGenreDisplayPresets()
     }
     func deleteGenreDisplayPreset(_ preset: GenreDisplayPreset) {
         genreDisplayPresets.removeAll { $0.id == preset.id }

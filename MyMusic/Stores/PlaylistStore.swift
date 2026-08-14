@@ -94,11 +94,33 @@ final class PlaylistStore {
     }
 
     @discardableResult
-    func importPlaylist(named name: String, trackIDs: [Track.ID]) -> Playlist.ID? {
+    func importPlaylist(
+        named name: String,
+        trackIDs: [Track.ID],
+        searchDefinition: PlaylistSearchDefinition? = nil
+    ) -> Playlist.ID? {
         guard let id = createPlaylist(named: name) else { return nil }
         var seen: Set<Track.ID> = []
-        update(id) { $0.trackIDs = trackIDs.filter { seen.insert($0).inserted } }
+        update(id) {
+            $0.trackIDs = trackIDs.filter { seen.insert($0).inserted }
+            $0.searchDefinition = searchDefinition
+        }
         return id
+    }
+
+    @discardableResult
+    func synchronizeSearchPlaylist(id: Playlist.ID, with trackIDs: [Track.ID]) -> PlaylistSyncResult? {
+        guard let playlist = playlist(id: id), playlist.searchDefinition != nil else { return nil }
+        let previousIDs = Set(playlist.trackIDs)
+        var seen: Set<Track.ID> = []
+        let uniqueTrackIDs = trackIDs.filter { seen.insert($0).inserted }
+        let updatedIDs = Set(uniqueTrackIDs)
+        update(id) { $0.trackIDs = uniqueTrackIDs }
+        return PlaylistSyncResult(
+            addedCount: updatedIDs.subtracting(previousIDs).count,
+            removedCount: previousIDs.subtracting(updatedIDs).count,
+            totalCount: uniqueTrackIDs.count
+        )
     }
 
     func playlist(id: Playlist.ID) -> Playlist? {
@@ -139,4 +161,10 @@ final class PlaylistStore {
             }
         }
     }
+}
+
+struct PlaylistSyncResult: Equatable, Sendable {
+    let addedCount: Int
+    let removedCount: Int
+    let totalCount: Int
 }

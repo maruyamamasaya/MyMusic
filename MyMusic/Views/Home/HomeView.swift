@@ -198,19 +198,58 @@ private struct HomeTuningTile: View {
         .foregroundStyle(.white)
         .padding(14)
         .frame(width: width, height: 140, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: isActive
-                    ? [Color.teal, Color.indigo.opacity(0.9)]
-                    : [Color(red: 0.38, green: 0.30, blue: 0.65), Color(red: 0.10, green: 0.10, blue: 0.22)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-        )
+        .background(tuningGradientBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityLabel("チューニング、\(preset.name)")
         .accessibilityHint(isActive ? "現在適用中です" : "ライブラリの表示を切り替えます")
+    }
+
+    private var tuningGradientBackground: some View {
+        LinearGradient(
+            colors: gradientColors,
+            startPoint: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
+            endPoint: gradientStartsAtTopTrailing ? .bottomLeading : .bottomTrailing
+        )
+        .overlay {
+            RadialGradient(
+                colors: [.white.opacity(0.18), .clear],
+                center: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
+                startRadius: 0,
+                endRadius: 145
+            )
+        }
+        .overlay(
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.08), location: 0),
+                    .init(color: .black.opacity(0.18), location: 0.48),
+                    .init(color: .black.opacity(0.46), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private var gradientColors: [Color] {
+        let palettes: [[Color]] = [
+            [Color(red: 0.12, green: 0.58, blue: 0.96), Color(red: 0.20, green: 0.28, blue: 0.78), Color(red: 0.10, green: 0.08, blue: 0.30)],
+            [Color(red: 0.96, green: 0.38, blue: 0.34), Color(red: 0.68, green: 0.16, blue: 0.34), Color(red: 0.27, green: 0.07, blue: 0.22)],
+            [Color(red: 0.12, green: 0.72, blue: 0.61), Color(red: 0.04, green: 0.43, blue: 0.45), Color(red: 0.03, green: 0.18, blue: 0.25)],
+            [Color(red: 0.96, green: 0.66, blue: 0.20), Color(red: 0.88, green: 0.31, blue: 0.18), Color(red: 0.35, green: 0.10, blue: 0.12)],
+            [Color(red: 0.69, green: 0.42, blue: 0.95), Color(red: 0.37, green: 0.20, blue: 0.66), Color(red: 0.13, green: 0.08, blue: 0.28)]
+        ]
+        return palettes[paletteIndex]
+    }
+
+    private var paletteIndex: Int {
+        preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 5 }
+    }
+
+    private var gradientStartsAtTopTrailing: Bool {
+        paletteIndex.isMultiple(of: 2)
     }
 }
 
