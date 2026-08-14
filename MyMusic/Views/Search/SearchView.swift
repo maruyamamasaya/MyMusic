@@ -34,6 +34,28 @@ struct SearchView: View {
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    private var resultAlbums: [Album] {
+        let trackIDs = Set(results.map(\.id))
+        return libraryStore.albums.filter { album in
+            album.trackIDs.contains { trackIDs.contains($0) }
+        }
+    }
+
+    private var resultArtists: [Artist] {
+        let trackIDs = Set(results.map(\.id))
+        return libraryStore.artists.filter { artist in
+            artist.trackIDs.contains { trackIDs.contains($0) }
+        }
+    }
+
+    private var resultsAreEmpty: Bool {
+        switch selectedKeywordField {
+        case .title: results.isEmpty
+        case .album: resultAlbums.isEmpty
+        case .artist: resultArtists.isEmpty
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -43,7 +65,7 @@ struct SearchView: View {
                         systemImage: "magnifyingglass",
                         description: Text("複数のキーワードや再生履歴で検索できます。")
                     )
-                } else if results.isEmpty {
+                } else if resultsAreEmpty {
                     ContentUnavailableView(
                         "検索結果がありません",
                         systemImage: "magnifyingglass",
@@ -51,10 +73,43 @@ struct SearchView: View {
                     )
                 } else {
                     List {
-                        Section("検索結果：\(results.count)曲") {
-                            ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
-                                PlayableTrackRowView(track: track) {
-                                    playerStore.playQueue(results, startingAt: index)
+                        switch selectedKeywordField {
+                        case .title:
+                            Section("検索結果：\(results.count)曲") {
+                                ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
+                                    PlayableTrackRowView(track: track) {
+                                        playerStore.playQueue(results, startingAt: index)
+                                    }
+                                }
+                            }
+                        case .album:
+                            Section("検索結果：\(resultAlbums.count)アルバム") {
+                                ForEach(resultAlbums) { album in
+                                    NavigationLink {
+                                        AlbumDetailView(album: album)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            AlbumArtworkView(artworkIdentifier: album.artworkIdentifier)
+                                                .frame(width: 52, height: 52)
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(album.title).lineLimit(1)
+                                                Text(album.artistName)
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        case .artist:
+                            Section("検索結果：\(resultArtists.count)アーティスト") {
+                                ForEach(resultArtists) { artist in
+                                    NavigationLink {
+                                        ArtistDetailView(artist: artist)
+                                    } label: {
+                                        Label(artist.name, systemImage: "person.circle")
+                                    }
                                 }
                             }
                         }
@@ -62,7 +117,7 @@ struct SearchView: View {
                 }
             }
             .navigationTitle("検索")
-            .searchable(text: $query, prompt: "曲、アーティスト、アルバムなど")
+            .searchable(text: $query, prompt: searchPrompt)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
@@ -82,7 +137,7 @@ struct SearchView: View {
                     } label: {
                         Label("検索結果をプレイリストに保存", systemImage: "text.badge.plus")
                     }
-                    .disabled(results.isEmpty)
+                    .disabled(resultsAreEmpty)
 
                     Button {
                         isFilterPresented = true
@@ -121,6 +176,14 @@ struct SearchView: View {
     private var suggestedPlaylistName: String {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedQuery.isEmpty ? "検索フィルターの結果" : "検索：\(trimmedQuery)"
+    }
+
+    private var searchPrompt: String {
+        switch selectedKeywordField {
+        case .title: "曲名を検索"
+        case .album: "アルバム名を検索"
+        case .artist: "アーティスト名を検索"
+        }
     }
 
     private var selectedKeywordField: TrackKeywordField {
