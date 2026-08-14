@@ -26,7 +26,9 @@ struct FavoriteAlbumsView: View {
 
                 Section("アルバム") {
                     ForEach(albums) { album in
-                        NavigationLink(value: album) {
+                        NavigationLink {
+                            AlbumDetailView(album: album)
+                        } label: {
                             HStack(spacing: 12) {
                                 AlbumArtworkView(artworkIdentifier: album.artworkIdentifier)
                                     .frame(width: 52, height: 52)
@@ -49,7 +51,6 @@ struct FavoriteAlbumsView: View {
             }
         }
         .navigationTitle("お気に入りのアルバム")
-        .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
     }
 
     private var playbackControls: some View {
@@ -97,7 +98,9 @@ struct FavoriteArtistsView: View {
 
                 Section("アーティスト") {
                     ForEach(artists) { artist in
-                        NavigationLink(value: artist) {
+                        NavigationLink {
+                            ArtistDetailView(artist: artist)
+                        } label: {
                             Label(artist.name, systemImage: "person.circle")
                         }
                         .swipeActions {
@@ -110,7 +113,6 @@ struct FavoriteArtistsView: View {
             }
         }
         .navigationTitle("お気に入りのアーティスト")
-        .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
     }
 
     private var playbackControls: some View {
