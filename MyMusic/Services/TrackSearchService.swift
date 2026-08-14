@@ -10,6 +10,8 @@ enum SearchMatchMode: String, CaseIterable, Identifiable, Codable, Hashable, Sen
 
 enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case genre
+    case artist
+    case album
     case favorite
     case notFavorite
     case liked
@@ -23,6 +25,8 @@ enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hash
     var title: String {
         switch self {
         case .genre: "ジャンル"
+        case .artist: "アーティスト"
+        case .album: "アルバム"
         case .favorite: "お気に入り"
         case .notFavorite: "お気に入り以外"
         case .liked: "いいね"
@@ -37,7 +41,24 @@ enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hash
         self == .minimumPlayCount || self == .maximumPlayCount
     }
 
-    var needsTextValue: Bool { self == .genre }
+    var needsGenreValue: Bool { self == .genre }
+    var needsStringValue: Bool { self == .artist || self == .album }
+}
+
+enum TrackTextMatchMode: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
+    case contains
+    case exact
+    case notContains
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .contains: "部分一致"
+        case .exact: "完全一致"
+        case .notContains: "含まない"
+        }
+    }
 }
 
 struct TrackSearchCondition: Identifiable, Codable, Hashable, Sendable {
@@ -45,17 +66,21 @@ struct TrackSearchCondition: Identifiable, Codable, Hashable, Sendable {
     var kind: TrackSearchConditionKind
     var value: Int
     var textValue: String?
+    // Optional so search definitions saved before this setting was added remain decodable.
+    var textMatchMode: TrackTextMatchMode?
 
     init(
         id: UUID = UUID(),
         kind: TrackSearchConditionKind = .favorite,
         value: Int = 0,
-        textValue: String? = nil
+        textValue: String? = nil,
+        textMatchMode: TrackTextMatchMode? = .contains
     ) {
         self.id = id
         self.kind = kind
         self.value = value
         self.textValue = textValue
+        self.textMatchMode = textMatchMode
     }
 }
 
@@ -112,6 +137,10 @@ struct TrackSearchService {
                 condition.textValue.map {
                     !$0.isEmpty && track.genre?.localizedStandardCompare($0) == .orderedSame
                 } ?? false
+            case .artist:
+                matchesString(track.artistName, condition: condition)
+            case .album:
+                matchesString(track.albumTitle ?? "", condition: condition)
             case .favorite: isFavorite
             case .notFavorite: !isFavorite
             case .liked: preference > 0
@@ -122,6 +151,20 @@ struct TrackSearchService {
             }
         }
         return combined(matches, mode: filter.conditionMatchMode)
+    }
+
+    private func matchesString(_ candidate: String, condition: TrackSearchCondition) -> Bool {
+        let value = condition.textValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return false }
+
+        return switch condition.textMatchMode ?? .contains {
+        case .contains:
+            candidate.localizedStandardContains(value)
+        case .exact:
+            candidate.localizedStandardCompare(value) == .orderedSame
+        case .notContains:
+            !candidate.localizedStandardContains(value)
+        }
     }
 
     private func combined(_ values: [Bool], mode: SearchMatchMode) -> Bool {

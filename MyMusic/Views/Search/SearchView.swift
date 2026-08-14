@@ -215,40 +215,74 @@ private struct SearchFilterView: View {
     }
 
     private func conditionRow(_ condition: Binding<TrackSearchCondition>) -> some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 10) {
             Picker("条件", selection: condition.kind) {
                 ForEach(TrackSearchConditionKind.allCases) { kind in
                     Text(kind.title).tag(kind)
                 }
             }
-            .labelsHidden()
 
             if condition.wrappedValue.kind.needsValue {
-                TextField("回数", value: condition.value, format: .number)
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(.body.monospacedDigit())
-                    .padding(.horizontal, 12)
-                    .frame(minWidth: 88, minHeight: 44)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.secondary.opacity(0.45), lineWidth: 1)
-                    }
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("再生回数")
-                    .layoutPriority(1)
-                Text("回")
-                    .foregroundStyle(.secondary)
-            } else if condition.wrappedValue.kind.needsTextValue {
+                HStack {
+                    TextField("回数", value: condition.value, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .font(.body.monospacedDigit())
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: 88, minHeight: 44)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.secondary.opacity(0.45), lineWidth: 1)
+                        }
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("再生回数")
+                    Text("回")
+                        .foregroundStyle(.secondary)
+                }
+            } else if condition.wrappedValue.kind.needsGenreValue {
                 Picker("ジャンル", selection: condition.textValue) {
                     ForEach(genres(for: condition.wrappedValue), id: \.self) { genre in
                         Text(genre).tag(Optional(genre))
                     }
                 }
-                .labelsHidden()
+            } else if condition.wrappedValue.kind.needsStringValue {
+                Picker("一致方法", selection: textMatchMode(for: condition)) {
+                    ForEach(TrackTextMatchMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                TextField(
+                    condition.wrappedValue.kind == .artist ? "アーティスト名" : "アルバム名",
+                    text: textValue(for: condition)
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(.secondary.opacity(0.45), lineWidth: 1)
+                }
             }
         }
+    }
+
+    private func textValue(for condition: Binding<TrackSearchCondition>) -> Binding<String> {
+        Binding(
+            get: { condition.wrappedValue.textValue ?? "" },
+            set: { condition.wrappedValue.textValue = $0 }
+        )
+    }
+
+    private func textMatchMode(for condition: Binding<TrackSearchCondition>) -> Binding<TrackTextMatchMode> {
+        Binding(
+            get: { condition.wrappedValue.textMatchMode ?? .contains },
+            set: { condition.wrappedValue.textMatchMode = $0 }
+        )
     }
 
     private func genres(for condition: TrackSearchCondition) -> [String] {
