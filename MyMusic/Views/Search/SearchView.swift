@@ -227,7 +227,17 @@ private struct SearchFilterView: View {
                 TextField("回数", value: condition.value, format: .number)
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.trailing)
-                    .frame(minWidth: 52, maxWidth: 72)
+                    .font(.body.monospacedDigit())
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 88, minHeight: 44)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(.secondary.opacity(0.45), lineWidth: 1)
+                    }
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("再生回数")
+                    .layoutPriority(1)
                 Text("回")
                     .foregroundStyle(.secondary)
             } else if condition.wrappedValue.kind.needsTextValue {

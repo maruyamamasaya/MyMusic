@@ -8,6 +8,8 @@ struct SongsView: View {
     @State private var sortOrder: SongSortOrder = .random
     @State private var displayedTrackCount = pageSize
     @State private var randomSeed = UInt64.random(in: .min ... .max)
+    @State private var arrangedTracks: [Track] = []
+    @State private var isPreparingTracks = true
     @AppStorage("library.songsDisplayMode") private var displayMode = LibraryDisplayMode.artwork
 
     private static let pageSize = 100
@@ -18,35 +20,6 @@ struct SongsView: View {
     init(tracks: [Track] = PreviewData.tracks, title: String = "曲") {
         self.tracks = tracks
         self.title = title
-    }
-
-    private var arrangedTracks: [Track] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let filteredTracks = trimmedQuery.isEmpty ? tracks : tracks.filter { track in
-            track.title.localizedStandardContains(trimmedQuery)
-                || track.artistName.localizedStandardContains(trimmedQuery)
-                || (track.albumTitle?.localizedStandardContains(trimmedQuery) == true)
-        }
-
-        return filteredTracks.sorted { lhs, rhs in
-            switch sortOrder {
-            case .title:
-                return compare(lhs.title, rhs.title, lhs: lhs, rhs: rhs)
-            case .artist:
-                return compare(lhs.artistName, rhs.artistName, lhs: lhs, rhs: rhs)
-            case .album:
-                return compare(lhs.albumTitle ?? "", rhs.albumTitle ?? "", lhs: lhs, rhs: rhs)
-            case .modifiedDate:
-                if lhs.modificationDate != rhs.modificationDate {
-                    return (lhs.modificationDate ?? .distantPast) > (rhs.modificationDate ?? .distantPast)
-                }
-                return compare(lhs.title, rhs.title, lhs: lhs, rhs: rhs)
-            case .random:
-                let lhsRank = randomRank(for: lhs.id)
-                let rhsRank = randomRank(for: rhs.id)
-                return lhsRank == rhsRank ? lhs.id.uuidString < rhs.id.uuidString : lhsRank < rhsRank
-            }
-        }
     }
 
     private var visibleTracks: [Track] {
@@ -63,7 +36,16 @@ struct SongsView: View {
                         }
                 }
 
-                if arrangedTracks.isEmpty {
+                if isPreparingTracks {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("曲を準備中…")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+                    .accessibilityElement(children: .combine)
+                } else if arrangedTracks.isEmpty {
                     ContentUnavailableView(
                         "検索結果がありません",
                         systemImage: "magnifyingglass",
@@ -84,7 +66,9 @@ struct SongsView: View {
         }
         .onChange(of: query) { _, _ in resetPagination() }
         .onChange(of: sortOrder) { _, _ in resetPagination() }
-        .onChange(of: tracks.map(\.id)) { _, _ in resetPagination() }
+        .task(id: arrangementRequest) {
+            await prepareTracks()
+        }
         .sheet(item: $trackToAddToPlaylist) { track in
             AddToPlaylistSheet(track: track)
         }
@@ -143,20 +127,86 @@ struct SongsView: View {
         displayedTrackCount = Self.pageSize
     }
 
-    private func compare(_ lhsValue: String, _ rhsValue: String, lhs: Track, rhs: Track) -> Bool {
+    private var arrangementRequest: ArrangementRequest {
+        ArrangementRequest(
+            query: query.trimmingCharacters(in: .whitespacesAndNewlines),
+            sortOrder: sortOrder,
+            randomSeed: randomSeed,
+            trackCount: tracks.count
+        )
+    }
+
+    @MainActor
+    private func prepareTracks() async {
+        isPreparingTracks = true
+
+        // Typing into search should not start a full-library pass for every keystroke.
+        if !query.isEmpty {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+        }
+
+        let sourceTracks = tracks
+        let request = arrangementRequest
+        let prepared = await Task.detached(priority: .userInitiated) {
+            Self.arrange(sourceTracks, request: request)
+        }.value
+
+        guard !Task.isCancelled, request == arrangementRequest else { return }
+        arrangedTracks = prepared
+        resetPagination()
+        isPreparingTracks = false
+    }
+
+    nonisolated private static func arrange(_ tracks: [Track], request: ArrangementRequest) -> [Track] {
+        let filteredTracks = request.query.isEmpty ? tracks : tracks.filter { track in
+            track.title.localizedStandardContains(request.query)
+                || track.artistName.localizedStandardContains(request.query)
+                || (track.albumTitle?.localizedStandardContains(request.query) == true)
+        }
+
+        return filteredTracks.sorted { lhs, rhs in
+            switch request.sortOrder {
+            case .title:
+                return compare(lhs.title, rhs.title, lhs: lhs, rhs: rhs)
+            case .artist:
+                return compare(lhs.artistName, rhs.artistName, lhs: lhs, rhs: rhs)
+            case .album:
+                return compare(lhs.albumTitle ?? "", rhs.albumTitle ?? "", lhs: lhs, rhs: rhs)
+            case .modifiedDate:
+                if lhs.modificationDate != rhs.modificationDate {
+                    return (lhs.modificationDate ?? .distantPast) > (rhs.modificationDate ?? .distantPast)
+                }
+                return compare(lhs.title, rhs.title, lhs: lhs, rhs: rhs)
+            case .random:
+                let lhsRank = randomRank(for: lhs.id, seed: request.randomSeed)
+                let rhsRank = randomRank(for: rhs.id, seed: request.randomSeed)
+                return lhsRank == rhsRank ? lhs.id.uuidString < rhs.id.uuidString : lhsRank < rhsRank
+            }
+        }
+    }
+
+    nonisolated private static func compare(_ lhsValue: String, _ rhsValue: String, lhs: Track, rhs: Track) -> Bool {
         let result = lhsValue.localizedStandardCompare(rhsValue)
         if result != .orderedSame { return result == .orderedAscending }
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
-    private func randomRank(for id: UUID) -> UInt64 {
-        id.uuidString.utf8.reduce(1_469_598_103_934_665_603 ^ randomSeed) { hash, byte in
+    nonisolated private static func randomRank(for id: UUID, seed: UInt64) -> UInt64 {
+        id.uuidString.utf8.reduce(1_469_598_103_934_665_603 ^ seed) { hash, byte in
             (hash ^ UInt64(byte)) &* 1_099_511_628_211
         }
     }
 }
 
-private enum SongSortOrder: String, CaseIterable, Identifiable {
+private struct ArrangementRequest: Hashable, Sendable {
+    let query: String
+    let sortOrder: SongSortOrder
+    let randomSeed: UInt64
+    let trackCount: Int
+}
+
+private enum SongSortOrder: String, CaseIterable, Identifiable, Sendable {
     case title
     case artist
     case album
