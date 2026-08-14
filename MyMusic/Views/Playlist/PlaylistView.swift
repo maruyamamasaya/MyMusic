@@ -33,6 +33,16 @@ struct PlaylistView: View {
                     } label: {
                         Label("お気に入り", systemImage: "heart.fill")
                     }
+                    NavigationLink {
+                        FavoriteAlbumsView()
+                    } label: {
+                        Label("お気に入りのアルバム", systemImage: "square.stack.fill")
+                    }
+                    NavigationLink {
+                        FavoriteArtistsView()
+                    } label: {
+                        Label("お気に入りのアーティスト", systemImage: "person.2.fill")
+                    }
                 }
 
                 Section("プレイリスト") {

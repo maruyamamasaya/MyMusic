@@ -96,6 +96,10 @@ struct HomeDestinationView: View {
             )
         case .favorites:
             FavoritesView()
+        case .favoriteAlbums:
+            FavoriteAlbumsView()
+        case .favoriteArtists:
+            FavoriteArtistsView()
         case .recentTracks:
             HomeTrackListView(
                 title: "最近再生した曲",

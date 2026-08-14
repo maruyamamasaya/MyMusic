@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(FavoriteStore.self) private var favoriteStore
 
     var body: some View {
         NavigationStack {
@@ -82,6 +83,10 @@ struct HomeView: View {
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) >= 2 }
         case .favorites:
             tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+        case .favoriteAlbums:
+            tracks = favoriteAlbumTracks
+        case .favoriteArtists:
+            tracks = favoriteArtistTracks
         case .recentTracks:
             tracks = playbackHistoryStore.recentTracks(from: libraryStore.tracks)
         default:
@@ -100,6 +105,10 @@ struct HomeView: View {
             !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
         case .favorites:
             !playbackHistoryStore.favoriteTracks(from: libraryStore.tracks, limit: 1).isEmpty
+        case .favoriteAlbums:
+            !favoriteAlbumTracks.isEmpty
+        case .favoriteArtists:
+            !favoriteArtistTracks.isEmpty
         default:
             true
         }
@@ -118,12 +127,38 @@ struct HomeView: View {
             tracks = playbackHistoryStore.preferenceWeightedShuffle(
                 playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
             )
+        case .favoriteAlbums:
+            tracks = favoriteAlbumTracks
+        case .favoriteArtists:
+            tracks = favoriteArtistTracks
         default:
             return
         }
 
         guard !tracks.isEmpty else { return }
+        if destination == .favoriteAlbums || destination == .favoriteArtists {
+            playerStore.setShuffleEnabled(false)
+        }
         playerStore.playQueue(tracks, startingAt: 0)
+    }
+
+    private var favoriteAlbumTracks: [Track] {
+        uniqueTracks(
+            favoriteStore.favoriteAlbums(from: libraryStore.albums)
+                .flatMap { libraryStore.tracks(for: $0) }
+        )
+    }
+
+    private var favoriteArtistTracks: [Track] {
+        uniqueTracks(
+            favoriteStore.favoriteArtists(from: libraryStore.artists)
+                .flatMap { libraryStore.tracks(for: $0) }
+        )
+    }
+
+    private func uniqueTracks(_ tracks: [Track]) -> [Track] {
+        var seen: Set<Track.ID> = []
+        return tracks.filter { seen.insert($0.id).inserted }
     }
 }
 
@@ -558,7 +593,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites:
+        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites, .favoriteAlbums, .favoriteArtists:
             true
         default:
             false

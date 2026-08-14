@@ -25,6 +25,8 @@ struct HomeCategory: Identifiable, Hashable {
                 HomeCategoryItem(title: "未発見再生", description: "まだ再生していない曲をランダムに再生", systemImage: "sparkles", destination: .discoveryPlay),
                 HomeCategoryItem(title: "リピート曲再生", description: "よく聴く曲からランダムに再生", systemImage: "repeat", destination: .repeatPlay),
                 HomeCategoryItem(title: "お気に入り", description: "お気に入りに登録した曲", systemImage: "heart.fill", destination: .favorites),
+                HomeCategoryItem(title: "お気に入りアルバム", description: "登録したアルバムをすぐに再生", systemImage: "square.stack.fill", destination: .favoriteAlbums),
+                HomeCategoryItem(title: "お気に入りアーティスト", description: "登録したアーティストをすぐに再生", systemImage: "person.2.fill", destination: .favoriteArtists),
                 HomeCategoryItem(title: "最近再生した曲", description: "最近聴いた曲を新しい順に表示", systemImage: "clock.arrow.circlepath", destination: .recentTracks)
             ]
         ),
@@ -69,6 +71,8 @@ enum HomeDestination: Hashable {
     case discoveryPlay
     case repeatPlay
     case favorites
+    case favoriteAlbums
+    case favoriteArtists
     case recentTracks
     case playlists
     case tunings
