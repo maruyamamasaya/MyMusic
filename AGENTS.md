@@ -370,20 +370,19 @@ Before making a large architectural change, inspect the existing implementation 
 
 # Current Development Priority
 
+The core local-player experience reached its completed baseline on 2026-08-14.
+
 The current priority is:
 
-1. Project architecture
-2. Local music import
-3. Music library
-4. Single-track playback
-5. Mini Player
-6. Now Playing
-7. Queue
-8. Playlists
-9. Background playback
-10. Lock screen controls
+1. Preserve the completed baseline behavior
+2. Develop original MyMusic features as small beta increments
+3. Build and verify each beta feature independently
+4. Document each beta feature's purpose, interaction, and known limitations
+5. Promote a beta feature into the baseline only after it is stable
 
-Streaming and server integration are future features.
+Do not regress the existing library, search, playback, favorites, playlist, or data-management flows while developing beta features.
+
+Streaming and server integration remain future features until explicitly requested.
 
 ---
 
