@@ -4,6 +4,7 @@ struct NowPlayingView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(SettingsStore.self) private var settingsStore
+    @Environment(LibraryStore.self) private var libraryStore
     @Environment(\.dismiss) private var dismiss
     @State private var isQueuePresented = false
     @State private var isEqualizerPresented = false
@@ -139,10 +140,42 @@ struct NowPlayingView: View {
                     .font(.title2.bold())
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
-                Text(playerStore.currentTrack?.artistName ?? "")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if let artist = currentArtist {
+                    NavigationLink {
+                        ArtistDetailView(artist: artist)
+                    } label: {
+                        Text(artist.name)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("アーティストページを表示")
+                } else {
+                    Text(playerStore.currentTrack?.artistName ?? "")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let album = currentAlbum {
+                    NavigationLink {
+                        AlbumDetailView(album: album)
+                    } label: {
+                        Text(album.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("アルバム、\(album.title)")
+                    .accessibilityHint("アルバムページを表示")
+                } else if let albumTitle = playerStore.currentTrack?.albumTitle,
+                          !albumTitle.isEmpty {
+                    Text(albumTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 if let track = playerStore.currentTrack {
                     Text("再生回数 \(playbackHistoryStore.playCount(for: track.id))回")
                         .font(.caption)
@@ -162,6 +195,16 @@ struct NowPlayingView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var currentAlbum: Album? {
+        guard let trackID = playerStore.currentTrack?.id else { return nil }
+        return libraryStore.albums.first { $0.trackIDs.contains(trackID) }
+    }
+
+    private var currentArtist: Artist? {
+        guard let trackID = playerStore.currentTrack?.id else { return nil }
+        return libraryStore.artists.first { $0.trackIDs.contains(trackID) }
     }
 
 }
