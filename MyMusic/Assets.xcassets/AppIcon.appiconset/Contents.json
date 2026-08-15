@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "iconmymusic 2.jpeg",
+      "filename" : "iconmusic2.jpeg",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "iconmymusic 1.jpeg",
+      "filename" : "iconmusic2 1.jpeg",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "iconmymusic.jpeg",
+      "filename" : "iconmusic2 2.jpeg",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

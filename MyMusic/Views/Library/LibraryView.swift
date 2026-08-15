@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @State private var isFolderImporterPresented = false
-    @State private var isShowingAllFolders = false
 
     private let collapsedFolderLimit = 4
 
@@ -25,9 +24,11 @@ struct LibraryView: View {
                             }
                         }
 
-                        if hasHiddenLibraryFolders {
-                            Button("もっと見る", systemImage: "chevron.down") {
-                                isShowingAllFolders = true
+                        if libraryStore.libraryFolders.count > collapsedFolderLimit {
+                            NavigationLink {
+                                LibraryFoldersView()
+                            } label: {
+                                Label("もっと見る", systemImage: "ellipsis")
                             }
                         }
                     } else {
@@ -142,15 +143,7 @@ struct LibraryView: View {
     }
 
     private var visibleLibraryFolders: ArraySlice<LibraryFolder> {
-        if isShowingAllFolders {
-            libraryStore.libraryFolders.prefix(libraryStore.libraryFolders.count)
-        } else {
-            libraryStore.libraryFolders.prefix(collapsedFolderLimit)
-        }
-    }
-
-    private var hasHiddenLibraryFolders: Bool {
-        !isShowingAllFolders && libraryStore.libraryFolders.count > collapsedFolderLimit
+        libraryStore.libraryFolders.prefix(collapsedFolderLimit)
     }
 }
 

@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
+    @State private var randomizedPlaylistIDs: [Playlist.ID] = []
 
     var body: some View {
         NavigationStack {
@@ -44,6 +45,9 @@ struct HomeView: View {
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
             }
+            .task(id: playlistStore.playlists.map(\.id)) {
+                randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -57,12 +61,12 @@ struct HomeView: View {
     }
 
     private var homePlaylists: [Playlist] {
-        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
-        return playlistStore.playlists
-            .filter { playlist in
-                playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
-            }
-            .sorted { $0.createdAt > $1.createdAt }
+        guard !randomizedPlaylistIDs.isEmpty else {
+            return playlistStore.playlists
+        }
+
+        let playlistsByID = Dictionary(uniqueKeysWithValues: playlistStore.playlists.map { ($0.id, $0) })
+        return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 
     private func playPlaylist(_ playlist: Playlist) {
@@ -331,7 +335,7 @@ private struct HomePlaylistSection: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("プレイリスト")
                     .font(.title3.weight(.bold))
-                Text("最近作成したプレイリストをランダム再生")
+                Text("プレイリストをランダムに表示・再生")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -469,7 +473,7 @@ private struct HomePlaylistMoreTile: View {
             Image(systemName: "arrow.right.circle.fill")
                 .font(.largeTitle)
             Spacer()
-            Text("続きを見る")
+            Text("もっと見る")
                 .font(.headline)
             Text("すべてのプレイリスト")
                 .font(.caption)
