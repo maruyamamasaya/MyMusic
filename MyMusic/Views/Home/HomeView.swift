@@ -20,7 +20,7 @@ struct HomeView: View {
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
-                            if playlistStore.playlists.isEmpty || !homePlaylists.isEmpty {
+                            if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
                                     playlists: Array(homePlaylists.prefix(5)),
                                     showsMore: homePlaylists.count > 5,
@@ -61,11 +61,14 @@ struct HomeView: View {
     }
 
     private var homePlaylists: [Playlist] {
-        guard !randomizedPlaylistIDs.isEmpty else {
-            return playlistStore.playlists
+        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
+        let playablePlaylists = playlistStore.playlists.filter { playlist in
+            playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
         }
 
-        let playlistsByID = Dictionary(uniqueKeysWithValues: playlistStore.playlists.map { ($0.id, $0) })
+        guard !randomizedPlaylistIDs.isEmpty else { return playablePlaylists }
+
+        let playlistsByID = Dictionary(uniqueKeysWithValues: playablePlaylists.map { ($0.id, $0) })
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 

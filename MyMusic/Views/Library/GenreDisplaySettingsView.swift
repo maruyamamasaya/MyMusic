@@ -142,12 +142,28 @@ struct GenreSelectionEditorView: View {
             }
 
             Section {
-                HStack {
-                    Button("すべて選択") { selection = allIDs }
-                    Spacer()
-                    Button("すべて解除") { selection.removeAll() }
+                HStack(spacing: 12) {
+                    Button {
+                        selection = allIDs
+                    } label: {
+                        Label("すべて選択", systemImage: "checkmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selection == allIDs)
+
+                    Button {
+                        selection.removeAll()
+                    } label: {
+                        Label("すべて解除", systemImage: "xmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(selection.isEmpty)
                 }
                 .font(.subheadline.weight(.semibold))
+                .controlSize(.regular)
+                .padding(.vertical, 4)
 
                 ForEach(libraryStore.availableGenreOptions) { option in
                     Button {
