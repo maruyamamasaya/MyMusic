@@ -33,8 +33,32 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
     }
 
     func saveLibraryFolders(_ urls: [URL]) throws {
+        // Reuse bookmarks for folders that are already registered. In particular,
+        // removing one folder must not require fresh access to every other folder:
+        // an offline iCloud provider could otherwise make registration removal
+        // impossible.
+        let savedBookmarks = storedBookmarks()
+        let savedBookmarksByPath = Dictionary(
+            savedBookmarks.compactMap { data -> (String, Data)? in
+                var isStale = false
+                guard let savedURL = try? URL(
+                    resolvingBookmarkData: data,
+                    options: [.withoutUI],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                ) else { return nil }
+                return (Self.normalizedPath(for: savedURL), data)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         var bookmarks: [Data] = []
         for url in urls {
+            if let savedBookmark = savedBookmarksByPath[Self.normalizedPath(for: url)] {
+                bookmarks.append(savedBookmark)
+                continue
+            }
+
             let hasAccess = url.startAccessingSecurityScopedResource()
             defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
             guard hasAccess || FileManager.default.isReadableFile(atPath: url.path) else {
@@ -51,9 +75,7 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
     }
 
     func restoreLibraryFolders() throws -> [URL] {
-        let bookmarks = (defaults.array(forKey: bookmarksKey) as? [Data])
-            ?? defaults.data(forKey: bookmarkKey).map { [$0] }
-            ?? []
+        let bookmarks = storedBookmarks()
         return try bookmarks.map { data in
             var isStale = false
             let url = try URL(
@@ -112,5 +134,16 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
             files.append(url)
         }
         return files
+    }
+
+    private func storedBookmarks() -> [Data] {
+        (defaults.array(forKey: bookmarksKey) as? [Data])
+            ?? defaults.data(forKey: bookmarkKey).map { [$0] }
+            ?? []
+    }
+
+    private nonisolated static func normalizedPath(for url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
+            .precomposedStringWithCanonicalMapping
     }
 }
