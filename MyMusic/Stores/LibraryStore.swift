@@ -107,6 +107,7 @@ final class LibraryStore {
             try fileImportService.saveLibraryFolders(remaining.map(\.url))
             libraryFolders = remaining
             librariesByFolderID.removeValue(forKey: folder.id)
+            errorMessage = nil
             rebuildCombinedLibrary()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -203,11 +204,19 @@ final class LibraryStore {
         do {
             let previous = librariesByFolderID[folder.id]?.tracks ?? []
             let library = try await service.loadLibrary(from: folder.url, previousTracks: previous)
+            // The user may unregister this folder while its asynchronous scan is running.
+            // Do not restore scan results for a folder that is no longer registered.
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
             librariesByFolderID[folder.id] = library
             try await persistence.save(library, for: folder.url)
             rebuildCombinedLibrary()
         } catch is CancellationError { return }
-        catch { errorMessage = error.localizedDescription }
+        catch {
+            // Likewise, a late access error from an unregistered folder should not be
+            // presented after the user has successfully removed its registration.
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func rebuildCombinedLibrary() {
