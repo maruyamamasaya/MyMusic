@@ -1,6 +1,8 @@
 import Foundation
 
 struct Track: Identifiable, Codable, Hashable, Sendable {
+    static let longFormMinimumDuration: TimeInterval = 20 * 60
+
     let id: UUID
     var title: String
     var artistName: String
@@ -17,4 +19,8 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     var genre: String? = nil
     var composer: String? = nil
     var audioFormat: AudioFormat? = nil
+
+    var isLongForm: Bool {
+        duration >= Self.longFormMinimumDuration
+    }
 }

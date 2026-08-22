@@ -123,10 +123,24 @@ final class PlaybackHistoryStore {
         return entry.isPermanentlyHiddenFromShuffle || (entry.boredomHiddenUntil.map { $0 > now } ?? false)
     }
 
+    func isEligibleForRegularShuffle(_ track: Track) -> Bool {
+        !track.isLongForm && !isHiddenFromShuffle(trackID: track.id)
+    }
+
     /// Returns every track once, ordered by a preference-weighted random draw.
     /// Positive preferences are more likely to appear early, while negative
     /// preferences use the reciprocal weight and remain eligible for playback.
     func preferenceWeightedShuffle(_ tracks: [Track]) -> [Track] {
+        weightedShuffle(tracks.filter(isEligibleForRegularShuffle))
+    }
+
+    /// Long-form tracks have their own playback entry point and stay out of
+    /// the app's regular shuffle flows.
+    func workPlaybackTracks(from tracks: [Track]) -> [Track] {
+        weightedShuffle(tracks.filter(\.isLongForm))
+    }
+
+    private func weightedShuffle(_ tracks: [Track]) -> [Track] {
         tracks
             .filter { !isHiddenFromShuffle(trackID: $0.id) }
             .map { track in
@@ -141,13 +155,14 @@ final class PlaybackHistoryStore {
     func quickPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
         guard limit > 0 else { return [] }
 
-        let recentFavorites = tracks
+        let shuffleEligibleTracks = tracks.filter(isEligibleForRegularShuffle)
+        let recentFavorites = shuffleEligibleTracks
             .filter { isFavorite(trackID: $0.id) }
             .sorted {
                 (entries[$0.id]?.lastPlayedAt ?? .distantPast) >
                     (entries[$1.id]?.lastPlayedAt ?? .distantPast)
             }
-        let otherTracks = tracks.filter { !isFavorite(trackID: $0.id) }
+        let otherTracks = shuffleEligibleTracks.filter { !isFavorite(trackID: $0.id) }
         let pairCount = min(limit / 2, recentFavorites.count, otherTracks.count)
 
         guard pairCount > 0 else {

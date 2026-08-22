@@ -45,7 +45,7 @@ final class HighlightPlayerStore {
     }
 
     func updateLibrary(_ tracks: [Track]) {
-        let playableTracks = tracks.filter { $0.duration.isFinite && $0.duration > 1 }
+        let playableTracks = tracks.filter { $0.duration.isFinite && $0.duration > 1 && !$0.isLongForm }
         let previousIDs = Set(sourceTracks.map(\.id))
         sourceTracks = playableTracks
         availableGenres = Self.genreNames(in: playableTracks).sorted {
@@ -122,6 +122,15 @@ final class HighlightPlayerStore {
             reason: .highlightUserInitiated
         )
         restartAutoAdvance(for: track, candidate: candidate)
+    }
+
+    /// Pauses highlight audio while the user performs a modal editing task.
+    /// Playback remains paused after dismissal and resumes only by explicit input.
+    func pauseForModalInteraction() {
+        guard isHighlightPlaybackActive,
+              playerStore.currentTrack?.id == currentTrack?.id,
+              playerStore.isPlaying else { return }
+        playerStore.pause()
     }
 
     func prepareFullPlayback() {

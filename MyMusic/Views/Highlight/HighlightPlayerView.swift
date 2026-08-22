@@ -60,7 +60,10 @@ struct HighlightPlayerView: View {
                             onSelectGenre: highlightStore.selectGenre,
                             onReshuffle: highlightStore.reshuffle,
                             onAnotherPart: highlightStore.playAnotherPart,
-                            onAddToPlaylist: { playlistTrack = track },
+                            onAddToPlaylist: {
+                                highlightStore.pauseForModalInteraction()
+                                playlistTrack = track
+                            },
                             onShowInformation: { informationTrack = track },
                             onFullPlayback: {
                                 highlightStore.prepareFullPlayback()

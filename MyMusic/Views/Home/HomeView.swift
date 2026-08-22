@@ -25,6 +25,10 @@ struct HomeView: View {
                                     playlists: Array(homePlaylists.prefix(5)),
                                     showsMore: homePlaylists.count > 5,
                                     tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
+                                    canPlay: { playlist in
+                                        playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+                                            .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
+                                    },
                                     onPlay: playPlaylist
                                 )
                             }
@@ -90,6 +94,8 @@ struct HomeView: View {
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) == 0 }
         case .repeatPlay:
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) >= 2 }
+        case .workSizePlay:
+            tracks = libraryStore.tracks.filter(\.isLongForm)
         case .favorites:
             tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
         case .favoriteAlbums:
@@ -107,13 +113,19 @@ struct HomeView: View {
     private func instantPlaybackIsAvailable(_ destination: HomeDestination) -> Bool {
         switch destination {
         case .quickPlay:
-            !libraryStore.tracks.isEmpty
+            libraryStore.tracks.contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
         case .discoveryPlay:
-            libraryStore.tracks.contains { playbackHistoryStore.playCount(for: $0.id) == 0 }
+            libraryStore.tracks.contains {
+                playbackHistoryStore.playCount(for: $0.id) == 0
+                    && playbackHistoryStore.isEligibleForRegularShuffle($0)
+            }
         case .repeatPlay:
             !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
+        case .workSizePlay:
+            !playbackHistoryStore.workPlaybackTracks(from: libraryStore.tracks).isEmpty
         case .favorites:
-            !playbackHistoryStore.favoriteTracks(from: libraryStore.tracks, limit: 1).isEmpty
+            playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+                .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
         case .favoriteAlbums:
             !favoriteAlbumTracks.isEmpty
         case .favoriteArtists:
@@ -132,6 +144,8 @@ struct HomeView: View {
             tracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
         case .repeatPlay:
             tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
+        case .workSizePlay:
+            tracks = playbackHistoryStore.workPlaybackTracks(from: libraryStore.tracks)
         case .favorites:
             tracks = playbackHistoryStore.preferenceWeightedShuffle(
                 playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
@@ -145,7 +159,7 @@ struct HomeView: View {
         }
 
         guard !tracks.isEmpty else { return }
-        if destination == .favoriteAlbums || destination == .favoriteArtists {
+        if destination == .favoriteAlbums || destination == .favoriteArtists || destination == .workSizePlay {
             playerStore.setShuffleEnabled(false)
         }
         playerStore.playQueue(tracks, startingAt: 0)
@@ -327,6 +341,7 @@ private struct HomePlaylistSection: View {
     let playlists: [Playlist]
     let showsMore: Bool
     let tracksForPlaylist: (Playlist) -> [Track]
+    let canPlay: (Playlist) -> Bool
     let onPlay: (Playlist) -> Void
 
     private let spacing: CGFloat = 12
@@ -358,6 +373,7 @@ private struct HomePlaylistSection: View {
                         } else {
                             ForEach(playlists) { playlist in
                                 let tracks = tracksForPlaylist(playlist)
+                                let isPlayable = canPlay(playlist)
                                 Button { onPlay(playlist) } label: {
                                     HomePlaylistTile(
                                         playlist: playlist,
@@ -367,8 +383,8 @@ private struct HomePlaylistSection: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(tracks.isEmpty)
-                                .opacity(tracks.isEmpty ? 0.55 : 1)
+                                .disabled(!isPlayable)
+                                .opacity(isPlayable ? 1 : 0.55)
                             }
 
                             if showsMore {
@@ -610,7 +626,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites, .favoriteAlbums, .favoriteArtists:
+        case .quickPlay, .discoveryPlay, .repeatPlay, .workSizePlay, .favorites, .favoriteAlbums, .favoriteArtists:
             true
         default:
             false

@@ -480,19 +480,37 @@ private struct PlaybackHistoryCalendarView: View {
 }
 
 private struct PlaybackDayDetailView: View {
+    @Environment(PlayerStore.self) private var playerStore
+    @State private var isNowPlayingPresented = false
+
     let day: AnalyticsSnapshot.DayGroup
 
     var body: some View {
-        List(day.events) { event in
-            VStack(alignment: .leading, spacing: 3) {
-                Text(event.track.title).lineLimit(1)
-                Text("\(event.track.artistName) • \(AnalyticsService.dateTimeFormatter.string(from: event.playedAt))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        List {
+            ForEach(Array(day.events.enumerated()), id: \.element.id) { index, event in
+                Button {
+                    playerStore.playQueue(day.events.map(\.track), startingAt: index)
+                    isNowPlayingPresented = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(event.track.title).lineLimit(1)
+                        Text("\(event.track.artistName) • \(AnalyticsService.dateTimeFormatter.string(from: event.playedAt))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("この曲を再生して再生画面を表示")
             }
         }
         .navigationTitle(day.date.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isNowPlayingPresented) {
+            NowPlayingView()
+                .presentationDragIndicator(.visible)
+        }
     }
 }
 

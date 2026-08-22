@@ -426,7 +426,10 @@ final class PlayerStore {
             return
         }
         let weightedIndexes = naturalOrder
-            .filter { $0 != index && !playbackHistoryStore.isHiddenFromShuffle(trackID: queue[$0].id) }
+            .filter {
+                $0 != index
+                    && playbackHistoryStore.isEligibleForRegularShuffle(queue[$0])
+            }
             .map { queueIndex in
                 let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
                 let weight = playbackHistoryStore.playbackSelectionWeight(for: queue[queueIndex].id)
