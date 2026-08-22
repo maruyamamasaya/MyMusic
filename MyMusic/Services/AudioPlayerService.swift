@@ -73,6 +73,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private let fileImportService: FileImportServicing
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
+    private let transitionMixer = AVAudioMixerNode()
     private let equalizer = AVAudioUnitEQ(numberOfBands: EqualizerSettings.frequencies.count)
     private var audioFile: AVAudioFile?
     private var currentTrack: Track?
@@ -89,12 +90,13 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private var equalizerSettings = EqualizerSettings.flat
     private var isSpectrumTapInstalled = false
     private lazy var playbackTransitionService = PlaybackTransitionService { [weak self] volume in
-        self?.playerNode.volume = volume
+        self?.transitionMixer.outputVolume = volume
     }
 
     init(fileImportService: FileImportServicing? = nil) {
         self.fileImportService = fileImportService ?? FileImportService()
         engine.attach(playerNode)
+        engine.attach(transitionMixer)
         engine.attach(equalizer)
         configureEqualizerBands()
         applyEqualizer(equalizerSettings)
@@ -183,9 +185,10 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     func pause() {
         guard playerNode.isPlaying else { return }
         cancelScheduledFadeOut(clearBoundary: false)
-        playbackTransitionService.cancelActiveRamp(resetVolume: true)
+        playbackTransitionService.cancelActiveRamp(resetVolume: false)
         pausedFrame = currentFrame()
         playerNode.pause()
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
         spectrumHandler?(Self.silentSpectrum)
         eventHandler?(.playingChanged(false))
     }
@@ -311,9 +314,12 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private func stopPlayback(clearTrack: Bool) {
         scheduleID = UUID()
         cancelScheduledFadeOut(clearBoundary: true)
-        playbackTransitionService.cancelActiveRamp(resetVolume: true)
+        playbackTransitionService.cancelActiveRamp(resetVolume: false)
         playerNode.stop()
         engine.stop()
+        // Reset only after the old render path is silent. Restoring the gain
+        // before stopping can briefly expose full-volume samples after a fade.
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
         playbackTimer?.invalidate()
         playbackTimer = nil
         audioFile = nil
@@ -369,8 +375,10 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         playerNode.stop()
         if engine.isRunning { engine.stop() }
         engine.disconnectNodeOutput(playerNode)
+        engine.disconnectNodeOutput(transitionMixer)
         engine.disconnectNodeOutput(equalizer)
-        engine.connect(playerNode, to: equalizer, format: format)
+        engine.connect(playerNode, to: transitionMixer, format: format)
+        engine.connect(transitionMixer, to: equalizer, format: format)
         engine.connect(equalizer, to: engine.mainMixerNode, format: format)
     }
 

@@ -44,7 +44,7 @@ struct PlaybackTransitionSettings: Codable, Equatable, Sendable {
     }
 
     func fadeInDuration(for reason: PlaybackTransitionReason) -> TimeInterval {
-        guard type == .fade, fadeInEnabled else { return 0 }
+        guard type != .none, fadeInEnabled else { return 0 }
         switch reason {
         case .highlightUserInitiated:
             return min(fadeInDuration, 0.35)
@@ -54,7 +54,7 @@ struct PlaybackTransitionSettings: Codable, Equatable, Sendable {
     }
 
     func fadeOutDuration(for reason: PlaybackTransitionReason) -> TimeInterval {
-        guard type == .fade, fadeOutEnabled else { return 0 }
+        guard type != .none, fadeOutEnabled else { return 0 }
         if reason == .manualTrackChange, manualTrackTransitionPolicy == .automaticOnly {
             return 0
         }

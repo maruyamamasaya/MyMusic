@@ -127,19 +127,17 @@ final class HighlightPlayerStore {
     func prepareFullPlayback() {
         guard let track = currentTrack else { return }
         startPlaybackTask?.cancel()
+        analysisTask?.cancel()
         autoAdvanceTask?.cancel()
         playbackGeneration = UUID()
+        isAnalyzingCurrentTrack = false
         isHighlightPlaybackActive = false
-        let requestedTime = playerStore.currentTrack?.id == track.id
-            ? playerStore.currentTime
-            : (currentCandidate?.startTime ?? 0)
-        let elapsedTime = min(max(requestedTime, 0), track.duration)
         let fullQueue = queue.isEmpty ? [track] : queue
         let index = fullQueue.firstIndex(where: { $0.id == track.id }) ?? 0
         playerStore.playQueue(
             fullQueue,
             startingAt: index,
-            playbackStartTime: elapsedTime,
+            playbackStartTime: 0,
             transitionReason: .manualTrackChange
         )
     }

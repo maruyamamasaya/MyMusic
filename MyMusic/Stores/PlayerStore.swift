@@ -60,6 +60,7 @@ final class PlayerStore {
     private var hasCountedCurrentPlay = false
     private var listenedTime: TimeInterval = 0
     private var lastObservedPlaybackTime: TimeInterval?
+    private var playbackCountThresholdOverride: TimeInterval?
     private var wasPlayingBeforeInterruption = false
 
     init(
@@ -361,6 +362,7 @@ final class PlayerStore {
         currentTrack = track
         loadAudioInformation(for: track)
         resetPlaybackSession()
+        playbackCountThresholdOverride = playbackEndTime == nil ? nil : 15
         currentTime = playbackStartTime
         duration = track.duration
         isPlaying = false
@@ -498,6 +500,7 @@ final class PlayerStore {
         hasCountedCurrentPlay = false
         listenedTime = 0
         lastObservedPlaybackTime = nil
+        playbackCountThresholdOverride = nil
     }
 
     private func recordPlaybackStartIfNeeded() {
@@ -512,7 +515,7 @@ final class PlayerStore {
         let delta = time - previous
         guard delta > 0, delta <= 1.5 else { return }
         listenedTime += delta
-        let threshold = min(30, duration * 0.5)
+        let threshold = playbackCountThresholdOverride ?? min(30, duration * 0.5)
         guard threshold > 0, listenedTime >= threshold, let currentTrack else { return }
         playbackHistoryStore.recordPlaybackCompleted(trackID: currentTrack.id)
         hasCountedCurrentPlay = true

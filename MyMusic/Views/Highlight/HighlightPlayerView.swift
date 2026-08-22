@@ -43,40 +43,42 @@ struct HighlightPlayerView: View {
     }
 
     private var highlightFeed: some View {
-        ScrollView(.vertical) {
-            LazyVStack(spacing: 0) {
-                ForEach(highlightStore.queue) { track in
-                    HighlightTrackPage(
-                        track: track,
-                        candidate: highlightStore.candidate(for: track),
-                        isCurrent: track.id == highlightStore.currentTrack?.id,
-                        isAnalyzing: track.id == highlightStore.currentTrack?.id && highlightStore.isAnalyzingCurrentTrack,
-                        isHighlightPlaybackActive: highlightStore.isHighlightPlaybackActive,
-                        selectedGenre: highlightStore.selectedGenre,
-                        availableGenres: highlightStore.availableGenres,
-                        candidateNumber: highlightStore.currentCandidateNumber,
-                        candidateCount: highlightStore.currentCandidateCount,
-                        onSelectGenre: highlightStore.selectGenre,
-                        onReshuffle: highlightStore.reshuffle,
-                        onAnotherPart: highlightStore.playAnotherPart,
-                        onAddToPlaylist: { playlistTrack = track },
-                        onShowInformation: { informationTrack = track },
-                        onFullPlayback: {
-                            highlightStore.prepareFullPlayback()
-                            onPresentNowPlaying()
-                        },
-                        onResumeHighlight: highlightStore.resumeHighlightPlayback
-                    )
-                    .containerRelativeFrame([.horizontal, .vertical])
-                    .id(track.id)
+        GeometryReader { viewport in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(highlightStore.queue) { track in
+                        HighlightTrackPage(
+                            track: track,
+                            candidate: highlightStore.candidate(for: track),
+                            isCurrent: track.id == highlightStore.currentTrack?.id,
+                            isAnalyzing: track.id == highlightStore.currentTrack?.id && highlightStore.isAnalyzingCurrentTrack,
+                            isHighlightPlaybackActive: highlightStore.isHighlightPlaybackActive,
+                            selectedGenre: highlightStore.selectedGenre,
+                            availableGenres: highlightStore.availableGenres,
+                            candidateNumber: highlightStore.currentCandidateNumber,
+                            candidateCount: highlightStore.currentCandidateCount,
+                            onSelectGenre: highlightStore.selectGenre,
+                            onReshuffle: highlightStore.reshuffle,
+                            onAnotherPart: highlightStore.playAnotherPart,
+                            onAddToPlaylist: { playlistTrack = track },
+                            onShowInformation: { informationTrack = track },
+                            onFullPlayback: {
+                                highlightStore.prepareFullPlayback()
+                                onPresentNowPlaying()
+                            },
+                            onResumeHighlight: highlightStore.resumeHighlightPlayback
+                        )
+                        .frame(width: viewport.size.width, height: viewport.size.height)
+                        .id(track.id)
+                    }
                 }
+                .scrollTargetLayout()
             }
-            .scrollTargetLayout()
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            .scrollPosition(id: $visibleTrackID, anchor: .top)
         }
-        .scrollIndicators(.hidden)
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $visibleTrackID)
-        .ignoresSafeArea(edges: .top)
+        .clipped()
     }
 
     private var emptyState: some View {
@@ -140,12 +142,19 @@ private struct HighlightTrackPage: View {
 
                     Spacer(minLength: 0)
 
-                    AlbumArtworkView(
-                        artworkIdentifier: track.artworkIdentifier,
-                        displayMode: .fitWithBlurredBackground
-                    )
-                    .frame(width: artworkSize(in: proxy.size), height: artworkSize(in: proxy.size))
-                    .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
+                    Button(action: togglePlaybackFromArtwork) {
+                        AlbumArtworkView(
+                            artworkIdentifier: track.artworkIdentifier,
+                            displayMode: .fitWithBlurredBackground
+                        )
+                        .frame(width: artworkSize(in: proxy.size), height: artworkSize(in: proxy.size))
+                        .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isCurrent || playerStore.isLoading)
+                    .accessibilityLabel(playerStore.isPlaying ? "一時停止" : "再生")
+                    .accessibilityHint("ジャケットをタップして再生状態を切り替えます")
 
                     trackDetails
                     actionBar
@@ -153,7 +162,7 @@ private struct HighlightTrackPage: View {
                     progressBar
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, max(proxy.safeAreaInsets.top, 12) + 8)
+                .padding(.top, max(proxy.safeAreaInsets.top, 16) + 12)
                 .padding(.bottom, 14)
             }
             .clipped()
@@ -232,6 +241,24 @@ private struct HighlightTrackPage: View {
             }
             .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
 
+            Button {
+                historyStore.increasePlaybackPreference(for: track.id)
+            } label: {
+                Image(systemName: "hand.thumbsup.fill")
+                    .foregroundStyle(playbackPreference > 0 ? .green : .white)
+            }
+            .accessibilityLabel("グッド")
+            .accessibilityValue("評価 \(playbackPreference)")
+
+            Button {
+                historyStore.decreasePlaybackPreference(for: track.id)
+            } label: {
+                Image(systemName: "hand.thumbsdown.fill")
+                    .foregroundStyle(playbackPreference < 0 ? .orange : .white)
+            }
+            .accessibilityLabel("よくないね")
+            .accessibilityValue("評価 \(playbackPreference)")
+
             Button("プレイリストに追加", systemImage: "text.badge.plus", action: onAddToPlaylist)
             Button("曲情報", systemImage: "ellipsis", action: onShowInformation)
 
@@ -282,6 +309,19 @@ private struct HighlightTrackPage: View {
     private var progress: Double {
         guard isCurrent, candidate.duration > 0 else { return 0 }
         return min(max((playerStore.currentTime - candidate.startTime) / candidate.duration, 0), 1)
+    }
+
+    private var playbackPreference: Int {
+        historyStore.playbackPreference(for: track.id)
+    }
+
+    private func togglePlaybackFromArtwork() {
+        guard isCurrent, !playerStore.isLoading else { return }
+        if isHighlightPlaybackActive {
+            playerStore.togglePlayPause()
+        } else {
+            onResumeHighlight()
+        }
     }
 
     private func artworkSize(in size: CGSize) -> CGFloat {
@@ -349,7 +389,7 @@ private struct HighlightTrackInformationView: View {
                 }
 
                 Section {
-                    Button("現在位置からフルで再生", systemImage: "play.fill") {
+                    Button("曲の最初からフルで再生", systemImage: "play.fill") {
                         dismiss()
                         onFullPlayback()
                     }

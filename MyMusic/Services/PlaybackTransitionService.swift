@@ -62,11 +62,14 @@ final class PlaybackTransitionService {
 
             let elapsed = ProcessInfo.processInfo.systemUptime - startTime
             let progress = min(max(elapsed / duration, 0), 1)
-            let value = startVolume + ((targetVolume - startVolume) * Float(progress))
+            // Smoothstep eases the gain slope at both ends and the shorter
+            // cadence keeps short highlight transitions from sounding stepped.
+            let easedProgress = progress * progress * (3 - (2 * progress))
+            let value = startVolume + ((targetVolume - startVolume) * Float(easedProgress))
             setVolume(value)
 
             if progress >= 1 { return }
-            try await Task.sleep(for: .milliseconds(16))
+            try await Task.sleep(for: .milliseconds(5))
         }
     }
 
