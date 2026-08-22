@@ -127,7 +127,8 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     ) async throws {
         cancelScheduledFadeOut(clearBoundary: false)
         if playerNode.isPlaying {
-            try await playbackTransitionService.fadeOut(for: reason)
+            try await playbackTransitionService.silenceBeforeDiscontinuity(for: reason)
+            try await waitForSilentRenderCycle()
         }
         try Task.checkCancellation()
 
@@ -155,6 +156,10 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
             let startFrame = AVAudioFramePosition(clampedStartTime * file.processingFormat.sampleRate)
             schedule(from: startFrame)
             installSpectrumTapIfNeeded()
+            // Establish a silent gain before the engine renders the first
+            // buffer. Starting at unity and lowering it after engine.start()
+            // can expose a transient at a track boundary.
+            playbackTransitionService.prepareFadeIn(for: reason)
             engine.prepare()
             if !engine.isRunning { try engine.start() }
 
@@ -168,7 +173,6 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
             } else {
                 fadeOutBoundary = (resolvedDuration, .automaticTrackChange)
             }
-            playbackTransitionService.prepareFadeIn(for: reason)
             playerNode.play()
             startPlaybackTimer()
             rescheduleFadeOut()
@@ -228,7 +232,8 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         cancelScheduledFadeOut(clearBoundary: false)
         let wasPlaying = playerNode.isPlaying
         if wasPlaying {
-            try await playbackTransitionService.fadeOut(for: reason)
+            try await playbackTransitionService.silenceBeforeDiscontinuity(for: reason)
+            try await waitForSilentRenderCycle()
         }
         try Task.checkCancellation()
 
@@ -335,6 +340,12 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         scheduledFadeOutTask?.cancel()
         scheduledFadeOutTask = nil
         if clearBoundary { fadeOutBoundary = nil }
+    }
+
+    /// Allows the zero-gain value to reach the render thread before a player
+    /// node is stopped. The small silence is preferable to a discontinuity pop.
+    private func waitForSilentRenderCycle() async throws {
+        try await Task.sleep(for: .milliseconds(20))
     }
 
     private func rescheduleFadeOut() {

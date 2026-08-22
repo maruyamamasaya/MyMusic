@@ -40,6 +40,15 @@ final class PlaybackTransitionService {
         try await ramp(to: 0, duration: duration)
     }
 
+    /// Silences the current render path before a node is stopped or rescheduled.
+    /// Even with fade-out disabled, a very short ramp avoids cutting a waveform
+    /// at full amplitude while keeping user-initiated transitions responsive.
+    func silenceBeforeDiscontinuity(for reason: PlaybackTransitionReason) async throws {
+        let configuredDuration = settings.fadeOutDuration(for: reason)
+        let duration = configuredDuration > 0 ? configuredDuration : 0.03
+        try await ramp(to: 0, duration: duration)
+    }
+
     func cancelActiveRamp(resetVolume: Bool) {
         activeRampID = UUID()
         if resetVolume { setVolume(1) }
