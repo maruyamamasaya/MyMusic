@@ -15,6 +15,11 @@ enum RepeatMode: String, CaseIterable, Sendable {
     }
 }
 
+enum PlayerPresentationMode: Sendable, Equatable {
+    case standard
+    case workSize
+}
+
 @MainActor
 @Observable
 final class PlayerStore {
@@ -29,6 +34,7 @@ final class PlayerStore {
     private(set) var playbackOrder: [Int] = []
     private(set) var isShuffleEnabled = false
     private(set) var repeatMode: RepeatMode = .off
+    private(set) var presentationMode: PlayerPresentationMode = .standard
     private(set) var audioInformation = AudioInformation.unknown
     private(set) var spectrumLevels: [Float] = Array(repeating: 0, count: 32)
 
@@ -122,12 +128,14 @@ final class PlayerStore {
         startingAt index: Int,
         playbackStartTime: TimeInterval = 0,
         playbackEndTime: TimeInterval? = nil,
-        transitionReason: PlaybackTransitionReason = .manualTrackChange
+        transitionReason: PlaybackTransitionReason = .manualTrackChange,
+        presentationMode: PlayerPresentationMode = .standard
     ) {
         guard tracks.indices.contains(index) else {
             if tracks.isEmpty { stop() }
             return
         }
+        self.presentationMode = presentationMode
         queue = tracks
         currentIndex = nil
         rebuildPlaybackOrder(keepingCurrentIndex: index)
@@ -286,6 +294,10 @@ final class PlayerStore {
         nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
     }
 
+    func skip(by offset: TimeInterval) {
+        seek(to: min(max(currentTime + offset, 0), duration))
+    }
+
     /// Intended for responsive highlight changes such as 「別の部分」.
     /// Repeated calls cancel the preceding transition before starting a new one.
     func seekWithTransition(
@@ -336,6 +348,7 @@ final class PlayerStore {
         playbackOrder = []
         currentIndex = nil
         currentTrack = nil
+        presentationMode = .standard
         audioInformation = .unknown
         spectrumLevels = Array(repeating: 0, count: 32)
         isPlaying = false

@@ -162,7 +162,11 @@ struct HomeView: View {
         if destination == .favoriteAlbums || destination == .favoriteArtists || destination == .workSizePlay {
             playerStore.setShuffleEnabled(false)
         }
-        playerStore.playQueue(tracks, startingAt: 0)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
+            presentationMode: destination == .workSizePlay ? .workSize : .standard
+        )
     }
 
     private var favoriteAlbumTracks: [Track] {

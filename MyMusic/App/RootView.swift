@@ -26,8 +26,14 @@ struct RootView: View {
         })
         .animation(.default, value: playerStore.currentTrack?.id)
         .sheet(isPresented: $isNowPlayingPresented) {
-            NowPlayingView()
-                .presentationDragIndicator(.visible)
+            Group {
+                if playerStore.presentationMode == .workSize {
+                    WorkSizeNowPlayingView()
+                } else {
+                    NowPlayingView()
+                }
+            }
+            .presentationDragIndicator(.visible)
         }
         .alert("再生エラー", isPresented: errorIsPresented) {
             Button("閉じる") { playerStore.dismissError() }
