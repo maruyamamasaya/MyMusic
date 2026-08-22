@@ -1,9 +1,9 @@
 import Foundation
 
-protocol FileImportServicing: Sendable {
-    func saveLibraryFolders(_ urls: [URL]) throws
-    func restoreLibraryFolders() throws -> [URL]
-    func audioFiles(in folderURL: URL) async throws -> [URL]
+nonisolated protocol FileImportServicing: Sendable {
+    nonisolated func saveLibraryFolders(_ urls: [URL]) throws
+    nonisolated func restoreLibraryFolders() throws -> [URL]
+    nonisolated func audioFiles(in folderURL: URL) async throws -> [URL]
 }
 
 enum FileImportServiceError: LocalizedError {
@@ -22,17 +22,17 @@ enum FileImportServiceError: LocalizedError {
     }
 }
 
-final class FileImportService: FileImportServicing, @unchecked Sendable {
+nonisolated final class FileImportService: FileImportServicing, @unchecked Sendable {
     private let defaults: UserDefaults
     private let bookmarkKey = "musicLibraryFolderBookmark"
     private let bookmarksKey = "musicLibraryFolderBookmarks"
     private nonisolated static let supportedExtensions: Set<String> = ["m4a", "mp3", "flac", "wav", "aiff", "aif", "aac"]
 
-    init(defaults: UserDefaults = .standard) {
+    nonisolated init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
-    func saveLibraryFolders(_ urls: [URL]) throws {
+    nonisolated func saveLibraryFolders(_ urls: [URL]) throws {
         // Reuse bookmarks for folders that are already registered. In particular,
         // removing one folder must not require fresh access to every other folder:
         // an offline iCloud provider could otherwise make registration removal
@@ -74,7 +74,7 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
         defaults.removeObject(forKey: bookmarkKey)
     }
 
-    func restoreLibraryFolders() throws -> [URL] {
+    nonisolated func restoreLibraryFolders() throws -> [URL] {
         let bookmarks = storedBookmarks()
         return try bookmarks.map { data in
             var isStale = false
@@ -94,7 +94,7 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
         }
     }
 
-    func audioFiles(in folderURL: URL) async throws -> [URL] {
+    nonisolated func audioFiles(in folderURL: URL) async throws -> [URL] {
         try await Task.detached(priority: .userInitiated) {
             try Self.scanAudioFiles(in: folderURL)
         }.value
@@ -136,7 +136,7 @@ final class FileImportService: FileImportServicing, @unchecked Sendable {
         return files
     }
 
-    private func storedBookmarks() -> [Data] {
+    private nonisolated func storedBookmarks() -> [Data] {
         (defaults.array(forKey: bookmarksKey) as? [Data])
             ?? defaults.data(forKey: bookmarkKey).map { [$0] }
             ?? []

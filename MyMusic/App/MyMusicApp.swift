@@ -8,13 +8,19 @@ struct MyMusicApp: App {
     @State private var playlistStore = PlaylistStore()
     @State private var favoriteStore = FavoriteStore()
     @State private var settingsStore: SettingsStore
+    @State private var highlightPlayerStore: HighlightPlayerStore
 
     init() {
         let historyStore = PlaybackHistoryStore()
         let audioPlayer = AudioPlayerService()
+        let playerStore = PlayerStore(audioPlayer: audioPlayer, playbackHistoryStore: historyStore)
         _playbackHistoryStore = State(initialValue: historyStore)
-        _playerStore = State(initialValue: PlayerStore(audioPlayer: audioPlayer, playbackHistoryStore: historyStore))
-        _settingsStore = State(initialValue: SettingsStore(equalizerController: audioPlayer))
+        _playerStore = State(initialValue: playerStore)
+        _highlightPlayerStore = State(initialValue: HighlightPlayerStore(playerStore: playerStore))
+        _settingsStore = State(initialValue: SettingsStore(
+            equalizerController: audioPlayer,
+            playbackTransitionController: audioPlayer
+        ))
     }
 
     var body: some Scene {
@@ -26,6 +32,7 @@ struct MyMusicApp: App {
                 .environment(favoriteStore)
                 .environment(playbackHistoryStore)
                 .environment(settingsStore)
+                .environment(highlightPlayerStore)
         }
     }
 }

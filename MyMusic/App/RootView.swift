@@ -7,15 +7,21 @@ struct RootView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var isNowPlayingPresented = false
+    @State private var selectedTab = RootTab.home
 
     var body: some View {
-        TabView {
-            Tab("ホーム", systemImage: "house") { HomeView() }
-            Tab("ライブラリ", systemImage: "music.note.list") { LibraryView() }
-            Tab("プレイリスト", systemImage: "list.bullet.rectangle") { PlaylistView() }
-            Tab("検索", systemImage: "magnifyingglass") { SearchView() }
+        TabView(selection: $selectedTab) {
+            Tab("ホーム", systemImage: "house", value: .home) { HomeView() }
+            Tab("ライブラリ", systemImage: "music.note.list", value: .library) { LibraryView() }
+            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
+            Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
+            Tab("ハイライト", systemImage: "sparkles.rectangle.stack", value: .highlight) {
+                HighlightPlayerView { isNowPlayingPresented = true }
+            }
         }
-        .modifier(MiniPlayerAccessoryModifier(isPresented: playerStore.currentTrack != nil) {
+        .modifier(MiniPlayerAccessoryModifier(
+            isPresented: playerStore.currentTrack != nil && selectedTab != .highlight
+        ) {
             isNowPlayingPresented = true
         })
         .animation(.default, value: playerStore.currentTrack?.id)
@@ -64,6 +70,14 @@ struct RootView: View {
             set: { if !$0 { favoriteStore.dismissError() } }
         )
     }
+}
+
+private enum RootTab: Hashable {
+    case home
+    case library
+    case playlist
+    case search
+    case highlight
 }
 
 private struct MiniPlayerAccessoryModifier: ViewModifier {

@@ -116,7 +116,13 @@ final class PlayerStore {
         playQueue([track], startingAt: 0)
     }
 
-    func playQueue(_ tracks: [Track], startingAt index: Int) {
+    func playQueue(
+        _ tracks: [Track],
+        startingAt index: Int,
+        playbackStartTime: TimeInterval = 0,
+        playbackEndTime: TimeInterval? = nil,
+        transitionReason: PlaybackTransitionReason = .manualTrackChange
+    ) {
         guard tracks.indices.contains(index) else {
             if tracks.isEmpty { stop() }
             return
@@ -124,7 +130,12 @@ final class PlayerStore {
         queue = tracks
         currentIndex = nil
         rebuildPlaybackOrder(keepingCurrentIndex: index)
-        startPlayback(at: index)
+        startPlayback(
+            at: index,
+            playbackStartTime: playbackStartTime,
+            playbackEndTime: playbackEndTime,
+            transitionReason: transitionReason
+        )
     }
 
     func playQueue(_ tracks: [Track], startingWith track: Track) {
@@ -132,9 +143,19 @@ final class PlayerStore {
         playQueue(tracks, startingAt: index)
     }
 
-    func playQueueItem(at index: Int) {
+    func playQueueItem(
+        at index: Int,
+        playbackStartTime: TimeInterval = 0,
+        playbackEndTime: TimeInterval? = nil,
+        transitionReason: PlaybackTransitionReason = .manualTrackChange
+    ) {
         guard queue.indices.contains(index) else { return }
-        startPlayback(at: index)
+        startPlayback(
+            at: index,
+            playbackStartTime: playbackStartTime,
+            playbackEndTime: playbackEndTime,
+            transitionReason: transitionReason
+        )
     }
 
     /// Removes queue entries at positions in the currently displayed playback order.
@@ -185,6 +206,10 @@ final class PlayerStore {
     }
 
     func next() {
+        next(using: .manualTrackChange)
+    }
+
+    func next(using transitionReason: PlaybackTransitionReason) {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
             audioPlayer.pause()
             isPlaying = false
@@ -192,7 +217,7 @@ final class PlayerStore {
             updateRemoteCommandAvailability()
             return
         }
-        startPlayback(at: playbackOrder[nextPosition])
+        startPlayback(at: playbackOrder[nextPosition], transitionReason: transitionReason)
     }
 
     func previous() {
@@ -200,7 +225,7 @@ final class PlayerStore {
         if currentTime >= previousRestartThreshold || position == 0 {
             seek(to: 0)
         } else {
-            startPlayback(at: playbackOrder[position - 1])
+            startPlayback(at: playbackOrder[position - 1], transitionReason: .manualTrackChange)
         }
     }
 
@@ -260,6 +285,45 @@ final class PlayerStore {
         nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
     }
 
+    /// Intended for responsive highlight changes such as 「別の部分」.
+    /// Repeated calls cancel the preceding transition before starting a new one.
+    func seekWithTransition(
+        to time: TimeInterval,
+        endingAt playbackEndTime: TimeInterval? = nil,
+        reason: PlaybackTransitionReason = .highlightUserInitiated
+    ) {
+        playbackTask?.cancel()
+        let requestID = beginPlaybackRequest()
+        playbackTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                if let transitionPlayer = audioPlayer as? PlaybackTransitionAudioControlling {
+                    try await transitionPlayer.seek(
+                        to: time,
+                        endingAt: playbackEndTime,
+                        transition: reason
+                    )
+                } else {
+                    audioPlayer.seek(to: time)
+                }
+                guard playbackRequestID == requestID else { return }
+                nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard playbackRequestID == requestID else { return }
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Highlight playback can set its segment end here so fade-out starts at
+    /// `highlightEndTime - fadeOutDuration` without duplicating fade logic.
+    func scheduleFadeOut(endingAt playbackTime: TimeInterval, reason: PlaybackTransitionReason = .highlightAutomatic) {
+        (audioPlayer as? PlaybackTransitionAudioControlling)?
+            .scheduleFadeOut(endingAt: playbackTime, reason: reason)
+    }
+
     func stop() {
         playbackTask?.cancel()
         audioInformationTask?.cancel()
@@ -283,7 +347,12 @@ final class PlayerStore {
 
     func dismissError() { errorMessage = nil }
 
-    private func startPlayback(at index: Int) {
+    private func startPlayback(
+        at index: Int,
+        playbackStartTime: TimeInterval = 0,
+        playbackEndTime: TimeInterval? = nil,
+        transitionReason: PlaybackTransitionReason
+    ) {
         guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
@@ -292,18 +361,32 @@ final class PlayerStore {
         currentTrack = track
         loadAudioInformation(for: track)
         resetPlaybackSession()
-        currentTime = 0
+        currentTime = playbackStartTime
         duration = track.duration
         isPlaying = false
         isLoading = true
         errorMessage = nil
-        nowPlayingService.setTrack(track, duration: track.duration, elapsedTime: 0, isPlaying: false)
+        nowPlayingService.setTrack(
+            track,
+            duration: track.duration,
+            elapsedTime: playbackStartTime,
+            isPlaying: false
+        )
         updateRemoteCommandAvailability()
 
         playbackTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await audioPlayer.play(track)
+                if let transitionPlayer = audioPlayer as? PlaybackTransitionAudioControlling {
+                    try await transitionPlayer.play(
+                        track,
+                        startingAt: playbackStartTime,
+                        endingAt: playbackEndTime,
+                        transition: transitionReason
+                    )
+                } else {
+                    try await audioPlayer.play(track)
+                }
                 guard playbackRequestID == requestID else { return }
                 recordPlaybackStartIfNeeded()
             } catch is CancellationError {
@@ -361,7 +444,7 @@ final class PlayerStore {
 
     private func advanceAfterTrackEnded() {
         if repeatMode == .one, let currentIndex {
-            startPlayback(at: currentIndex)
+            startPlayback(at: currentIndex, transitionReason: .automaticTrackChange)
             return
         }
 
@@ -369,7 +452,7 @@ final class PlayerStore {
             isPlaying = false
             return
         }
-        startPlayback(at: playbackOrder[nextPosition])
+        startPlayback(at: playbackOrder[nextPosition], transitionReason: .automaticTrackChange)
     }
 
     private func handle(_ event: AudioPlaybackEvent) {

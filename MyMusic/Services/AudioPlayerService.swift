@@ -37,13 +37,36 @@ protocol AudioPlayerServicing: AnyObject {
 }
 
 @MainActor
+protocol PlaybackTransitionAudioControlling: AnyObject {
+    func play(_ track: Track, transition: PlaybackTransitionReason) async throws
+    func play(
+        _ track: Track,
+        startingAt playbackTime: TimeInterval,
+        endingAt playbackEndTime: TimeInterval?,
+        transition: PlaybackTransitionReason
+    ) async throws
+    func seek(to time: TimeInterval, transition: PlaybackTransitionReason) async throws
+    func seek(
+        to time: TimeInterval,
+        endingAt playbackEndTime: TimeInterval?,
+        transition: PlaybackTransitionReason
+    ) async throws
+    func scheduleFadeOut(endingAt playbackTime: TimeInterval, reason: PlaybackTransitionReason)
+}
+
+@MainActor
+protocol PlaybackTransitionControlling: AnyObject {
+    func applyPlaybackTransition(_ settings: PlaybackTransitionSettings)
+}
+
+@MainActor
 protocol EqualizerControlling: AnyObject {
     var spectrumHandler: (([Float]) -> Void)? { get set }
     func applyEqualizer(_ settings: EqualizerSettings)
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
+final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     var spectrumHandler: (([Float]) -> Void)?
 
@@ -54,6 +77,8 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
     private var audioFile: AVAudioFile?
     private var currentTrack: Track?
     private var playbackTimer: Timer?
+    private var scheduledFadeOutTask: Task<Void, Never>?
+    private var fadeOutBoundary: (endTime: TimeInterval, reason: PlaybackTransitionReason)?
     private var audioSessionNotificationTokens: [NSObjectProtocol] = []
     private var accessedURL: URL?
     private var isAccessingSecurityScope = false
@@ -63,6 +88,9 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
     private var scheduleID = UUID()
     private var equalizerSettings = EqualizerSettings.flat
     private var isSpectrumTapInstalled = false
+    private lazy var playbackTransitionService = PlaybackTransitionService { [weak self] volume in
+        self?.playerNode.volume = volume
+    }
 
     init(fileImportService: FileImportServicing? = nil) {
         self.fileImportService = fileImportService ?? FileImportService()
@@ -75,12 +103,32 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
 
     isolated deinit {
         playbackTimer?.invalidate()
+        scheduledFadeOutTask?.cancel()
         if isSpectrumTapInstalled { engine.mainMixerNode.removeTap(onBus: 0) }
         audioSessionNotificationTokens.forEach(NotificationCenter.default.removeObserver)
         if isAccessingSecurityScope { accessedURL?.stopAccessingSecurityScopedResource() }
     }
 
     func play(_ track: Track) async throws {
+        try await play(track, transition: .initialPlayback)
+    }
+
+    func play(_ track: Track, transition reason: PlaybackTransitionReason) async throws {
+        try await play(track, startingAt: 0, endingAt: nil, transition: reason)
+    }
+
+    func play(
+        _ track: Track,
+        startingAt playbackTime: TimeInterval,
+        endingAt playbackEndTime: TimeInterval?,
+        transition reason: PlaybackTransitionReason
+    ) async throws {
+        cancelScheduledFadeOut(clearBoundary: false)
+        if playerNode.isPlaying {
+            try await playbackTransitionService.fadeOut(for: reason)
+        }
+        try Task.checkCancellation()
+
         stopPlayback(clearTrack: false)
         currentTrack = track
         try beginFileAccess(for: track.fileURL)
@@ -99,16 +147,33 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
             }
             audioFile = file
             try configureGraph(for: file.processingFormat)
-            schedule(from: 0)
+            let seconds = Double(file.length) / file.processingFormat.sampleRate
+            let resolvedDuration = seconds.isFinite ? seconds : max(track.duration, 0)
+            let clampedStartTime = min(max(playbackTime, 0), resolvedDuration)
+            let startFrame = AVAudioFramePosition(clampedStartTime * file.processingFormat.sampleRate)
+            schedule(from: startFrame)
             installSpectrumTapIfNeeded()
             engine.prepare()
             if !engine.isRunning { try engine.start() }
 
-            let seconds = Double(file.length) / file.processingFormat.sampleRate
-            eventHandler?(.ready(duration: seconds.isFinite ? seconds : track.duration))
+            eventHandler?(.ready(duration: resolvedDuration))
+            eventHandler?(.timeChanged(clampedStartTime))
+            if let playbackEndTime {
+                fadeOutBoundary = (
+                    min(max(playbackEndTime, clampedStartTime), resolvedDuration),
+                    .highlightAutomatic
+                )
+            } else {
+                fadeOutBoundary = (resolvedDuration, .automaticTrackChange)
+            }
+            playbackTransitionService.prepareFadeIn(for: reason)
             playerNode.play()
             startPlaybackTimer()
+            rescheduleFadeOut()
             eventHandler?(.playingChanged(true))
+            try await playbackTransitionService.fadeIn(for: reason)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             stopPlayback(clearTrack: false)
             throw error
@@ -117,6 +182,8 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
 
     func pause() {
         guard playerNode.isPlaying else { return }
+        cancelScheduledFadeOut(clearBoundary: false)
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
         pausedFrame = currentFrame()
         playerNode.pause()
         spectrumHandler?(Self.silentSpectrum)
@@ -131,12 +198,62 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
             eventHandler?(.timeChanged(0))
         }
         if !engine.isRunning { try engine.start() }
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
         playerNode.play()
         startPlaybackTimer()
+        rescheduleFadeOut()
         eventHandler?(.playingChanged(true))
     }
 
     func seek(to time: TimeInterval) {
+        cancelScheduledFadeOut(clearBoundary: false)
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
+        seekImmediately(to: time)
+        rescheduleFadeOut()
+    }
+
+    func seek(to time: TimeInterval, transition reason: PlaybackTransitionReason) async throws {
+        try await seek(to: time, endingAt: nil, transition: reason)
+    }
+
+    func seek(
+        to time: TimeInterval,
+        endingAt playbackEndTime: TimeInterval?,
+        transition reason: PlaybackTransitionReason
+    ) async throws {
+        guard audioFile != nil else { return }
+        cancelScheduledFadeOut(clearBoundary: false)
+        let wasPlaying = playerNode.isPlaying
+        if wasPlaying {
+            try await playbackTransitionService.fadeOut(for: reason)
+        }
+        try Task.checkCancellation()
+
+        if wasPlaying { playbackTransitionService.prepareFadeIn(for: reason) }
+        seekImmediately(to: time)
+        if let playbackEndTime, let audioFile {
+            let duration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
+            fadeOutBoundary = (min(max(playbackEndTime, time), duration), .highlightAutomatic)
+        }
+        rescheduleFadeOut()
+        if wasPlaying, playerNode.isPlaying {
+            try await playbackTransitionService.fadeIn(for: reason)
+        }
+    }
+
+    func scheduleFadeOut(endingAt playbackTime: TimeInterval, reason: PlaybackTransitionReason) {
+        guard playbackTime.isFinite else { return }
+        fadeOutBoundary = (max(playbackTime, 0), reason)
+        rescheduleFadeOut()
+    }
+
+    func applyPlaybackTransition(_ settings: PlaybackTransitionSettings) {
+        cancelScheduledFadeOut(clearBoundary: false)
+        playbackTransitionService.apply(settings)
+        rescheduleFadeOut()
+    }
+
+    private func seekImmediately(to time: TimeInterval) {
         guard let audioFile else { return }
         let wasPlaying = playerNode.isPlaying
         let duration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
@@ -193,6 +310,8 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
 
     private func stopPlayback(clearTrack: Bool) {
         scheduleID = UUID()
+        cancelScheduledFadeOut(clearBoundary: true)
+        playbackTransitionService.cancelActiveRamp(resetVolume: true)
         playerNode.stop()
         engine.stop()
         playbackTimer?.invalidate()
@@ -204,6 +323,38 @@ final class AudioPlayerService: AudioPlayerServicing, EqualizerControlling {
         spectrumHandler?(Self.silentSpectrum)
         if clearTrack { currentTrack = nil }
         endFileAccess()
+    }
+
+    private func cancelScheduledFadeOut(clearBoundary: Bool) {
+        scheduledFadeOutTask?.cancel()
+        scheduledFadeOutTask = nil
+        if clearBoundary { fadeOutBoundary = nil }
+    }
+
+    private func rescheduleFadeOut() {
+        scheduledFadeOutTask?.cancel()
+        scheduledFadeOutTask = nil
+        guard playerNode.isPlaying,
+              let audioFile,
+              let fadeOutBoundary else { return }
+
+        let fadeDuration = playbackTransitionService.settings.fadeOutDuration(for: fadeOutBoundary.reason)
+        guard fadeDuration > 0 else { return }
+
+        let currentTime = Double(currentFrame()) / audioFile.processingFormat.sampleRate
+        let delay = max(fadeOutBoundary.endTime - currentTime - fadeDuration, 0)
+        let activeScheduleID = scheduleID
+        scheduledFadeOutTask = Task { @MainActor [weak self] in
+            do {
+                if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+                guard let self,
+                      self.scheduleID == activeScheduleID,
+                      self.playerNode.isPlaying else { return }
+                try await self.playbackTransitionService.fadeOut(for: fadeOutBoundary.reason)
+            } catch {
+                // A new playback action or settings change superseded this transition.
+            }
+        }
     }
 
     private func configureEqualizerBands() {

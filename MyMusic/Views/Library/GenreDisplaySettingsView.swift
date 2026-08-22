@@ -3,6 +3,7 @@ import SwiftUI
 struct GenreDisplaySettingsView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @State private var presetToDelete: GenreDisplayPreset?
+    @State private var appliedSetName: String?
 
     var body: some View {
         List {
@@ -20,6 +21,30 @@ struct GenreDisplaySettingsView: View {
                 Text("現在の設定")
             } footer: {
                 Text("表示しないジャンルの楽曲も削除されず、いつでも元に戻せます。")
+            }
+
+            Section {
+                Button {
+                    libraryStore.showAllGenres()
+                    appliedSetName = "全曲表示"
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: libraryStore.areAllGenresEnabled ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(libraryStore.areAllGenresEnabled ? Color.accentColor : .secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("全曲表示")
+                                .foregroundStyle(.primary)
+                            Text("すべてのジャンルを表示")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(libraryStore.areAllGenresEnabled ? "選択中" : "未選択")
             }
 
             Section("プリセット") {
@@ -43,6 +68,13 @@ struct GenreDisplaySettingsView: View {
         }
         .navigationTitle("ジャンルごとの表示")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("設定しました", isPresented: appliedSetIsPresented) {
+            Button("OK", role: .cancel) { appliedSetName = nil }
+        } message: {
+            if let appliedSetName {
+                Text("「\(appliedSetName)」を設定しました。")
+            }
+        }
         .confirmationDialog(
             "プリセットを削除しますか？",
             isPresented: Binding(
@@ -63,10 +95,18 @@ struct GenreDisplaySettingsView: View {
         libraryStore.availableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
     }
 
+    private var appliedSetIsPresented: Binding<Bool> {
+        Binding(
+            get: { appliedSetName != nil },
+            set: { if !$0 { appliedSetName = nil } }
+        )
+    }
+
     private func presetRow(_ preset: GenreDisplayPreset) -> some View {
         HStack(spacing: 12) {
             Button {
                 libraryStore.applyGenreDisplayPreset(preset)
+                appliedSetName = preset.name
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: libraryStore.isGenreDisplayPresetActive(preset) ? "checkmark.circle.fill" : "circle")

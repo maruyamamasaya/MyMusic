@@ -5,6 +5,12 @@ struct SettingsView: View {
         List {
             Section("オーディオ") {
                 NavigationLink {
+                    PlaybackTransitionSettingsView()
+                } label: {
+                    Label("再生トランジション", systemImage: "waveform.path")
+                }
+
+                NavigationLink {
                     EqualizerSettingsView()
                 } label: {
                     Label("イコライザ", systemImage: "slider.vertical.3")

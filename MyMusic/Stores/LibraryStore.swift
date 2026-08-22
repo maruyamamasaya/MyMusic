@@ -134,6 +134,12 @@ final class LibraryStore {
         saveDisabledGenres()
         applyGenreFilter()
     }
+    func showAllGenres() {
+        setEnabledGenres(Set(availableGenreOptions.map(\.id)))
+    }
+    var areAllGenresEnabled: Bool {
+        availableGenreOptions.allSatisfy { isGenreEnabled($0.id) }
+    }
     func saveGenreDisplayPreset(named name: String) {
         let enabledGenreNames = Set(availableGenreOptions.map(\.id).filter(isGenreEnabled))
         saveGenreDisplayPreset(named: name, enabledGenreNames: enabledGenreNames)
@@ -176,7 +182,10 @@ final class LibraryStore {
         saveGenreDisplayPresets()
     }
     func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
-        Set(availableGenreOptions.map(\.id).filter(isGenreEnabled)) == enabledGenreKeys(for: preset)
+        let availableKeys = Set(availableGenreOptions.map(\.id))
+        let currentEnabledKeys = availableKeys.filter(isGenreEnabled)
+        let presetEnabledKeys = enabledGenreKeys(for: preset).intersection(availableKeys)
+        return currentEnabledKeys == presetEnabledKeys
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for artist: Artist) -> [Track] {

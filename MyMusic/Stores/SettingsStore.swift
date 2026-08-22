@@ -6,19 +6,26 @@ import Observation
 final class SettingsStore {
     enum Appearance { case system, light, dark }
     var appearance: Appearance = .system
-    var crossfadeEnabled = false
     var volumeNormalizationEnabled = false
     var gaplessPlaybackEnabled = true
 
     private(set) var equalizer: EqualizerSettings
     private(set) var customEqualizerPresets: [EqualizerPreset]
+    private(set) var playbackTransition: PlaybackTransitionSettings
     @ObservationIgnored private weak var equalizerController: EqualizerControlling?
+    @ObservationIgnored private weak var playbackTransitionController: PlaybackTransitionControlling?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let equalizerKey = "equalizerSettings"
     @ObservationIgnored private let customPresetsKey = "customEqualizerPresets"
+    @ObservationIgnored private let playbackTransitionKey = "playbackTransitionSettings"
 
-    init(equalizerController: EqualizerControlling? = nil, defaults: UserDefaults = .standard) {
+    init(
+        equalizerController: EqualizerControlling? = nil,
+        playbackTransitionController: PlaybackTransitionControlling? = nil,
+        defaults: UserDefaults = .standard
+    ) {
         self.equalizerController = equalizerController
+        self.playbackTransitionController = playbackTransitionController
         self.defaults = defaults
         if let data = defaults.data(forKey: equalizerKey),
            var saved = try? JSONDecoder().decode(EqualizerSettings.self, from: data) {
@@ -33,7 +40,15 @@ final class SettingsStore {
         } else {
             customEqualizerPresets = []
         }
+        if let data = defaults.data(forKey: playbackTransitionKey),
+           var saved = try? JSONDecoder().decode(PlaybackTransitionSettings.self, from: data) {
+            saved.normalize()
+            playbackTransition = saved
+        } else {
+            playbackTransition = .preservingExistingPlayback
+        }
         equalizerController?.applyEqualizer(equalizer)
+        playbackTransitionController?.applyPlaybackTransition(playbackTransition)
     }
 
     func setEqualizerEnabled(_ isEnabled: Bool) {
@@ -90,10 +105,50 @@ final class SettingsStore {
         saveCustomPresets()
     }
 
+    func setFadeInEnabled(_ isEnabled: Bool) {
+        playbackTransition.fadeInEnabled = isEnabled
+        if isEnabled { playbackTransition.type = .fade }
+        applyAndSavePlaybackTransition()
+    }
+
+    func setFadeInDuration(_ duration: TimeInterval) {
+        playbackTransition.fadeInDuration = duration
+        applyAndSavePlaybackTransition()
+    }
+
+    func setFadeOutEnabled(_ isEnabled: Bool) {
+        playbackTransition.fadeOutEnabled = isEnabled
+        if isEnabled { playbackTransition.type = .fade }
+        applyAndSavePlaybackTransition()
+    }
+
+    func setFadeOutDuration(_ duration: TimeInterval) {
+        playbackTransition.fadeOutDuration = duration
+        applyAndSavePlaybackTransition()
+    }
+
+    func setPlaybackTransitionType(_ type: PlaybackTransitionType) {
+        playbackTransition.type = type
+        applyAndSavePlaybackTransition()
+    }
+
+    func setManualTrackTransitionPolicy(_ policy: ManualTrackTransitionPolicy) {
+        playbackTransition.manualTrackTransitionPolicy = policy
+        applyAndSavePlaybackTransition()
+    }
+
     private func applyAndSaveEqualizer() {
         equalizerController?.applyEqualizer(equalizer)
         if let data = try? JSONEncoder().encode(equalizer) {
             defaults.set(data, forKey: equalizerKey)
+        }
+    }
+
+    private func applyAndSavePlaybackTransition() {
+        playbackTransition.normalize()
+        playbackTransitionController?.applyPlaybackTransition(playbackTransition)
+        if let data = try? JSONEncoder().encode(playbackTransition) {
+            defaults.set(data, forKey: playbackTransitionKey)
         }
     }
 
