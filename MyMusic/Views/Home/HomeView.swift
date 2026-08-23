@@ -100,12 +100,9 @@ struct HomeView: View {
     }
 
     private var homeWorkPlaylists: [Playlist] {
-        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
-        let playablePlaylists = playlistStore.playlists(of: .work).filter { playlist in
-            playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
-                && !playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).isEmpty
-        }
-        let playlistsByID = Dictionary(uniqueKeysWithValues: playablePlaylists.map { ($0.id, $0) })
+        let workPlaylists = playlistStore.playlists(of: .work)
+        let playlistsByID = Dictionary(uniqueKeysWithValues: workPlaylists.map { ($0.id, $0) })
+        guard !randomizedPlaylistIDs.isEmpty else { return workPlaylists }
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 
