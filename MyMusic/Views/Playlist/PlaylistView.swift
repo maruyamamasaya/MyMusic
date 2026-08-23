@@ -1,15 +1,6 @@
 import SwiftUI
 
 struct PlaylistView: View {
-    @Environment(PlaylistStore.self) private var playlistStore
-    @State private var isCreatingPlaylist = false
-    @State private var newPlaylistName = ""
-    @State private var playlistToRename: Playlist?
-    @State private var renameText = ""
-    @State private var playlistToDelete: Playlist?
-    @State private var isSelecting = false
-    @State private var selection: Set<Playlist.ID> = []
-    @State private var confirmsBulkDelete = false
     private let createsNavigationStack: Bool
 
     init(createsNavigationStack: Bool = true) {
@@ -26,7 +17,54 @@ struct PlaylistView: View {
     }
 
     private var content: some View {
+        PlaylistManagementView(kind: .regular, title: "プレイリスト", showsLibraryLinks: true)
+    }
+}
+
+struct WorkPlaylistView: View {
+    private let createsNavigationStack: Bool
+
+    init(createsNavigationStack: Bool = true) {
+        self.createsNavigationStack = createsNavigationStack
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if createsNavigationStack {
+            NavigationStack { content }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        PlaylistManagementView(kind: .work, title: "作業用プレイリスト", showsLibraryLinks: false)
+    }
+}
+
+private struct PlaylistManagementView: View {
+    @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(LibraryStore.self) private var libraryStore
+    @State private var isCreatingPlaylist = false
+    @State private var newPlaylistName = ""
+    @State private var playlistToRename: Playlist?
+    @State private var renameText = ""
+    @State private var playlistToDelete: Playlist?
+    @State private var isSelecting = false
+    @State private var selection: Set<Playlist.ID> = []
+    @State private var confirmsBulkDelete = false
+
+    let kind: PlaylistKind
+    let title: String
+    let showsLibraryLinks: Bool
+
+    private var playlists: [Playlist] {
+        playlistStore.playlists(of: kind)
+    }
+
+    var body: some View {
         List {
+            if showsLibraryLinks {
                 Section {
                     NavigationLink {
                         FavoritesView()
@@ -43,98 +81,140 @@ struct PlaylistView: View {
                     } label: {
                         Label("お気に入りのアーティスト", systemImage: "person.2.fill")
                     }
+                    NavigationLink {
+                        WorkPlaylistView(createsNavigationStack: false)
+                    } label: {
+                        Label("作業用プレイリスト", systemImage: "timer")
+                    }
                 }
+            }
 
-                Section("プレイリスト") {
-                    if playlistStore.playlists.isEmpty {
-                        ContentUnavailableView(
-                            "プレイリストはありません",
-                            systemImage: "music.note.list",
-                            description: Text("＋ボタンからプレイリストを作成できます。")
-                        )
-                    } else {
-                        ForEach(playlistStore.playlists) { playlist in
-                            playlistRow(playlist)
+            Section(kind == .work ? "作業用プレイリスト" : "プレイリスト") {
+                if playlists.isEmpty {
+                    ContentUnavailableView(
+                        kind == .work ? "作業用プレイリストはありません" : "プレイリストはありません",
+                        systemImage: kind == .work ? "timer" : "music.note.list",
+                        description: Text(emptyDescription)
+                    )
+                } else {
+                    ForEach(playlists) { playlist in
+                        playlistRow(playlist)
                             .contextMenu {
                                 Button("名前を変更", systemImage: "pencil") { presentRename(playlist) }
-                                Button("削除", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
+                                Button("削除", systemImage: "trash", role: .destructive) {
+                                    playlistToDelete = playlist
+                                }
                             }
                             .swipeActions {
-                                Button("削除", systemImage: "trash", role: .destructive) { playlistToDelete = playlist }
+                                Button("削除", systemImage: "trash", role: .destructive) {
+                                    playlistToDelete = playlist
+                                }
                             }
-                        }
                     }
                 }
-                if isSelecting {
-                    Section {
-                        Button("選択した\(selection.count)件を削除", systemImage: "trash", role: .destructive) {
-                            confirmsBulkDelete = true
-                        }.disabled(selection.isEmpty)
+            }
+
+            if isSelecting {
+                Section {
+                    Button("選択した\(selection.count)件を削除", systemImage: "trash", role: .destructive) {
+                        confirmsBulkDelete = true
                     }
+                    .disabled(selection.isEmpty)
                 }
+            }
         }
-            .navigationTitle("プレイリスト")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if isSelecting { Button("キャンセル") { stopSelecting() } }
+        .navigationTitle(title)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                if isSelecting {
+                    Button("キャンセル") { stopSelecting() }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    if isSelecting {
-                        Button("すべて選択") { selection = Set(playlistStore.playlists.map(\.id)) }
-                    } else {
-                        Menu {
-                            Button("新規プレイリスト", systemImage: "plus") { presentCreatePlaylist() }
-                            Button("プレイリストを選択", systemImage: "checkmark.circle") { isSelecting = true }
-                        } label: { Label("プレイリスト操作", systemImage: "ellipsis.circle") }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                if isSelecting {
+                    Button("すべて選択") { selection = Set(playlists.map(\.id)) }
+                } else {
+                    Menu {
+                        Button(newPlaylistLabel, systemImage: "plus") { presentCreatePlaylist() }
+                        Button("プレイリストを選択", systemImage: "checkmark.circle") {
+                            isSelecting = true
+                        }
+                        .disabled(playlists.isEmpty)
+                    } label: {
+                        Label("プレイリスト操作", systemImage: "ellipsis.circle")
                     }
                 }
             }
-            .confirmationDialog("選択したプレイリストを削除しますか？", isPresented: $confirmsBulkDelete, titleVisibility: .visible) {
-                Button("\(selection.count)件を削除", role: .destructive) {
-                    playlistStore.deletePlaylists(ids: selection); stopSelecting()
+        }
+        .confirmationDialog(
+            "選択したプレイリストを削除しますか？",
+            isPresented: $confirmsBulkDelete,
+            titleVisibility: .visible
+        ) {
+            Button("\(selection.count)件を削除", role: .destructive) {
+                playlistStore.deletePlaylists(ids: selection)
+                stopSelecting()
+            }
+        } message: {
+            Text("音楽ファイルやライブラリの曲は削除されません。")
+        }
+        .navigationDestination(for: Playlist.ID.self) { playlistID in
+            PlaylistDetailView(playlistID: playlistID)
+        }
+        .alert(newPlaylistLabel, isPresented: $isCreatingPlaylist) {
+            TextField("プレイリスト名", text: $newPlaylistName)
+            Button("キャンセル", role: .cancel) {}
+            Button("作成") { playlistStore.createPlaylist(named: newPlaylistName, kind: kind) }
+                .disabled(trimmed(newPlaylistName).isEmpty)
+        }
+        .alert("プレイリスト名を変更", isPresented: renameIsPresented) {
+            TextField("プレイリスト名", text: $renameText)
+            Button("キャンセル", role: .cancel) { playlistToRename = nil }
+            Button("保存") {
+                if let playlistToRename {
+                    playlistStore.renamePlaylist(id: playlistToRename.id, to: renameText)
                 }
-            } message: { Text("音楽ファイルやライブラリの曲は削除されません。") }
-            .navigationDestination(for: Playlist.ID.self) { playlistID in
-                PlaylistDetailView(playlistID: playlistID)
+                playlistToRename = nil
             }
-            .alert("新規プレイリスト", isPresented: $isCreatingPlaylist) {
-                TextField("プレイリスト名", text: $newPlaylistName)
-                Button("キャンセル", role: .cancel) {}
-                Button("作成") { playlistStore.createPlaylist(named: newPlaylistName) }
-                    .disabled(trimmed(newPlaylistName).isEmpty)
-            }
-            .alert("プレイリスト名を変更", isPresented: renameIsPresented) {
-                TextField("プレイリスト名", text: $renameText)
-                Button("キャンセル", role: .cancel) { playlistToRename = nil }
-                Button("保存") {
-                    if let playlistToRename { playlistStore.renamePlaylist(id: playlistToRename.id, to: renameText) }
-                    playlistToRename = nil
+            .disabled(trimmed(renameText).isEmpty)
+        }
+        .confirmationDialog(
+            "「\(playlistToDelete?.name ?? "プレイリスト")」を削除しますか？",
+            isPresented: deleteIsPresented,
+            titleVisibility: .visible
+        ) {
+            Button("プレイリストを削除", role: .destructive) {
+                if let playlistToDelete {
+                    playlistStore.deletePlaylist(id: playlistToDelete.id)
                 }
-                .disabled(trimmed(renameText).isEmpty)
+                playlistToDelete = nil
             }
-            .confirmationDialog(
-                "「\(playlistToDelete?.name ?? "プレイリスト")」を削除しますか？",
-                isPresented: deleteIsPresented,
-                titleVisibility: .visible
-            ) {
-                Button("プレイリストを削除", role: .destructive) {
-                    if let playlistToDelete { playlistStore.deletePlaylist(id: playlistToDelete.id) }
-                    playlistToDelete = nil
-                }
-                Button("キャンセル", role: .cancel) { playlistToDelete = nil }
-            } message: {
-                Text("プレイリストだけを削除します。音楽ファイルは削除されません。")
-            }
-            .alert("プレイリストのエラー", isPresented: errorIsPresented) {
-                Button("閉じる") { playlistStore.dismissError() }
-            } message: {
-                Text(playlistStore.errorMessage ?? "不明なエラーが発生しました。")
-            }
-            .task { await playlistStore.loadIfNeeded() }
-            .onDisappear {
-                if isSelecting { stopSelecting() }
-                confirmsBulkDelete = false
-            }
+            Button("キャンセル", role: .cancel) { playlistToDelete = nil }
+        } message: {
+            Text("プレイリストだけを削除します。音楽ファイルは削除されません。")
+        }
+        .alert("プレイリストのエラー", isPresented: errorIsPresented) {
+            Button("閉じる") { playlistStore.dismissError() }
+        } message: {
+            Text(playlistStore.errorMessage ?? "不明なエラーが発生しました。")
+        }
+        .task { await playlistStore.loadIfNeeded() }
+        .onDisappear {
+            if isSelecting { stopSelecting() }
+            confirmsBulkDelete = false
+        }
+    }
+
+    private var emptyDescription: String {
+        if kind == .work {
+            "＋ボタンから作成し、20分以上またはジャンルが作業用BGMの曲を追加できます。"
+        } else {
+            "＋ボタンからプレイリストを作成できます。"
+        }
+    }
+
+    private var newPlaylistLabel: String {
+        kind == .work ? "新規作業用プレイリスト" : "新規プレイリスト"
     }
 
     private var renameIsPresented: Binding<Bool> {
@@ -146,7 +226,10 @@ struct PlaylistView: View {
     }
 
     private var errorIsPresented: Binding<Bool> {
-        Binding(get: { playlistStore.errorMessage != nil }, set: { if !$0 { playlistStore.dismissError() } })
+        Binding(
+            get: { playlistStore.errorMessage != nil },
+            set: { if !$0 { playlistStore.dismissError() } }
+        )
     }
 
     private func presentCreatePlaylist() {
@@ -154,26 +237,43 @@ struct PlaylistView: View {
         isCreatingPlaylist = true
     }
 
-    @ViewBuilder private func playlistRow(_ playlist: Playlist) -> some View {
+    @ViewBuilder
+    private func playlistRow(_ playlist: Playlist) -> some View {
         if isSelecting {
             Button {
-                if !selection.insert(playlist.id).inserted { selection.remove(playlist.id) }
-            } label: { rowLabel(playlist, selected: selection.contains(playlist.id)) }
+                if !selection.insert(playlist.id).inserted {
+                    selection.remove(playlist.id)
+                }
+            } label: {
+                rowLabel(playlist, selected: selection.contains(playlist.id))
+            }
         } else {
-            NavigationLink(value: playlist.id) { rowLabel(playlist, selected: nil) }
+            NavigationLink(value: playlist.id) {
+                rowLabel(playlist, selected: nil)
+            }
         }
     }
 
     private func rowLabel(_ playlist: Playlist, selected: Bool?) -> some View {
         HStack {
-            if let selected { Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? Color.accentColor : .secondary) }
-            Label(playlist.name, systemImage: "music.note.list").lineLimit(1)
+            if let selected {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+            }
+            Label(playlist.name, systemImage: kind == .work ? "timer" : "music.note.list")
+                .lineLimit(1)
             Spacer()
-            Text("\(playlist.trackIDs.count)曲").font(.caption).foregroundStyle(.secondary)
-        }.foregroundStyle(.primary)
+            Text("\(playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).count)曲")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.primary)
     }
 
-    private func stopSelecting() { isSelecting = false; selection.removeAll() }
+    private func stopSelecting() {
+        isSelecting = false
+        selection.removeAll()
+    }
 
     private func presentRename(_ playlist: Playlist) {
         renameText = playlist.name

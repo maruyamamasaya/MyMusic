@@ -25,6 +25,7 @@ struct MusicDataExportService {
         let playlistID: UUID
         let createdAt: Date
         let updatedAt: Date
+        let kind: PlaylistKind
         let tracks: [TrackDocument]
     }
 
@@ -52,7 +53,7 @@ struct MusicDataExportService {
     }
 
     func playlistMarkdown(_ playlist: Playlist, tracks: [Track]) -> MusicExportFile {
-        var lines = ["# Playlist: \(playlist.name)", "", "- ID: \(playlist.id.uuidString)",
+        var lines = ["# Playlist: \(playlist.name)", "", "- ID: \(playlist.id.uuidString)", "- Kind: \(playlist.kind.rawValue)",
                      "- Created: \(iso(playlist.createdAt))", "- Updated: \(iso(playlist.updatedAt))", "", "## Tracks", ""]
         for (index, track) in tracks.enumerated() {
             lines += ["\(index + 1). \(track.title)", "   - Artist: \(track.artistName)",
@@ -94,7 +95,7 @@ struct MusicDataExportService {
     private func document(for playlist: Playlist, tracks: [Track]) -> PlaylistDocument {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
         return PlaylistDocument(version: 1, name: playlist.name, playlistID: playlist.id,
-            createdAt: playlist.createdAt, updatedAt: playlist.updatedAt,
+            createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind,
             tracks: playlist.trackIDs.compactMap { byID[$0] }.map { trackDocument($0, history: nil) })
     }
 

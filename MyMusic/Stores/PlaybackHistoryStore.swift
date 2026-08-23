@@ -124,7 +124,7 @@ final class PlaybackHistoryStore {
     }
 
     func isEligibleForRegularShuffle(_ track: Track) -> Bool {
-        !track.isLongForm && !isHiddenFromShuffle(trackID: track.id)
+        !track.isEligibleForWorkPlayback && !isHiddenFromShuffle(trackID: track.id)
     }
 
     /// Returns every track once, ordered by a preference-weighted random draw.
@@ -134,10 +134,10 @@ final class PlaybackHistoryStore {
         weightedShuffle(tracks.filter(isEligibleForRegularShuffle))
     }
 
-    /// Long-form tracks have their own playback entry point and stay out of
-    /// the app's regular shuffle flows.
+    /// Work-playback tracks have their own playback entry point and stay out
+    /// of the app's regular shuffle flows.
     func workPlaybackTracks(from tracks: [Track]) -> [Track] {
-        weightedShuffle(tracks.filter(\.isLongForm))
+        weightedShuffle(tracks.filter(\.isEligibleForWorkPlayback))
     }
 
     private func weightedShuffle(_ tracks: [Track]) -> [Track] {

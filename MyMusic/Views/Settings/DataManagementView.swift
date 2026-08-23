@@ -59,8 +59,15 @@ struct DataManagementView: View {
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             let parsed = try MusicDataImportService().parse(data: Data(contentsOf: url), fileExtension: url.pathExtension, libraryTracks: libraryStore.tracks)
-            for draft in parsed.playlists { playlistStore.importPlaylist(named: draft.name, trackIDs: draft.trackIDs) }
-            resultMessage = "\(parsed.playlists.count)件のプレイリスト、\(parsed.importedTrackCount)曲を読み込みました。\n見つからない曲: \(parsed.missingTrackCount)曲"
+            let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
+            for draft in parsed.playlists {
+                playlistStore.importPlaylist(
+                    named: draft.name,
+                    tracks: draft.trackIDs.compactMap { tracksByID[$0] },
+                    kind: draft.kind
+                )
+            }
+            resultMessage = "\(parsed.playlists.count)件のプレイリスト、\(parsed.importedTrackCount)曲を読み込みました。\n見つからない曲: \(parsed.missingTrackCount)曲\n種別が異なる曲: \(parsed.incompatibleTrackCount)曲"
         } catch let error as CocoaError where error.code == .userCancelled { }
         catch { errorMessage = error.localizedDescription }
     }

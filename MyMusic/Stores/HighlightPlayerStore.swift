@@ -45,7 +45,9 @@ final class HighlightPlayerStore {
     }
 
     func updateLibrary(_ tracks: [Track]) {
-        let playableTracks = tracks.filter { $0.duration.isFinite && $0.duration > 1 && !$0.isLongForm }
+        let playableTracks = tracks.filter {
+            $0.duration.isFinite && $0.duration > 1 && !$0.isEligibleForWorkPlayback
+        }
         let previousIDs = Set(sourceTracks.map(\.id))
         sourceTracks = playableTracks
         availableGenres = Self.genreNames(in: playableTracks).sorted {

@@ -6,10 +6,15 @@ struct WorkSizeNowPlayingView: View {
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isQueuePresented = false
     @State private var isEqualizerPresented = false
     @State private var isAddToPlaylistPresented = false
     @State private var showsTrackNavigation = false
+    @State private var isScreenDimmed = false
+    @State private var dimmingActivityID = UUID()
+
+    private let screenDimmingDelay: Duration = .seconds(5)
 
     var body: some View {
         NavigationStack {
@@ -48,6 +53,61 @@ struct WorkSizeNowPlayingView: View {
                 showsTrackNavigation = false
             }
         }
+        .overlay {
+            if isScreenDimmed {
+                screenDimmingOverlay
+                    .transition(.opacity)
+            }
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in registerUserActivity() }
+        )
+        .task(id: dimmingActivityID) {
+            guard scenePhase == .active else { return }
+            do {
+                try await Task.sleep(for: screenDimmingDelay)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.8)) {
+                isScreenDimmed = true
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                registerUserActivity()
+            } else {
+                isScreenDimmed = false
+                dimmingActivityID = UUID()
+            }
+        }
+    }
+
+    private var screenDimmingOverlay: some View {
+        Color.black
+            .opacity(0.94)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in registerUserActivity() }
+            )
+            .accessibilityElement()
+            .accessibilityLabel("画面を表示")
+            .accessibilityHint("操作すると作業用再生画面の明るさが戻ります")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { registerUserActivity() }
+    }
+
+    private func registerUserActivity() {
+        if isScreenDimmed {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isScreenDimmed = false
+            }
+        }
+        dimmingActivityID = UUID()
     }
 
     private var nowPlayingContent: some View {

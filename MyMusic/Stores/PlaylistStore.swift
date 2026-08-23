@@ -26,11 +26,18 @@ final class PlaylistStore {
     }
 
     @discardableResult
-    func createPlaylist(named name: String) -> Playlist.ID? {
+    func createPlaylist(named name: String, kind: PlaylistKind = .regular) -> Playlist.ID? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
         let now = Date()
-        let playlist = Playlist(id: UUID(), name: trimmedName, trackIDs: [], createdAt: now, updatedAt: now)
+        let playlist = Playlist(
+            id: UUID(),
+            name: trimmedName,
+            trackIDs: [],
+            createdAt: now,
+            updatedAt: now,
+            kind: kind
+        )
         playlists.insert(playlist, at: 0)
         persist()
         return playlist.id
@@ -55,7 +62,7 @@ final class PlaylistStore {
 
     func addTrack(_ track: Track, to playlistID: Playlist.ID) {
         update(playlistID) { playlist in
-            guard !playlist.trackIDs.contains(track.id) else { return }
+            guard playlist.kind.accepts(track), !playlist.trackIDs.contains(track.id) else { return }
             playlist.trackIDs.append(track.id)
         }
     }
@@ -71,7 +78,10 @@ final class PlaylistStore {
     func addTracks(_ tracks: [Track], to playlistID: Playlist.ID) {
         update(playlistID) { playlist in
             var existing = Set(playlist.trackIDs)
-            playlist.trackIDs.append(contentsOf: tracks.map(\.id).filter { existing.insert($0).inserted })
+            playlist.trackIDs.append(contentsOf: tracks
+                .filter(playlist.kind.accepts)
+                .map(\.id)
+                .filter { existing.insert($0).inserted })
         }
     }
 
@@ -84,36 +94,60 @@ final class PlaylistStore {
         update(playlistID) { $0.trackIDs.removeAll { trackIDs.contains($0) } }
     }
 
-    func moveTracks(in playlistID: Playlist.ID, from source: IndexSet, to destination: Int) {
+    func moveTracks(
+        in playlistID: Playlist.ID,
+        orderedTrackIDs: [Track.ID],
+        from source: IndexSet,
+        to destination: Int
+    ) {
         update(playlistID) { playlist in
-            let moved = source.sorted().map { playlist.trackIDs[$0] }
-            for index in source.sorted(by: >) { playlist.trackIDs.remove(at: index) }
+            guard source.allSatisfy(orderedTrackIDs.indices.contains) else { return }
+            var reorderedTrackIDs = orderedTrackIDs
+            let moved = source.sorted().map { reorderedTrackIDs[$0] }
+            for index in source.sorted(by: >) { reorderedTrackIDs.remove(at: index) }
             let adjustedDestination = destination - source.filter { $0 < destination }.count
-            playlist.trackIDs.insert(contentsOf: moved, at: min(adjustedDestination, playlist.trackIDs.count))
+            reorderedTrackIDs.insert(
+                contentsOf: moved,
+                at: min(adjustedDestination, reorderedTrackIDs.count)
+            )
+
+            let visibleTrackIDs = Set(orderedTrackIDs)
+            var reorderedIterator = reorderedTrackIDs.makeIterator()
+            for index in playlist.trackIDs.indices where visibleTrackIDs.contains(playlist.trackIDs[index]) {
+                guard let trackID = reorderedIterator.next() else { break }
+                playlist.trackIDs[index] = trackID
+            }
         }
     }
 
     @discardableResult
     func importPlaylist(
         named name: String,
-        trackIDs: [Track.ID],
+        tracks: [Track],
+        kind: PlaylistKind = .regular,
         searchDefinition: PlaylistSearchDefinition? = nil
     ) -> Playlist.ID? {
-        guard let id = createPlaylist(named: name) else { return nil }
+        guard let id = createPlaylist(named: name, kind: kind) else { return nil }
         var seen: Set<Track.ID> = []
         update(id) {
-            $0.trackIDs = trackIDs.filter { seen.insert($0).inserted }
+            $0.trackIDs = tracks
+                .filter(kind.accepts)
+                .map(\.id)
+                .filter { seen.insert($0).inserted }
             $0.searchDefinition = searchDefinition
         }
         return id
     }
 
     @discardableResult
-    func synchronizeSearchPlaylist(id: Playlist.ID, with trackIDs: [Track.ID]) -> PlaylistSyncResult? {
+    func synchronizeSearchPlaylist(id: Playlist.ID, with tracks: [Track]) -> PlaylistSyncResult? {
         guard let playlist = playlist(id: id), playlist.searchDefinition != nil else { return nil }
         let previousIDs = Set(playlist.trackIDs)
         var seen: Set<Track.ID> = []
-        let uniqueTrackIDs = trackIDs.filter { seen.insert($0).inserted }
+        let uniqueTrackIDs = tracks
+            .filter(playlist.kind.accepts)
+            .map(\.id)
+            .filter { seen.insert($0).inserted }
         let updatedIDs = Set(uniqueTrackIDs)
         update(id) { $0.trackIDs = uniqueTrackIDs }
         return PlaylistSyncResult(
@@ -127,6 +161,14 @@ final class PlaylistStore {
         playlists.first { $0.id == id }
     }
 
+    func playlists(of kind: PlaylistKind) -> [Playlist] {
+        playlists.filter { $0.kind == kind }
+    }
+
+    func playlists(compatibleWith track: Track) -> [Playlist] {
+        playlists(of: track.isEligibleForWorkPlayback ? .work : .regular)
+    }
+
     func contains(_ trackID: Track.ID, in playlistID: Playlist.ID) -> Bool {
         playlist(id: playlistID)?.trackIDs.contains(trackID) == true
     }
@@ -134,7 +176,9 @@ final class PlaylistStore {
     func tracks(for playlistID: Playlist.ID, in libraryTracks: [Track]) -> [Track] {
         guard let playlist = playlist(id: playlistID) else { return [] }
         let tracksByID = Dictionary(uniqueKeysWithValues: libraryTracks.map { ($0.id, $0) })
-        return playlist.trackIDs.compactMap { tracksByID[$0] }
+        return playlist.trackIDs
+            .compactMap { tracksByID[$0] }
+            .filter(playlist.kind.accepts)
     }
 
     func dismissError() { errorMessage = nil }

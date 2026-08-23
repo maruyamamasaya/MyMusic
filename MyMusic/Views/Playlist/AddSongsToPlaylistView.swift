@@ -9,11 +9,16 @@ struct AddSongsToPlaylistView: View {
     @State private var selection: Set<Track.ID> = []
     @State private var searchText = ""
 
+    private var playlist: Playlist? {
+        playlistStore.playlist(id: playlistID)
+    }
+
     private var tracks: [Track] {
         libraryStore.tracks.filter {
-            searchText.isEmpty || $0.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.artistName.localizedCaseInsensitiveContains(searchText) ||
-            ($0.albumTitle?.localizedCaseInsensitiveContains(searchText) == true)
+            guard playlist?.kind.accepts($0) == true else { return false }
+            return searchText.isEmpty || $0.title.localizedCaseInsensitiveContains(searchText) ||
+                $0.artistName.localizedCaseInsensitiveContains(searchText) ||
+                ($0.albumTitle?.localizedCaseInsensitiveContains(searchText) == true)
         }
     }
 
@@ -34,7 +39,7 @@ struct AddSongsToPlaylistView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "曲、アーティスト、アルバムを検索")
-            .navigationTitle("曲を追加")
+            .navigationTitle(playlist?.kind == .work ? "作業用の曲を追加" : "曲を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }

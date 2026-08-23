@@ -30,9 +30,16 @@ struct PlaylistDetailView: View {
                     } else {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                             if isEditingPlaylist { selectionRow(track) }
-                            else { PlayableTrackRowView(track: track) { playerStore.playQueue(tracks, startingAt: index) } }
+                            else { PlayableTrackRowView(track: track) { playTrack(at: index) } }
                         }
-                        .onMove { playlistStore.moveTracks(in: playlistID, from: $0, to: $1) }
+                        .onMove {
+                            playlistStore.moveTracks(
+                                in: playlistID,
+                                orderedTrackIDs: tracks.map(\.id),
+                                from: $0,
+                                to: $1
+                            )
+                        }
                     }
                 }
                 if isEditingPlaylist {
@@ -133,9 +140,31 @@ struct PlaylistDetailView: View {
     }
 
     private func play(shuffled: Bool) {
-        guard !tracks.isEmpty else { return }
-        playerStore.setShuffleEnabled(shuffled)
-        playerStore.playQueue(tracks, startingAt: 0)
+        guard let playlist, !tracks.isEmpty else { return }
+        let playbackTracks: [Track]
+        if playlist.kind == .work && shuffled {
+            playbackTracks = playbackHistoryStore.workPlaybackTracks(from: tracks)
+            playerStore.setShuffleEnabled(false)
+        } else {
+            playbackTracks = tracks
+            playerStore.setShuffleEnabled(shuffled)
+        }
+        guard !playbackTracks.isEmpty else { return }
+        playerStore.playQueue(
+            playbackTracks,
+            startingAt: 0,
+            presentationMode: playlist.kind == .work ? .workSize : .standard
+        )
+    }
+
+    private func playTrack(at index: Int) {
+        guard let playlist, tracks.indices.contains(index) else { return }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(
+            tracks,
+            startingAt: index,
+            presentationMode: playlist.kind == .work ? .workSize : .standard
+        )
     }
 
     private var syncResultIsPresented: Binding<Bool> {
@@ -152,7 +181,7 @@ struct PlaylistDetailView: View {
         )
         syncResult = playlistStore.synchronizeSearchPlaylist(
             id: playlistID,
-            with: matchedTracks.map(\.id)
+            with: matchedTracks
         )
     }
 }

@@ -385,7 +385,7 @@ private struct HighlightTrackInformationView: View {
                         historyStore.toggleFavorite(trackID: track.id)
                     }
                     Menu("プレイリストに追加", systemImage: "text.badge.plus") {
-                        ForEach(playlistStore.playlists) { playlist in
+                        ForEach(playlistStore.playlists(compatibleWith: track)) { playlist in
                             Button(playlist.name) { playlistStore.addTrack(track, to: playlist.id) }
                         }
                     }

@@ -7,21 +7,32 @@ struct AddToPlaylistSheet: View {
 
     @State private var isCreatingPlaylist = false
 
+    private var playlistKind: PlaylistKind {
+        track.isEligibleForWorkPlayback ? .work : .regular
+    }
+
+    private var compatiblePlaylists: [Playlist] {
+        playlistStore.playlists(compatibleWith: track)
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Button("新規プレイリスト", systemImage: "plus") {
+                    Button(
+                        playlistKind == .work ? "新規作業用プレイリスト" : "新規プレイリスト",
+                        systemImage: "plus"
+                    ) {
                         isCreatingPlaylist = true
                     }
                 }
 
-                Section("プレイリストを選択") {
-                    if playlistStore.playlists.isEmpty {
+                Section(playlistKind == .work ? "作業用プレイリストを選択" : "プレイリストを選択") {
+                    if compatiblePlaylists.isEmpty {
                         Text("プレイリストはありません")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(playlistStore.playlists) { playlist in
+                        ForEach(compatiblePlaylists) { playlist in
                             let alreadyAdded = playlistStore.contains(track.id, in: playlist.id)
                             Button {
                                 playlistStore.toggleTrack(track, in: playlist.id)
@@ -41,10 +52,10 @@ struct AddToPlaylistSheet: View {
                     }
                 }
             }
-            .navigationTitle("プレイリストに追加")
+            .navigationTitle(playlistKind == .work ? "作業用プレイリストに追加" : "プレイリストに追加")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $isCreatingPlaylist) {
-                CreatePlaylistForTrackView(track: track)
+                CreatePlaylistForTrackView(track: track, kind: playlistKind)
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -62,6 +73,7 @@ private struct CreatePlaylistForTrackView: View {
     @FocusState private var isNameFocused: Bool
 
     let track: Track
+    let kind: PlaylistKind
 
     var body: some View {
         Form {
@@ -73,7 +85,7 @@ private struct CreatePlaylistForTrackView: View {
                     .onSubmit(createPlaylist)
             }
         }
-        .navigationTitle("新規プレイリスト")
+        .navigationTitle(kind == .work ? "新規作業用プレイリスト" : "新規プレイリスト")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -92,7 +104,7 @@ private struct CreatePlaylistForTrackView: View {
     }
 
     private func createPlaylist() {
-        guard let playlistID = playlistStore.createPlaylist(named: trimmedName) else { return }
+        guard let playlistID = playlistStore.createPlaylist(named: trimmedName, kind: kind) else { return }
         playlistStore.addTrack(track, to: playlistID)
         dismiss()
     }

@@ -161,9 +161,12 @@ struct SearchView: View {
                 TextField("プレイリスト名", text: $playlistName)
                 Button("キャンセル", role: .cancel) {}
                 Button("保存") { saveResultsAsPlaylist() }
-                    .disabled(playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || regularPlaylistResults.isEmpty
+                    )
             } message: {
-                Text("現在の検索結果 \(results.count)曲を新しいプレイリストに保存します。")
+                Text("通常再生の対象 \(regularPlaylistResults.count)曲を新しいプレイリストに保存します。")
             }
             .alert("保存しました", isPresented: savedPlaylistIsPresented) {
                 Button("閉じる", role: .cancel) { savedPlaylistName = nil }
@@ -201,13 +204,17 @@ struct SearchView: View {
         Binding(get: { savedPlaylistName != nil }, set: { if !$0 { savedPlaylistName = nil } })
     }
 
+    private var regularPlaylistResults: [Track] {
+        results.filter(PlaylistKind.regular.accepts)
+    }
+
     private func saveResultsAsPlaylist() {
         let name = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, !results.isEmpty else { return }
+        guard !name.isEmpty, !regularPlaylistResults.isEmpty else { return }
         let definition = PlaylistSearchDefinition(query: query, filter: filter)
         guard playlistStore.importPlaylist(
             named: name,
-            trackIDs: results.map(\.id),
+            tracks: regularPlaylistResults,
             searchDefinition: definition
         ) != nil else { return }
         savedPlaylistName = name

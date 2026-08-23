@@ -49,7 +49,7 @@ struct HomeCategory: Identifiable, Hashable {
             description: "長尺の音楽を作業のお供に",
             systemImage: "timer",
             items: [
-                HomeCategoryItem(title: "作業用サイズ再生", description: "20分以上の曲をランダムに再生", systemImage: "timer", destination: .workSizePlay)
+                HomeCategoryItem(title: "作業用サイズ再生", description: "20分以上、またはジャンルが作業用BGMの曲を再生", systemImage: "timer", destination: .workSizePlay)
             ]
         ),
         HomeCategory(
@@ -80,6 +80,7 @@ enum HomeDestination: Hashable {
     case discoveryPlay
     case repeatPlay
     case workSizePlay
+    case workPlaylists
     case favorites
     case favoriteAlbums
     case favoriteArtists

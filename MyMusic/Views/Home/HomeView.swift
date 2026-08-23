@@ -13,12 +13,30 @@ struct HomeView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     ForEach(HomeCategory.all) { category in
-                        HomeCarouselSection(
-                            category: category,
-                            artworkIdentifiers: artworkIdentifiers,
-                            instantPlaybackIsAvailable: instantPlaybackIsAvailable,
-                            onInstantPlay: playImmediately
-                        )
+                        if category.id == .playback {
+                            HomeWorkSection(
+                                category: category,
+                                playlists: Array(homeWorkPlaylists.prefix(4)),
+                                showsMore: homeWorkPlaylists.count > 4,
+                                artworkIdentifiers: artworkIdentifiers,
+                                instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                                tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
+                                canPlay: { playlist in
+                                    !playbackHistoryStore.workPlaybackTracks(
+                                        from: playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+                                    ).isEmpty
+                                },
+                                onInstantPlay: playImmediately,
+                                onPlayPlaylist: playPlaylist
+                            )
+                        } else {
+                            HomeCarouselSection(
+                                category: category,
+                                artworkIdentifiers: artworkIdentifiers,
+                                instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                                onInstantPlay: playImmediately
+                            )
+                        }
                         if category.id == .myMusic {
                             if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
@@ -66,8 +84,9 @@ struct HomeView: View {
 
     private var homePlaylists: [Playlist] {
         let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
-        let playablePlaylists = playlistStore.playlists.filter { playlist in
+        let playablePlaylists = playlistStore.playlists(of: .regular).filter { playlist in
             playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
+                && !playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).isEmpty
         }
 
         guard !randomizedPlaylistIDs.isEmpty else { return playablePlaylists }
@@ -76,13 +95,28 @@ struct HomeView: View {
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 
+    private var homeWorkPlaylists: [Playlist] {
+        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
+        let playablePlaylists = playlistStore.playlists(of: .work).filter { playlist in
+            playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
+                && !playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).isEmpty
+        }
+        let playlistsByID = Dictionary(uniqueKeysWithValues: playablePlaylists.map { ($0.id, $0) })
+        return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
+    }
+
     private func playPlaylist(_ playlist: Playlist) {
-        let tracks = playbackHistoryStore.preferenceWeightedShuffle(
-            playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
-        )
+        let playlistTracks = playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+        let tracks = playlist.kind == .work
+            ? playbackHistoryStore.workPlaybackTracks(from: playlistTracks)
+            : playbackHistoryStore.preferenceWeightedShuffle(playlistTracks)
         guard !tracks.isEmpty else { return }
-        playerStore.setShuffleEnabled(true)
-        playerStore.playQueue(tracks, startingAt: tracks.startIndex)
+        playerStore.setShuffleEnabled(playlist.kind == .regular)
+        playerStore.playQueue(
+            tracks,
+            startingAt: tracks.startIndex,
+            presentationMode: playlist.kind == .work ? .workSize : .standard
+        )
     }
 
     private func artworkIdentifiers(for destination: HomeDestination) -> [String] {
@@ -95,7 +129,7 @@ struct HomeView: View {
         case .repeatPlay:
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) >= 2 }
         case .workSizePlay:
-            tracks = libraryStore.tracks.filter(\.isLongForm)
+            tracks = libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
         case .favorites:
             tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
         case .favoriteAlbums:
@@ -341,6 +375,127 @@ private struct HomeTuningMoreTile: View {
     }
 }
 
+private struct HomeWorkSection: View {
+    let category: HomeCategory
+    let playlists: [Playlist]
+    let showsMore: Bool
+    let artworkIdentifiers: (HomeDestination) -> [String]
+    let instantPlaybackIsAvailable: (HomeDestination) -> Bool
+    let tracksForPlaylist: (Playlist) -> [Track]
+    let canPlay: (Playlist) -> Bool
+    let onInstantPlay: (HomeDestination) -> Void
+    let onPlayPlaylist: (Playlist) -> Void
+
+    private let spacing: CGFloat = 12
+    private let horizontalPadding: CGFloat = 16
+    private let nextTilePeek: CGFloat = 28
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(category.title)
+                    .font(.title3.weight(.bold))
+                Text(category.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, horizontalPadding)
+
+            GeometryReader { proxy in
+                let width = tileWidth(for: proxy.size.width)
+
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: spacing) {
+                        if let item = category.items.first {
+                            Button {
+                                onInstantPlay(item.destination)
+                            } label: {
+                                HomeItemTile(
+                                    item: item,
+                                    categoryID: category.id,
+                                    artworkIdentifiers: artworkIdentifiers(item.destination),
+                                    width: width
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!instantPlaybackIsAvailable(item.destination))
+                            .opacity(instantPlaybackIsAvailable(item.destination) ? 1 : 0.55)
+                        }
+
+                        if playlists.isEmpty {
+                            NavigationLink(value: HomeDestination.workPlaylists) {
+                                HomePlaylistEmptyTile(
+                                    width: width,
+                                    title: "作業用リストを作成",
+                                    subtitle: "作業用の曲をまとめる",
+                                    systemImage: "timer"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            ForEach(playlists) { playlist in
+                                let tracks = tracksForPlaylist(playlist)
+                                let isPlayable = canPlay(playlist)
+                                Button { onPlayPlaylist(playlist) } label: {
+                                    HomePlaylistTile(
+                                        playlist: playlist,
+                                        artworkIdentifiers: playlistArtworkIdentifiers(
+                                            playlist: playlist,
+                                            tracks: tracks
+                                        ),
+                                        trackCount: tracks.count,
+                                        width: width
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!isPlayable)
+                                .opacity(isPlayable ? 1 : 0.55)
+                            }
+
+                            if showsMore {
+                                NavigationLink(value: HomeDestination.workPlaylists) {
+                                    HomePlaylistMoreTile(
+                                        width: width,
+                                        title: "続きを見る",
+                                        subtitle: "すべての作業用リスト"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            }
+            .frame(height: 168)
+        }
+    }
+
+    private func playlistArtworkIdentifiers(playlist: Playlist, tracks: [Track]) -> [String] {
+        var identifiers = tracks.compactMap(\.artworkIdentifier)
+        if let artworkIdentifier = playlist.artworkIdentifier {
+            identifiers.insert(artworkIdentifier, at: 0)
+        }
+        return Array(Set(identifiers))
+    }
+
+    private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
+        let visibleTileCount: CGFloat
+        switch availableWidth {
+        case ..<600: visibleTileCount = 2
+        case ..<800: visibleTileCount = 3
+        case ..<1_100: visibleTileCount = 5
+        default: visibleTileCount = 6
+        }
+        let contentWidth = availableWidth - (horizontalPadding * 2) - nextTilePeek
+        return min(180, max(132, (contentWidth - spacing * (visibleTileCount - 1)) / visibleTileCount))
+    }
+}
+
 private struct HomePlaylistSection: View {
     let playlists: [Playlist]
     let showsMore: Bool
@@ -490,15 +645,17 @@ private struct HomePlaylistTile: View {
 
 private struct HomePlaylistMoreTile: View {
     let width: CGFloat
+    var title = "もっと見る"
+    var subtitle = "すべてのプレイリスト"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Image(systemName: "arrow.right.circle.fill")
                 .font(.largeTitle)
             Spacer()
-            Text("もっと見る")
+            Text(title)
                 .font(.headline)
-            Text("すべてのプレイリスト")
+            Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.76))
                 .padding(.top, 3)
@@ -521,13 +678,16 @@ private struct HomePlaylistMoreTile: View {
 
 private struct HomePlaylistEmptyTile: View {
     let width: CGFloat
+    var title = "プレイリストを作成"
+    var subtitle = "曲をまとめて楽しむ"
+    var systemImage = "plus.circle.fill"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: "plus.circle.fill").font(.largeTitle)
+            Image(systemName: systemImage).font(.largeTitle)
             Spacer()
-            Text("プレイリストを作成").font(.headline).lineLimit(2)
-            Text("曲をまとめて楽しむ").font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
+            Text(title).font(.headline).lineLimit(2)
+            Text(subtitle).font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
         }
         .foregroundStyle(.white)
         .padding(14)

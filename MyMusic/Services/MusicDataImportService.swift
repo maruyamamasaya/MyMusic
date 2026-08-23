@@ -3,12 +3,14 @@ import Foundation
 struct PlaylistImportDraft: Sendable {
     let name: String
     let trackIDs: [Track.ID]
+    let kind: PlaylistKind
 }
 
 struct PlaylistImportResult: Sendable {
     let playlists: [PlaylistImportDraft]
     let importedTrackCount: Int
     let missingTrackCount: Int
+    let incompatibleTrackCount: Int
 }
 
 enum MusicDataImportError: LocalizedError {
@@ -31,17 +33,24 @@ struct MusicDataImportService: Sendable {
         case "md", "markdown": drafts = try parseMarkdown(data)
         default: throw MusicDataImportError.unsupportedFormat
         }
-        let available = Set(libraryTracks.map(\.id))
-        var imported = 0, missing = 0
+        let tracksByID = Dictionary(uniqueKeysWithValues: libraryTracks.map { ($0.id, $0) })
+        var imported = 0, missing = 0, incompatible = 0
         let resolved = drafts.map { draft in
             var seen: Set<Track.ID> = []
             let unique = draft.trackIDs.filter { seen.insert($0).inserted }
-            let found = unique.filter { available.contains($0) }
-            imported += found.count
+            let found = unique.compactMap { tracksByID[$0] }
+            let accepted = found.filter(draft.kind.accepts)
+            imported += accepted.count
             missing += unique.count - found.count
-            return PlaylistImportDraft(name: draft.name, trackIDs: found)
+            incompatible += found.count - accepted.count
+            return PlaylistImportDraft(name: draft.name, trackIDs: accepted.map(\.id), kind: draft.kind)
         }
-        return PlaylistImportResult(playlists: resolved, importedTrackCount: imported, missingTrackCount: missing)
+        return PlaylistImportResult(
+            playlists: resolved,
+            importedTrackCount: imported,
+            missingTrackCount: missing,
+            incompatibleTrackCount: incompatible
+        )
     }
 
     private func parseJSON(_ data: Data) throws -> [PlaylistImportDraft] {
@@ -56,7 +65,8 @@ struct MusicDataImportService: Sendable {
         guard let tracks = object["tracks"] as? [[String: Any]] else { throw MusicDataImportError.noTrackIDs }
         let ids = tracks.compactMap { ($0["trackID"] as? String).flatMap(UUID.init(uuidString:)) }
         guard !ids.isEmpty || tracks.isEmpty else { throw MusicDataImportError.noTrackIDs }
-        return PlaylistImportDraft(name: name, trackIDs: ids)
+        let kind = (object["kind"] as? String).flatMap(PlaylistKind.init(rawValue:)) ?? .regular
+        return PlaylistImportDraft(name: name, trackIDs: ids, kind: kind)
     }
 
     private func parseMarkdown(_ data: Data) throws -> [PlaylistImportDraft] {
@@ -69,6 +79,11 @@ struct MusicDataImportService: Sendable {
             return UUID(uuidString: line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines))
         }
         guard !ids.isEmpty else { throw MusicDataImportError.noTrackIDs }
-        return [PlaylistImportDraft(name: name, trackIDs: ids)]
+        let kind = text.split(separator: "\n").compactMap { line -> PlaylistKind? in
+            guard let range = line.range(of: "Kind:") else { return nil }
+            let value = line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+            return PlaylistKind(rawValue: value)
+        }.first ?? .regular
+        return [PlaylistImportDraft(name: name, trackIDs: ids, kind: kind)]
     }
 }
