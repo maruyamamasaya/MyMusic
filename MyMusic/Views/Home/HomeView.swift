@@ -12,31 +12,13 @@ struct HomeView: View {
         NavigationStack {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
-                    ForEach(HomeCategory.all) { category in
-                        if category.id == .playback {
-                            HomeWorkSection(
-                                category: category,
-                                playlists: Array(homeWorkPlaylists.prefix(4)),
-                                showsMore: homeWorkPlaylists.count > 4,
-                                artworkIdentifiers: artworkIdentifiers,
-                                instantPlaybackIsAvailable: instantPlaybackIsAvailable,
-                                tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
-                                canPlay: { playlist in
-                                    !playbackHistoryStore.workPlaybackTracks(
-                                        from: playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
-                                    ).isEmpty
-                                },
-                                onInstantPlay: playImmediately,
-                                onPlayPlaylist: playPlaylist
-                            )
-                        } else {
-                            HomeCarouselSection(
-                                category: category,
-                                artworkIdentifiers: artworkIdentifiers,
-                                instantPlaybackIsAvailable: instantPlaybackIsAvailable,
-                                onInstantPlay: playImmediately
-                            )
-                        }
+                    ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
+                        HomeCarouselSection(
+                            category: category,
+                            artworkIdentifiers: artworkIdentifiers,
+                            instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                            onInstantPlay: playImmediately
+                        )
                         if category.id == .myMusic {
                             if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
@@ -48,6 +30,28 @@ struct HomeView: View {
                                             .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
                                     },
                                     onPlay: playPlaylist
+                                )
+                            }
+                            if let workCategory = HomeCategory.all.first(where: { $0.id == .playback }) {
+                                HomeWorkSection(
+                                    category: workCategory,
+                                    playlists: Array(homeWorkPlaylists.prefix(4)),
+                                    showsMore: homeWorkPlaylists.count > 4,
+                                    artworkIdentifiers: artworkIdentifiers,
+                                    instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                                    tracksForPlaylist: {
+                                        playlistStore.tracks(for: $0.id, in: libraryStore.tracks)
+                                    },
+                                    canPlay: { playlist in
+                                        !playbackHistoryStore.workPlaybackTracks(
+                                            from: playlistStore.tracks(
+                                                for: playlist.id,
+                                                in: libraryStore.tracks
+                                            )
+                                        ).isEmpty
+                                    },
+                                    onInstantPlay: playImmediately,
+                                    onPlayPlaylist: playPlaylist
                                 )
                             }
                             if !libraryStore.genreDisplayPresets.isEmpty {
