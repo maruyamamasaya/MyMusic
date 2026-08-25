@@ -7,8 +7,6 @@ final class HighlightPlayerStore {
     private(set) var queue: [Track] = []
     private(set) var currentIndex: Int?
     private(set) var currentCandidate: HighlightCandidate?
-    private(set) var availableGenres: [String] = []
-    private(set) var selectedGenre: String?
     private(set) var analyzedTrackIDs: Set<Track.ID> = []
     private(set) var isAnalyzingCurrentTrack = false
     private(set) var isHighlightPlaybackActive = false
@@ -35,6 +33,8 @@ final class HighlightPlayerStore {
     private var analysisTask: Task<Void, Never>?
     private var autoAdvanceTask: Task<Void, Never>?
     private var playbackGeneration = UUID()
+    private var hasPreparedRandomSelection = false
+    private var preventsAutomaticAdvance = false
 
     init(
         playerStore: PlayerStore,
@@ -50,18 +50,13 @@ final class HighlightPlayerStore {
         }
         let previousIDs = Set(sourceTracks.map(\.id))
         sourceTracks = playableTracks
-        availableGenres = Self.genreNames(in: playableTracks).sorted {
-            $0.localizedStandardCompare($1) == .orderedAscending
-        }
-
-        if let selectedGenre, !availableGenres.contains(selectedGenre) {
-            self.selectedGenre = nil
-        }
         let currentIDs = Set(playableTracks.map(\.id))
         guard queue.isEmpty || previousIDs != currentIDs else { return }
 
         if let currentTrack, currentIDs.contains(currentTrack.id) {
             queue = queue.filter { currentIDs.contains($0.id) }
+            let queuedIDs = Set(queue.map(\.id))
+            queue.append(contentsOf: playableTracks.filter { !queuedIDs.contains($0.id) }.shuffled())
             currentIndex = queue.firstIndex(where: { $0.id == currentTrack.id })
         } else {
             rebuildQueueAndPlay(reason: .highlightAutomatic)
@@ -69,14 +64,30 @@ final class HighlightPlayerStore {
     }
 
     func startIfNeeded() {
+        if hasPreparedRandomSelection, currentTrack != nil {
+            hasPreparedRandomSelection = false
+            playCurrentTrack(reason: .highlightAutomatic)
+            return
+        }
         guard currentTrack == nil else { return }
         rebuildQueueAndPlay(reason: .highlightAutomatic)
     }
 
-    func selectGenre(_ genre: String?) {
-        guard selectedGenre != genre else { return }
-        selectedGenre = genre
-        rebuildQueueAndPlay(reason: .highlightUserInitiated)
+    /// Prepares a fresh random selection for the next visit without replacing
+    /// playback that was started by another screen.
+    func resetRandomSelection() {
+        let previousTrackID = currentTrack?.id
+        startPlaybackTask?.cancel()
+        analysisTask?.cancel()
+        autoAdvanceTask?.cancel()
+        playbackGeneration = UUID()
+        isAnalyzingCurrentTrack = false
+        isHighlightPlaybackActive = false
+        preventsAutomaticAdvance = false
+        currentCandidate = nil
+        reshuffleQueue(avoidingFirstTrackID: previousTrackID)
+        currentIndex = queue.isEmpty ? nil : 0
+        hasPreparedRandomSelection = !queue.isEmpty
     }
 
     func reshuffle() {
@@ -126,13 +137,14 @@ final class HighlightPlayerStore {
         restartAutoAdvance(for: track, candidate: candidate)
     }
 
-    /// Pauses highlight audio while the user performs a modal editing task.
-    /// Playback remains paused after dismissal and resumes only by explicit input.
-    func pauseForModalInteraction() {
-        guard isHighlightPlaybackActive,
-              playerStore.currentTrack?.id == currentTrack?.id,
-              playerStore.isPlaying else { return }
-        playerStore.pause()
+    /// Keeps the current highlight playing while an editing sheet is open, but
+    /// prevents its automatic transition from replacing the sheet's track.
+    func beginPlaylistInteraction() {
+        preventsAutomaticAdvance = true
+    }
+
+    func endPlaylistInteraction() {
+        preventsAutomaticAdvance = false
     }
 
     func prepareFullPlayback() {
@@ -143,6 +155,7 @@ final class HighlightPlayerStore {
         playbackGeneration = UUID()
         isAnalyzingCurrentTrack = false
         isHighlightPlaybackActive = false
+        preventsAutomaticAdvance = false
         let fullQueue = queue.isEmpty ? [track] : queue
         let index = fullQueue.firstIndex(where: { $0.id == track.id }) ?? 0
         playerStore.playQueue(
@@ -176,13 +189,11 @@ final class HighlightPlayerStore {
         autoAdvanceTask?.cancel()
         startPlaybackTask?.cancel()
         analysisTask?.cancel()
-        let filteredTracks = sourceTracks.filter { track in
-            guard let selectedGenre else { return true }
-            return Self.genreNames(in: track.genre).contains(selectedGenre)
-        }
-        queue = filteredTracks.shuffled()
+        queue = sourceTracks.shuffled()
         currentIndex = queue.isEmpty ? nil : 0
         currentCandidate = nil
+        hasPreparedRandomSelection = false
+        preventsAutomaticAdvance = false
         guard !queue.isEmpty else {
             isHighlightPlaybackActive = false
             return
@@ -191,11 +202,7 @@ final class HighlightPlayerStore {
     }
 
     private func reshuffleQueue(avoidingFirstTrackID trackID: Track.ID?) {
-        let filteredTracks = sourceTracks.filter { track in
-            guard let selectedGenre else { return true }
-            return Self.genreNames(in: track.genre).contains(selectedGenre)
-        }
-        queue = filteredTracks.shuffled()
+        queue = sourceTracks.shuffled()
         if let trackID, queue.count > 1, queue.first?.id == trackID {
             queue.swapAt(0, 1)
         }
@@ -254,7 +261,12 @@ final class HighlightPlayerStore {
                       playerStore.isPlaying else { continue }
                 listenedTime += now - previousTime
                 if listenedTime >= candidate.duration {
-                    playNext(userInitiated: false)
+                    if preventsAutomaticAdvance {
+                        isHighlightPlaybackActive = false
+                        playerStore.pause()
+                    } else {
+                        playNext(userInitiated: false)
+                    }
                     return
                 }
             }
@@ -281,17 +293,4 @@ final class HighlightPlayerStore {
         }
     }
 
-    private static func genreNames(in tracks: [Track]) -> Set<String> {
-        tracks.reduce(into: Set<String>()) { result, track in
-            result.formUnion(genreNames(in: track.genre))
-        }
-    }
-
-    private static func genreNames(in value: String?) -> Set<String> {
-        guard let value else { return [] }
-        return Set(value
-            .split(whereSeparator: { $0 == ";" || $0 == "\0" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty })
-    }
 }

@@ -6,7 +6,9 @@ struct RootView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(FavoriteStore.self) private var favoriteStore
+    @Environment(HighlightPlayerStore.self) private var highlightStore
     @State private var isNowPlayingPresented = false
+    @State private var returnsHomeAfterNowPlaying = false
     @State private var selectedTab = RootTab.home
 
     var body: some View {
@@ -16,16 +18,20 @@ struct RootView: View {
             Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
             Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
             Tab("ハイライト", systemImage: "sparkles.rectangle.stack", value: .highlight) {
-                HighlightPlayerView { isNowPlayingPresented = true }
+                HighlightPlayerView {
+                    returnsHomeAfterNowPlaying = true
+                    isNowPlayingPresented = true
+                }
             }
         }
         .modifier(MiniPlayerAccessoryModifier(
             isPresented: playerStore.currentTrack != nil && selectedTab != .highlight
         ) {
+            returnsHomeAfterNowPlaying = false
             isNowPlayingPresented = true
         })
         .animation(.default, value: playerStore.currentTrack?.id)
-        .sheet(isPresented: $isNowPlayingPresented) {
+        .sheet(isPresented: $isNowPlayingPresented, onDismiss: handleNowPlayingDismissal) {
             Group {
                 if playerStore.presentationMode == .workSize {
                     WorkSizeNowPlayingView()
@@ -34,6 +40,15 @@ struct RootView: View {
                 }
             }
             .presentationDragIndicator(.visible)
+        }
+        .onChange(of: selectedTab) { oldTab, newTab in
+            if oldTab == .highlight, newTab.resetsHighlightSelection {
+                highlightStore.resetRandomSelection()
+            }
+            if newTab == .highlight {
+                highlightStore.updateLibrary(libraryStore.tracks)
+                highlightStore.startIfNeeded()
+            }
         }
         .alert("再生エラー", isPresented: errorIsPresented) {
             Button("閉じる") { playerStore.dismissError() }
@@ -54,6 +69,12 @@ struct RootView: View {
         .task { await playbackHistoryStore.loadIfNeeded() }
         .task { await favoriteStore.loadIfNeeded() }
         .task { await libraryStore.restoreAndLoadIfNeeded() }
+    }
+
+    private func handleNowPlayingDismissal() {
+        guard returnsHomeAfterNowPlaying else { return }
+        returnsHomeAfterNowPlaying = false
+        selectedTab = .home
     }
 
     private var errorIsPresented: Binding<Bool> {
@@ -84,6 +105,15 @@ private enum RootTab: Hashable {
     case playlist
     case search
     case highlight
+
+    var resetsHighlightSelection: Bool {
+        switch self {
+        case .home, .library, .search:
+            true
+        case .playlist, .highlight:
+            false
+        }
+    }
 }
 
 private struct MiniPlayerAccessoryModifier: ViewModifier {

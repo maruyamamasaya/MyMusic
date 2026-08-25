@@ -86,6 +86,8 @@ struct HomeDestinationView: View {
                 systemImage: "sparkles",
                 tracks: playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
             )
+        case .selectiveRandomPlay:
+            SelectiveRandomPlayView()
         case .repeatPlay:
             GeneratedQueueView(
                 title: "リピート曲再生",

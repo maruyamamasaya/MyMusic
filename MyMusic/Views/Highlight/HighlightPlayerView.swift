@@ -6,6 +6,8 @@ struct HighlightPlayerView: View {
     @State private var visibleTrackID: Track.ID?
     @State private var playlistTrack: Track?
     @State private var informationTrack: Track?
+    @State private var isQueuePresented = false
+    @State private var isEqualizerPresented = false
 
     let onPresentNowPlaying: () -> Void
 
@@ -18,8 +20,8 @@ struct HighlightPlayerView: View {
             }
         }
         .background(Color.black)
-        .task(id: libraryStore.unfilteredTracks.map(\.id)) {
-            highlightStore.updateLibrary(libraryStore.unfilteredTracks)
+        .task(id: libraryStore.tracks.map(\.id)) {
+            highlightStore.updateLibrary(libraryStore.tracks)
             highlightStore.startIfNeeded()
             visibleTrackID = highlightStore.currentTrack?.id
         }
@@ -31,13 +33,26 @@ struct HighlightPlayerView: View {
             guard let newTrackID, newTrackID != highlightStore.currentTrack?.id else { return }
             highlightStore.move(to: newTrackID)
         }
-        .sheet(item: $playlistTrack) { track in
+        .sheet(item: $playlistTrack, onDismiss: highlightStore.endPlaylistInteraction) { track in
             AddToPlaylistSheet(track: track)
         }
         .sheet(item: $informationTrack) { track in
             HighlightTrackInformationView(track: track) {
                 highlightStore.prepareFullPlayback()
                 onPresentNowPlaying()
+            }
+        }
+        .sheet(isPresented: $isQueuePresented) {
+            QueueView()
+        }
+        .sheet(isPresented: $isEqualizerPresented) {
+            NavigationStack {
+                EqualizerSettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完了") { isEqualizerPresented = false }
+                        }
+                    }
             }
         }
     }
@@ -53,18 +68,17 @@ struct HighlightPlayerView: View {
                             isCurrent: track.id == highlightStore.currentTrack?.id,
                             isAnalyzing: track.id == highlightStore.currentTrack?.id && highlightStore.isAnalyzingCurrentTrack,
                             isHighlightPlaybackActive: highlightStore.isHighlightPlaybackActive,
-                            selectedGenre: highlightStore.selectedGenre,
-                            availableGenres: highlightStore.availableGenres,
                             candidateNumber: highlightStore.currentCandidateNumber,
                             candidateCount: highlightStore.currentCandidateCount,
-                            onSelectGenre: highlightStore.selectGenre,
                             onReshuffle: highlightStore.reshuffle,
                             onAnotherPart: highlightStore.playAnotherPart,
                             onAddToPlaylist: {
-                                highlightStore.pauseForModalInteraction()
+                                highlightStore.beginPlaylistInteraction()
                                 playlistTrack = track
                             },
                             onShowInformation: { informationTrack = track },
+                            onShowQueue: { isQueuePresented = true },
+                            onShowEqualizer: { isEqualizerPresented = true },
                             onFullPlayback: {
                                 highlightStore.prepareFullPlayback()
                                 onPresentNowPlaying()
@@ -98,26 +112,27 @@ struct HighlightPlayerView: View {
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
 }
 
 private struct HighlightTrackPage: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var historyStore
+    @Environment(SettingsStore.self) private var settingsStore
 
     let track: Track
     let candidate: HighlightCandidate
     let isCurrent: Bool
     let isAnalyzing: Bool
     let isHighlightPlaybackActive: Bool
-    let selectedGenre: String?
-    let availableGenres: [String]
     let candidateNumber: Int
     let candidateCount: Int
-    let onSelectGenre: (String?) -> Void
     let onReshuffle: () -> Void
     let onAnotherPart: () -> Void
     let onAddToPlaylist: () -> Void
     let onShowInformation: () -> Void
+    let onShowQueue: () -> Void
+    let onShowEqualizer: () -> Void
     let onFullPlayback: () -> Void
     let onResumeHighlight: () -> Void
 
@@ -184,21 +199,6 @@ private struct HighlightTrackPage: View {
                     .foregroundStyle(.white.opacity(0.72))
             }
             Spacer()
-            Menu {
-                Button("すべて", systemImage: selectedGenre == nil ? "checkmark" : "music.note.list") {
-                    onSelectGenre(nil)
-                }
-                ForEach(availableGenres, id: \.self) { genre in
-                    Button(genre, systemImage: selectedGenre == genre ? "checkmark" : "music.note") {
-                        onSelectGenre(genre)
-                    }
-                }
-            } label: {
-                Label(selectedGenre ?? "すべて", systemImage: "line.3.horizontal.decrease.circle")
-                    .lineLimit(1)
-            }
-            .buttonStyle(HighlightCapsuleButtonStyle())
-
             Button("シャッフルし直す", systemImage: "shuffle", action: onReshuffle)
                 .labelStyle(.iconOnly)
                 .buttonStyle(HighlightCircleButtonStyle())
@@ -275,11 +275,24 @@ private struct HighlightTrackPage: View {
     }
 
     private var playbackButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Button("フルで再生", systemImage: "music.note", action: onFullPlayback)
                 .buttonStyle(HighlightCapsuleButtonStyle())
 
             Spacer()
+
+            Button("再生キュー", systemImage: "list.bullet", action: onShowQueue)
+                .labelStyle(.iconOnly)
+                .buttonStyle(HighlightCircleButtonStyle())
+                .accessibilityLabel("再生キューを表示")
+
+            Button(action: onShowEqualizer) {
+                Image(systemName: "slider.vertical.3")
+                    .foregroundStyle(settingsStore.equalizer.isEnabled ? Color.cyan : Color.white)
+            }
+                .buttonStyle(HighlightCircleButtonStyle())
+                .accessibilityLabel("イコライザ設定を表示")
+                .accessibilityValue(settingsStore.equalizer.isEnabled ? "オン" : "オフ")
 
             if isCurrent, !isHighlightPlaybackActive {
                 Button("ハイライトを再開", systemImage: "sparkles", action: onResumeHighlight)

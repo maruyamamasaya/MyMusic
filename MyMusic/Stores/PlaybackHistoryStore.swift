@@ -178,6 +178,29 @@ final class PlaybackHistoryStore {
         Array(preferenceWeightedShuffle(tracks.filter { playCount(for: $0.id) == 0 }).prefix(limit))
     }
 
+    /// Offers seed tracks for a user-selected, genre-based random queue.
+    func selectiveRandomCandidates(from tracks: [Track], limit: Int = 5) -> [Track] {
+        guard limit > 0 else { return [] }
+        let candidates = tracks.filter {
+            !$0.normalizedGenreNames.isEmpty && isEligibleForRegularShuffle($0)
+        }
+        return Array(preferenceWeightedShuffle(candidates).prefix(limit))
+    }
+
+    /// Places the selected track first, then randomizes tracks sharing at least
+    /// one of its genres. Tracks without a matching genre are not included.
+    func genreRandomTracks(startingWith selectedTrack: Track, from tracks: [Track]) -> [Track] {
+        let selectedGenres = selectedTrack.normalizedGenreNames
+        guard !selectedGenres.isEmpty, isEligibleForRegularShuffle(selectedTrack) else { return [] }
+
+        let relatedTracks = tracks.filter {
+            $0.id != selectedTrack.id
+                && isEligibleForRegularShuffle($0)
+                && !$0.normalizedGenreNames.isDisjoint(with: selectedGenres)
+        }
+        return [selectedTrack] + preferenceWeightedShuffle(relatedTracks)
+    }
+
     func repeatPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
         let candidates = tracks.filter { playCount(for: $0.id) >= Self.repeatPlayMinimumCount }
         return Array(preferenceWeightedShuffle(candidates).prefix(limit))
