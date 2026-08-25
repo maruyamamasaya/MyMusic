@@ -179,12 +179,24 @@ final class PlaybackHistoryStore {
     }
 
     /// Offers seed tracks for a user-selected, genre-based random queue.
-    func selectiveRandomCandidates(from tracks: [Track], limit: Int = 5) -> [Track] {
+    /// Each candidate has genres that are disjoint from every other candidate.
+    func selectiveRandomCandidates(from tracks: [Track], limit: Int = 7) -> [Track] {
         guard limit > 0 else { return [] }
         let candidates = tracks.filter {
             !$0.normalizedGenreNames.isEmpty && isEligibleForRegularShuffle($0)
         }
-        return Array(preferenceWeightedShuffle(candidates).prefix(limit))
+
+        var selectedTracks: [Track] = []
+        var selectedGenres: Set<String> = []
+
+        for track in preferenceWeightedShuffle(candidates) {
+            guard selectedGenres.isDisjoint(with: track.normalizedGenreNames) else { continue }
+            selectedTracks.append(track)
+            selectedGenres.formUnion(track.normalizedGenreNames)
+            if selectedTracks.count == limit { break }
+        }
+
+        return selectedTracks
     }
 
     /// Places the selected track first, then randomizes tracks sharing at least

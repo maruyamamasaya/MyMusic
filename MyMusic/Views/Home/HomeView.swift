@@ -129,6 +129,8 @@ struct HomeView: View {
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) == 0 }
         case .repeatPlay:
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) >= 2 }
+        case .selectiveRandomPlay:
+            tracks = libraryStore.tracks
         case .workSizePlay:
             tracks = libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
         case .favorites:
@@ -855,8 +857,16 @@ private struct HomeItemTile: View {
     private var tileBackground: some View {
         if let selectedArtworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
-                .opacity(colorScheme == .dark ? 0.68 : 0.58)
-                .overlay(readabilityMask)
+                .opacity(item.destination == .selectiveRandomPlay ? 1 : (colorScheme == .dark ? 0.68 : 0.58))
+                .overlay {
+                    if item.destination == .selectiveRandomPlay {
+                        selectiveRandomGradient.opacity(0.8)
+                    }
+                }
+                .overlay(item.destination == .selectiveRandomPlay ? selectiveRandomReadabilityMask : readabilityMask)
+        } else if item.destination == .selectiveRandomPlay {
+            selectiveRandomGradient
+                .overlay(selectiveRandomReadabilityMask)
         } else if categoryID == .library || categoryID == .activity {
             decorativeGradientBackground
         } else {
@@ -879,6 +889,32 @@ private struct HomeItemTile: View {
             )
         }
         .overlay(decorativeReadabilityMask)
+    }
+
+    private var selectiveRandomGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.96, green: 0.24, blue: 0.45),
+                Color(red: 0.98, green: 0.64, blue: 0.18),
+                Color(red: 0.24, green: 0.78, blue: 0.55),
+                Color(red: 0.18, green: 0.62, blue: 0.96),
+                Color(red: 0.56, green: 0.30, blue: 0.92)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var selectiveRandomReadabilityMask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.06), location: 0),
+                .init(color: .black.opacity(0.18), location: 0.48),
+                .init(color: .black.opacity(0.58), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     private var decorativeColors: [Color] {
@@ -959,6 +995,7 @@ private struct HomeItemTile: View {
     }
 
     private var contentColor: Color {
+        if item.destination == .selectiveRandomPlay { return .white }
         if selectedArtworkIdentifier != nil {
             return colorScheme == .dark ? .white : .black
         }

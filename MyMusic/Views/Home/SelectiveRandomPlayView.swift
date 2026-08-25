@@ -55,7 +55,7 @@ struct SelectiveRandomPlayView: View {
 
     private func refreshCandidates() {
         candidateTrackIDs = playbackHistoryStore
-            .selectiveRandomCandidates(from: libraryStore.tracks)
+            .selectiveRandomCandidates(from: libraryStore.tracks, limit: 7)
             .map(\.id)
     }
 
