@@ -860,7 +860,7 @@ private struct HomeItemTile: View {
                 .opacity(item.destination == .selectiveRandomPlay ? 1 : (colorScheme == .dark ? 0.68 : 0.58))
                 .overlay {
                     if item.destination == .selectiveRandomPlay {
-                        selectiveRandomGradient.opacity(0.8)
+                        selectiveRandomGradient.opacity(0.5)
                     }
                 }
                 .overlay(item.destination == .selectiveRandomPlay ? selectiveRandomReadabilityMask : readabilityMask)
@@ -894,11 +894,11 @@ private struct HomeItemTile: View {
     private var selectiveRandomGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.96, green: 0.24, blue: 0.45),
-                Color(red: 0.98, green: 0.64, blue: 0.18),
-                Color(red: 0.24, green: 0.78, blue: 0.55),
-                Color(red: 0.18, green: 0.62, blue: 0.96),
-                Color(red: 0.56, green: 0.30, blue: 0.92)
+                Color(red: 0.60, green: 0.10, blue: 0.27),
+                Color(red: 0.62, green: 0.33, blue: 0.08),
+                Color(red: 0.08, green: 0.42, blue: 0.30),
+                Color(red: 0.07, green: 0.29, blue: 0.58),
+                Color(red: 0.31, green: 0.13, blue: 0.55)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -908,9 +908,9 @@ private struct HomeItemTile: View {
     private var selectiveRandomReadabilityMask: LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.06), location: 0),
-                .init(color: .black.opacity(0.18), location: 0.48),
-                .init(color: .black.opacity(0.58), location: 1)
+                .init(color: .black.opacity(0.22), location: 0),
+                .init(color: .black.opacity(0.38), location: 0.48),
+                .init(color: .black.opacity(0.70), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
