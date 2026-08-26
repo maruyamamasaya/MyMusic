@@ -52,8 +52,11 @@ struct AlbumDetailView: View {
     }
 
     private func play(shuffled: Bool) {
-        guard !tracks.isEmpty else { return }
+        let playbackTracks = shuffled
+            ? tracks.filter(\.isEligibleForRegularPlayback)
+            : tracks
+        guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(shuffled)
-        playerStore.playQueue(tracks, startingAt: 0)
+        playerStore.playQueue(playbackTracks, startingAt: 0)
     }
 }

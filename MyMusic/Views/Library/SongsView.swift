@@ -87,11 +87,13 @@ struct SongsView: View {
             }
         }
         .contextMenu {
-            Button(
-                playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
-                systemImage: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
-            ) {
-                playbackHistoryStore.toggleFavorite(trackID: track.id)
+            if track.isEligibleForRegularPlayback {
+                Button(
+                    playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
+                    systemImage: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
+                ) {
+                    playbackHistoryStore.toggleFavorite(trackID: track.id)
+                }
             }
             Button("プレイリストに追加", systemImage: "text.badge.plus") {
                 trackToAddToPlaylist = track
@@ -159,10 +161,14 @@ struct SongsView: View {
     }
 
     nonisolated private static func arrange(_ tracks: [Track], request: ArrangementRequest) -> [Track] {
-        let filteredTracks = request.query.isEmpty ? tracks : tracks.filter { track in
+        var filteredTracks = request.query.isEmpty ? tracks : tracks.filter { track in
             track.title.localizedStandardContains(request.query)
                 || track.artistName.localizedStandardContains(request.query)
                 || (track.albumTitle?.localizedStandardContains(request.query) == true)
+        }
+
+        if request.sortOrder == .random {
+            filteredTracks.removeAll { !$0.isEligibleForRegularPlayback }
         }
 
         return filteredTracks.sorted { lhs, rhs in

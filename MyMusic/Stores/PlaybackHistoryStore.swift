@@ -66,13 +66,13 @@ final class PlaybackHistoryStore {
     }
 
     func recentTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
-        resolvedTracks(from: tracks) { $0.lastPlayedAt != nil }
+        resolvedTracks(from: tracks.filter(\.isEligibleForRegularPlayback)) { $0.lastPlayedAt != nil }
             .sorted { (entries[$0.id]?.lastPlayedAt ?? .distantPast) > (entries[$1.id]?.lastPlayedAt ?? .distantPast) }
             .limited(to: limit)
     }
 
     func favoriteTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
-        resolvedTracks(from: tracks) { $0.isFavorite }
+        resolvedTracks(from: tracks.filter(\.isEligibleForRegularPlayback)) { $0.isFavorite }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             .limited(to: limit)
     }
@@ -124,7 +124,7 @@ final class PlaybackHistoryStore {
     }
 
     func isEligibleForRegularShuffle(_ track: Track) -> Bool {
-        !track.isEligibleForWorkPlayback && !isHiddenFromShuffle(trackID: track.id)
+        track.isEligibleForRegularPlayback && !isHiddenFromShuffle(trackID: track.id)
     }
 
     /// Returns every track once, ordered by a preference-weighted random draw.
@@ -214,7 +214,10 @@ final class PlaybackHistoryStore {
     }
 
     func repeatPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
-        let candidates = tracks.filter { playCount(for: $0.id) >= Self.repeatPlayMinimumCount }
+        let candidates = tracks.filter {
+            $0.isEligibleForRegularPlayback
+                && playCount(for: $0.id) >= Self.repeatPlayMinimumCount
+        }
         return Array(preferenceWeightedShuffle(candidates).prefix(limit))
     }
 

@@ -13,27 +13,31 @@ struct TrackFavoriteButton: View {
     private var isFavorite: Bool { historyStore.isFavorite(trackID: track.id) }
 
     var body: some View {
-        Button(action: toggleFavorite) {
-            ZStack {
-                if showsBurst {
-                    Circle()
-                        .stroke(Color.pink.opacity(0.75), lineWidth: 2.5)
-                        .frame(width: 28, height: 28)
-                        .scaleEffect(1.9)
-                        .opacity(0)
+        Group {
+            if track.isEligibleForRegularPlayback {
+                Button(action: toggleFavorite) {
+                    ZStack {
+                        if showsBurst {
+                            Circle()
+                                .stroke(Color.pink.opacity(0.75), lineWidth: 2.5)
+                                .frame(width: 28, height: 28)
+                                .scaleEffect(1.9)
+                                .opacity(0)
+                        }
+                        Image(systemName: isFavorite ? "heart.fill" : "heart")
+                            .font(font)
+                            .foregroundStyle(isFavorite ? Color.pink : Color.accentColor)
+                            .symbolEffect(.bounce, options: .speed(1.6), value: effectTrigger)
+                            .scaleEffect(showsBurst ? 1.22 : 1)
+                            .frame(width: width, height: 36)
+                    }
+                    .contentShape(Rectangle())
                 }
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .font(font)
-                    .foregroundStyle(isFavorite ? Color.pink : Color.accentColor)
-                    .symbolEffect(.bounce, options: .speed(1.6), value: effectTrigger)
-                    .scaleEffect(showsBurst ? 1.22 : 1)
-                    .frame(width: width, height: 36)
+                .buttonStyle(.plain)
+                .sensoryFeedback(.success, trigger: effectTrigger)
+                .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.success, trigger: effectTrigger)
-        .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
     }
 
     private func toggleFavorite() {

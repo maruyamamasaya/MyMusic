@@ -7,6 +7,8 @@ struct HomeView: View {
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var randomizedPlaylistIDs: [Playlist.ID] = []
+    @State private var randomizedFavoriteAlbumIDs: [Album.ID] = []
+    @State private var randomizedFavoriteArtistIDs: [Artist.ID] = []
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,10 @@ struct HomeView: View {
                             category: category,
                             artworkIdentifiers: artworkIdentifiers,
                             instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                            favoriteAlbums: homeFavoriteAlbums,
+                            favoriteArtists: homeFavoriteArtists,
+                            artworkIdentifiersForArtist: artistArtworkIdentifiers,
+                            albumsForArtist: libraryStore.albums(for:),
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
@@ -74,6 +80,12 @@ struct HomeView: View {
             .task(id: playlistStore.playlists.map(\.id)) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
             }
+            .task(id: favoriteStore.favoriteAlbums(from: libraryStore.albums).map(\.id)) {
+                randomizeFavoriteAlbums()
+            }
+            .task(id: favoriteStore.favoriteArtists(from: libraryStore.artists).map(\.id)) {
+                randomizeFavoriteArtists()
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -106,6 +118,28 @@ struct HomeView: View {
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 
+    private var homeFavoriteAlbums: [Album] {
+        let albumsByID = Dictionary(uniqueKeysWithValues: libraryStore.albums.map { ($0.id, $0) })
+        return randomizedFavoriteAlbumIDs.compactMap { albumsByID[$0] }
+    }
+
+    private var homeFavoriteArtists: [Artist] {
+        let artistsByID = Dictionary(uniqueKeysWithValues: libraryStore.artists.map { ($0.id, $0) })
+        return randomizedFavoriteArtistIDs.compactMap { artistsByID[$0] }
+    }
+
+    private func randomizeFavoriteAlbums() {
+        randomizedFavoriteAlbumIDs = favoriteStore
+            .randomFavoriteAlbums(from: libraryStore.albums, limit: 7)
+            .map(\.id)
+    }
+
+    private func randomizeFavoriteArtists() {
+        randomizedFavoriteArtistIDs = favoriteStore
+            .randomFavoriteArtists(from: libraryStore.artists, limit: 7)
+            .map(\.id)
+    }
+
     private func playPlaylist(_ playlist: Playlist) {
         let playlistTracks = playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
         let tracks = playlist.kind == .work
@@ -120,6 +154,10 @@ struct HomeView: View {
         )
     }
 
+    private func artistArtworkIdentifiers(_ artist: Artist) -> [String] {
+        Array(Set(libraryStore.tracks(for: artist).compactMap(\.artworkIdentifier)))
+    }
+
     private func artworkIdentifiers(for destination: HomeDestination) -> [String] {
         let tracks: [Track]
         switch destination {
@@ -128,7 +166,7 @@ struct HomeView: View {
         case .discoveryPlay:
             tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) == 0 }
         case .repeatPlay:
-            tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) >= 2 }
+            tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
         case .selectiveRandomPlay:
             tracks = libraryStore.tracks
         case .workSizePlay:
@@ -187,16 +225,12 @@ struct HomeView: View {
             tracks = playbackHistoryStore.preferenceWeightedShuffle(
                 playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
             )
-        case .favoriteAlbums:
-            tracks = favoriteAlbumTracks
-        case .favoriteArtists:
-            tracks = favoriteArtistTracks
         default:
             return
         }
 
         guard !tracks.isEmpty else { return }
-        if destination == .favoriteAlbums || destination == .favoriteArtists || destination == .workSizePlay {
+        if destination == .workSizePlay {
             playerStore.setShuffleEnabled(false)
         }
         playerStore.playQueue(
@@ -210,6 +244,7 @@ struct HomeView: View {
         uniqueTracks(
             favoriteStore.favoriteAlbums(from: libraryStore.albums)
                 .flatMap { libraryStore.tracks(for: $0) }
+                .filter(\.isEligibleForRegularPlayback)
         )
     }
 
@@ -217,6 +252,7 @@ struct HomeView: View {
         uniqueTracks(
             favoriteStore.favoriteArtists(from: libraryStore.artists)
                 .flatMap { libraryStore.tracks(for: $0) }
+                .filter(\.isEligibleForRegularPlayback)
         )
     }
 
@@ -705,6 +741,10 @@ private struct HomeCarouselSection: View {
     let category: HomeCategory
     let artworkIdentifiers: (HomeDestination) -> [String]
     let instantPlaybackIsAvailable: (HomeDestination) -> Bool
+    let favoriteAlbums: [Album]
+    let favoriteArtists: [Artist]
+    let artworkIdentifiersForArtist: (Artist) -> [String]
+    let albumsForArtist: (Artist) -> [Album]
     let onInstantPlay: (HomeDestination) -> Void
 
     private let spacing: CGFloat = 12
@@ -744,7 +784,51 @@ private struct HomeCarouselSection: View {
 
     @ViewBuilder
     private func tile(for item: HomeCategoryItem, width: CGFloat) -> some View {
-        if isInstantPlaybackDestination(item.destination) {
+        if item.destination == .favoriteAlbums, !favoriteAlbums.isEmpty {
+            ForEach(favoriteAlbums) { album in
+                NavigationLink {
+                    AlbumShuffleSelectionView(
+                        title: album.title,
+                        albums: [album]
+                    )
+                } label: {
+                    HomeItemTile(
+                        item: HomeCategoryItem(
+                            title: album.title,
+                            description: "\(album.artistName)・アルバムを選んで再生",
+                            systemImage: "square.stack",
+                            destination: .favoriteAlbums
+                        ),
+                        categoryID: category.id,
+                        artworkIdentifiers: [album.artworkIdentifier].compactMap { $0 },
+                        width: width
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        } else if item.destination == .favoriteArtists, !favoriteArtists.isEmpty {
+            ForEach(favoriteArtists) { artist in
+                NavigationLink {
+                    AlbumShuffleSelectionView(
+                        title: artist.name,
+                        albums: albumsForArtist(artist)
+                    )
+                } label: {
+                    HomeItemTile(
+                        item: HomeCategoryItem(
+                            title: artist.name,
+                            description: "アルバムを選んでランダム再生",
+                            systemImage: "person.crop.square",
+                            destination: .favoriteArtists
+                        ),
+                        categoryID: category.id,
+                        artworkIdentifiers: artworkIdentifiersForArtist(artist),
+                        width: width
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        } else if isInstantPlaybackDestination(item.destination) {
             Button {
                 onInstantPlay(item.destination)
             } label: {
@@ -793,7 +877,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .repeatPlay, .workSizePlay, .favorites, .favoriteAlbums, .favoriteArtists:
+        case .quickPlay, .discoveryPlay, .repeatPlay, .workSizePlay, .favorites:
             true
         default:
             false

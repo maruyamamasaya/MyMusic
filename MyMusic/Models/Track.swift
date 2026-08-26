@@ -29,6 +29,10 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
         isLongForm || normalizedGenreNames.contains(Self.workPlaybackGenre)
     }
 
+    var isEligibleForRegularPlayback: Bool {
+        !isEligibleForWorkPlayback
+    }
+
     var normalizedGenreNames: Set<String> {
         guard let genre else { return [] }
         return Set(
