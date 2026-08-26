@@ -16,7 +16,10 @@ struct QueueView: View {
                 } else {
                     List {
                         Section("次に再生") {
-                            ForEach(playerStore.playbackOrder, id: \.self) { index in
+                            ForEach(
+                                playerStore.playbackOrder.filter { playerStore.queue.indices.contains($0) },
+                                id: \.self
+                            ) { index in
                                 let track = playerStore.queue[index]
                                 Button {
                                     playerStore.playQueueItem(at: index)

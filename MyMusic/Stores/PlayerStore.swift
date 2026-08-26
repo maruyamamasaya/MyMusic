@@ -178,17 +178,23 @@ final class PlayerStore {
         guard !indexesToRemove.isEmpty else { return }
 
         let oldCurrentIndex = currentIndex
-        queue = queue.enumerated().compactMap { index, track in
+        let updatedQueue = queue.enumerated().compactMap { index, track in
             indexesToRemove.contains(index) ? nil : track
         }
-        playbackOrder = playbackOrder
+        let updatedPlaybackOrder = playbackOrder
             .filter { !indexesToRemove.contains($0) }
             .map { oldIndex in
                 oldIndex - indexesToRemove.filter { $0 < oldIndex }.count
             }
-        if let oldCurrentIndex {
-            currentIndex = oldCurrentIndex - indexesToRemove.filter { $0 < oldCurrentIndex }.count
+        let updatedCurrentIndex = oldCurrentIndex.map { index in
+            index - indexesToRemove.filter { $0 < index }.count
         }
+
+        // Keep every published playback-order index valid while Observation
+        // delivers these individual state changes to SwiftUI.
+        playbackOrder = updatedPlaybackOrder
+        currentIndex = updatedCurrentIndex
+        queue = updatedQueue
         updateRemoteCommandAvailability()
     }
 
