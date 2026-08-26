@@ -50,14 +50,6 @@ final class FavoriteStore {
         limited(artists.filter { favorites.artistIDs.contains($0.id) }, to: limit)
     }
 
-    func randomFavoriteAlbums(from albums: [Album], limit: Int) -> [Album] {
-        Array(favoriteAlbums(from: albums).shuffled().prefix(limit))
-    }
-
-    func randomFavoriteArtists(from artists: [Artist], limit: Int) -> [Artist] {
-        Array(favoriteArtists(from: artists).shuffled().prefix(limit))
-    }
-
     func dismissError() { errorMessage = nil }
 
     private func limited<Element>(_ values: [Element], to limit: Int?) -> [Element] {

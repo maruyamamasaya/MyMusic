@@ -26,8 +26,8 @@ struct HomeCategory: Identifiable, Hashable {
                 HomeCategoryItem(title: "選択してランダム再生", description: "最初の曲を選んで同じジャンルをランダム再生", systemImage: "shuffle.circle", destination: .selectiveRandomPlay),
                 HomeCategoryItem(title: "リピート曲再生", description: "よく聴く曲からランダムに再生", systemImage: "repeat", destination: .repeatPlay),
                 HomeCategoryItem(title: "お気に入り", description: "お気に入りに登録した曲", systemImage: "heart.fill", destination: .favorites),
-                HomeCategoryItem(title: "お気に入りアルバム", description: "アルバムを選んでランダム再生", systemImage: "square.stack.fill", destination: .favoriteAlbums),
-                HomeCategoryItem(title: "お気に入りアーティスト", description: "アーティストのアルバムを選んでランダム再生", systemImage: "person.2.fill", destination: .favoriteArtists),
+                HomeCategoryItem(title: "お気に入りアルバム", description: "一覧から選んでランダム再生", systemImage: "square.stack.fill", destination: .favoriteAlbums),
+                HomeCategoryItem(title: "お気に入りアーティスト", description: "一覧から選んでランダム再生", systemImage: "person.2.fill", destination: .favoriteArtists),
                 HomeCategoryItem(title: "最近再生した曲", description: "最近聴いた曲を新しい順に表示", systemImage: "clock.arrow.circlepath", destination: .recentTracks)
             ]
         ),

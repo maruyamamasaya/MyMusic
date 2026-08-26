@@ -3,14 +3,11 @@ import SwiftUI
 struct FavoriteAlbumsView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(FavoriteStore.self) private var favoriteStore
 
     private var albums: [Album] {
         favoriteStore.favoriteAlbums(from: libraryStore.albums)
-    }
-
-    private var tracks: [Track] {
-        uniqueTracks(albums.flatMap { libraryStore.tracks(for: $0) })
     }
 
     var body: some View {
@@ -22,12 +19,10 @@ struct FavoriteAlbumsView: View {
                     description: Text("アルバム画面のハートから追加できます。")
                 )
             } else {
-                playbackControls
-
                 Section("アルバム") {
                     ForEach(albums) { album in
-                        NavigationLink {
-                            AlbumDetailView(album: album)
+                        Button {
+                            playRandomly(libraryStore.tracks(for: album))
                         } label: {
                             HStack(spacing: 12) {
                                 AlbumArtworkView(artworkIdentifier: album.artworkIdentifier)
@@ -39,8 +34,13 @@ struct FavoriteAlbumsView: View {
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
+                                Spacer(minLength: 8)
+                                Image(systemName: "shuffle")
+                                    .foregroundStyle(.tint)
                             }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("このアルバムをランダム再生")
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
                                 favoriteStore.toggleFavorite(albumID: album.id)
@@ -53,24 +53,10 @@ struct FavoriteAlbumsView: View {
         .navigationTitle("お気に入りのアルバム")
     }
 
-    private var playbackControls: some View {
-        Section {
-            PlayShuffleButtons(
-                isDisabled: tracks.isEmpty,
-                onPlay: { play(shuffled: false) },
-                onShuffle: { play(shuffled: true) }
-            )
-            .frame(maxWidth: .infinity)
-            .listRowBackground(Color.clear)
-        }
-    }
-
-    private func play(shuffled: Bool) {
-        let playbackTracks = shuffled
-            ? tracks.filter(\.isEligibleForRegularPlayback)
-            : tracks
+    private func playRandomly(_ sourceTracks: [Track]) {
+        let playbackTracks = playbackHistoryStore.preferenceWeightedShuffle(sourceTracks)
         guard !playbackTracks.isEmpty else { return }
-        playerStore.setShuffleEnabled(shuffled)
+        playerStore.setShuffleEnabled(true)
         playerStore.playQueue(playbackTracks, startingAt: 0)
     }
 }
@@ -78,14 +64,11 @@ struct FavoriteAlbumsView: View {
 struct FavoriteArtistsView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(FavoriteStore.self) private var favoriteStore
 
     private var artists: [Artist] {
         favoriteStore.favoriteArtists(from: libraryStore.artists)
-    }
-
-    private var tracks: [Track] {
-        uniqueTracks(artists.flatMap { libraryStore.tracks(for: $0) })
     }
 
     var body: some View {
@@ -97,15 +80,24 @@ struct FavoriteArtistsView: View {
                     description: Text("アーティスト画面のハートから追加できます。")
                 )
             } else {
-                playbackControls
-
                 Section("アーティスト") {
                     ForEach(artists) { artist in
-                        NavigationLink {
-                            ArtistDetailView(artist: artist)
+                        Button {
+                            playRandomly(libraryStore.tracks(for: artist))
                         } label: {
-                            Label(artist.name, systemImage: "person.circle")
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.circle")
+                                    .font(.title2)
+                                    .foregroundStyle(.tint)
+                                Text(artist.name)
+                                    .foregroundStyle(.primary)
+                                Spacer(minLength: 8)
+                                Image(systemName: "shuffle")
+                                    .foregroundStyle(.tint)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("このアーティストをランダム再生")
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
                                 favoriteStore.toggleFavorite(artistID: artist.id)
@@ -118,29 +110,10 @@ struct FavoriteArtistsView: View {
         .navigationTitle("お気に入りのアーティスト")
     }
 
-    private var playbackControls: some View {
-        Section {
-            PlayShuffleButtons(
-                isDisabled: tracks.isEmpty,
-                onPlay: { play(shuffled: false) },
-                onShuffle: { play(shuffled: true) }
-            )
-            .frame(maxWidth: .infinity)
-            .listRowBackground(Color.clear)
-        }
-    }
-
-    private func play(shuffled: Bool) {
-        let playbackTracks = shuffled
-            ? tracks.filter(\.isEligibleForRegularPlayback)
-            : tracks
+    private func playRandomly(_ sourceTracks: [Track]) {
+        let playbackTracks = playbackHistoryStore.preferenceWeightedShuffle(sourceTracks)
         guard !playbackTracks.isEmpty else { return }
-        playerStore.setShuffleEnabled(shuffled)
+        playerStore.setShuffleEnabled(true)
         playerStore.playQueue(playbackTracks, startingAt: 0)
     }
-}
-
-private func uniqueTracks(_ tracks: [Track]) -> [Track] {
-    var seen: Set<Track.ID> = []
-    return tracks.filter { seen.insert($0.id).inserted }
 }
