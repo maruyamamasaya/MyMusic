@@ -22,8 +22,8 @@ struct HomeView: View {
                         if category.id == .myMusic {
                             if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
-                                    playlists: Array(homePlaylists.prefix(5)),
-                                    showsMore: homePlaylists.count > 5,
+                                    playlists: Array(homePlaylists.prefix(12)),
+                                    showsMore: homePlaylists.count > 12,
                                     tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
                                     canPlay: { playlist in
                                         playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
@@ -853,18 +853,16 @@ private struct HomeItemTile: View {
 
     @ViewBuilder
     private var tileBackground: some View {
-        if let selectedArtworkIdentifier {
+        if categoryID == .myMusic, let selectedArtworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
-                .opacity(item.destination == .selectiveRandomPlay ? 1 : (colorScheme == .dark ? 0.68 : 0.58))
-                .overlay {
-                    if item.destination == .selectiveRandomPlay {
-                        selectiveRandomGradient.opacity(0.5)
-                    }
-                }
-                .overlay(item.destination == .selectiveRandomPlay ? selectiveRandomReadabilityMask : readabilityMask)
-        } else if item.destination == .selectiveRandomPlay {
-            selectiveRandomGradient
-                .overlay(selectiveRandomReadabilityMask)
+                .overlay(playlistStyleReadabilityMask)
+        } else if categoryID == .myMusic {
+            playlistStyleFallbackBackground
+                .overlay(playlistStyleReadabilityMask)
+        } else if let selectedArtworkIdentifier {
+            HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
+                .opacity(colorScheme == .dark ? 0.68 : 0.58)
+                .overlay(readabilityMask)
         } else if categoryID == .library || categoryID == .activity {
             decorativeGradientBackground
         } else {
@@ -889,26 +887,23 @@ private struct HomeItemTile: View {
         .overlay(decorativeReadabilityMask)
     }
 
-    private var selectiveRandomGradient: LinearGradient {
+    private var playlistStyleFallbackBackground: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.60, green: 0.10, blue: 0.27),
-                Color(red: 0.62, green: 0.33, blue: 0.08),
-                Color(red: 0.08, green: 0.42, blue: 0.30),
-                Color(red: 0.07, green: 0.29, blue: 0.58),
-                Color(red: 0.31, green: 0.13, blue: 0.55)
+                Color(red: 0.25, green: 0.29, blue: 0.40),
+                Color(red: 0.08, green: 0.09, blue: 0.14)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    private var selectiveRandomReadabilityMask: LinearGradient {
+    private var playlistStyleReadabilityMask: LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.22), location: 0),
+                .init(color: .black.opacity(0.20), location: 0),
                 .init(color: .black.opacity(0.38), location: 0.48),
-                .init(color: .black.opacity(0.70), location: 1)
+                .init(color: .black.opacity(0.88), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -993,7 +988,7 @@ private struct HomeItemTile: View {
     }
 
     private var contentColor: Color {
-        if item.destination == .selectiveRandomPlay { return .white }
+        if categoryID == .myMusic { return .white }
         if selectedArtworkIdentifier != nil {
             return colorScheme == .dark ? .white : .black
         }
