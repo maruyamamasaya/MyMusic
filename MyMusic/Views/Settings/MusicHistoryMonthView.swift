@@ -2,17 +2,25 @@ import SwiftUI
 
 struct MusicHistoryMonthView: View {
     let month: MusicHistorySnapshot.Month
+    let trackHistories: [Track.ID: MusicHistoryTrackSummary]
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
                 if let topTrack = month.mostPlayedTrack {
-                    MusicHistoryHeroView(
-                        eyebrow: "この月の1曲",
-                        item: topTrack,
-                        artworkMaxWidth: 270
-                    )
-                    .padding(.horizontal, 16)
+                    if let history = trackHistories[topTrack.track.id] {
+                        NavigationLink {
+                            TrackMusicHistoryView(summary: history)
+                        } label: {
+                            MusicHistoryHeroView(
+                                eyebrow: "この月の1曲",
+                                item: topTrack,
+                                artworkMaxWidth: 270
+                            )
+                            .padding(.horizontal, 16)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 summarySection
@@ -45,8 +53,18 @@ struct MusicHistoryMonthView: View {
 
                 LazyVStack(spacing: 0) {
                     ForEach(Array(month.topTracks.enumerated()), id: \.element.id) { index, item in
-                        MusicHistoryTrackRow(rank: index + 1, item: item)
-                            .padding(.vertical, 8)
+                        if let history = trackHistories[item.track.id] {
+                            NavigationLink {
+                                TrackMusicHistoryView(summary: history)
+                            } label: {
+                                MusicHistoryTrackRow(rank: index + 1, item: item)
+                                    .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            MusicHistoryTrackRow(rank: index + 1, item: item)
+                                .padding(.vertical, 8)
+                        }
                         if item.id != month.topTracks.last?.id {
                             Divider().padding(.leading, 90)
                         }

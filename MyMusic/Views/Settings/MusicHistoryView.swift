@@ -49,18 +49,35 @@ struct MusicHistoryView: View {
                 yearHeader(year)
 
                 if let topTrack = year.mostPlayedTrack {
-                    MusicHistoryHeroView(
-                        eyebrow: "この年の1曲",
-                        item: topTrack,
-                        artworkMaxWidth: 320
-                    )
-                    .padding(.horizontal, 16)
+                    if let history = snapshot.memories.trackHistories[topTrack.track.id] {
+                        NavigationLink {
+                            TrackMusicHistoryView(summary: history)
+                        } label: {
+                            MusicHistoryHeroView(
+                                eyebrow: "この年の1曲",
+                                item: topTrack,
+                                artworkMaxWidth: 320
+                            )
+                            .padding(.horizontal, 16)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 summarySection(year)
                 artistsSection(year)
                 tracksSection(year)
                 monthsSection(year)
+
+                if year.id == snapshot.years.first?.id,
+                   let changesAndDiscovery = snapshot.changesAndDiscovery {
+                    MusicHistoryChangesView(
+                        snapshot: changesAndDiscovery,
+                        trackHistories: snapshot.memories.trackHistories
+                    )
+                }
+
+                moreHistorySection(year)
             }
             .padding(.vertical, 16)
         }
@@ -131,7 +148,14 @@ struct MusicHistoryView: View {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(year.topTracks) { item in
-                            MusicHistoryTrackTile(item: item, width: 154)
+                            if let history = snapshot.memories.trackHistories[item.track.id] {
+                                NavigationLink {
+                                    TrackMusicHistoryView(summary: history)
+                                } label: {
+                                    MusicHistoryTrackTile(item: item, width: 154)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -152,13 +176,56 @@ struct MusicHistoryView: View {
             ) {
                 ForEach(year.months) { month in
                     NavigationLink {
-                        MusicHistoryMonthView(month: month)
+                        MusicHistoryMonthView(
+                            month: month,
+                            trackHistories: snapshot.memories.trackHistories
+                        )
                     } label: {
                         MusicHistoryMonthTile(month: month)
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func moreHistorySection(_ year: MusicHistorySnapshot.Year) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MusicHistorySectionHeader(
+                title: "もっと振り返る",
+                subtitle: "日々と曲に残った音楽の記憶"
+            )
+
+            VStack(spacing: 12) {
+                NavigationLink {
+                    MusicHistoryCalendarView(
+                        years: snapshot.memories.calendarYears,
+                        trackHistories: snapshot.memories.trackHistories,
+                        initialYear: year.year
+                    )
+                } label: {
+                    MusicHistoryDestinationRow(
+                        title: "音楽カレンダー",
+                        subtitle: "音楽を聴いていた日々を眺める",
+                        systemImage: "calendar"
+                    )
+                }
+
+                NavigationLink {
+                    MusicHistoryTimeCapsuleView(
+                        capsules: snapshot.memories.timeCapsules,
+                        trackHistories: snapshot.memories.trackHistories
+                    )
+                } label: {
+                    MusicHistoryDestinationRow(
+                        title: "タイムカプセル",
+                        subtitle: "過去の同じ時期に聴いた音楽",
+                        systemImage: "archivebox"
+                    )
+                }
+            }
+            .buttonStyle(.plain)
             .padding(.horizontal, 16)
         }
     }
@@ -205,4 +272,36 @@ private struct MusicHistoryDataRevision: Hashable {
     let historyEntryCount: Int
     let playbackEventCount: Int
     let libraryTrackCount: Int
+}
+
+private struct MusicHistoryDestinationRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.tint)
+                .frame(width: 42, height: 42)
+                .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .foregroundStyle(.primary)
+        .padding(14)
+        .background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+    }
 }

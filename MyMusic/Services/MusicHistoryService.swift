@@ -43,10 +43,16 @@ struct MusicHistorySnapshot {
     }
 
     let years: [Year]
+    let changesAndDiscovery: MusicHistoryDiscoverySnapshot?
+    let memories: MusicHistoryMemorySnapshot
 
     var availableYears: [Int] { years.map(\.year) }
 
-    static let empty = MusicHistorySnapshot(years: [])
+    static let empty = MusicHistorySnapshot(
+        years: [],
+        changesAndDiscovery: nil,
+        memories: .empty
+    )
 }
 
 @MainActor
@@ -55,8 +61,12 @@ final class MusicHistoryService {
     private let artistRankingLimit = 10
 
     /// Builds a read-only history from the month groups already resolved by AnalyticsService.
-    func makeSnapshot(playbackMonths: [AnalyticsSnapshot.MonthGroup]) -> MusicHistorySnapshot {
+    func makeSnapshot(
+        playbackMonths: [AnalyticsSnapshot.MonthGroup],
+        now: Date = Date()
+    ) -> MusicHistorySnapshot {
         let calendar = Calendar.current
+        let allEvents = playbackMonths.flatMap { $0.days.flatMap(\.events) }
         let months = playbackMonths.map(makeMonth)
         let monthsByDate = Dictionary(uniqueKeysWithValues: months.map { ($0.date, $0) })
         let years = Dictionary(grouping: playbackMonths) {
@@ -80,7 +90,20 @@ final class MusicHistoryService {
         }
         .sorted { $0.year > $1.year }
 
-        return MusicHistorySnapshot(years: years)
+        return MusicHistorySnapshot(
+            years: years,
+            changesAndDiscovery: MusicHistoryDiscoveryService().makeSnapshot(
+                events: allEvents,
+                now: now,
+                calendar: calendar
+            ),
+            memories: MusicHistoryMemoryService().makeSnapshot(
+                playbackMonths: playbackMonths,
+                events: allEvents,
+                now: now,
+                calendar: calendar
+            )
+        )
     }
 
     private func makeMonth(_ month: AnalyticsSnapshot.MonthGroup) -> MusicHistorySnapshot.Month {
