@@ -292,6 +292,11 @@ Do not commit:
 - xcuserdata/
 - DerivedData/
 
+Generated music-analysis exports (such as `music_features*.json`), caches, and
+other large generated analysis artifacts should be ignored by Git by default.
+Keep source code, configuration, schemas, and small intentional examples or test
+fixtures tracked. When untracking generated files, preserve the local files.
+
 Avoid unnecessary changes to:
 
 MyMusic.xcodeproj/project.pbxproj
