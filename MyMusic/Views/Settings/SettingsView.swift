@@ -23,6 +23,12 @@ struct SettingsView: View {
                 } label: {
                     Label("分析", systemImage: "chart.bar.xaxis")
                 }
+
+                NavigationLink {
+                    MusicHistoryView()
+                } label: {
+                    Label("音楽史", systemImage: "calendar.badge.clock")
+                }
             }
 
             Section("データ管理") {
