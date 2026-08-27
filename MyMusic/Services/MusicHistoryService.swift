@@ -11,6 +11,7 @@ struct MusicHistorySnapshot {
     struct ArtistRanking: Identifiable {
         let name: String
         let playCount: Int
+        let representativeTrack: Track
 
         var id: String { name }
     }
@@ -29,29 +30,52 @@ struct MusicHistorySnapshot {
 
     struct Year: Identifiable {
         let year: Int
+        let playCount: Int
+        let trackCount: Int
+        let artistCount: Int
         let months: [Month]
+        let topTracks: [TrackRanking]
+        let topArtists: [ArtistRanking]
 
         var id: Int { year }
+        var mostPlayedTrack: TrackRanking? { topTracks.first }
+        var monthCount: Int { months.count }
     }
 
     let years: [Year]
+
+    var availableYears: [Int] { years.map(\.year) }
+
+    static let empty = MusicHistorySnapshot(years: [])
 }
 
 @MainActor
 final class MusicHistoryService {
-    private let rankingLimit = 10
+    private let trackRankingLimit = 10
+    private let artistRankingLimit = 10
 
     /// Builds a read-only history from the month groups already resolved by AnalyticsService.
     func makeSnapshot(playbackMonths: [AnalyticsSnapshot.MonthGroup]) -> MusicHistorySnapshot {
         let calendar = Calendar.current
         let months = playbackMonths.map(makeMonth)
-        let years = Dictionary(grouping: months) {
+        let monthsByDate = Dictionary(uniqueKeysWithValues: months.map { ($0.date, $0) })
+        let years = Dictionary(grouping: playbackMonths) {
             calendar.component(.year, from: $0.date)
         }
-        .map { year, months in
-            MusicHistorySnapshot.Year(
+        .map { year, playbackMonths in
+            let events = playbackMonths.flatMap { $0.days.flatMap(\.events) }
+            let topTracks = makeTrackRankings(from: events, limit: trackRankingLimit)
+            let topArtists = makeArtistRankings(from: events, limit: artistRankingLimit)
+            return MusicHistorySnapshot.Year(
                 year: year,
-                months: months.sorted { $0.date > $1.date }
+                playCount: events.count,
+                trackCount: Set(events.map { $0.track.id }).count,
+                artistCount: Set(events.map { $0.track.artistName }).count,
+                months: playbackMonths
+                    .compactMap { monthsByDate[$0.date] }
+                    .sorted { $0.date < $1.date },
+                topTracks: topTracks,
+                topArtists: topArtists
             )
         }
         .sorted { $0.year > $1.year }
@@ -61,29 +85,51 @@ final class MusicHistoryService {
 
     private func makeMonth(_ month: AnalyticsSnapshot.MonthGroup) -> MusicHistorySnapshot.Month {
         let events = month.days.flatMap(\.events)
-        let tracks = Dictionary(grouping: events, by: { $0.track.id })
-        let artists = Dictionary(grouping: events, by: { $0.track.artistName })
+        let topTracks = makeTrackRankings(from: events, limit: trackRankingLimit)
+        let topArtists = makeArtistRankings(from: events, limit: artistRankingLimit)
 
-        let topTracks = tracks.values
+        return MusicHistorySnapshot.Month(
+            date: month.date,
+            playCount: events.count,
+            trackCount: Set(events.map { $0.track.id }).count,
+            artistCount: Set(events.map { $0.track.artistName }).count,
+            topTracks: topTracks,
+            topArtists: topArtists
+        )
+    }
+
+    private func makeTrackRankings(
+        from events: [AnalyticsSnapshot.PlaybackEvent],
+        limit: Int
+    ) -> [MusicHistorySnapshot.TrackRanking] {
+        Dictionary(grouping: events, by: { $0.track.id }).values
             .compactMap { events -> MusicHistorySnapshot.TrackRanking? in
                 guard let track = events.first?.track else { return nil }
                 return MusicHistorySnapshot.TrackRanking(track: track, playCount: events.count)
             }
             .sorted(by: trackRankingSort)
+            .prefix(limit)
+            .map { $0 }
+    }
 
-        let topArtists = artists.map { name, events in
-            MusicHistorySnapshot.ArtistRanking(name: name, playCount: events.count)
-        }
-        .sorted(by: artistRankingSort)
-
-        return MusicHistorySnapshot.Month(
-            date: month.date,
-            playCount: events.count,
-            trackCount: tracks.count,
-            artistCount: artists.count,
-            topTracks: Array(topTracks.prefix(rankingLimit)),
-            topArtists: Array(topArtists.prefix(rankingLimit))
-        )
+    private func makeArtistRankings(
+        from events: [AnalyticsSnapshot.PlaybackEvent],
+        limit: Int
+    ) -> [MusicHistorySnapshot.ArtistRanking] {
+        Dictionary(grouping: events, by: { $0.track.artistName })
+            .compactMap { name, events -> MusicHistorySnapshot.ArtistRanking? in
+                guard let representativeTrack = makeTrackRankings(from: events, limit: 1).first?.track else {
+                    return nil
+                }
+                return MusicHistorySnapshot.ArtistRanking(
+                    name: name,
+                    playCount: events.count,
+                    representativeTrack: representativeTrack
+                )
+            }
+            .sorted(by: artistRankingSort)
+            .prefix(limit)
+            .map { $0 }
     }
 
     private func trackRankingSort(
