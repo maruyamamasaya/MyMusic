@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		AB1000000000000000000007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FCC1BB12302B265200C78471 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FCC1BB19302B265200C78471;
+			remoteInfo = MyMusic;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		AB1000000000000000000001 /* MyMusicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyMusicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCC1BB1A302B265200C78471 /* MyMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -21,6 +32,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		AB1000000000000000000002 /* MyMusicTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MyMusicTests;
+			sourceTree = "<group>";
+		};
 		FCC1BB1C302B265200C78471 /* MyMusic */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -32,6 +48,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		AB1000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FCC1BB17302B265200C78471 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -46,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				FCC1BB1C302B265200C78471 /* MyMusic */,
+				AB1000000000000000000002 /* MyMusicTests */,
 				FCC1BB1B302B265200C78471 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				FCC1BB1A302B265200C78471 /* MyMusic.app */,
+				AB1000000000000000000001 /* MyMusicTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +86,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		AB1000000000000000000006 /* MyMusicTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB100000000000000000000B /* Build configuration list for PBXNativeTarget "MyMusicTests" */;
+			buildPhases = (
+				AB1000000000000000000005 /* Sources */,
+				AB1000000000000000000003 /* Frameworks */,
+				AB1000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AB1000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AB1000000000000000000002 /* MyMusicTests */,
+			);
+			name = MyMusicTests;
+			packageProductDependencies = (
+			);
+			productName = MyMusicTests;
+			productReference = AB1000000000000000000001 /* MyMusicTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		FCC1BB19302B265200C78471 /* MyMusic */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FCC1BB25302B265400C78471 /* Build configuration list for PBXNativeTarget "MyMusic" */;
@@ -93,6 +141,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					AB1000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = FCC1BB19302B265200C78471;
+					};
 					FCC1BB19302B265200C78471 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -113,11 +165,19 @@
 			projectRoot = "";
 			targets = (
 				FCC1BB19302B265200C78471 /* MyMusic */,
+				AB1000000000000000000006 /* MyMusicTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		AB1000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FCC1BB18302B265200C78471 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,6 +188,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		AB1000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FCC1BB16302B265200C78471 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,7 +204,67 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		AB1000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FCC1BB19302B265200C78471 /* MyMusic */;
+			targetProxy = AB1000000000000000000007 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		AB1000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29GY347DY;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maruyama.MyMusicTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MyMusic.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MyMusic";
+			};
+			name = Debug;
+		};
+		AB100000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29GY347DY;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maruyama.MyMusicTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MyMusic.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MyMusic";
+			};
+			name = Release;
+		};
 		FCC1BB23302B265400C78471 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -326,6 +453,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AB100000000000000000000B /* Build configuration list for PBXNativeTarget "MyMusicTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB1000000000000000000009 /* Debug */,
+				AB100000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FCC1BB15302B265200C78471 /* Build configuration list for PBXProject "MyMusic" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

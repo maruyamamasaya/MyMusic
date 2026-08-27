@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MusicHistoryTimeCapsuleView: View {
+    @Environment(LibraryStore.self) private var libraryStore
+    @Environment(PlayerStore.self) private var playerStore
     let capsules: [MusicHistoryTimeCapsuleSummary]
     let trackHistories: [Track.ID: MusicHistoryTrackSummary]
 
@@ -63,6 +65,26 @@ struct MusicHistoryTimeCapsuleView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 16)
             }
+
+            MusicHistoryPlaybackButton(
+                isDisabled: playbackTracks(for: capsule).isEmpty,
+                action: { play(capsule) }
+            )
+            .padding(.horizontal, 16)
         }
+    }
+
+    private func playbackTracks(for capsule: MusicHistoryTimeCapsuleSummary) -> [Track] {
+        MusicHistoryService().tracksForTimeCapsule(
+            capsule,
+            availableTracks: libraryStore.unfilteredTracks
+        )
+    }
+
+    private func play(_ capsule: MusicHistoryTimeCapsuleSummary) {
+        let tracks = playbackTracks(for: capsule)
+        guard !tracks.isEmpty else { return }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(tracks, startingAt: 0)
     }
 }

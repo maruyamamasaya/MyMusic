@@ -191,3 +191,19 @@ struct MusicHistoryTrackRow: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+struct MusicHistoryPlaybackButton: View {
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("この頃を再生", systemImage: "play.fill")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(isDisabled)
+    }
+}

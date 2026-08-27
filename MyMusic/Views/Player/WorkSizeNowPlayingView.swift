@@ -113,6 +113,9 @@ struct WorkSizeNowPlayingView: View {
     private var nowPlayingContent: some View {
         VStack(spacing: 18) {
             WorkSizeArtworkView(
+                track: playerStore.currentTrack,
+                information: playerStore.audioInformation,
+                spectrumLevels: playerStore.spectrumLevels,
                 artworkIdentifier: playerStore.currentTrack?.artworkIdentifier,
                 trackTitle: playerStore.currentTrack?.title,
                 showsTrackNavigation: $showsTrackNavigation,
@@ -260,6 +263,9 @@ struct WorkSizeNowPlayingView: View {
 }
 
 private struct WorkSizeArtworkView: View {
+    let track: Track?
+    let information: AudioInformation
+    let spectrumLevels: [Float]
     let artworkIdentifier: String?
     let trackTitle: String?
     @Binding var showsTrackNavigation: Bool
@@ -267,8 +273,44 @@ private struct WorkSizeArtworkView: View {
     let canGoNext: Bool
     let onPrevious: () -> Void
     let onNext: () -> Void
+    @State private var showsAudioDetails = false
 
     var body: some View {
+        Group {
+            if showsAudioDetails {
+                AudioInformationView(
+                    track: track,
+                    information: information,
+                    spectrumLevels: spectrumLevels
+                ) {
+                    withAnimation(.snappy) {
+                        showsAudioDetails = false
+                        showsTrackNavigation = false
+                    }
+                }
+            } else {
+                navigationArtwork
+                    .overlay(alignment: .bottom) {
+                        if showsTrackNavigation {
+                            Button("オーディオ情報", systemImage: "info.circle") {
+                                withAnimation(.snappy) { showsAudioDetails = true }
+                            }
+                            .font(.subheadline)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.black.opacity(0.65))
+                            .padding()
+                        }
+                    }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onChange(of: track?.id) { _, _ in
+            showsAudioDetails = false
+        }
+    }
+
+    private var navigationArtwork: some View {
         ZStack {
             AlbumArtworkView(
                 artworkIdentifier: artworkIdentifier,

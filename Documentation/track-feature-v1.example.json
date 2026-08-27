@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "analysisVersion": 1,
+  "generatedAt": "2026-08-27T12:34:56Z",
+  "tracks": [
+    {
+      "relativePath": "Artist/Album/01 - Example.flac",
+      "fileSize": 12345678,
+      "duration": 243.21,
+      "modificationDate": "2026-08-20T03:12:45Z",
+      "contentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "title": "Example",
+      "artist": "Artist",
+      "album": "Album",
+      "features": {
+        "tempo": 92.4,
+        "energy": 0.72,
+        "piano": 0.15,
+        "ambient": 0.18,
+        "electronic": 0.64,
+        "drumAndBass": 0.81,
+        "aggressive": 0.22,
+        "calm": 0.58,
+        "bright": 0.61,
+        "dark": 0.27,
+        "vocal": 0.12,
+        "instrumental": 0.88,
+        "additional": {
+          "danceable": 0.7
+        }
+      }
+    }
+  ]
+}

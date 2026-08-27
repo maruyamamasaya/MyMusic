@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @Environment(HighlightPlayerStore.self) private var highlightStore
+    @Environment(TrackFeatureStore.self) private var trackFeatureStore
     @State private var isNowPlayingPresented = false
     @State private var returnsHomeAfterNowPlaying = false
     @State private var selectedTab = RootTab.home
@@ -69,6 +70,7 @@ struct RootView: View {
         .task { await playbackHistoryStore.loadIfNeeded() }
         .task { await favoriteStore.loadIfNeeded() }
         .task { await libraryStore.restoreAndLoadIfNeeded() }
+        .task { await trackFeatureStore.loadIfNeeded() }
     }
 
     private func handleNowPlayingDismissal() {

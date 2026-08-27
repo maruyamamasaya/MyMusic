@@ -1,0 +1,8 @@
+cache/*
+!cache/.gitkeep
+output/*
+!output/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+

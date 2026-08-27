@@ -1,8 +1,17 @@
 import SwiftUI
 
 struct MusicHistoryMonthView: View {
+    @Environment(LibraryStore.self) private var libraryStore
+    @Environment(PlayerStore.self) private var playerStore
     let month: MusicHistorySnapshot.Month
     let trackHistories: [Track.ID: MusicHistoryTrackSummary]
+
+    private var playbackTracks: [Track] {
+        MusicHistoryService().tracksForMonth(
+            month,
+            availableTracks: libraryStore.unfilteredTracks
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -23,6 +32,12 @@ struct MusicHistoryMonthView: View {
                     }
                 }
 
+                MusicHistoryPlaybackButton(
+                    isDisabled: playbackTracks.isEmpty,
+                    action: playThisPeriod
+                )
+                .padding(.horizontal, 16)
+
                 summarySection
                 tracksSection
                 artistsSection
@@ -31,6 +46,13 @@ struct MusicHistoryMonthView: View {
         }
         .navigationTitle(month.date.formatted(.dateTime.year().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func playThisPeriod() {
+        let tracks = playbackTracks
+        guard !tracks.isEmpty else { return }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(tracks, startingAt: 0)
     }
 
     private var summarySection: some View {

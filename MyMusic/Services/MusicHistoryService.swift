@@ -23,6 +23,7 @@ struct MusicHistorySnapshot {
         let artistCount: Int
         let topTracks: [TrackRanking]
         let topArtists: [ArtistRanking]
+        let playbackTracks: [Track]
 
         var id: Date { date }
         var mostPlayedTrack: TrackRanking? { topTracks.first }
@@ -59,6 +60,7 @@ struct MusicHistorySnapshot {
 final class MusicHistoryService {
     private let trackRankingLimit = 10
     private let artistRankingLimit = 10
+    private let playbackTrackLimit = 25
 
     /// Builds a read-only history from the month groups already resolved by AnalyticsService.
     func makeSnapshot(
@@ -106,9 +108,28 @@ final class MusicHistoryService {
         )
     }
 
+    /// Returns only tracks that still exist in the current library, preserving
+    /// the period's play-count ranking and never exceeding the Beta queue limit.
+    func tracksForMonth(
+        _ month: MusicHistorySnapshot.Month,
+        availableTracks: [Track]
+    ) -> [Track] {
+        resolvedPlaybackTracks(from: month.playbackTracks, availableTracks: availableTracks)
+    }
+
+    /// Uses the exact window represented by the time capsule and resolves its
+    /// candidates against the current library immediately before playback.
+    func tracksForTimeCapsule(
+        _ capsule: MusicHistoryTimeCapsuleSummary,
+        availableTracks: [Track]
+    ) -> [Track] {
+        resolvedPlaybackTracks(from: capsule.playbackTracks, availableTracks: availableTracks)
+    }
+
     private func makeMonth(_ month: AnalyticsSnapshot.MonthGroup) -> MusicHistorySnapshot.Month {
         let events = month.days.flatMap(\.events)
-        let topTracks = makeTrackRankings(from: events, limit: trackRankingLimit)
+        let playbackRankings = makeTrackRankings(from: events, limit: playbackTrackLimit)
+        let topTracks = Array(playbackRankings.prefix(trackRankingLimit))
         let topArtists = makeArtistRankings(from: events, limit: artistRankingLimit)
 
         return MusicHistorySnapshot.Month(
@@ -117,8 +138,23 @@ final class MusicHistoryService {
             trackCount: Set(events.map { $0.track.id }).count,
             artistCount: Set(events.map { $0.track.artistName }).count,
             topTracks: topTracks,
-            topArtists: topArtists
+            topArtists: topArtists,
+            playbackTracks: playbackRankings.map(\.track)
         )
+    }
+
+    private func resolvedPlaybackTracks(
+        from candidates: [Track],
+        availableTracks: [Track]
+    ) -> [Track] {
+        let availableTracksByID = Dictionary(uniqueKeysWithValues: availableTracks.map { ($0.id, $0) })
+        var resolvedTrackIDs: Set<Track.ID> = []
+        return candidates.compactMap { candidate in
+            guard resolvedTrackIDs.insert(candidate.id).inserted else { return nil }
+            return availableTracksByID[candidate.id]
+        }
+        .prefix(playbackTrackLimit)
+        .map { $0 }
     }
 
     private func makeTrackRankings(

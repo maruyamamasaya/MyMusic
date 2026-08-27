@@ -64,6 +64,7 @@ struct MusicHistoryTimeCapsuleSummary: Identifiable {
     let targetDate: Date
     let topTracks: [MusicHistorySnapshot.TrackRanking]
     let topArtistNames: [String]
+    let playbackTracks: [Track]
 
     var id: Distance { distance }
 }
@@ -83,6 +84,7 @@ struct MusicHistoryMemorySnapshot {
 @MainActor
 final class MusicHistoryMemoryService {
     private let capsuleTrackLimit = 5
+    private let capsulePlaybackTrackLimit = 25
     private let capsuleWindowDays = 7
 
     func makeSnapshot(
@@ -189,6 +191,11 @@ final class MusicHistoryMemoryService {
             let capsuleEvents = events.filter { $0.playedAt >= start && $0.playedAt < end }
             guard !capsuleEvents.isEmpty else { return nil }
 
+            let playbackRankings = trackRankings(
+                from: capsuleEvents,
+                limit: capsulePlaybackTrackLimit
+            )
+
             let artists = Dictionary(grouping: capsuleEvents, by: { $0.track.artistName })
                 .map { (name: $0.key, playCount: $0.value.count) }
                 .sorted {
@@ -199,8 +206,9 @@ final class MusicHistoryMemoryService {
             return MusicHistoryTimeCapsuleSummary(
                 distance: distance,
                 targetDate: targetDate,
-                topTracks: trackRankings(from: capsuleEvents, limit: capsuleTrackLimit),
-                topArtistNames: Array(artists.prefix(2).map(\.name))
+                topTracks: Array(playbackRankings.prefix(capsuleTrackLimit)),
+                topArtistNames: Array(artists.prefix(2).map(\.name)),
+                playbackTracks: playbackRankings.map(\.track)
             )
         }
     }

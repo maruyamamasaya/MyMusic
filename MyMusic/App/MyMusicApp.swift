@@ -9,6 +9,7 @@ struct MyMusicApp: App {
     @State private var favoriteStore = FavoriteStore()
     @State private var settingsStore: SettingsStore
     @State private var highlightPlayerStore: HighlightPlayerStore
+    @State private var trackFeatureStore = TrackFeatureStore()
 
     init() {
         let historyStore = PlaybackHistoryStore()
@@ -33,6 +34,7 @@ struct MyMusicApp: App {
                 .environment(playbackHistoryStore)
                 .environment(settingsStore)
                 .environment(highlightPlayerStore)
+                .environment(trackFeatureStore)
         }
     }
 }

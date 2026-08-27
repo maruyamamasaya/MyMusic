@@ -53,6 +53,7 @@ struct NowPlayingView: View {
     private var nowPlayingContent: some View {
         VStack(spacing: 18) {
             ArtworkAudioDetailsView(
+                track: playerStore.currentTrack,
                 artworkIdentifier: playerStore.currentTrack?.artworkIdentifier,
                 trackTitle: playerStore.currentTrack?.title,
                 information: playerStore.audioInformation,
@@ -202,6 +203,7 @@ struct NowPlayingView: View {
 }
 
 private struct ArtworkAudioDetailsView: View {
+    let track: Track?
     let artworkIdentifier: String?
     let trackTitle: String?
     let information: AudioInformation
@@ -209,119 +211,32 @@ private struct ArtworkAudioDetailsView: View {
     @Binding var showsAudioDetails: Bool
 
     var body: some View {
-        Button {
-            withAnimation(.snappy) { showsAudioDetails.toggle() }
-        } label: {
-            ZStack {
-                if showsAudioDetails {
-                    AudioInformationView(information: information, spectrumLevels: spectrumLevels)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                } else {
+        ZStack {
+            if showsAudioDetails {
+                AudioInformationView(
+                    track: track,
+                    information: information,
+                    spectrumLevels: spectrumLevels
+                ) {
+                    withAnimation(.snappy) { showsAudioDetails = false }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else {
+                Button {
+                    withAnimation(.snappy) { showsAudioDetails = true }
+                } label: {
                     AlbumArtworkView(
                         artworkIdentifier: artworkIdentifier,
                         displayMode: .fitWithBlurredBackground
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(trackTitle ?? "現在の曲")のアートワーク")
+                .accessibilityHint("ダブルタップしてオーディオ情報を表示")
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
-            .aspectRatio(1, contentMode: .fit)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(showsAudioDetails ? "オーディオ情報" : "\(trackTitle ?? "現在の曲")のアートワーク")
-        .accessibilityHint(showsAudioDetails ? "ダブルタップしてアートワークを表示" : "ダブルタップしてオーディオ情報を表示")
-    }
-}
-
-private struct AudioInformationView: View {
-    let information: AudioInformation
-    let spectrumLevels: [Float]
-
-    private var hasDetails: Bool {
-        information.codec != "Unknown" || information.bitRate != nil || information.sampleRate != nil ||
-        information.bitDepth != nil || information.channels != nil
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("オーディオ情報", systemImage: "waveform")
-                .font(.headline)
-
-            WaveformView(levels: spectrumLevels)
-                .frame(height: 72)
-                .accessibilityHidden(true)
-
-            if hasDetails {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    if information.codec != "Unknown" { row("形式・コーデック", information.codec) }
-                    if let bitRate = information.bitRate { row("ビットレート", "\(bitRate / 1_000) kbps") }
-                    if let sampleRate = information.sampleRate { row("サンプルレート", rate(sampleRate)) }
-                    if let bitDepth = information.bitDepth { row("ビット深度", "\(bitDepth) bit") }
-                    if let channels = information.channels { row("チャンネル", channelDescription(channels)) }
-                }
-                .font(.subheadline)
-            } else {
-                ContentUnavailableView("オーディオ情報がありません", systemImage: "waveform.slash")
-            }
-
-            Spacer(minLength: 0)
-            Text("タップしてアートワークを表示")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func row(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).lineLimit(1).minimumScaleFactor(0.8)
-        }
-    }
-
-    private func rate(_ value: Double) -> String {
-        String(format: "%.1f kHz", value / 1_000)
-    }
-
-    private func channelDescription(_ channels: Int) -> String {
-        switch channels {
-        case 1: "モノラル"
-        case 2: "ステレオ"
-        default: "\(channels) ch"
-        }
-    }
-}
-
-private struct WaveformView: View {
-    let levels: [Float]
-
-    var body: some View {
-        GeometryReader { proxy in
-            let count = max(levels.count, 1)
-            let spacing: CGFloat = 3
-            let width = max((proxy.size.width - spacing * CGFloat(count - 1)) / CGFloat(count), 1)
-
-            HStack(alignment: .center, spacing: spacing) {
-                ForEach(levels.indices, id: \.self) { index in
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.cyan, .blue, .purple],
-                                startPoint: .bottom,
-                                endPoint: .top
-                            )
-                        )
-                        .frame(
-                            width: width,
-                            height: max(3, proxy.size.height * CGFloat(levels[index]))
-                        )
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.linear(duration: 0.08), value: levels)
-        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
