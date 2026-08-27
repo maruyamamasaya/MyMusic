@@ -428,3 +428,29 @@ After completing a task, briefly report:
 - Architecture changes
 - Build result
 - Important limitations
+
+---
+
+# iPhone Device Deployment
+
+These rules apply only when the user explicitly asks to deploy or install MyMusic on an iPhone, for example:
+
+- Deploy to Vspera
+- Install on iPhone
+- Reflect the current build on the physical device
+- Make MyMusic ready to check on the physical device
+
+They do not restrict or replace the normal development, debugging, testing, or simulator build workflow described above.
+
+For an explicit physical-device deployment request:
+
+1. Inspect `git status` without modifying the working tree.
+2. Run `./scripts/check-iphone.sh`.
+3. Run `./scripts/deploy-iphone.sh` only after the device check succeeds.
+4. Report the selected project or workspace, scheme, product, bundle identifier, device name and UDID, and the Build / Install / Launch results.
+
+The default device name is `Vspera`. Use the `DEVICE_NAME` environment variable only when the user explicitly identifies a different device name. Device names must match exactly; do not silently deploy to a similarly named device.
+
+A deployment-only request does not authorize application code, UI, architecture, signing, Bundle Identifier, Development Team, or Deployment Target changes. Do not run destructive Git commands, delete branches or large file sets, change Apple Developer Portal settings, or discard uncommitted work. Preserve existing uncommitted changes while building them as-is.
+
+If deployment fails, investigate and report the cause first. A small, clearly safe correction to the deployment scripts is allowed. Stop and report before making substantial application-code or Xcode-project changes.
