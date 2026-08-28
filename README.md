@@ -181,4 +181,5 @@ xcodebuild \
   build
 ```
 
-開発上の詳細なルールは [AGENTS.md](AGENTS.md) を参照してください。
+継続開発を始めるときは [AGENTS.md](AGENTS.md) を入口に、
+[CURRENT.md](CURRENT.md) で現在状態、[ARCHITECTURE.md](ARCHITECTURE.md) で実装構成を確認してください。
