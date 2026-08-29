@@ -114,6 +114,14 @@ private struct PlaylistManagementView: View {
                 }
             }
 
+            if kind == .regular && !isSelecting {
+                Section("ステーション") {
+                    StationEntryView()
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
+            }
+
             if isSelecting {
                 Section {
                     Button("選択した\(selection.count)件を削除", systemImage: "trash", role: .destructive) {

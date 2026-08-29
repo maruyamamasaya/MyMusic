@@ -32,6 +32,12 @@ struct HomeView: View {
                                     onPlay: playPlaylist
                                 )
                             }
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("ステーション").font(.title3.bold())
+                                StationEntryView()
+                            }
+                            .padding(.horizontal, 16)
+
                             if let workCategory = HomeCategory.all.first(where: { $0.id == .playback }) {
                                 HomeWorkSection(
                                     category: workCategory,

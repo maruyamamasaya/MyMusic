@@ -1,0 +1,16 @@
+{
+  "description": "Human-provided qualitative evaluation only. These labels must never be inference inputs or numerical training targets.",
+  "tracks": [
+    {"artist": "Ado", "title": "Show (Live At Japan National Stadium, 2024)", "expectation": "female vocal, live, intense; energetic; not instrumental"},
+    {"artist": "ダズビー", "title": "360°", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "ダズビー", "title": "Departures 〜あなたにおくるアイの歌〜", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "ダズビー", "title": "Forフルーツバスケット", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "AZKi", "title": "Sincerely", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "AZKi", "title": "たばこ", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "AZKi", "title": "Just Be Friends -piano.ver-", "expectation": "female vocal; artist-level soft voice hypothesis, song mood not guaranteed"},
+    {"artist": "ポケモンチャンピオンズ BGM", "title": "対戦！バトルアリーナ", "expectation": "instrumental, battle BGM, somewhat intense"},
+    {"artist": "ポケモンSV BGM", "title": "ラスボス戦（ファイナル）", "expectation": "instrumental, battle BGM, intense"},
+    {"artist": "超学生×Gero", "title": "ファタール", "expectation": "male vocal, powerful, energetic"},
+    {"artist": "ChroNoiR", "title": "ブラッディ・グルービー", "expectation": "male vocal, low voice, relatively energetic"}
+  ]
+}

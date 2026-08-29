@@ -1,0 +1,7 @@
+# Independent from the production v1 environment. Python 3.12, macOS arm64.
+librosa==0.11.0
+numpy==2.2.6
+soundfile==0.13.1
+onnxruntime==1.29.0
+psutil==7.2.2
+threadpoolctl==3.6.0

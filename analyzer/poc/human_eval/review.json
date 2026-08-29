@@ -1,0 +1,16 @@
+{
+  "purpose": "Qualitative report annotations only. Never used by inference, mapping, model selection coefficients, or export.",
+  "tracks": [
+    {"title": "Show (Live At Japan National Stadium, 2024)", "rating": "人間の認識と概ね一致", "note": "Vocalが明確。Aggressiveは優しい声の6曲より高いが0.465と中程度。Calmはそれらより低い。ライブ判定や性別は今回のheadでは検証していない。"},
+    {"title": "360°", "rating": "部分的に一致", "note": "Calm優勢でShowよりAggressiveは低い。ただしVocal 0.543はInstrumental 0.457と近く、既存Badge閾値0.68にも届かない。声質と曲全体の電子的な伴奏は別要素。"},
+    {"title": "Departures 〜あなたにおくるアイの歌〜", "rating": "人間の認識と概ね一致", "note": "Vocalが明確でCalm優勢。Aggressiveは低い。"},
+    {"title": "Forフルーツバスケット", "rating": "人間の認識と概ね一致", "note": "Vocal優勢でCalmが高い。Aggressiveは低い。"},
+    {"title": "Sincerely", "rating": "人間の認識と概ね一致", "note": "Vocalが明確でCalm優勢。Showとの相対的なMood差がある。"},
+    {"title": "たばこ", "rating": "人間の認識と概ね一致", "note": "Vocal優勢でCalmが高く、Aggressiveは低い。"},
+    {"title": "Just Be Friends -piano.ver-", "rating": "人間の認識と概ね一致", "note": "Vocalが明確でInstrumentalは低い。Pianoは現状0.589を維持し、期待値に合わせて上げていない。"},
+    {"title": "対戦！バトルアリーナ", "rating": "明らかに不一致", "note": "ユーザーのInstrumental認識に対しVocal 0.791と誤判定。Aggressive高め/Calm低めは合うが、最優先のV/Iが不一致。旧Vocal 0.026より悪化した。"},
+    {"title": "ラスボス戦（ファイナル）", "rating": "人間の認識と概ね一致", "note": "Instrumental 0.914、Vocal 0.086で分離。Aggressive 0.601でCalm一辺倒ではない。"},
+    {"title": "ファタール", "rating": "人間の認識と概ね一致", "note": "Vocalが明確。Aggressiveは中低程度だが優しい声の6曲より高く、raw energeticも比較的高い。男性/かっこよさ自体は未分類。"},
+    {"title": "ブラッディ・グルービー", "rating": "部分的に一致", "note": "Vocal優勢だが0.674でBadge閾値未満。Energyと低域量は高めだがAggressiveは0.015と低い。低音/かっこよさ/勢いと攻撃性は同義ではなく、期待へ合わせる補正はしない。"}
+  ]
+}

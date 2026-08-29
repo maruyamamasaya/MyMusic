@@ -1,0 +1,5 @@
+# Optional native frontend audit, installed with --no-deps --target .native.
+# Uses the unchanged PoC venv's existing numpy 2.2.6 (CPython 3.12, arm64).
+essentia==2.1b6.dev1389
+six==1.17.0
+PyYAML==6.0.3

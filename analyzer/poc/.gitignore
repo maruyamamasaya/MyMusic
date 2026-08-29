@@ -1,0 +1,12 @@
+.venv/
+models/
+data/
+output/
+.runtime/
+__pycache__/
+*.pyc
+human_eval/data/
+human_eval/output/
+vi_eval/data/
+vi_eval/output/
+vi_eval/.native/

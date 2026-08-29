@@ -1,0 +1,21 @@
+{
+  "note": "Evaluation selectors and user ground truth only. Never classifier inputs. Selection frozen before inference.",
+  "tracks": [
+    {"artist":"交響アクティブNEETs","title":"亡き王女の為のセプテット","truth":"instrumental","group":"orchestral"},
+    {"artist":"交響アクティブNEETs","title":"ネイティブフェイス","truth":"instrumental","group":"orchestral"},
+    {"artist":"交響アクティブNEETs","title":"封印されし神々","truth":"instrumental","group":"orchestral"},
+    {"artist":"Classics","title":"チェロとピアノのための夜想曲 Op.14 第1番","truth":"instrumental","group":"cello/piano"},
+    {"artist":"Classics","title":"月の光","truth":"instrumental","group":"classics"},
+    {"artist":"Classics","title":"G線上のアリア","truth":"instrumental","group":"classics"},
+    {"artist":"Classics","title":"白鳥（Le Cygne）","truth":"instrumental","group":"classics"},
+    {"artist":"久石譲","title":"海の見える街","truth":"instrumental","group":"orchestral soundtrack"},
+    {"artist":"Keiichi Okabe","title":"最後の歌","truth":"mostly_instrumental","group":"sparse voice","note":"User estimates ~5% voice; not a timestamp annotation or calibrated probability target."},
+    {"artist":"ポケモンチャンピオンズ BGM","title":"ワールドチャンピオンシップ戦","truth":"instrumental","group":"electronic BGM","hardCase":true},
+    {"artist":"さユり","title":"アノニマス","truth":"vocal","group":"vocal"},
+    {"artist":"サザンオールスターズ","title":"勝手にシンドバッド","truth":"vocal","group":"vocal","note":"Request spelling シンドバット; saved title シンドバッド, matching artist and 2024 Remaster path. Explicit evaluation-only spelling resolution."},
+    {"artist":"ずっと真夜中でいいのに。","title":"有心論","truth":"vocal","group":"vocal"},
+    {"artist":"ヨルシカ","title":"あぶく","truth":"vocal","group":"vocal"},
+    {"artist":"supercell","title":"さよならメモリーズ","truth":"vocal","group":"vocal"},
+    {"artist":"natsumi","title":"イージーゲーム","truth":"vocal","group":"vocal","requiredAlbum":"和ぬか","requiredPathText":"feat. 和ぬか_natsumi","note":"Artist natsumi + album 和ぬか + exact title/path. No alternate cover substituted."}
+  ]
+}
