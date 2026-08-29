@@ -957,6 +957,12 @@ private struct HomeItemTile: View {
                 Color(red: 0.08, green: 0.42, blue: 0.68),
                 Color(red: 0.16, green: 0.12, blue: 0.38)
             ]
+        case .musicHistory:
+            [
+                Color(red: 0.96, green: 0.58, blue: 0.20),
+                Color(red: 0.82, green: 0.24, blue: 0.30),
+                Color(red: 0.34, green: 0.08, blue: 0.24)
+            ]
         default:
             [Color.accentColor, Color.accentColor.opacity(0.65), Color.black.opacity(0.72)]
         }
@@ -964,7 +970,7 @@ private struct HomeItemTile: View {
 
     private var gradientStartsAtTopTrailing: Bool {
         switch item.destination {
-        case .albums, .genres, .analytics: true
+        case .albums, .genres, .analytics, .musicHistory: true
         default: false
         }
     }

@@ -25,7 +25,7 @@ updated: 2026-08-29
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
 - mini player / Now Playing、audio 情報、簡易 spectrum、lock screen / Control Center 情報、remote command、background audio 設定。
 - 曲・アルバム・アーティストのお気に入り、通常 / 作業用 playlist、playlist import / export。
-- 複数条件検索、home の各種再生入口、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
+- 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
 

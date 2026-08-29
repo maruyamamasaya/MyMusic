@@ -59,7 +59,8 @@ struct HomeCategory: Identifiable, Hashable {
             description: "再生履歴・再生回数・よく聴く音楽を確認します",
             systemImage: "chart.bar.xaxis",
             items: [
-                HomeCategoryItem(title: "再生分析", description: "履歴、再生回数、よく聴く曲をまとめて表示", systemImage: "chart.xyaxis.line", destination: .analytics)
+                HomeCategoryItem(title: "再生分析", description: "履歴、再生回数、よく聴く曲をまとめて表示", systemImage: "chart.xyaxis.line", destination: .analytics),
+                HomeCategoryItem(title: "音楽史", description: "年・月・日の記録から聴いてきた音楽を振り返る", systemImage: "calendar.badge.clock", destination: .musicHistory)
             ]
         )
     ]
@@ -95,4 +96,5 @@ enum HomeDestination: Hashable {
     case genres
     case composers
     case analytics
+    case musicHistory
 }

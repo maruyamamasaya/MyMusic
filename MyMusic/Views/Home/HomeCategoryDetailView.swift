@@ -127,6 +127,8 @@ struct HomeDestinationView: View {
             ComposersView(composers: libraryStore.composers)
         case .analytics:
             AnalyticsView()
+        case .musicHistory:
+            MusicHistoryView()
         case .workPlaylists:
             WorkPlaylistView(createsNavigationStack: false)
         case .workSizePlay, .nowPlaying, .queue:
