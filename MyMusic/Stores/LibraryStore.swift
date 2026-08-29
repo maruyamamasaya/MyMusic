@@ -159,7 +159,6 @@ final class LibraryStore {
                 includesUnassignedGenreSetting: true
             ))
         }
-        genreDisplayPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         saveGenreDisplayPresets()
     }
     func applyGenreDisplayPreset(_ preset: GenreDisplayPreset) {
@@ -174,7 +173,22 @@ final class LibraryStore {
         genreDisplayPresets[index].name = trimmedName
         genreDisplayPresets[index].enabledGenreNames = enabledGenreNames
         genreDisplayPresets[index].includesUnassignedGenreSetting = true
-        genreDisplayPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        saveGenreDisplayPresets()
+    }
+    func moveGenreDisplayPresets(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        guard !offsets.isEmpty,
+              offsets.allSatisfy(genreDisplayPresets.indices.contains),
+              genreDisplayPresets.indices.contains(destination) || destination == genreDisplayPresets.endIndex else { return }
+
+        let movingPresets = offsets.map { genreDisplayPresets[$0] }
+        let removedBeforeDestination = offsets.count { $0 < destination }
+        for index in offsets.reversed() {
+            genreDisplayPresets.remove(at: index)
+        }
+        genreDisplayPresets.insert(
+            contentsOf: movingPresets,
+            at: destination - removedBeforeDestination
+        )
         saveGenreDisplayPresets()
     }
     func deleteGenreDisplayPreset(_ preset: GenreDisplayPreset) {

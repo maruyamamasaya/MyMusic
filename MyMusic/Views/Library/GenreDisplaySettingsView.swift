@@ -47,7 +47,7 @@ struct GenreDisplaySettingsView: View {
                 .accessibilityValue(libraryStore.areAllGenresEnabled ? "選択中" : "未選択")
             }
 
-            Section("プリセット") {
+            Section {
                 NavigationLink {
                     GenreSelectionEditorView(mode: .newPreset)
                 } label: {
@@ -63,11 +63,24 @@ struct GenreDisplaySettingsView: View {
                     ForEach(libraryStore.genreDisplayPresets) { preset in
                         presetRow(preset)
                     }
+                    .onMove(perform: libraryStore.moveGenreDisplayPresets)
+                }
+            } header: {
+                Text("プリセット")
+            } footer: {
+                if libraryStore.genreDisplayPresets.count > 1 {
+                    Text("右上の「編集」を押すと、ドラッグして表示順を変更できます。")
                 }
             }
         }
         .navigationTitle("ジャンルごとの表示")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                EditButton()
+                    .disabled(libraryStore.genreDisplayPresets.count < 2)
+            }
+        }
         .alert("設定しました", isPresented: appliedSetIsPresented) {
             Button("OK", role: .cancel) { appliedSetName = nil }
         } message: {

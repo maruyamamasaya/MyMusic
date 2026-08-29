@@ -16,7 +16,9 @@ struct HomeView: View {
                         if category.id == .myMusic, !libraryStore.genreDisplayPresets.isEmpty {
                             HomeTuningSection(
                                 presets: libraryStore.genreDisplayPresets,
+                                allGenresAreEnabled: libraryStore.areAllGenresEnabled,
                                 isActive: libraryStore.isGenreDisplayPresetActive,
+                                onShowAllGenres: libraryStore.showAllGenres,
                                 onApply: libraryStore.applyGenreDisplayPreset
                             )
                         }
@@ -231,7 +233,9 @@ struct HomeView: View {
 
 private struct HomeTuningSection: View {
     let presets: [GenreDisplayPreset]
+    let allGenresAreEnabled: Bool
     let isActive: (GenreDisplayPreset) -> Bool
+    let onShowAllGenres: () -> Void
     let onApply: (GenreDisplayPreset) -> Void
 
     @State private var appliedPresetName: String?
@@ -263,12 +267,24 @@ private struct HomeTuningSection: View {
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
+                    Button {
+                        onShowAllGenres()
+                        appliedPresetName = "全曲表示"
+                    } label: {
+                        HomeTuningTag(title: "全曲表示", isActive: allGenresAreEnabled, paletteIndex: 0)
+                    }
+                    .buttonStyle(.plain)
+
                     ForEach(presets) { preset in
                         Button {
                             onApply(preset)
                             appliedPresetName = preset.name
                         } label: {
-                            HomeTuningTag(preset: preset, isActive: isActive(preset))
+                            HomeTuningTag(
+                                title: preset.name,
+                                isActive: !allGenresAreEnabled && isActive(preset),
+                                paletteIndex: paletteIndex(for: preset)
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -297,7 +313,12 @@ private struct HomeTuningSection: View {
     }
 
     private var activePresetName: String? {
-        presets.first(where: isActive)?.name
+        if allGenresAreEnabled { return "全曲表示" }
+        return presets.first(where: isActive)?.name
+    }
+
+    private func paletteIndex(for preset: GenreDisplayPreset) -> Int {
+        1 + preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 6 }
     }
 
     private var appliedPresetIsPresented: Binding<Bool> {
@@ -309,14 +330,15 @@ private struct HomeTuningSection: View {
 }
 
 private struct HomeTuningTag: View {
-    let preset: GenreDisplayPreset
+    let title: String
     let isActive: Bool
+    let paletteIndex: Int
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: isActive ? "checkmark" : "tuningfork")
                 .font(.caption.weight(.bold))
-            Text(preset.name)
+            Text(title)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
         }
@@ -330,7 +352,7 @@ private struct HomeTuningTag: View {
                 .stroke(.white.opacity(isActive ? 0.9 : 0.18), lineWidth: isActive ? 2 : 0.5)
         }
         .contentShape(Capsule())
-        .accessibilityLabel("チューニング、\(preset.name)")
+        .accessibilityLabel("チューニング、\(title)")
         .accessibilityValue(isActive ? "適用中" : "未適用")
         .accessibilityHint(isActive ? "現在適用中です" : "ライブラリの表示を切り替えます")
     }
@@ -354,10 +376,6 @@ private struct HomeTuningTag: View {
             [Color(red: 0.25, green: 0.58, blue: 0.16), Color(red: 0.03, green: 0.38, blue: 0.30)]
         ]
         return palettes[paletteIndex]
-    }
-
-    private var paletteIndex: Int {
-        preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 7 }
     }
 
     private var gradientStartsAtTopTrailing: Bool {
