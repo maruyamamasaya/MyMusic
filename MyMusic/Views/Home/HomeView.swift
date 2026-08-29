@@ -13,6 +13,13 @@ struct HomeView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
+                        if category.id == .myMusic, !libraryStore.genreDisplayPresets.isEmpty {
+                            HomeTuningSection(
+                                presets: libraryStore.genreDisplayPresets,
+                                isActive: libraryStore.isGenreDisplayPresetActive,
+                                onApply: libraryStore.applyGenreDisplayPreset
+                            )
+                        }
                         HomeCarouselSection(
                             category: category,
                             artworkIdentifiers: artworkIdentifiers,
@@ -58,14 +65,6 @@ struct HomeView: View {
                                     },
                                     onInstantPlay: playImmediately,
                                     onPlayPlaylist: playPlaylist
-                                )
-                            }
-                            if !libraryStore.genreDisplayPresets.isEmpty {
-                                HomeTuningSection(
-                                    presets: Array(libraryStore.genreDisplayPresets.prefix(10)),
-                                    showsMore: libraryStore.genreDisplayPresets.count > 10,
-                                    isActive: libraryStore.isGenreDisplayPresetActive,
-                                    onApply: libraryStore.applyGenreDisplayPreset
                                 )
                             }
                         }
@@ -232,153 +231,137 @@ struct HomeView: View {
 
 private struct HomeTuningSection: View {
     let presets: [GenreDisplayPreset]
-    let showsMore: Bool
     let isActive: (GenreDisplayPreset) -> Bool
     let onApply: (GenreDisplayPreset) -> Void
 
-    private let spacing: CGFloat = 12
+    @State private var appliedPresetName: String?
+
+    private let spacing: CGFloat = 10
     private let horizontalPadding: CGFloat = 16
-    private let nextTilePeek: CGFloat = 28
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("チューニング").font(.title3.weight(.bold))
-                Text("シーンに合わせてライブラリの表示を切り替え")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("チューニング").font(.title3.weight(.bold))
+                    Text("シーンに合わせてライブラリの表示を切り替え")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("設定中")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(activePresetName ?? "未選択")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, horizontalPadding)
 
-            GeometryReader { proxy in
-                let width = tileWidth(for: proxy.size.width)
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: spacing) {
-                        ForEach(presets) { preset in
-                            Button { onApply(preset) } label: {
-                                HomeTuningTile(preset: preset, isActive: isActive(preset), width: width)
-                            }
-                            .buttonStyle(.plain)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: spacing) {
+                    ForEach(presets) { preset in
+                        Button {
+                            onApply(preset)
+                            appliedPresetName = preset.name
+                        } label: {
+                            HomeTuningTag(preset: preset, isActive: isActive(preset))
                         }
-                        if showsMore {
-                            NavigationLink(value: HomeDestination.tunings) {
-                                HomeTuningMoreTile(width: width)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, horizontalPadding)
-                    .scrollTargetLayout()
                 }
-                .scrollIndicators(.hidden)
-                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                .padding(.horizontal, horizontalPadding)
+                .scrollTargetLayout()
             }
-            .frame(height: 168)
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(.primary.opacity(0.08), lineWidth: 0.5)
+        }
+        .padding(.horizontal, 16)
+        .alert("設定しました", isPresented: appliedPresetIsPresented) {
+            Button("OK", role: .cancel) { appliedPresetName = nil }
+        } message: {
+            if let appliedPresetName {
+                Text("「\(appliedPresetName)」を設定しました。")
+            }
         }
     }
 
-    private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
-        let visibleTileCount: CGFloat
-        switch availableWidth {
-        case ..<600: visibleTileCount = 2
-        case ..<800: visibleTileCount = 3
-        case ..<1_100: visibleTileCount = 5
-        default: visibleTileCount = 6
-        }
-        let contentWidth = availableWidth - (horizontalPadding * 2) - nextTilePeek
-        return min(180, max(132, (contentWidth - spacing * (visibleTileCount - 1)) / visibleTileCount))
+    private var activePresetName: String? {
+        presets.first(where: isActive)?.name
+    }
+
+    private var appliedPresetIsPresented: Binding<Bool> {
+        Binding(
+            get: { appliedPresetName != nil },
+            set: { if !$0 { appliedPresetName = nil } }
+        )
     }
 }
 
-private struct HomeTuningTile: View {
+private struct HomeTuningTag: View {
     let preset: GenreDisplayPreset
     let isActive: Bool
-    let width: CGFloat
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: isActive ? "slider.horizontal.3" : "tuningfork")
-                .font(.title2.weight(.semibold))
-                .frame(width: 42, height: 42)
-                .background(.white.opacity(0.17), in: RoundedRectangle(cornerRadius: 12))
-            Spacer()
-            Text(preset.name).font(.headline).lineLimit(2)
-            Text(isActive ? "適用中" : "タップして適用")
-                .font(.caption).foregroundStyle(.white.opacity(0.78)).padding(.top, 3)
+        HStack(spacing: 8) {
+            Image(systemName: isActive ? "checkmark" : "tuningfork")
+                .font(.caption.weight(.bold))
+            Text(preset.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
         }
         .foregroundStyle(.white)
-        .padding(14)
-        .frame(width: width, height: 168, alignment: .leading)
-        .background(tuningGradientBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 15)
+        .frame(minHeight: 44)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(tagGradient, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(.white.opacity(isActive ? 0.9 : 0.18), lineWidth: isActive ? 2 : 0.5)
+        }
+        .contentShape(Capsule())
         .accessibilityLabel("チューニング、\(preset.name)")
+        .accessibilityValue(isActive ? "適用中" : "未適用")
         .accessibilityHint(isActive ? "現在適用中です" : "ライブラリの表示を切り替えます")
     }
 
-    private var tuningGradientBackground: some View {
+    private var tagGradient: LinearGradient {
         LinearGradient(
             colors: gradientColors,
             startPoint: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
             endPoint: gradientStartsAtTopTrailing ? .bottomLeading : .bottomTrailing
         )
-        .overlay {
-            RadialGradient(
-                colors: [.white.opacity(0.18), .clear],
-                center: gradientStartsAtTopTrailing ? .topTrailing : .topLeading,
-                startRadius: 0,
-                endRadius: 145
-            )
-        }
-        .overlay(
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.08), location: 0),
-                    .init(color: .black.opacity(0.18), location: 0.48),
-                    .init(color: .black.opacity(0.46), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
     }
 
     private var gradientColors: [Color] {
         let palettes: [[Color]] = [
-            [Color(red: 0.12, green: 0.58, blue: 0.96), Color(red: 0.20, green: 0.28, blue: 0.78), Color(red: 0.10, green: 0.08, blue: 0.30)],
-            [Color(red: 0.96, green: 0.38, blue: 0.34), Color(red: 0.68, green: 0.16, blue: 0.34), Color(red: 0.27, green: 0.07, blue: 0.22)],
-            [Color(red: 0.12, green: 0.72, blue: 0.61), Color(red: 0.04, green: 0.43, blue: 0.45), Color(red: 0.03, green: 0.18, blue: 0.25)],
-            [Color(red: 0.96, green: 0.66, blue: 0.20), Color(red: 0.88, green: 0.31, blue: 0.18), Color(red: 0.35, green: 0.10, blue: 0.12)],
-            [Color(red: 0.69, green: 0.42, blue: 0.95), Color(red: 0.37, green: 0.20, blue: 0.66), Color(red: 0.13, green: 0.08, blue: 0.28)]
+            [Color(red: 0.12, green: 0.48, blue: 0.88), Color(red: 0.18, green: 0.14, blue: 0.60)],
+            [Color(red: 0.85, green: 0.18, blue: 0.45), Color(red: 0.44, green: 0.14, blue: 0.62)],
+            [Color(red: 0.05, green: 0.55, blue: 0.42), Color(red: 0.02, green: 0.31, blue: 0.38)],
+            [Color(red: 0.78, green: 0.31, blue: 0.05), Color(red: 0.68, green: 0.12, blue: 0.18)],
+            [Color(red: 0.58, green: 0.26, blue: 0.85), Color(red: 0.27, green: 0.15, blue: 0.60)],
+            [Color(red: 0.00, green: 0.52, blue: 0.68), Color(red: 0.05, green: 0.30, blue: 0.66)],
+            [Color(red: 0.25, green: 0.58, blue: 0.16), Color(red: 0.03, green: 0.38, blue: 0.30)]
         ]
         return palettes[paletteIndex]
     }
 
     private var paletteIndex: Int {
-        preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 5 }
+        preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 7 }
     }
 
     private var gradientStartsAtTopTrailing: Bool {
         paletteIndex.isMultiple(of: 2)
-    }
-}
-
-private struct HomeTuningMoreTile: View {
-    let width: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: "arrow.right.circle.fill").font(.largeTitle)
-            Spacer()
-            Text("続きを見る").font(.headline)
-            Text("すべてのシーン").font(.caption).foregroundStyle(.white.opacity(0.76)).padding(.top, 3)
-        }
-        .foregroundStyle(.white).padding(14)
-        .frame(width: width, height: 168, alignment: .leading)
-        .background(LinearGradient(colors: [.indigo, .black.opacity(0.86)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 
