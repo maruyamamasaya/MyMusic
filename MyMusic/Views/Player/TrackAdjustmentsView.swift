@@ -10,6 +10,14 @@ struct TrackAdjustmentsView: View {
     let onShowArtwork: () -> Void
 
     @State private var validationMessage: String?
+    @State private var confirmedBoundary: PlaybackBoundary?
+    @State private var confirmationID = UUID()
+    @State private var confirmationTrigger = 0
+
+    private enum PlaybackBoundary {
+        case start
+        case end
+    }
 
     var body: some View {
         ScrollView {
@@ -42,6 +50,8 @@ struct TrackAdjustmentsView: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .task(id: track?.id) {
+            validationMessage = nil
+            confirmedBoundary = nil
             guard let track else { return }
             _ = await adjustmentStore.load(for: track.id, duration: resolvedDuration(for: track))
         }
@@ -59,16 +69,28 @@ struct TrackAdjustmentsView: View {
             valueRow("開始位置", adjustment.customStartPosition.map(formatted) ?? "未設定")
             valueRow("終了位置", adjustment.customEndPosition.map(formatted) ?? "未設定")
 
-            if adjustment.lastPlaybackPosition > 0,
-               adjustment.lastPlaybackPosition < duration {
-                Button("前回位置へ移動") {
-                    playerStore.seek(to: adjustment.lastPlaybackPosition)
+            HStack {
+                Button("1秒戻る", systemImage: "gobackward") {
+                    playerStore.skip(by: -1)
                 }
-                .buttonStyle(.bordered)
+                .disabled(playerStore.currentTime <= 0)
+                .accessibilityHint("開始位置または終了位置を設定する前に現在位置を1秒戻します")
+
+                if adjustment.lastPlaybackPosition > 0,
+                   adjustment.lastPlaybackPosition < duration {
+                    Button("前回位置へ移動") {
+                        playerStore.seek(to: adjustment.lastPlaybackPosition)
+                    }
+                }
             }
+            .font(.caption)
+            .buttonStyle(.bordered)
 
             HStack {
-                Button("現在位置を開始位置に設定") {
+                boundarySettingButton(
+                    title: "現在位置を開始位置に設定",
+                    boundary: .start
+                ) {
                     setStart(track, duration: duration)
                 }
                 Button("リセット") {
@@ -85,7 +107,10 @@ struct TrackAdjustmentsView: View {
             .buttonStyle(.bordered)
 
             HStack {
-                Button("現在位置を終了位置に設定") {
+                boundarySettingButton(
+                    title: "現在位置を終了位置に設定",
+                    boundary: .end
+                ) {
                     setEnd(track, duration: duration)
                 }
                 Button("リセット") {
@@ -108,6 +133,7 @@ struct TrackAdjustmentsView: View {
                     .foregroundStyle(.red)
             }
         }
+        .sensoryFeedback(.success, trigger: confirmationTrigger)
     }
 
     @ViewBuilder
@@ -182,7 +208,13 @@ struct TrackAdjustmentsView: View {
                 position: playerStore.currentTime,
                 duration: duration
             )
-            validationMessage = succeeded ? nil : "開始位置は終了位置より前で、曲の範囲内に設定してください。"
+            if succeeded {
+                validationMessage = nil
+                showConfirmation(for: .start)
+            } else {
+                clearConfirmation()
+                validationMessage = "開始位置は終了位置より前で、曲の範囲内に設定してください。"
+            }
         }
     }
 
@@ -193,8 +225,38 @@ struct TrackAdjustmentsView: View {
                 position: playerStore.currentTime,
                 duration: duration
             )
-            if succeeded { playerStore.refreshActiveTrackAdjustment() }
-            validationMessage = succeeded ? nil : "終了位置は開始位置より後で、曲の範囲内に設定してください。"
+            if succeeded {
+                playerStore.refreshActiveTrackAdjustment()
+                validationMessage = nil
+                showConfirmation(for: .end)
+            } else {
+                clearConfirmation()
+                validationMessage = "終了位置は開始位置より後で、曲の範囲内に設定してください。"
+            }
+        }
+    }
+
+    private func showConfirmation(for boundary: PlaybackBoundary) {
+        let newID = UUID()
+        confirmationID = newID
+        confirmationTrigger += 1
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.62)) {
+            confirmedBoundary = boundary
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard confirmationID == newID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                confirmedBoundary = nil
+            }
+        }
+    }
+
+    private func clearConfirmation() {
+        confirmationID = UUID()
+        withAnimation(.easeOut(duration: 0.2)) {
+            confirmedBoundary = nil
         }
     }
 
@@ -216,6 +278,29 @@ struct TrackAdjustmentsView: View {
         }
         .buttonStyle(.bordered)
         .disabled(!enabled)
+    }
+
+    private func boundarySettingButton(
+        title: String,
+        boundary: PlaybackBoundary,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isConfirmed = confirmedBoundary == boundary
+
+        return Button(action: action) {
+            Label(
+                isConfirmed ? "設定しました" : title,
+                systemImage: isConfirmed ? "checkmark.circle.fill" : "scope"
+            )
+            .contentTransition(.symbolEffect(.replace))
+        }
+        .tint(isConfirmed ? .green : .accentColor)
+        .background(
+            isConfirmed ? Color.green.opacity(0.18) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .shadow(color: isConfirmed ? Color.green.opacity(0.75) : .clear, radius: 8)
+        .accessibilityLabel(isConfirmed ? "設定しました" : title)
     }
 
     private func valueRow(_ label: String, _ value: String) -> some View {
