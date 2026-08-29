@@ -10,22 +10,31 @@ struct MyMusicApp: App {
     @State private var settingsStore: SettingsStore
     @State private var highlightPlayerStore: HighlightPlayerStore
     @State private var trackFeatureStore: TrackFeatureStore
+    @State private var trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore
     @State private var stationStore: StationStore
 
     init() {
         let historyStore = PlaybackHistoryStore()
         let audioPlayer = AudioPlayerService()
         let featureStore = TrackFeatureStore()
+        let adjustmentStore = TrackPlaybackAdjustmentStore()
         let playerStore = PlayerStore(
             audioPlayer: audioPlayer,
             playbackHistoryStore: historyStore,
-            normalizationGainProvider: { trackID in
-                featureStore.feature(for: trackID)?.values.normalizationGainDB
+            trackPlaybackAdjustmentStore: adjustmentStore,
+            normalizationMetadataProvider: { trackID in
+                await featureStore.loadIfNeeded()
+                guard let values = featureStore.feature(for: trackID)?.values else { return nil }
+                return TrackNormalizationMetadata(
+                    automaticGainDB: values.normalizationGainDB,
+                    truePeakDBTP: values.truePeakDBTP
+                )
             }
         )
         let libraryStore = LibraryStore()
         _libraryStore = State(initialValue: libraryStore)
         _trackFeatureStore = State(initialValue: featureStore)
+        _trackPlaybackAdjustmentStore = State(initialValue: adjustmentStore)
         _stationStore = State(initialValue: StationStore(
             libraryStore: libraryStore, featureStore: featureStore,
             historyStore: historyStore, playerStore: playerStore
@@ -51,6 +60,7 @@ struct MyMusicApp: App {
                 .environment(settingsStore)
                 .environment(highlightPlayerStore)
                 .environment(trackFeatureStore)
+                .environment(trackPlaybackAdjustmentStore)
                 .environment(stationStore)
         }
     }

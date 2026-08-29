@@ -59,7 +59,8 @@ final class PlayerStore {
     private let nowPlayingService: NowPlayingServicing
     private let remoteCommandService: RemoteCommandServicing
     private let audioInformationService: AudioInformationServicing?
-    private let normalizationGainProvider: (Track.ID) -> Double?
+    private let trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore
+    private let normalizationMetadataProvider: (Track.ID) async -> TrackNormalizationMetadata?
     private var playbackTask: Task<Void, Never>?
     private var audioInformationTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
@@ -69,6 +70,11 @@ final class PlayerStore {
     private var lastObservedPlaybackTime: TimeInterval?
     private var playbackCountThresholdOverride: TimeInterval?
     private var wasPlayingBeforeInterruption = false
+    private var activeCustomEndPosition: TimeInterval?
+    private var usesTrackAdjustmentBoundaries = false
+    private var isCompletingCustomEnd = false
+    private var lastPositionPersistenceDate = Date.distantPast
+    private let periodicPositionPersistenceInterval: TimeInterval = 7
 
     init(
         audioPlayer: AudioPlayerServicing? = nil,
@@ -76,7 +82,8 @@ final class PlayerStore {
         nowPlayingService: NowPlayingServicing? = nil,
         remoteCommandService: RemoteCommandServicing? = nil,
         audioInformationService: AudioInformationServicing?,
-        normalizationGainProvider: @escaping (Track.ID) -> Double? = { _ in nil }
+        trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore? = nil,
+        normalizationMetadataProvider: @escaping (Track.ID) async -> TrackNormalizationMetadata? = { _ in nil }
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
@@ -84,7 +91,8 @@ final class PlayerStore {
         self.nowPlayingService = nowPlayingService ?? NowPlayingService()
         self.remoteCommandService = remoteCommandService ?? RemoteCommandService()
         self.audioInformationService = audioInformationService
-        self.normalizationGainProvider = normalizationGainProvider
+        self.trackPlaybackAdjustmentStore = trackPlaybackAdjustmentStore ?? TrackPlaybackAdjustmentStore()
+        self.normalizationMetadataProvider = normalizationMetadataProvider
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
         }
@@ -111,7 +119,8 @@ final class PlayerStore {
         playbackHistoryStore: PlaybackHistoryStore? = nil,
         nowPlayingService: NowPlayingServicing? = nil,
         remoteCommandService: RemoteCommandServicing? = nil,
-        normalizationGainProvider: @escaping (Track.ID) -> Double? = { _ in nil }
+        trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore? = nil,
+        normalizationMetadataProvider: @escaping (Track.ID) async -> TrackNormalizationMetadata? = { _ in nil }
     ) {
         self.init(
             audioPlayer: audioPlayer,
@@ -119,7 +128,30 @@ final class PlayerStore {
             nowPlayingService: nowPlayingService,
             remoteCommandService: remoteCommandService,
             audioInformationService: AudioInformationService(),
-            normalizationGainProvider: normalizationGainProvider
+            trackPlaybackAdjustmentStore: trackPlaybackAdjustmentStore,
+            normalizationMetadataProvider: normalizationMetadataProvider
+        )
+    }
+
+    convenience init(
+        audioPlayer: AudioPlayerServicing? = nil,
+        playbackHistoryStore: PlaybackHistoryStore? = nil,
+        nowPlayingService: NowPlayingServicing? = nil,
+        remoteCommandService: RemoteCommandServicing? = nil,
+        normalizationGainProvider: @escaping (Track.ID) -> Double?
+    ) {
+        self.init(
+            audioPlayer: audioPlayer,
+            playbackHistoryStore: playbackHistoryStore,
+            nowPlayingService: nowPlayingService,
+            remoteCommandService: remoteCommandService,
+            audioInformationService: AudioInformationService(),
+            normalizationMetadataProvider: { trackID in
+                TrackNormalizationMetadata(
+                    automaticGainDB: normalizationGainProvider(trackID),
+                    truePeakDBTP: nil
+                )
+            }
         )
     }
 
@@ -231,6 +263,7 @@ final class PlayerStore {
 
     func next(using transitionReason: PlaybackTransitionReason) {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
+            persistCurrentPlaybackPosition(force: true)
             audioPlayer.pause()
             isPlaying = false
             nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: false)
@@ -243,7 +276,7 @@ final class PlayerStore {
     func previous() {
         guard let position = currentPlaybackPosition else { return }
         if currentTime >= previousRestartThreshold || position == 0 {
-            seek(to: 0)
+            seek(to: currentTrack.map { effectiveStartPosition(for: $0) } ?? 0)
         } else {
             startPlayback(at: playbackOrder[position - 1], transitionReason: .manualTrackChange)
         }
@@ -272,6 +305,7 @@ final class PlayerStore {
     }
 
     func pause() {
+        persistCurrentPlaybackPosition(force: true)
         audioPlayer.pause()
     }
 
@@ -301,7 +335,8 @@ final class PlayerStore {
     }
 
     func seek(to time: TimeInterval) {
-        audioPlayer.seek(to: time)
+        let upperBound = activeCustomEndPosition ?? duration
+        audioPlayer.seek(to: min(max(time.isFinite ? time : 0, 0), max(upperBound, 0)))
         nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
     }
 
@@ -349,6 +384,7 @@ final class PlayerStore {
     }
 
     func stop() {
+        persistCurrentPlaybackPosition(force: true)
         playbackTask?.cancel()
         audioInformationTask?.cancel()
         playbackTask = nil
@@ -366,25 +402,38 @@ final class PlayerStore {
         currentTime = 0
         duration = 0
         isLoading = false
+        activeCustomEndPosition = nil
+        usesTrackAdjustmentBoundaries = false
+        isCompletingCustomEnd = false
         nowPlayingService.clear()
         updateRemoteCommandAvailability()
     }
 
     func dismissError() { errorMessage = nil }
 
+    /// Flushes the current position at lifecycle boundaries without coupling
+    /// persistence to a view timer.
+    func persistPlaybackPositionForLifecycle() {
+        persistCurrentPlaybackPosition(force: true)
+    }
+
+    func refreshActiveTrackAdjustment() {
+        guard let track = currentTrack else { return }
+        validateActiveAdjustment(for: duration > 0 ? duration : track.duration)
+    }
+
     private func startPlayback(
         at index: Int,
         playbackStartTime: TimeInterval = 0,
         playbackEndTime: TimeInterval? = nil,
-        transitionReason: PlaybackTransitionReason
+        transitionReason: PlaybackTransitionReason,
+        savesPreviousPosition: Bool = true
     ) {
         guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
+        if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         let track = queue[index]
-        (audioPlayer as? VolumeNormalizationControlling)?.prepareVolumeNormalizationGain(
-            decibels: normalizationGainProvider(track.id) ?? 0
-        )
         currentIndex = index
         currentTrack = track
         loadAudioInformation(for: track)
@@ -392,6 +441,10 @@ final class PlayerStore {
         playbackCountThresholdOverride = playbackEndTime == nil ? nil : 15
         currentTime = playbackStartTime
         duration = track.duration
+        activeCustomEndPosition = nil
+        usesTrackAdjustmentBoundaries = playbackEndTime == nil
+        isCompletingCustomEnd = false
+        lastPositionPersistenceDate = Date()
         isPlaying = false
         isLoading = true
         errorMessage = nil
@@ -405,11 +458,41 @@ final class PlayerStore {
 
         playbackTask = Task { [weak self] in
             guard let self else { return }
+            let adjustment = await trackPlaybackAdjustmentStore.load(
+                for: track.id,
+                duration: track.duration
+            )
+            let normalizationMetadata = await normalizationMetadataProvider(track.id)
+            guard playbackRequestID == requestID, !Task.isCancelled else { return }
+
+            let usesTrackBoundaries = playbackEndTime == nil
+            let resolvedStartTime: TimeInterval
+            if usesTrackBoundaries, playbackStartTime == 0 {
+                resolvedStartTime = adjustment.customStartPosition ?? 0
+            } else {
+                resolvedStartTime = playbackStartTime
+            }
+            activeCustomEndPosition = usesTrackBoundaries ? adjustment.customEndPosition : nil
+            let finalGain = VolumeNormalizationGain.finalDecibels(
+                automaticGainDB: normalizationMetadata?.automaticGainDB,
+                manualAdjustmentDB: adjustment.manualNormalizationAdjustmentDB,
+                truePeakDBTP: normalizationMetadata?.truePeakDBTP
+            )
+            (audioPlayer as? VolumeNormalizationControlling)?.prepareVolumeNormalizationGain(
+                decibels: finalGain
+            )
+            currentTime = resolvedStartTime
+            nowPlayingService.setTrack(
+                track,
+                duration: track.duration,
+                elapsedTime: resolvedStartTime,
+                isPlaying: false
+            )
             do {
                 if let transitionPlayer = audioPlayer as? PlaybackTransitionAudioControlling {
                     try await transitionPlayer.play(
                         track,
-                        startingAt: playbackStartTime,
+                        startingAt: resolvedStartTime,
                         endingAt: playbackEndTime,
                         transition: transitionReason
                     )
@@ -417,6 +500,12 @@ final class PlayerStore {
                     try await audioPlayer.play(track)
                 }
                 guard playbackRequestID == requestID else { return }
+                if let customEnd = activeCustomEndPosition {
+                    (audioPlayer as? PlaybackTransitionAudioControlling)?.scheduleFadeOut(
+                        endingAt: customEnd,
+                        reason: .automaticTrackChange
+                    )
+                }
                 recordPlaybackStartIfNeeded()
             } catch is CancellationError {
                 return
@@ -476,7 +565,11 @@ final class PlayerStore {
 
     private func advanceAfterTrackEnded() {
         if repeatMode == .one, let currentIndex {
-            startPlayback(at: currentIndex, transitionReason: .automaticTrackChange)
+            startPlayback(
+                at: currentIndex,
+                transitionReason: .automaticTrackChange,
+                savesPreviousPosition: false
+            )
             return
         }
 
@@ -484,7 +577,11 @@ final class PlayerStore {
             isPlaying = false
             return
         }
-        startPlayback(at: playbackOrder[nextPosition], transitionReason: .automaticTrackChange)
+        startPlayback(
+            at: playbackOrder[nextPosition],
+            transitionReason: .automaticTrackChange,
+            savesPreviousPosition: false
+        )
     }
 
     private func handle(_ event: AudioPlaybackEvent) {
@@ -493,10 +590,18 @@ final class PlayerStore {
             self.duration = duration
             isLoading = false
             nowPlayingService.updateDuration(duration, elapsedTime: currentTime, isPlaying: isPlaying)
+            validateActiveAdjustment(for: duration)
         case let .timeChanged(time):
             let safeTime = time.isFinite ? time : 0
             recordListenedTime(at: safeTime)
             currentTime = safeTime
+            if let customEnd = activeCustomEndPosition,
+               safeTime >= customEnd,
+               !isCompletingCustomEnd {
+                completeCurrentTrack(at: customEnd)
+            } else {
+                persistCurrentPlaybackPosition(force: false)
+            }
         case let .playingChanged(isPlaying):
             self.isPlaying = isPlaying
             if isPlaying { recordPlaybackStartIfNeeded() }
@@ -507,6 +612,7 @@ final class PlayerStore {
             isPlaying = false
             currentTime = duration
             nowPlayingService.updatePlayback(elapsedTime: duration, isPlaying: false)
+            persistCompletedTrackPosition()
             advanceAfterTrackEnded()
             updateRemoteCommandAvailability()
         case let .failed(message):
@@ -531,6 +637,78 @@ final class PlayerStore {
         listenedTime = 0
         lastObservedPlaybackTime = nil
         playbackCountThresholdOverride = nil
+    }
+
+    private func effectiveStartPosition(for track: Track) -> TimeInterval {
+        trackPlaybackAdjustmentStore.adjustment(for: track.id)
+            .sanitized(for: duration > 0 ? duration : track.duration)
+            .customStartPosition ?? 0
+    }
+
+    private func validateActiveAdjustment(for resolvedDuration: TimeInterval) {
+        guard usesTrackAdjustmentBoundaries, let track = currentTrack else { return }
+        let adjustment = trackPlaybackAdjustmentStore.adjustment(for: track.id)
+            .sanitized(for: resolvedDuration)
+        activeCustomEndPosition = adjustment.customEndPosition
+        scheduleFadeOut(
+            endingAt: activeCustomEndPosition ?? resolvedDuration,
+            reason: .automaticTrackChange
+        )
+        Task { [weak self, trackPlaybackAdjustmentStore] in
+            let persisted = await trackPlaybackAdjustmentStore.load(
+                for: track.id,
+                duration: resolvedDuration
+            )
+            guard let self,
+                  self.currentTrack?.id == track.id,
+                  self.usesTrackAdjustmentBoundaries else { return }
+            self.activeCustomEndPosition = persisted.customEndPosition
+            self.scheduleFadeOut(
+                endingAt: persisted.customEndPosition ?? resolvedDuration,
+                reason: .automaticTrackChange
+            )
+        }
+    }
+
+    private func completeCurrentTrack(at endPosition: TimeInterval) {
+        isCompletingCustomEnd = true
+        audioPlayer.pause()
+        isPlaying = false
+        currentTime = endPosition
+        nowPlayingService.updatePlayback(elapsedTime: endPosition, isPlaying: false)
+        persistCompletedTrackPosition()
+        advanceAfterTrackEnded()
+        updateRemoteCommandAvailability()
+    }
+
+    private func persistCompletedTrackPosition() {
+        guard let track = currentTrack else { return }
+        let resolvedDuration = duration > 0 ? duration : track.duration
+        Task { [trackPlaybackAdjustmentStore] in
+            await trackPlaybackAdjustmentStore.setLastPlaybackPosition(
+                trackID: track.id,
+                position: 0,
+                duration: resolvedDuration
+            )
+        }
+    }
+
+    private func persistCurrentPlaybackPosition(force: Bool) {
+        guard let track = currentTrack else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastPositionPersistenceDate) >= periodicPositionPersistenceInterval else {
+            return
+        }
+        lastPositionPersistenceDate = now
+        let position = currentTime
+        let resolvedDuration = duration > 0 ? duration : track.duration
+        Task { [trackPlaybackAdjustmentStore] in
+            await trackPlaybackAdjustmentStore.setLastPlaybackPosition(
+                trackID: track.id,
+                position: position,
+                duration: resolvedDuration
+            )
+        }
     }
 
     private func recordPlaybackStartIfNeeded() {

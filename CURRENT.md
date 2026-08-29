@@ -29,6 +29,7 @@ updated: 2026-08-29
 
 ### Beta
 
+- **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。
@@ -47,6 +48,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - Semantic v2の差分更新testでは、既存曲Skip、新規曲と新規subfolderだけのaudio read、再実行の全Skip、head再評価時の`audioReads=0`、更新・削除・中断再開、20,000行reconciliationを確認している。
 - Semantic v2統合testでは、defaultのみ、workspace 1件／複数件、空／破損JSON、relativePath衝突、別libraryの同名file、source manifest、統合件数、fail-closedを確認している。
 - 2026-08-27 の特徴量 Beta 3 記録では iPhone 17 / iOS 26.5 Simulator の XCTest 19件と Debug build が成功。
+- 2026-08-29 のTrack Adjustments追加後、iPhone 17 / iOS 26.5 SimulatorのXCTest 54件とDebug buildが成功。Analyzer / Semantic unittest 36件もPython 3.12環境で成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
@@ -60,6 +62,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
+- Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
 - `MetadataService` は `.m4a` container を AAC と表示し、ALAC の stream-level 判別は未実装。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。
 - 既存ライブラリキャッシュはそのままdecodeできる。Album Artistを旧キャッシュへ補完するには一度「再スキャン」が必要で、metadata revisionにより旧Trackだけを一度再抽出する。

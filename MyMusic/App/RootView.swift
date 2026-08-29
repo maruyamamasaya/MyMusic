@@ -8,6 +8,8 @@ struct RootView: View {
     @Environment(FavoriteStore.self) private var favoriteStore
     @Environment(HighlightPlayerStore.self) private var highlightStore
     @Environment(TrackFeatureStore.self) private var trackFeatureStore
+    @Environment(TrackPlaybackAdjustmentStore.self) private var trackPlaybackAdjustmentStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isNowPlayingPresented = false
     @State private var returnsHomeAfterNowPlaying = false
     @State private var selectedTab = RootTab.home
@@ -66,6 +68,16 @@ struct RootView: View {
         } message: {
             Text(favoriteStore.errorMessage ?? "お気に入りを保存できませんでした。")
         }
+        .alert("曲別設定のエラー", isPresented: adjustmentErrorIsPresented) {
+            Button("閉じる") { trackPlaybackAdjustmentStore.dismissError() }
+        } message: {
+            Text(trackPlaybackAdjustmentStore.errorMessage ?? "曲別の再生設定を保存できませんでした。")
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .inactive || newPhase == .background {
+                playerStore.persistPlaybackPositionForLifecycle()
+            }
+        }
         .task { await playlistStore.loadIfNeeded() }
         .task { await playbackHistoryStore.loadIfNeeded() }
         .task { await favoriteStore.loadIfNeeded() }
@@ -97,6 +109,13 @@ struct RootView: View {
         Binding(
             get: { favoriteStore.errorMessage != nil },
             set: { if !$0 { favoriteStore.dismissError() } }
+        )
+    }
+
+    private var adjustmentErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { trackPlaybackAdjustmentStore.errorMessage != nil },
+            set: { if !$0 { trackPlaybackAdjustmentStore.dismissError() } }
         )
     }
 }

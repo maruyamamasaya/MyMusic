@@ -9,7 +9,7 @@ struct NowPlayingView: View {
     @State private var isQueuePresented = false
     @State private var isEqualizerPresented = false
     @State private var isAddToPlaylistPresented = false
-    @State private var showsAudioDetails = false
+    @State private var artworkDisplayState = ArtworkDisplayState.artwork
 
     var body: some View {
         NavigationStack {
@@ -45,7 +45,7 @@ struct NowPlayingView: View {
                 if let track = playerStore.currentTrack { AddToPlaylistSheet(track: track) }
             }
             .onChange(of: playerStore.currentTrack?.id) { _, _ in
-                showsAudioDetails = false
+                artworkDisplayState = .artwork
             }
         }
     }
@@ -58,7 +58,7 @@ struct NowPlayingView: View {
                 trackTitle: playerStore.currentTrack?.title,
                 information: playerStore.audioInformation,
                 spectrumLevels: playerStore.spectrumLevels,
-                showsAudioDetails: $showsAudioDetails
+                displayState: $artworkDisplayState
             )
             .containerRelativeFrame(.horizontal) { availableWidth, _ in
                 min(availableWidth, 360)
@@ -208,22 +208,14 @@ private struct ArtworkAudioDetailsView: View {
     let trackTitle: String?
     let information: AudioInformation
     let spectrumLevels: [Float]
-    @Binding var showsAudioDetails: Bool
+    @Binding var displayState: ArtworkDisplayState
 
     var body: some View {
         ZStack {
-            if showsAudioDetails {
-                AudioInformationView(
-                    track: track,
-                    information: information,
-                    spectrumLevels: spectrumLevels
-                ) {
-                    withAnimation(.snappy) { showsAudioDetails = false }
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            } else {
+            switch displayState {
+            case .artwork:
                 Button {
-                    withAnimation(.snappy) { showsAudioDetails = true }
+                    advance()
                 } label: {
                     AlbumArtworkView(
                         artworkIdentifier: artworkIdentifier,
@@ -234,9 +226,35 @@ private struct ArtworkAudioDetailsView: View {
                 .accessibilityLabel("\(trackTitle ?? "現在の曲")のアートワーク")
                 .accessibilityHint("ダブルタップしてオーディオ情報を表示")
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            case .audioInformation:
+                AudioInformationView(
+                    track: track,
+                    information: information,
+                    spectrumLevels: spectrumLevels,
+                    onShowArtwork: advance
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            case .trackAdjustments:
+                TrackAdjustmentsView(track: track, onShowArtwork: advance)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func advance() {
+        withAnimation(.snappy) { displayState = displayState.next }
+    }
+}
+
+enum ArtworkDisplayState: Int, CaseIterable {
+    case artwork
+    case audioInformation
+    case trackAdjustments
+
+    var next: ArtworkDisplayState {
+        let states = Self.allCases
+        return states[(rawValue + 1) % states.count]
     }
 }

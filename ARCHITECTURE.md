@@ -32,7 +32,7 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 ## Composition と画面構成
 
-`MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Highlight の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task を管理します。
+`MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Highlight の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。
 
 主な View 群は責務別に `Home`、`Library`、`Player`、`Playlist`、`Search`、`Settings`、`Highlight`、`Components` に分かれます。
 
@@ -57,7 +57,11 @@ PlaybackControlsView / playable Views
   → AVAudioEngine → transition mixer → normalization gain → AVAudioUnitEQ → output
 ```
 
-`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。音量ノーマライズはTrack IDで`TrackFeatureStore`の固定dB値を解決し、曲切替の旧render pathを消音後、専用`AVAudioUnitEQ.globalGain`段へ1曲につき一度適用します。OFFまたは0 dB時はこの段をbypassし、fade mixerとユーザーEQから分離します。
+`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
+
+通常再生開始前にPlayerStoreはStable Track IDで`TrackPlaybackAdjustmentStore`を遅延loadし、有効な`customStartPosition`を開始時刻へ反映する。`AudioPlayerService`から0.5秒間隔で届く再生時刻eventを利用し、7秒間隔とpause／曲変更／backgroundで前回位置を保存する。有効な`customEndPosition`到達時は音声を停止して既存の曲終了・repeat・次曲経路へ合流する。Highlight区間には曲別の開始／終了位置を適用しない。
+
+音量ノーマライズはTrack IDで`TrackFeatureStore`の固定dB値と曲別の手動微調整を解決し、合計を±4 dBへ制限した後、True Peakが-1 dBTPを超えない上限を適用する。曲切替の旧render pathを消音後、専用`AVAudioUnitEQ.globalGain`段へ1曲につき一度適用する。OFFまたは0 dB時はこの段をbypassし、fade mixerとユーザーEQから分離する。
 
 ### Music feature analysis / import
 
@@ -107,6 +111,7 @@ server / database migration はありません。端末内の file と UserDefau
 | Artwork / highlight | `ArtworkService` / `HighlightRepository` | Caches 内 file / JSON |
 | Favorites / playlists / playback history | 各 PersistenceService | Application Support 内 JSON |
 | Track features | `TrackFeaturePersistenceService` | Application Support `MyMusic/track-features.json` |
+| Track playback adjustments | `TrackPlaybackAdjustmentPersistenceService` | Application Support `MyMusic/TrackPlaybackAdjustments/<ID先頭2文字>/<Stable Track ID>.json` |
 | EQ / transition / volume normalization / display preferences | `SettingsStore` 等 | UserDefaults |
 | Analyzer progress | Python analyzer | `analyzer/cache/analysis.sqlite3`（DSP + 独立loudness table、Git ignore） |
 | Analyzer export | Python analyzer | `analyzer/output/music_features.json`（Git ignore） |
@@ -118,6 +123,8 @@ server / database migration はありません。端末内の file と UserDefau
 永続化 model を変える場合は既存 decode compatibility と非破壊性を確認します。Track ID を参照するデータが多いため、identity 変更は横断的な migration なしに行いません。
 
 TrackのAlbum Artistはoptionalで、旧cacheのdecodeを維持する。metadata revisionがない旧Trackは次回の手動再スキャン時に一度だけAVFoundation metadataを再抽出する。アルバムは`albumTitle + (albumArtistName ?? artistName)`で導出し、Artist一覧自体はTrack Artistから導出する。
+
+曲別調整は解析JSONへ書き戻さず、端末ユーザー固有データとしてStable Track ID単位のsharded JSONへ保存する。全曲DictionaryをUserDefaultsへ載せず、アクセスした曲だけを遅延loadし、頻繁な位置更新でも他曲の設定ファイルを書き直さない。field欠落は`TrackPlaybackAdjustment`の安全な初期値でdecodeする。
 
 ## Build, tests, delivery
 

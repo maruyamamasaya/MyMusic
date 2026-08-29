@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The back of the artwork. Keep the return action separate from the feature detail button.
+/// The second artwork panel. Advancing preserves the established tap interaction.
 struct AudioInformationView: View {
     @Environment(TrackFeatureStore.self) private var featureStore
     let track: Track?
@@ -20,14 +20,14 @@ struct AudioInformationView: View {
                     audioDetails
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("ダブルタップしてアートワークを表示")
+                .accessibilityHint("ダブルタップして曲別調整を表示")
 
                 if let track, let feature = featureStore.feature(for: track.id) {
                     Divider()
                     TrackFeatureBadgeView(track: track, feature: feature)
                 }
 
-                Button("アートワークに戻る", action: onShowArtwork)
+                Button("Track Adjustmentsへ", action: onShowArtwork)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 44)

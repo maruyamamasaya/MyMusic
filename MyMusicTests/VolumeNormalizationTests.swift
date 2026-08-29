@@ -9,6 +9,27 @@ final class VolumeNormalizationGainTests: XCTestCase {
         XCTAssertEqual(VolumeNormalizationGain.linear(fromDecibels: nil), 1, accuracy: 0.000_001)
         XCTAssertEqual(VolumeNormalizationGain.linear(fromDecibels: .nan), 1, accuracy: 0.000_001)
     }
+
+    func testManualAdjustmentAndTruePeakCeilingConstrainFinalGain() {
+        XCTAssertEqual(
+            VolumeNormalizationGain.finalDecibels(
+                automaticGainDB: 3,
+                manualAdjustmentDB: 0.5,
+                truePeakDBTP: -5
+            ),
+            3.5,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            VolumeNormalizationGain.finalDecibels(
+                automaticGainDB: 4,
+                manualAdjustmentDB: 2,
+                truePeakDBTP: -2
+            ),
+            1,
+            accuracy: 0.000_001
+        )
+    }
 }
 
 @MainActor
@@ -35,7 +56,7 @@ final class VolumeNormalizationSettingsTests: XCTestCase {
 
 @MainActor
 final class VolumeNormalizationPlaybackTests: XCTestCase {
-    func testTrackChangesPrepareTheMatchedFixedGainAndMissingDataUsesZeroDB() {
+    func testTrackChangesPrepareTheMatchedFixedGainAndMissingDataUsesZeroDB() async throws {
         let first = makeTrack(title: "Quiet")
         let second = makeTrack(title: "Unanalyzed")
         let player = NormalizationAudioPlayerSpy()
@@ -48,9 +69,19 @@ final class VolumeNormalizationPlaybackTests: XCTestCase {
         )
 
         store.playQueue([first, second], startingAt: 0)
+        try await waitUntil { player.preparedGains.count == 1 }
         store.playQueueItem(at: 1)
+        try await waitUntil { player.preparedGains.count == 2 }
 
         XCTAssertEqual(player.preparedGains, [3.25, 0])
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async throws {
+        for _ in 0..<100 {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for playback preparation")
     }
 
     private func makeTrack(title: String) -> Track {
