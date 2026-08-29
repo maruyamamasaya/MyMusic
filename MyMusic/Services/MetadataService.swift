@@ -6,6 +6,8 @@ protocol MetadataServicing: Sendable {
 }
 
 final class MetadataService: MetadataServicing, Sendable {
+    nonisolated static let currentMetadataRevision = 1
+
     private let artworkService: ArtworkServicing
     private let identityService: TrackIdentityServicing
 
@@ -26,6 +28,10 @@ final class MetadataService: MetadataServicing, Sendable {
 
         let title = await stringValue(for: .commonIdentifierTitle, in: metadata)
         let artist = await stringValue(for: .commonIdentifierArtist, in: metadata)
+        let albumArtist = await firstStringValue(
+            for: [.iTunesMetadataAlbumArtist, .id3MetadataBand],
+            in: metadata
+        )
         let album = await stringValue(for: .commonIdentifierAlbumName, in: metadata)
         let genre = await joinedStringValues(
             for: [
@@ -58,6 +64,7 @@ final class MetadataService: MetadataServicing, Sendable {
             id: trackID,
             title: title ?? fileURL.deletingPathExtension().lastPathComponent,
             artistName: artist ?? pathFallback.artist ?? "Unknown Artist",
+            albumArtistName: albumArtist,
             albumTitle: album ?? pathFallback.album ?? "Unknown Album",
             duration: duration.isFinite ? duration : 0,
             fileURL: fileURL,
@@ -70,7 +77,8 @@ final class MetadataService: MetadataServicing, Sendable {
             year: await yearValue(in: metadata),
             genre: genre,
             composer: composer,
-            audioFormat: format(for: fileURL)
+            audioFormat: format(for: fileURL),
+            metadataRevision: Self.currentMetadataRevision
         )
     }
 
@@ -103,6 +111,20 @@ final class MetadataService: MetadataServicing, Sendable {
         }
 
         return values.isEmpty ? nil : values.joined(separator: "; ")
+    }
+
+    private func firstStringValue(
+        for identifiers: [AVMetadataIdentifier],
+        in items: [AVMetadataItem]
+    ) async -> String? {
+        for identifier in identifiers {
+            for item in AVMetadataItem.metadataItems(from: items, filteredByIdentifier: identifier) {
+                guard let value = try? await item.load(.stringValue) else { continue }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return nil
     }
 
     private func metadataComponents(from value: String) -> [String] {

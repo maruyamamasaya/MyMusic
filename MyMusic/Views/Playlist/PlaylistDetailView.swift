@@ -14,9 +14,11 @@ struct PlaylistDetailView: View {
     @State private var isRenaming = false
     @State private var renameText = ""
     @State private var syncResult: PlaylistSyncResult?
+    @State private var isSynchronizingSearch = false
+    @State private var searchSyncTask: Task<Void, Never>?
 
     private let exporter = MusicDataExportService()
-    private let searchService = TrackSearchService()
+    private let searchWorker = TrackSearchWorker()
     private var playlist: Playlist? { playlistStore.playlist(id: playlistID) }
     private var tracks: [Track] { playlistStore.tracks(for: playlistID, in: libraryStore.tracks) }
 
@@ -69,6 +71,7 @@ struct PlaylistDetailView: View {
                     Button("検索条件で更新", systemImage: "arrow.triangle.2.circlepath") {
                         synchronizeWithSearch()
                     }
+                    .disabled(isSynchronizingSearch)
                 }
             }
             ToolbarItem(placement: .secondaryAction) {
@@ -99,6 +102,9 @@ struct PlaylistDetailView: View {
             }
         }
         .onDisappear {
+            searchSyncTask?.cancel()
+            searchSyncTask = nil
+            isSynchronizingSearch = false
             isEditingPlaylist = false
             editMode = .inactive
             selectedTracks.removeAll()
@@ -173,15 +179,24 @@ struct PlaylistDetailView: View {
 
     private func synchronizeWithSearch() {
         guard let definition = playlist?.searchDefinition else { return }
-        let matchedTracks = searchService.search(
-            tracks: libraryStore.tracks,
-            query: definition.query,
-            filter: definition.filter,
-            historyEntries: playbackHistoryStore.entries
-        )
-        syncResult = playlistStore.synchronizeSearchPlaylist(
-            id: playlistID,
-            with: matchedTracks
-        )
+        let tracks = libraryStore.tracks
+        let historyEntries = playbackHistoryStore.entries
+        searchSyncTask?.cancel()
+        isSynchronizingSearch = true
+        searchSyncTask = Task { [searchWorker] in
+            let matchedTracks = await searchWorker.search(
+                tracks: tracks,
+                query: definition.query,
+                filter: definition.filter,
+                historyEntries: historyEntries
+            )
+            guard !Task.isCancelled else { return }
+            syncResult = playlistStore.synchronizeSearchPlaylist(
+                id: playlistID,
+                with: matchedTracks
+            )
+            isSynchronizingSearch = false
+            searchSyncTask = nil
+        }
     }
 }

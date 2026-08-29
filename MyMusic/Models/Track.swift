@@ -7,6 +7,7 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     var title: String
     var artistName: String
+    var albumArtistName: String? = nil
     var albumTitle: String? = nil
     var duration: TimeInterval
     var fileURL: URL
@@ -20,6 +21,8 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     var genre: String? = nil
     var composer: String? = nil
     var audioFormat: AudioFormat? = nil
+    // Missing in legacy caches; used to run one-time metadata migrations on rescan.
+    var metadataRevision: Int? = nil
 
     var isLongForm: Bool {
         duration >= Self.longFormMinimumDuration

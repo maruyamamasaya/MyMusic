@@ -160,7 +160,7 @@ class HeadRunner:
         labels['discogs']=dict(zip(self.labels['discogs'],arrays['discogs_mean'].tolist()))
         features={k:round(float(labels[group][label]),6) for k,(group,label) in SEMANTIC_MAPPING.items()}
         features['drumAndBass']=round(labels['discogs']['Electronic---Drum n Bass'],6)
-        for key in ('energy','tempo'):
+        for key in ('energy','tempo','integratedLUFS','truePeakDBTP','normalizationGainDB'):
             if key in dsp:
                 features[key]=dsp[key]
         return features,labels

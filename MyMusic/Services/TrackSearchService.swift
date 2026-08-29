@@ -124,8 +124,10 @@ struct PlaylistSearchDefinition: Codable, Hashable, Sendable {
     var filter: TrackSearchFilter
 }
 
-struct TrackSearchService {
-    func search(
+struct TrackSearchService: Sendable {
+    nonisolated init() {}
+
+    nonisolated func search(
         tracks: [Track],
         query: String,
         filter: TrackSearchFilter,
@@ -133,34 +135,45 @@ struct TrackSearchService {
     ) -> [Track] {
         let terms = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
 
-        return tracks.filter { track in
-            matchesText(
+        var results: [Track] = []
+        results.reserveCapacity(min(tracks.count, 256))
+
+        for (index, track) in tracks.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled { return [] }
+            if matchesText(
                 track,
                 terms: terms,
                 mode: filter.keywordMatchMode,
                 field: filter.keywordField ?? .title
             )
-                && matchesConditions(track, history: historyEntries[track.id], filter: filter)
+                && matchesConditions(track, history: historyEntries[track.id], filter: filter) {
+                results.append(track)
+            }
         }
+        return results
     }
 
-    private func matchesText(
+    private nonisolated func matchesText(
         _ track: Track,
         terms: [String],
         mode: SearchMatchMode,
         field: TrackKeywordField
     ) -> Bool {
         guard !terms.isEmpty else { return true }
-        let value = switch field {
-        case .title: track.title
-        case .album: track.albumTitle ?? ""
-        case .artist: track.artistName
+        let matches = terms.map { term in
+            switch field {
+            case .title:
+                track.title.localizedStandardContains(term)
+            case .album:
+                (track.albumTitle ?? "").localizedStandardContains(term)
+            case .artist:
+                artistNames(for: track).contains { $0.localizedStandardContains(term) }
+            }
         }
-        let matches = terms.map { value.localizedStandardContains($0) }
         return combined(matches, mode: mode)
     }
 
-    private func matchesConditions(
+    private nonisolated func matchesConditions(
         _ track: Track,
         history: PlaybackHistory?,
         filter: TrackSearchFilter
@@ -177,7 +190,7 @@ struct TrackSearchService {
                     !$0.isEmpty && track.genre?.localizedStandardCompare($0) == .orderedSame
                 } ?? false
             case .artist:
-                matchesString(track.artistName, condition: condition)
+                matchesArtist(track, condition: condition)
             case .album:
                 matchesString(track.albumTitle ?? "", condition: condition)
             case .favorite: isFavorite
@@ -192,7 +205,7 @@ struct TrackSearchService {
         return combined(matches, mode: filter.conditionMatchMode)
     }
 
-    private func matchesString(_ candidate: String, condition: TrackSearchCondition) -> Bool {
+    private nonisolated func matchesString(_ candidate: String, condition: TrackSearchCondition) -> Bool {
         let value = condition.textValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !value.isEmpty else { return false }
 
@@ -206,7 +219,30 @@ struct TrackSearchService {
         }
     }
 
-    private func combined(_ values: [Bool], mode: SearchMatchMode) -> Bool {
+    private nonisolated func matchesArtist(_ track: Track, condition: TrackSearchCondition) -> Bool {
+        let value = condition.textValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return false }
+        let candidates = artistNames(for: track)
+
+        return switch condition.textMatchMode ?? .contains {
+        case .contains:
+            candidates.contains { $0.localizedStandardContains(value) }
+        case .exact:
+            candidates.contains { $0.localizedStandardCompare(value) == .orderedSame }
+        case .notContains:
+            candidates.allSatisfy { !$0.localizedStandardContains(value) }
+        }
+    }
+
+    private nonisolated func artistNames(for track: Track) -> [String] {
+        guard let albumArtistName = track.albumArtistName,
+              albumArtistName.localizedStandardCompare(track.artistName) != .orderedSame else {
+            return [track.artistName]
+        }
+        return [track.artistName, albumArtistName]
+    }
+
+    private nonisolated func combined(_ values: [Bool], mode: SearchMatchMode) -> Bool {
         mode == .and ? values.allSatisfy { $0 } : values.contains(true)
     }
 }

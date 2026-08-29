@@ -143,7 +143,8 @@ nonisolated struct TrackFeatureImportService: Sendable {
             ]
             let featureKeys: Set<String> = [
                 "tempo", "energy", "piano", "ambient", "electronic", "drumAndBass",
-                "aggressive", "calm", "bright", "dark", "vocal", "instrumental", "additional"
+                "aggressive", "calm", "bright", "dark", "vocal", "instrumental", "additional",
+                "integratedLUFS", "truePeakDBTP", "normalizationGainDB"
             ]
             for (index, rawTrack) in rawTracks.enumerated() {
                 let unknownEntryKeys = Set(rawTrack.keys).subtracting(entryKeys)
@@ -211,6 +212,26 @@ nonisolated struct TrackFeatureImportService: Sendable {
         if let tempo = entry.features.tempo, (!tempo.isFinite || tempo <= 0) {
             throw TrackFeatureImportError.invalidEntry(index: index, reason: "tempoは0より大きい有限値にしてください。")
         }
+        let loudnessValues = [
+            entry.features.integratedLUFS,
+            entry.features.truePeakDBTP,
+            entry.features.normalizationGainDB
+        ]
+        let presentLoudnessValueCount = loudnessValues.compactMap { $0 }.count
+        guard presentLoudnessValueCount == 0 || presentLoudnessValueCount == loudnessValues.count else {
+            throw TrackFeatureImportError.invalidEntry(
+                index: index,
+                reason: "integratedLUFS、truePeakDBTP、normalizationGainDBは3項目を揃えてください。"
+            )
+        }
+        if presentLoudnessValueCount > 0 {
+            guard loudnessValues.allSatisfy({ $0?.isFinite == true }) else {
+                throw TrackFeatureImportError.invalidEntry(index: index, reason: "音量解析値は有限値にしてください。")
+            }
+            guard let gain = entry.features.normalizationGainDB, (-4 ... 4).contains(gain) else {
+                throw TrackFeatureImportError.invalidEntry(index: index, reason: "normalizationGainDBは-4.0...4.0にしてください。")
+            }
+        }
 
         let fixedNames = Set([
             "energy", "piano", "ambient", "electronic", "drumAndBass", "aggressive",
@@ -226,7 +247,7 @@ nonisolated struct TrackFeatureImportService: Sendable {
                 throw TrackFeatureImportError.invalidEntry(index: index, reason: "特徴量\(name)は0.0...1.0の有限値にしてください。")
             }
         }
-        guard entry.features.tempo != nil || !entry.features.scores.isEmpty else {
+        guard entry.features.tempo != nil || !entry.features.scores.isEmpty || entry.features.hasCompleteNormalization else {
             throw TrackFeatureImportError.invalidEntry(index: index, reason: "featuresが空です。")
         }
     }

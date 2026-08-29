@@ -14,6 +14,9 @@
       "album": "Album",
       "features": {
         "tempo": 92.4,
+        "integratedLUFS": -20.8,
+        "truePeakDBTP": -2.4,
+        "normalizationGainDB": 1.4,
         "energy": 0.72,
         "piano": 0.15,
         "ambient": 0.18,

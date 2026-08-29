@@ -87,7 +87,9 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
     }
 
     private func isUnchanged(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
-        // Older cached indexes have no lightweight fields. Adopt them without re-reading audio metadata.
+        // Legacy cache entries need one metadata read to acquire Album Artist.
+        guard track.metadataRevision == MetadataService.currentMetadataRevision else { return false }
+        // Current-revision entries can still lack lightweight fields when resource values are unavailable.
         guard let oldSize = track.fileSize, let oldDate = track.modificationDate else { return true }
         return oldSize == fileSize && abs(oldDate.timeIntervalSince(modificationDate ?? .distantPast)) < 0.001
     }
@@ -98,7 +100,10 @@ extension MusicLibrary {
     static func build(from tracks: [Track]) -> MusicLibrary {
         struct AlbumKey: Hashable { let title: String; let artist: String }
         let albumGroups = Dictionary(grouping: tracks) {
-            AlbumKey(title: $0.albumTitle ?? "Unknown Album", artist: $0.artistName)
+            AlbumKey(
+                title: $0.albumTitle ?? "Unknown Album",
+                artist: $0.albumArtistName ?? $0.artistName
+            )
         }
         let albums = albumGroups.map { key, tracks in
             Album(
@@ -107,7 +112,10 @@ extension MusicLibrary {
                 artistName: key.artist,
                 artworkIdentifier: tracks.compactMap(\.artworkIdentifier).first,
                 year: tracks.compactMap(\.year).first,
-                trackIDs: tracks.map(\.id)
+                trackIDs: tracks.map(\.id),
+                legacyAlbumIDs: Set(tracks.map {
+                    StableLibraryIdentifier.albumID(title: key.title, artistName: $0.artistName)
+                })
             )
         }.sorted {
             let titleOrder = $0.title.localizedStandardCompare($1.title)
@@ -115,17 +123,31 @@ extension MusicLibrary {
             return $0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending
         }
 
-        let albumsByArtist = Dictionary(grouping: albums, by: \.artistName)
-        let artists = Dictionary(grouping: tracks, by: \.artistName).map { name, tracks in
-            Artist(
+        let albumByTrackID = Dictionary(
+            albums.flatMap { album in album.trackIDs.map { ($0, album) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var artists: [Artist] = Dictionary(grouping: tracks, by: \.artistName).map { name, tracks in
+            var seenAlbumIDs: Set<Album.ID> = []
+            var artistAlbums: [Album] = []
+            for track in tracks {
+                guard let album = albumByTrackID[track.id],
+                      seenAlbumIDs.insert(album.id).inserted else { continue }
+                artistAlbums.append(album)
+            }
+            artistAlbums.sort {
+                $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+            return Artist(
                 id: StableLibraryIdentifier.artistID(name: name),
                 name: name,
-                albumIDs: albumsByArtist[name, default: []]
-                    .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-                    .map(\.id),
+                albumIDs: artistAlbums.map(\.id),
                 trackIDs: tracks.map(\.id)
             )
-        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+        artists.sort { lhs, rhs in
+            lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
 
         let genres = groupedTracks(tracks, value: \.genre).map { name, tracks in
             Genre(id: UUID(), name: name, trackIDs: tracks.map(\.id))

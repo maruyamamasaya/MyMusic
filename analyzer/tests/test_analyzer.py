@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 import unicodedata
@@ -8,6 +9,7 @@ from pathlib import Path
 
 from mymusic_analyzer.cache import AnalysisCache
 from mymusic_analyzer.discovery import discover_audio_files, relative_path
+from mymusic_analyzer.normalization import analyze_loudness, calculate_normalization_gain_db
 from mymusic_analyzer.schema import FEATURE_KEYS, TRACK_KEYS, make_document, validate_document
 
 
@@ -46,6 +48,20 @@ class CacheTests(unittest.TestCase):
             self.assertEqual(cache.valid_result("/music", "Artist/song.wav", 100, 200, 1, "config"), entry)
             self.assertIsNone(cache.valid_result("/music", "Artist/song.wav", 101, 200, 1, "config"))
             self.assertIsNone(cache.valid_result("/music", "Artist/song.wav", 100, 200, 2, "config"))
+
+            loudness = {
+                "integratedLUFS": -20.8,
+                "truePeakDBTP": -2.4,
+                "normalizationGainDB": 1.4,
+            }
+            cache.save_loudness_success("/music", "Artist/song.wav", 100, 200, "loudness-v1", loudness)
+            self.assertEqual(
+                cache.valid_loudness_result("/music", "Artist/song.wav", 100, 200, "loudness-v1"),
+                loudness,
+            )
+            self.assertIsNone(
+                cache.valid_loudness_result("/music", "Artist/song.wav", 100, 201, "loudness-v1")
+            )
             cache.close()
 
 
@@ -69,6 +85,50 @@ class SchemaTests(unittest.TestCase):
         entry["features"]["energy"] = 1.1
         with self.assertRaises(ValueError):
             make_document(1, [entry])
+
+    def test_loudness_fields_are_optional_for_backward_compatibility(self) -> None:
+        validate_document(make_document(1, [_entry()]))
+
+    def test_loudness_fields_must_be_complete_and_gain_is_bounded(self) -> None:
+        entry = _entry()
+        entry["features"]["integratedLUFS"] = -20.8
+        with self.assertRaises(ValueError):
+            make_document(1, [entry])
+
+        entry["features"].update({"truePeakDBTP": -2.4, "normalizationGainDB": 4.1})
+        with self.assertRaises(ValueError):
+            make_document(1, [entry])
+
+
+class NormalizationTests(unittest.TestCase):
+    def test_conservative_dead_band_and_gain_limits(self) -> None:
+        self.assertEqual(calculate_normalization_gain_db(-13.0, -2.0), 0.0)
+        self.assertEqual(calculate_normalization_gain_db(-15.0, -2.0), 0.0)
+        self.assertEqual(calculate_normalization_gain_db(-21.0, -10.0), 4.0)
+        self.assertEqual(calculate_normalization_gain_db(-8.0, -0.5), -4.0)
+
+    def test_true_peak_ceiling_reduces_boost(self) -> None:
+        self.assertEqual(calculate_normalization_gain_db(-20.8, -2.4), 1.4)
+
+    def test_ffmpeg_statistics_are_parsed_without_modifying_the_source(self) -> None:
+        commands = []
+
+        def runner(command, **kwargs):
+            commands.append((command, kwargs))
+            stderr = 'log\n{\n "input_i" : "-20.80",\n "input_tp" : "-2.40"\n}\n'
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr=stderr)
+
+        result = analyze_loudness(Path("/Music/song.flac"), runner=runner)
+
+        self.assertEqual(result, {
+            "integratedLUFS": -20.8,
+            "truePeakDBTP": -2.4,
+            "normalizationGainDB": 1.4,
+        })
+        command, kwargs = commands[0]
+        self.assertEqual(command[-3:], ("-f", "null", "-"))
+        self.assertNotIn("-y", command)
+        self.assertTrue(kwargs["capture_output"])
 
 
 def _entry() -> dict:

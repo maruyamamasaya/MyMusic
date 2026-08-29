@@ -7,4 +7,6 @@ struct Album: Identifiable, Codable, Hashable, Sendable {
     var artworkIdentifier: String? = nil
     var year: Int? = nil
     var trackIDs: [Track.ID]
+    // IDs used by the pre-Album-Artist grouping remain valid favorite aliases.
+    var legacyAlbumIDs: Set<Album.ID>? = nil
 }

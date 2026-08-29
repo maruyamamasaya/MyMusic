@@ -47,8 +47,27 @@
     "features": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "integratedLUFS": ["truePeakDBTP", "normalizationGainDB"],
+        "truePeakDBTP": ["integratedLUFS", "normalizationGainDB"],
+        "normalizationGainDB": ["integratedLUFS", "truePeakDBTP"]
+      },
       "properties": {
         "tempo": { "type": "number", "exclusiveMinimum": 0 },
+        "integratedLUFS": {
+          "type": "number",
+          "description": "Whole-track integrated loudness measured on Mac in LUFS."
+        },
+        "truePeakDBTP": {
+          "type": "number",
+          "description": "Whole-track true peak measured on Mac in dBTP."
+        },
+        "normalizationGainDB": {
+          "type": "number",
+          "minimum": -4.0,
+          "maximum": 4.0,
+          "description": "Fixed conservative playback gain recommended by the Mac analyzer."
+        },
         "energy": { "$ref": "#/$defs/score" },
         "piano": { "$ref": "#/$defs/score" },
         "ambient": { "$ref": "#/$defs/score" },
@@ -76,6 +95,7 @@
       },
       "anyOf": [
         { "required": ["tempo"] },
+        { "required": ["integratedLUFS", "truePeakDBTP", "normalizationGainDB"] },
         { "required": ["energy"] },
         { "required": ["piano"] },
         { "required": ["ambient"] },

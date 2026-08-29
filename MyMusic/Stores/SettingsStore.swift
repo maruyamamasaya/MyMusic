@@ -6,7 +6,7 @@ import Observation
 final class SettingsStore {
     enum Appearance { case system, light, dark }
     var appearance: Appearance = .system
-    var volumeNormalizationEnabled = false
+    private(set) var volumeNormalizationEnabled = false
     var gaplessPlaybackEnabled = true
 
     private(set) var equalizer: EqualizerSettings
@@ -14,19 +14,24 @@ final class SettingsStore {
     private(set) var playbackTransition: PlaybackTransitionSettings
     @ObservationIgnored private weak var equalizerController: EqualizerControlling?
     @ObservationIgnored private weak var playbackTransitionController: PlaybackTransitionControlling?
+    @ObservationIgnored private weak var volumeNormalizationController: VolumeNormalizationControlling?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let equalizerKey = "equalizerSettings"
     @ObservationIgnored private let customPresetsKey = "customEqualizerPresets"
     @ObservationIgnored private let playbackTransitionKey = "playbackTransitionSettings"
+    @ObservationIgnored private let volumeNormalizationKey = "volumeNormalizationEnabled"
 
     init(
         equalizerController: EqualizerControlling? = nil,
         playbackTransitionController: PlaybackTransitionControlling? = nil,
+        volumeNormalizationController: VolumeNormalizationControlling? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.equalizerController = equalizerController
         self.playbackTransitionController = playbackTransitionController
+        self.volumeNormalizationController = volumeNormalizationController
         self.defaults = defaults
+        volumeNormalizationEnabled = defaults.bool(forKey: volumeNormalizationKey)
         if let data = defaults.data(forKey: equalizerKey),
            var saved = try? JSONDecoder().decode(EqualizerSettings.self, from: data) {
             saved.normalize()
@@ -49,6 +54,13 @@ final class SettingsStore {
         }
         equalizerController?.applyEqualizer(equalizer)
         playbackTransitionController?.applyPlaybackTransition(playbackTransition)
+        volumeNormalizationController?.setVolumeNormalizationEnabled(volumeNormalizationEnabled)
+    }
+
+    func setVolumeNormalizationEnabled(_ isEnabled: Bool) {
+        volumeNormalizationEnabled = isEnabled
+        volumeNormalizationController?.setVolumeNormalizationEnabled(isEnabled)
+        defaults.set(isEnabled, forKey: volumeNormalizationKey)
     }
 
     func setEqualizerEnabled(_ isEnabled: Bool) {

@@ -59,6 +59,7 @@ final class PlayerStore {
     private let nowPlayingService: NowPlayingServicing
     private let remoteCommandService: RemoteCommandServicing
     private let audioInformationService: AudioInformationServicing?
+    private let normalizationGainProvider: (Track.ID) -> Double?
     private var playbackTask: Task<Void, Never>?
     private var audioInformationTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
@@ -74,7 +75,8 @@ final class PlayerStore {
         playbackHistoryStore: PlaybackHistoryStore? = nil,
         nowPlayingService: NowPlayingServicing? = nil,
         remoteCommandService: RemoteCommandServicing? = nil,
-        audioInformationService: AudioInformationServicing?
+        audioInformationService: AudioInformationServicing?,
+        normalizationGainProvider: @escaping (Track.ID) -> Double? = { _ in nil }
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
         self.audioPlayer = resolvedPlayer
@@ -82,6 +84,7 @@ final class PlayerStore {
         self.nowPlayingService = nowPlayingService ?? NowPlayingService()
         self.remoteCommandService = remoteCommandService ?? RemoteCommandService()
         self.audioInformationService = audioInformationService
+        self.normalizationGainProvider = normalizationGainProvider
         resolvedPlayer.eventHandler = { [weak self] event in
             self?.handle(event)
         }
@@ -107,14 +110,16 @@ final class PlayerStore {
         audioPlayer: AudioPlayerServicing? = nil,
         playbackHistoryStore: PlaybackHistoryStore? = nil,
         nowPlayingService: NowPlayingServicing? = nil,
-        remoteCommandService: RemoteCommandServicing? = nil
+        remoteCommandService: RemoteCommandServicing? = nil,
+        normalizationGainProvider: @escaping (Track.ID) -> Double? = { _ in nil }
     ) {
         self.init(
             audioPlayer: audioPlayer,
             playbackHistoryStore: playbackHistoryStore,
             nowPlayingService: nowPlayingService,
             remoteCommandService: remoteCommandService,
-            audioInformationService: AudioInformationService()
+            audioInformationService: AudioInformationService(),
+            normalizationGainProvider: normalizationGainProvider
         )
     }
 
@@ -377,6 +382,9 @@ final class PlayerStore {
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         let track = queue[index]
+        (audioPlayer as? VolumeNormalizationControlling)?.prepareVolumeNormalizationGain(
+            decibels: normalizationGainProvider(track.id) ?? 0
+        )
         currentIndex = index
         currentTrack = track
         loadAudioInformation(for: track)

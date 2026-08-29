@@ -12,41 +12,22 @@ struct SearchView: View {
     @State private var isSavingPlaylist = false
     @State private var playlistName = ""
     @State private var savedPlaylistName: String?
-
-    private let searchService = TrackSearchService()
+    @State private var searchStore = TrackSearchStore()
 
     private var hasSearchConditions: Bool {
         !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || filter.hasConditions
     }
 
-    private var results: [Track] {
-        guard hasSearchConditions else { return [] }
-        return searchService.search(
-            tracks: libraryStore.tracks,
-            query: query,
-            filter: filter,
-            historyEntries: playbackHistoryStore.entries
-        )
-    }
+    private var results: [Track] { searchStore.results }
 
     private var availableGenres: [String] {
         Array(Set(libraryStore.tracks.compactMap(\.genre).filter { !$0.isEmpty }))
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
-    private var resultAlbums: [Album] {
-        let trackIDs = Set(results.map(\.id))
-        return libraryStore.albums.filter { album in
-            album.trackIDs.contains { trackIDs.contains($0) }
-        }
-    }
+    private var resultAlbums: [Album] { searchStore.resultAlbums }
 
-    private var resultArtists: [Artist] {
-        let trackIDs = Set(results.map(\.id))
-        return libraryStore.artists.filter { artist in
-            artist.trackIDs.contains { trackIDs.contains($0) }
-        }
-    }
+    private var resultArtists: [Artist] { searchStore.resultArtists }
 
     private var resultsAreEmpty: Bool {
         switch selectedKeywordField {
@@ -118,6 +99,11 @@ struct SearchView: View {
             }
             .navigationTitle("検索")
             .searchable(text: $query, prompt: searchPrompt)
+            .task { updateSearch() }
+            .onChange(of: query) { updateSearch() }
+            .onChange(of: filter) { updateSearch() }
+            .onChange(of: libraryStore.tracks) { updateSearch() }
+            .onChange(of: playbackHistoryStore.entries) { updateSearch() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
@@ -218,6 +204,17 @@ struct SearchView: View {
             searchDefinition: definition
         ) != nil else { return }
         savedPlaylistName = name
+    }
+
+    private func updateSearch() {
+        searchStore.update(
+            tracks: libraryStore.tracks,
+            albums: libraryStore.albums,
+            artists: libraryStore.artists,
+            query: query,
+            filter: filter,
+            historyEntries: playbackHistoryStore.entries
+        )
     }
 }
 

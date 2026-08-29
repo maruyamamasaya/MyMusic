@@ -15,9 +15,15 @@ struct MyMusicApp: App {
     init() {
         let historyStore = PlaybackHistoryStore()
         let audioPlayer = AudioPlayerService()
-        let playerStore = PlayerStore(audioPlayer: audioPlayer, playbackHistoryStore: historyStore)
-        let libraryStore = LibraryStore()
         let featureStore = TrackFeatureStore()
+        let playerStore = PlayerStore(
+            audioPlayer: audioPlayer,
+            playbackHistoryStore: historyStore,
+            normalizationGainProvider: { trackID in
+                featureStore.feature(for: trackID)?.values.normalizationGainDB
+            }
+        )
+        let libraryStore = LibraryStore()
         _libraryStore = State(initialValue: libraryStore)
         _trackFeatureStore = State(initialValue: featureStore)
         _stationStore = State(initialValue: StationStore(
@@ -29,7 +35,8 @@ struct MyMusicApp: App {
         _highlightPlayerStore = State(initialValue: HighlightPlayerStore(playerStore: playerStore))
         _settingsStore = State(initialValue: SettingsStore(
             equalizerController: audioPlayer,
-            playbackTransitionController: audioPlayer
+            playbackTransitionController: audioPlayer,
+            volumeNormalizationController: audioPlayer
         ))
     }
 

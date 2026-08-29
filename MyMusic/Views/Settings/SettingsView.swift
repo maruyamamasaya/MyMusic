@@ -1,9 +1,15 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(SettingsStore.self) private var settingsStore
+
     var body: some View {
         List {
-            Section("オーディオ") {
+            Section {
+                Toggle(isOn: volumeNormalizationBinding) {
+                    Label("音量ノーマライズ", systemImage: "speaker.wave.2.bubble")
+                }
+
                 NavigationLink {
                     PlaybackTransitionSettingsView()
                 } label: {
@@ -15,6 +21,10 @@ struct SettingsView: View {
                 } label: {
                     Label("イコライザ", systemImage: "slider.vertical.3")
                 }
+            } header: {
+                Text("オーディオ")
+            } footer: {
+                Text("Macで解析された音量情報を利用して、極端に音量の異なる曲のみ補正します。")
             }
 
             Section {
@@ -49,5 +59,12 @@ struct SettingsView: View {
         }
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var volumeNormalizationBinding: Binding<Bool> {
+        Binding(
+            get: { settingsStore.volumeNormalizationEnabled },
+            set: { settingsStore.setVolumeNormalizationEnabled($0) }
+        )
     }
 }

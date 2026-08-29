@@ -25,6 +25,7 @@ Import後は合計、照合成功、未照合、曖昧、新規保存、更新�
 - `contentHash`: 任意のSHA-256（64桁hex）。Beta 1では保存するが、iPhone側で生成・照合はしない。
 - `title` / `artist` / `album`: フォールバック照合用の任意metadata。フォールバックにはtitleとartistの両方が必要。
 - `features.tempo`: 任意のBPM。0より大きい有限値。
+- `features.integratedLUFS` / `truePeakDBTP` / `normalizationGainDB`: 任意の音量解析3項目。指定時は3項目すべてを含め、補正値は`-4.0...4.0 dB`とする。
 - その他の標準特徴量: 任意の`0.0...1.0`。
 - `features.additional`: 将来の分類値を格納する任意の辞書。値は`0.0...1.0`。標準特徴量と同名のキーは禁止。
 
@@ -42,7 +43,7 @@ metadata比較では前後空白、大小文字、ダイアクリティカルマ
 ## 保存と削除
 
 特徴量はApplication Supportの`MyMusic/track-features.json`へ保存し、Track IDをキーにメモリindex化する。
-同一Trackの再Importではレコードを増やさず上書きする。古い`analysisVersion`へのダウングレードは行わない。
+同一Trackの再Importではレコードを増やさず上書きする。古い`analysisVersion`へのダウングレードは行わない。ただし、既存の新しいSemantic特徴量を保ったまま、古いAnalyzer JSONから音量解析3項目だけを補完できる。以後Semantic JSONを再Importしても保存済み音量項目は保持する。
 
 管理画面の「特徴量データを削除」はこの専用ファイルだけを削除する。Track、Playlist、PlaybackHistory、評価、お気に入り、再生機能には触れない。
 

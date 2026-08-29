@@ -192,6 +192,14 @@ python analyze.py "/path/to/Music" --resume --segment-seconds 15 --segments 2
 
 segment設定はcache keyに含まれます。設定を変えると、同じ曲も別解析設定として再解析されます。
 
+### 音量ノーマライズ情報
+
+各曲の全区間をFFmpeg `loudnorm`で走査し、BS.1770 / EBU R128系のIntegrated LUFSとTrue Peakを取得します。音声出力先はnullであり、元ファイルの書き換えや再エンコード保存は行いません。
+
+推奨固定ゲインは`mymusic_analyzer/normalization.py`の`NormalizationPolicy`で独立管理します。初期値はtarget `-14 LUFS`、無補正範囲`-17...-11 LUFS`、最大増幅`+4 dB`、最大減衰`-4 dB`、True Peak ceiling `-1 dBTP`です。無補正範囲外ではtargetとの差を±4 dBへ制限し、増幅後のTrue Peakがceilingを超える場合はさらにゲインを下げます。
+
+ラウドネス結果は既存SQLite内の独立した`track_loudness` tableへ、file size・mtime・解析revisionとともに保存します。従来のDSP結果がcache済みで音量項目だけがない曲は、同じ`--resume`コマンドでDSPを再実行せずラウドネスだけを追加解析します。Summaryの`DSP analyzed`、`Loudness`、`cache backfills`で内訳を確認できます。
+
 ## 6. 出力JSON
 
 出力はリポジトリの
@@ -214,6 +222,9 @@ segment設定はcache keyに含まれます。設定を変えると、同じ曲�
       "album": "Album",
       "features": {
         "tempo": 92.4,
+        "integratedLUFS": -20.8,
+        "truePeakDBTP": -2.4,
+        "normalizationGainDB": 1.4,
         "energy": 0.72,
         "piano": 0.15,
         "ambient": 0.18,

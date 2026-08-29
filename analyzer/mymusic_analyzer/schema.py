@@ -15,6 +15,8 @@ STANDARD_SCORES = {
     "calm", "bright", "dark", "vocal", "instrumental",
 }
 FEATURE_KEYS = STANDARD_SCORES | {"tempo", "additional"}
+LOUDNESS_KEYS = {"integratedLUFS", "truePeakDBTP", "normalizationGainDB"}
+FEATURE_KEYS |= LOUDNESS_KEYS
 TRACK_KEYS = {
     "relativePath", "fileSize", "duration", "modificationDate", "contentHash",
     "title", "artist", "album", "features",
@@ -90,6 +92,17 @@ def _validate_features(features: Any, index: int) -> None:
         raise ValueError(f"tracks[{index}].features is invalid")
     if "tempo" in features and (not _finite_number(features["tempo"]) or features["tempo"] <= 0):
         raise ValueError(f"tracks[{index}].features.tempo is invalid")
+    present_loudness_keys = LOUDNESS_KEYS.intersection(features)
+    if present_loudness_keys and present_loudness_keys != LOUDNESS_KEYS:
+        raise ValueError(f"tracks[{index}].features loudness fields must be provided together")
+    for name in ("integratedLUFS", "truePeakDBTP"):
+        if name in features and not _finite_number(features[name]):
+            raise ValueError(f"tracks[{index}].features.{name} is invalid")
+    if "normalizationGainDB" in features and (
+        not _finite_number(features["normalizationGainDB"])
+        or not -4.0 <= features["normalizationGainDB"] <= 4.0
+    ):
+        raise ValueError(f"tracks[{index}].features.normalizationGainDB is outside -4...4")
     for name in STANDARD_SCORES:
         if name in features and not _score(features[name]):
             raise ValueError(f"tracks[{index}].features.{name} is outside 0...1")

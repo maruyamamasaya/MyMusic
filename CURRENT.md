@@ -21,6 +21,7 @@ updated: 2026-08-29
 
 - Files / iCloud Drive の複数フォルダ登録、security-scoped bookmark の復元、音源 scan と library cache。
 - 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。
+- iTunes / ID3のAlbum Artistを保持し、アルバムの統合・表示・検索に使用。検索画面は225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
 - mini player / Now Playing、audio 情報、簡易 spectrum、lock screen / Control Center 情報、remote command、background audio 設定。
 - 曲・アルバム・アーティストのお気に入り、通常 / 作業用 playlist、playlist import / export。
@@ -28,6 +29,8 @@ updated: 2026-08-29
 
 ### Beta
 
+- **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
+- **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。
 - **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
@@ -56,8 +59,10 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 作業用の20分境界、暗転時間、完全一致 genre 名は固定。直接選曲時は通常 player を使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
+- 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - `MetadataService` は `.m4a` container を AAC と表示し、ALAC の stream-level 判別は未実装。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。
+- 既存ライブラリキャッシュはそのままdecodeできる。Album Artistを旧キャッシュへ補完するには一度「再スキャン」が必要で、metadata revisionにより旧Trackだけを一度再抽出する。
 
 ## 次のアクション
 

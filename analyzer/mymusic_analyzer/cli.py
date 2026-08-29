@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import shutil
 import signal
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ from .audio import AnalysisConfig, analyze_audio
 from .cache import AnalysisCache
 from .discovery import discover_audio_files, relative_path
 from .metadata import file_signature, read_metadata
+from .normalization import LOUDNESS_ANALYSIS_REVISION, analyze_loudness
 from .schema import atomic_write_document, make_document
 
 
@@ -51,6 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     cache = AnalysisCache(cache_path)
     analyzed = 0
+    dsp_analyzed = 0
+    loudness_analyzed = 0
+    loudness_backfilled = 0
+    loudness_failed = 0
     failed = 0
     skipped = 0
     deferred = 0
@@ -84,7 +90,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 root_key, relative, size, modification_time_ns,
                 args.analysis_version, config_key,
             )
-            if args.resume and cached is not None:
+            cached_loudness = cache.valid_loudness_result(
+                root_key, relative, size, modification_time_ns, LOUDNESS_ANALYSIS_REVISION,
+            )
+            if cached_loudness is None and cached is not None:
+                cached_loudness = _loudness_from_entry(cached)
+                if cached_loudness is not None:
+                    cache.save_loudness_success(
+                        root_key, relative, size, modification_time_ns,
+                        LOUDNESS_ANALYSIS_REVISION, cached_loudness,
+                    )
+
+            if args.resume and cached is not None and cached_loudness is not None:
+                merged = _merge_loudness(cached, cached_loudness)
+                if merged != cached:
+                    cache.save_success(
+                        root_key, relative, size, modification_time_ns,
+                        args.analysis_version, config_key, merged,
+                    )
                 skipped += 1
                 if skipped == 1 or skipped % 100 == 0 or index == len(files):
                     print(f"[{index:,} / {len(files):,}] Skip cached: {relative}")
@@ -97,16 +120,45 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(relative)
             print("Analyzing...")
             try:
-                metadata = read_metadata(path, root)
-                features = analyze_audio(path, metadata.duration, config)
-                entry = metadata.identity_fields()
-                entry["features"] = features
+                if args.resume and cached is not None:
+                    entry = cached
+                else:
+                    metadata = read_metadata(path, root)
+                    features = analyze_audio(path, metadata.duration, config)
+                    entry = metadata.identity_fields()
+                    entry["features"] = features
+                    dsp_analyzed += 1
+
+                loudness = cached_loudness if args.resume else None
+                if loudness is None:
+                    try:
+                        loudness = analyze_loudness(path)
+                        cache.save_loudness_success(
+                            root_key, relative, size, modification_time_ns,
+                            LOUDNESS_ANALYSIS_REVISION, loudness,
+                        )
+                        loudness_analyzed += 1
+                        if cached is not None:
+                            loudness_backfilled += 1
+                    except Exception as error:
+                        loudness_failed += 1
+                        cache.save_loudness_error(
+                            root_key, relative, size, modification_time_ns,
+                            LOUDNESS_ANALYSIS_REVISION, f"{type(error).__name__}: {error}",
+                        )
+                        print(f"Loudness failed: {type(error).__name__}: {error}")
+                if loudness is not None:
+                    entry = _merge_loudness(entry, loudness)
                 cache.save_success(
-                    root_key, relative, metadata.file_size, metadata.modification_time_ns,
+                    root_key, relative, size, modification_time_ns,
                     args.analysis_version, config_key, entry,
                 )
                 analyzed += 1
-                _print_scores(metadata.artist, metadata.title, features)
+                _print_scores(
+                    str(entry.get("artist", "Unknown Artist")),
+                    str(entry.get("title", path.stem)),
+                    entry["features"],
+                )
             except KeyboardInterrupt:
                 interrupted = True
                 print("\n中断要求を受け付けました。完了済み結果を保存します。")
@@ -134,6 +186,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Failed      : {failed:,}")
     print(f"Skipped     : {skipped:,}")
     print(f"Analyzed    : {analyzed:,}")
+    print(f"DSP analyzed: {dsp_analyzed:,}")
+    print(f"Loudness    : {loudness_analyzed:,} ({loudness_backfilled:,} cache backfills)")
+    print(f"Loudness err: {loudness_failed:,}")
     print(f"Deferred    : {deferred:,}")
     print(f"Output      : {output_path}")
     return 130 if interrupted else 0
@@ -173,6 +228,22 @@ def _print_scores(artist: str, title: str, features: dict[str, Any]) -> None:
     print(f"Energy: {features['energy']:.2f}\n")
 
 
+def _loudness_from_entry(entry: dict[str, Any]) -> dict[str, float] | None:
+    features = entry.get("features")
+    if not isinstance(features, dict):
+        return None
+    names = ("integratedLUFS", "truePeakDBTP", "normalizationGainDB")
+    if not all(name in features for name in names):
+        return None
+    return {name: float(features[name]) for name in names}
+
+
+def _merge_loudness(entry: dict[str, Any], loudness: dict[str, float]) -> dict[str, Any]:
+    merged = dict(entry)
+    merged["features"] = {**entry.get("features", {}), **loudness}
+    return merged
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Mac上で音楽を解析し、MyMusic Track Feature schema v1 JSONを生成します。"
@@ -207,3 +278,5 @@ def _check_runtime(parser: argparse.ArgumentParser) -> None:
             "Python環境または依存関係が不完全です。Homebrew Pythonでvenvを作成し、"
             f"requirements.txtを導入してください。Python: {sys.executable} / Error: {error}"
         )
+    if shutil.which("ffmpeg") is None:
+        parser.error("FFmpegが見つかりません。Homebrew等でffmpegをインストールしてください。")

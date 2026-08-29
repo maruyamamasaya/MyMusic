@@ -7,6 +7,7 @@ struct AnalyticsView: View {
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
     @State private var showsAllMostPlayed = false
+    @State private var playbackResetCandidate: Track?
 
     private var snapshot: AnalyticsSnapshot {
         AnalyticsService().makeSnapshot(
@@ -35,6 +36,24 @@ struct AnalyticsView: View {
         }
         .navigationTitle("分析")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "再生回数をリセットしますか？",
+            isPresented: Binding(
+                get: { playbackResetCandidate != nil },
+                set: { if !$0 { playbackResetCandidate = nil } }
+            ),
+            presenting: playbackResetCandidate
+        ) { track in
+            Button("リセット", role: .destructive) {
+                playbackHistoryStore.resetPlaybackHistory(for: track.id)
+                playbackResetCandidate = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                playbackResetCandidate = nil
+            }
+        } message: { track in
+            Text("「\(track.title)」の再生回数と再生履歴が削除されます。この操作は取り消せません。")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(item: export, preview: SharePreview("MyMusic分析データ")) {
@@ -81,6 +100,16 @@ struct AnalyticsView: View {
                         trackSummary(item.track)
                         Spacer()
                         Text("\(item.playCount)回").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            playbackResetCandidate = item.track
+                        } label: {
+                            Label("再生回数をリセット", systemImage: "arrow.counterclockwise")
+                        }
+                    }
+                    .accessibilityAction(named: "再生回数をリセット") {
+                        playbackResetCandidate = item.track
                     }
                 }
             }

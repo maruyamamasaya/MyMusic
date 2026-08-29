@@ -29,6 +29,27 @@ final class TrackFeatureImportServiceTests: XCTestCase {
         XCTAssertEqual(result.features.first?.values.energy, 0.72)
     }
 
+    func testNormalizationValuesAreImportedAndOldJSONRemainsValid() throws {
+        let track = makeTrack(path: "Artist/Album/song.flac", size: 1_234, duration: 243)
+
+        let oldResult = try service.prepareImport(
+            data: makeJSON(path: track.relativePath!, size: 1_234, duration: 243),
+            libraryTracks: [track]
+        )
+        let normalizedResult = try service.prepareImport(
+            data: makeJSON(
+                path: track.relativePath!, size: 1_234, duration: 243,
+                integratedLUFS: -20.8, truePeakDBTP: -2.4, normalizationGainDB: 1.4
+            ),
+            libraryTracks: [track]
+        )
+
+        XCTAssertNil(oldResult.features.first?.values.normalizationGainDB)
+        XCTAssertEqual(normalizedResult.features.first?.values.integratedLUFS, -20.8)
+        XCTAssertEqual(normalizedResult.features.first?.values.truePeakDBTP, -2.4)
+        XCTAssertEqual(normalizedResult.features.first?.values.normalizationGainDB, 1.4)
+    }
+
     func testInvalidJSONIsRejected() {
         XCTAssertThrowsError(try service.prepareImport(data: Data("not-json".utf8), libraryTracks: [])) { error in
             guard case TrackFeatureImportError.invalidJSON = error else {
@@ -108,13 +129,20 @@ final class TrackFeatureImportServiceTests: XCTestCase {
         album: String? = "Album",
         schemaVersion: Int = 1,
         analysisVersion: Int = 1,
-        energy: Double = 0.72
+        energy: Double = 0.72,
+        integratedLUFS: Double? = nil,
+        truePeakDBTP: Double? = nil,
+        normalizationGainDB: Double? = nil
     ) -> Data {
+        var features: [String: Double] = ["tempo": 92.4, "energy": energy]
+        if let integratedLUFS { features["integratedLUFS"] = integratedLUFS }
+        if let truePeakDBTP { features["truePeakDBTP"] = truePeakDBTP }
+        if let normalizationGainDB { features["normalizationGainDB"] = normalizationGainDB }
         var track: [String: Any] = [
             "relativePath": path,
             "fileSize": size,
             "duration": duration,
-            "features": ["tempo": 92.4, "energy": energy]
+            "features": features
         ]
         if let title { track["title"] = title }
         if let artist { track["artist"] = artist }
@@ -158,6 +186,62 @@ final class TrackFeatureStoreTests: XCTestCase {
         XCTAssertEqual(store.feature(for: track.id)?.values.energy, 0.9)
         let snapshot = await persistence.currentSnapshot()
         XCTAssertEqual(snapshot.features.count, 1)
+    }
+
+    func testOlderAnalyzerCanAddNormalizationWithoutDowngradingSemanticFeatures() async throws {
+        let persistence = InMemoryTrackFeaturePersistence()
+        let store = TrackFeatureStore(persistence: persistence)
+        let track = makeTrack()
+        let helper = TrackFeatureImportServiceTests()
+        _ = try await store.import(
+            data: helper.makeJSON(
+                path: track.relativePath!, size: track.fileSize!, duration: track.duration,
+                analysisVersion: 2, energy: 0.9
+            ),
+            libraryTracks: [track]
+        )
+
+        let result = try await store.import(
+            data: helper.makeJSON(
+                path: track.relativePath!, size: track.fileSize!, duration: track.duration,
+                analysisVersion: 1, energy: 0.2,
+                integratedLUFS: -20.8, truePeakDBTP: -2.4, normalizationGainDB: 1.4
+            ),
+            libraryTracks: [track]
+        )
+
+        XCTAssertEqual(result.updatedCount, 1)
+        XCTAssertEqual(result.skippedOlderAnalysisCount, 0)
+        XCTAssertEqual(store.feature(for: track.id)?.analysisVersion, 2)
+        XCTAssertEqual(store.feature(for: track.id)?.values.energy, 0.9)
+        XCTAssertEqual(store.feature(for: track.id)?.values.normalizationGainDB, 1.4)
+    }
+
+    func testSemanticReimportWithoutLoudnessPreservesExistingNormalization() async throws {
+        let persistence = InMemoryTrackFeaturePersistence()
+        let store = TrackFeatureStore(persistence: persistence)
+        let track = makeTrack()
+        let helper = TrackFeatureImportServiceTests()
+        _ = try await store.import(
+            data: helper.makeJSON(
+                path: track.relativePath!, size: track.fileSize!, duration: track.duration,
+                analysisVersion: 1, energy: 0.2,
+                integratedLUFS: -20.8, truePeakDBTP: -2.4, normalizationGainDB: 1.4
+            ),
+            libraryTracks: [track]
+        )
+
+        _ = try await store.import(
+            data: helper.makeJSON(
+                path: track.relativePath!, size: track.fileSize!, duration: track.duration,
+                analysisVersion: 2, energy: 0.9
+            ),
+            libraryTracks: [track]
+        )
+
+        XCTAssertEqual(store.feature(for: track.id)?.analysisVersion, 2)
+        XCTAssertEqual(store.feature(for: track.id)?.values.energy, 0.9)
+        XCTAssertEqual(store.feature(for: track.id)?.values.normalizationGainDB, 1.4)
     }
 
     func testDeleteRemovesOnlyFeaturePersistence() async throws {

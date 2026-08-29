@@ -30,10 +30,23 @@ final class FavoriteStore {
     }
 
     func isFavorite(albumID: Album.ID) -> Bool { favorites.albumIDs.contains(albumID) }
+    func isFavorite(album: Album) -> Bool {
+        !favorites.albumIDs.isDisjoint(with: compatibleIDs(for: album))
+    }
     func isFavorite(artistID: Artist.ID) -> Bool { favorites.artistIDs.contains(artistID) }
 
     func toggleFavorite(albumID: Album.ID) {
         if favorites.albumIDs.remove(albumID) == nil { favorites.albumIDs.insert(albumID) }
+        persist()
+    }
+
+    func toggleFavorite(album: Album) {
+        let compatibleIDs = compatibleIDs(for: album)
+        if favorites.albumIDs.isDisjoint(with: compatibleIDs) {
+            favorites.albumIDs.insert(album.id)
+        } else {
+            favorites.albumIDs.subtract(compatibleIDs)
+        }
         persist()
     }
 
@@ -43,7 +56,7 @@ final class FavoriteStore {
     }
 
     func favoriteAlbums(from albums: [Album], limit: Int? = nil) -> [Album] {
-        limited(albums.filter { favorites.albumIDs.contains($0.id) }, to: limit)
+        limited(albums.filter { isFavorite(album: $0) }, to: limit)
     }
 
     func favoriteArtists(from artists: [Artist], limit: Int? = nil) -> [Artist] {
@@ -55,6 +68,10 @@ final class FavoriteStore {
     private func limited<Element>(_ values: [Element], to limit: Int?) -> [Element] {
         guard let limit else { return values }
         return Array(values.prefix(limit))
+    }
+
+    private func compatibleIDs(for album: Album) -> Set<Album.ID> {
+        (album.legacyAlbumIDs ?? []).union([album.id])
     }
 
     private func persist() {

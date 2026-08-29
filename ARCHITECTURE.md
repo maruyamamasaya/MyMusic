@@ -54,10 +54,10 @@ Library View → LibraryStore → FileImportService
 PlaybackControlsView / playable Views
   → PlayerStore (queue, repeat, shuffle, presentation state)
   → AudioPlayerService
-  → AVAudioEngine → transition mixer → AVAudioUnitEQ → output
+  → AVAudioEngine → transition mixer → normalization gain → AVAudioUnitEQ → output
 ```
 
-`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
+`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。音量ノーマライズはTrack IDで`TrackFeatureStore`の固定dB値を解決し、曲切替の旧render pathを消音後、専用`AVAudioUnitEQ.globalGain`段へ1曲につき一度適用します。OFFまたは0 dB時はこの段をbypassし、fade mixerとユーザーEQから分離します。
 
 ### Music feature analysis / import
 
@@ -69,6 +69,8 @@ local music files → Python Analyzer → schemaVersion 1 JSON
 ```
 
 Analyzer は librosa / Mutagen / SoundFile と SQLite cache を利用する逐次 CLI です。標準 contract は `Documentation/track-feature-schema-v1.json`。iPhone では音響解析や全曲 hash 計算をせず、特徴量は Track 本体と分離します。採用理由は [ADR-0003](decisions/ADR-0003-mac-feature-analyzer.md) を参照してください。
+
+音量解析は同じCLIからFFmpeg `loudnorm`を音声出力なしで全曲に実行し、`integratedLUFS`、`truePeakDBTP`、`normalizationGainDB`を任意fieldとして既存JSONへ追加する。ラウドネスcacheはDSP cache signatureと分離し、旧DSP cacheへ音量値だけを追解析できる。iPhone importは3項目欠落を0 dBとして扱い、analysisVersionの異なるSemantic特徴量と音量項目を相互に失わないようマージする。
 
 Semantic v2はproduction DSP Analyzerと書込先を分離する。
 
@@ -88,9 +90,9 @@ music root recursive scan
 
 ### Search, favorites, playlists, history
 
-- `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。
+- `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にする。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性を持つ。
-- `PlaybackHistoryStore` は再生回数、rating、event を保存する。`AnalyticsService` と `MusicHistory*Service` は現在 library と履歴から表示用 snapshot を導出する。
+- `PlaybackHistoryStore` は再生回数、rating、event を保存する。分析画面から1曲の履歴をリセットする場合は、対象Trackの再生回数・event・最終再生日時だけを消去し、お気に入り、rating、飽き度は保持する。`AnalyticsService` と `MusicHistory*Service` は現在 library と履歴から表示用 snapshot を導出する。
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history の JSON / Markdown 等の入出力境界を担う。
 
 ## 永続化
@@ -105,8 +107,8 @@ server / database migration はありません。端末内の file と UserDefau
 | Artwork / highlight | `ArtworkService` / `HighlightRepository` | Caches 内 file / JSON |
 | Favorites / playlists / playback history | 各 PersistenceService | Application Support 内 JSON |
 | Track features | `TrackFeaturePersistenceService` | Application Support `MyMusic/track-features.json` |
-| EQ / transition / display preferences | `SettingsStore` 等 | UserDefaults |
-| Analyzer progress | Python analyzer | `analyzer/cache/analysis.sqlite3`（Git ignore） |
+| EQ / transition / volume normalization / display preferences | `SettingsStore` 等 | UserDefaults |
+| Analyzer progress | Python analyzer | `analyzer/cache/analysis.sqlite3`（DSP + 独立loudness table、Git ignore） |
 | Analyzer export | Python analyzer | `analyzer/output/music_features.json`（Git ignore） |
 | Semantic v2 progress / embeddings | Python semantic analyzer | `analyzer/semantic_cache/index.sqlite3` / sharded NPZ（Git ignore） |
 | Semantic v2 isolated workspaces | Python semantic analyzer | `analyzer/semantic_workspaces/library-<ID>`（Git ignore） |
@@ -114,6 +116,8 @@ server / database migration はありません。端末内の file と UserDefau
 | Semantic v2 merged app export | Python semantic exporter | `analyzer/output/music_features_semantic_v2_merged.json` + source sidecar（Git ignore） |
 
 永続化 model を変える場合は既存 decode compatibility と非破壊性を確認します。Track ID を参照するデータが多いため、identity 変更は横断的な migration なしに行いません。
+
+TrackのAlbum Artistはoptionalで、旧cacheのdecodeを維持する。metadata revisionがない旧Trackは次回の手動再スキャン時に一度だけAVFoundation metadataを再抽出する。アルバムは`albumTitle + (albumArtistName ?? artistName)`で導出し、Artist一覧自体はTrack Artistから導出する。
 
 ## Build, tests, delivery
 

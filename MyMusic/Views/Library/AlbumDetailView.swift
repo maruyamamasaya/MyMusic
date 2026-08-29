@@ -7,7 +7,7 @@ struct AlbumDetailView: View {
     let album: Album
 
     private var tracks: [Track] { libraryStore.tracks(for: album) }
-    private var isFavorite: Bool { favoriteStore.isFavorite(albumID: album.id) }
+    private var isFavorite: Bool { favoriteStore.isFavorite(album: album) }
 
     var body: some View {
         List {
@@ -46,7 +46,7 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button(isFavorite ? "お気に入りから削除" : "お気に入りに追加", systemImage: isFavorite ? "heart.fill" : "heart") {
-                favoriteStore.toggleFavorite(albumID: album.id)
+                favoriteStore.toggleFavorite(album: album)
             }
         }
     }

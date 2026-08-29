@@ -98,11 +98,17 @@ final class TrackFeatureStore {
         var inserted = 0
         var updated = 0
         var skippedOlder = 0
-        for feature in preparation.features {
+        for incomingFeature in preparation.features {
+            var feature = incomingFeature
             if let current = merged[feature.trackID] {
-                guard feature.analysisVersion >= current.analysisVersion else {
-                    skippedOlder += 1
-                    continue
+                if feature.analysisVersion < current.analysisVersion {
+                    guard feature.values.hasCompleteNormalization else {
+                        skippedOlder += 1
+                        continue
+                    }
+                    feature = current.replacingNormalization(with: feature)
+                } else {
+                    feature = feature.preservingNormalization(from: current)
                 }
                 updated += 1
             } else {

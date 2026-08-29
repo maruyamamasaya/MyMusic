@@ -181,10 +181,11 @@ NPZ checksumは**音源contentHashではない**。全曲音源SHA-256計算は�
 |dark|既存Jamendo mood/theme headのdark|
 |drumAndBass|保存済みDiscogs `Electronic---Drum n Bass`|
 |energy / tempo|未更新の既存identityだけ、本番baseline JSONに保存済みのDSP値をコピー|
+|integratedLUFS / truePeakDBTP / normalizationGainDB|baseline JSONに存在する場合だけ、その固定音量解析値をコピー|
 
 意味スコアはpatchごとのモデル出力を平均。係数調整/再sigmoid/Artist例外/Badge閾値変更はない。
-新規・更新TrackのEnergy/Tempoは未出力とし、Embeddingから捏造しない。本番DSP解析も起動しない。
-Bright、loudness、embedding自体はMyMusic Import JSONへ追加しない。
+新規・更新TrackのEnergy/Tempoと音量解析値は未出力とし、Embeddingから捏造しない。本番DSP解析も起動しない。
+Brightとembedding自体はMyMusic Import JSONへ追加しない。
 モデルは従来どおりCC BY-NC-SA。今回も配布や商用利用を新たに許可するものではない。
 
 ## Resume / 失敗 / 中断

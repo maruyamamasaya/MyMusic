@@ -43,7 +43,7 @@ struct FavoriteAlbumsView: View {
                         .accessibilityHint("このアルバムをランダム再生")
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
-                                favoriteStore.toggleFavorite(albumID: album.id)
+                                favoriteStore.toggleFavorite(album: album)
                             }
                         }
                     }

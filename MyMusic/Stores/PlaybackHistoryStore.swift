@@ -65,6 +65,20 @@ final class PlaybackHistoryStore {
         persist()
     }
 
+    /// Clears only the playback facts for one track while preserving unrelated
+    /// user choices such as favorites, preference ratings, and shuffle hiding.
+    func resetPlaybackHistory(for trackID: Track.ID) {
+        guard var entry = entries[trackID],
+              entry.playCount > 0 || entry.lastPlayedAt != nil || !entry.playbackEvents.isEmpty else {
+            return
+        }
+        entry.playCount = 0
+        entry.lastPlayedAt = nil
+        entry.playbackEvents.removeAll()
+        entries[trackID] = entry
+        persist()
+    }
+
     func recentTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
         resolvedTracks(from: tracks.filter(\.isEligibleForRegularPlayback)) { $0.lastPlayedAt != nil }
             .sorted { (entries[$0.id]?.lastPlayedAt ?? .distantPast) > (entries[$1.id]?.lastPlayedAt ?? .distantPast) }

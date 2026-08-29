@@ -66,7 +66,13 @@ protocol EqualizerControlling: AnyObject {
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling {
+protocol VolumeNormalizationControlling: AnyObject {
+    func setVolumeNormalizationEnabled(_ isEnabled: Bool)
+    func prepareVolumeNormalizationGain(decibels: Double?)
+}
+
+@MainActor
+final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, VolumeNormalizationControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     var spectrumHandler: (([Float]) -> Void)?
 
@@ -74,6 +80,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let transitionMixer = AVAudioMixerNode()
+    private let volumeNormalizer = AVAudioUnitEQ(numberOfBands: 1)
     private let equalizer = AVAudioUnitEQ(numberOfBands: EqualizerSettings.frequencies.count)
     private var audioFile: AVAudioFile?
     private var currentTrack: Track?
@@ -88,6 +95,9 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private var pausedFrame: AVAudioFramePosition = 0
     private var scheduleID = UUID()
     private var equalizerSettings = EqualizerSettings.flat
+    private var isVolumeNormalizationEnabled = false
+    private var preparedNormalizationGainDB = 0.0
+    private var currentNormalizationGainDB = 0.0
     private var isSpectrumTapInstalled = false
     private lazy var playbackTransitionService = PlaybackTransitionService { [weak self] volume in
         self?.transitionMixer.outputVolume = volume
@@ -97,7 +107,9 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         self.fileImportService = fileImportService ?? FileImportService()
         engine.attach(playerNode)
         engine.attach(transitionMixer)
+        engine.attach(volumeNormalizer)
         engine.attach(equalizer)
+        volumeNormalizer.bands[0].bypass = true
         configureEqualizerBands()
         applyEqualizer(equalizerSettings)
         observeAudioSession()
@@ -133,6 +145,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         try Task.checkCancellation()
 
         stopPlayback(clearTrack: false)
+        applyPreparedNormalizationGain()
         currentTrack = track
         try beginFileAccess(for: track.fileURL)
 
@@ -296,6 +309,15 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         }
     }
 
+    func setVolumeNormalizationEnabled(_ isEnabled: Bool) {
+        isVolumeNormalizationEnabled = isEnabled
+        updateVolumeNormalizer()
+    }
+
+    func prepareVolumeNormalizationGain(decibels: Double?) {
+        preparedNormalizationGainDB = VolumeNormalizationGain.clampedDecibels(decibels)
+    }
+
     private func beginFileAccess(for fileURL: URL) throws {
         endFileAccess()
         let libraryFolders = try fileImportService.restoreLibraryFolders()
@@ -387,10 +409,24 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         if engine.isRunning { engine.stop() }
         engine.disconnectNodeOutput(playerNode)
         engine.disconnectNodeOutput(transitionMixer)
+        engine.disconnectNodeOutput(volumeNormalizer)
         engine.disconnectNodeOutput(equalizer)
         engine.connect(playerNode, to: transitionMixer, format: format)
-        engine.connect(transitionMixer, to: equalizer, format: format)
+        engine.connect(transitionMixer, to: volumeNormalizer, format: format)
+        engine.connect(volumeNormalizer, to: equalizer, format: format)
         engine.connect(equalizer, to: engine.mainMixerNode, format: format)
+    }
+
+    private func applyPreparedNormalizationGain() {
+        currentNormalizationGainDB = preparedNormalizationGainDB
+        updateVolumeNormalizer()
+    }
+
+    private func updateVolumeNormalizer() {
+        let effectiveGainDB = isVolumeNormalizationEnabled ? currentNormalizationGainDB : 0
+        let linearGain = VolumeNormalizationGain.linear(fromDecibels: effectiveGainDB)
+        volumeNormalizer.globalGain = Float(20 * log10(linearGain))
+        volumeNormalizer.bypass = !isVolumeNormalizationEnabled || abs(effectiveGainDB) < 0.000_1
     }
 
     private func schedule(from requestedFrame: AVAudioFramePosition) {
