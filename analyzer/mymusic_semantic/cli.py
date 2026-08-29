@@ -183,6 +183,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description='Independent full-library semantic cache; never writes production/PoC data.')
     mode=parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--update',action='store_true',help='Rescan library, analyze only changes, apply heads, export')
+    mode.add_argument('--export-all',action='store_true',help='Merge completed per-library Semantic JSON outputs')
     mode.add_argument('--stage',choices=('embed','heads'),help='Advanced: run one legacy stage only')
     parser.add_argument('--music-root',type=Path,
                         help='Audio root. With --update, initialize/resume an isolated live-library workspace')
@@ -194,6 +195,9 @@ def main(argv=None):
     parser.add_argument('--expect-tracks',type=int,help='Fail closed if frozen source count differs, e.g. 3552')
     parser.add_argument('--force-heads',action='store_true',help='Re-run heads only; never re-read audio')
     args=parser.parse_args(argv)
+    if args.export_all and any((args.music_root,args.source_json,args.cache_dir,args.output,args.limit,
+                                args.expect_tracks,args.force_heads)):
+        parser.error('--export-all uses automatic source discovery and the fixed analyzer/output destination')
     if args.limit is not None and args.limit<1:
         parser.error('--limit must be positive')
     if args.update and (args.source_json is not None or args.limit is not None or args.expect_tracks is not None):
@@ -214,6 +218,11 @@ def main(argv=None):
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM,interrupted)
     try:
+        if args.export_all:
+            from .exporter import export_all
+            result=export_all()
+            print(json.dumps(result,ensure_ascii=False,indent=2),flush=True)
+            return 0
         with locked_cache(args.cache_dir,create=args.stage=='embed' or (args.update and args.music_root is not None)) as directory:
             runtime(directory)
             if args.update:

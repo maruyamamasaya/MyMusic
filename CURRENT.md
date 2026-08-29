@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-28
+updated: 2026-08-29
 ---
 
 # MyMusic の現在状態
@@ -33,6 +33,7 @@ updated: 2026-08-28
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
 - **音楽特徴量 Beta 1 / 3**: Mac Analyzer の schema v1 JSON を安全に照合・永続化し、audio 情報面で分類 badge と詳細を表示。
+- **Semantic v2 Analyzer**: 保存済みEmbeddingと学習済みheadからVocal / Instrumental、Mood、音色系特徴量を生成する。通常運用は音楽Rootを再帰走査し、relativePathとfileSize / mtimeNSで新規・更新・削除を差分反映する。library単位のcacheを維持したまま、完了済みJSONだけを`--export-all`でアプリ用の1ファイルへ統合できる。2026-08-29にインスト／OST中心3,837曲と従来3,552曲で分布を評価し、追加calibrationなしでraw headをFIXした。
 
 Beta の操作と制約は [README.md](README.md)、特徴量の contract は [Documentation/TrackFeatureBeta1.md](Documentation/TrackFeatureBeta1.md) と [Documentation/TrackFeatureBeta3.md](Documentation/TrackFeatureBeta3.md) を参照してください。
 
@@ -40,12 +41,17 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 
 - `MyMusicTests` に音楽特徴量の import / matching / persistence / presentation / Observation / layout を対象とする XCTest がある。
 - `analyzer/tests` に discovery、cache、schema、audio analysis、CLI を対象とする Python unittest がある。
+- Semantic v2の差分更新testでは、既存曲Skip、新規曲と新規subfolderだけのaudio read、再実行の全Skip、head再評価時の`audioReads=0`、更新・削除・中断再開、20,000行reconciliationを確認している。
+- Semantic v2統合testでは、defaultのみ、workspace 1件／複数件、空／破損JSON、relativePath衝突、別libraryの同名file、source manifest、統合件数、fail-closedを確認している。
 - 2026-08-27 の特徴量 Beta 3 記録では iPhone 17 / iOS 26.5 Simulator の XCTest 19件と Debug build が成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
 
 - 特徴量分類とハイライト候補は軽量 heuristic であり、学習済み分類器の確率やサビ判定ではない。
+- Semantic v2のVocal / Instrumentalは学習済みbinary headだが、game / OST音色をVocalとする局所的なdomain shiftが残る。Artist / Title / Folderによる補正は行わず、再調整は作品横断の人手ラベル付き評価ができた場合に限定する。
+- Semantic単独では新規Trackの`energy` / `tempo`を生成しない。同一relativePathのproduction DSP baselineがある場合だけ値を継承し、2.048秒未満の曲はmodel patchを構成できないため未解析となる。
+- schema v1はmusic-root識別fieldを持たない。異なるrootの同一relativePathはmerged JSONで両方保持するが、fileSize / durationまで同じ複製音源はiPhone importでAmbiguousになり得る。source/library対応はimport対象外sidecarに保持する。
 - 特徴量 schema v1 の `contentHash` は予約項目で、iPhone での生成・照合は未実装。未照合 / 曖昧項目の修正 UI もない。
 - 作業用の20分境界、暗転時間、完全一致 genre 名は固定。直接選曲時は通常 player を使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
@@ -56,6 +62,6 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 ## 次のアクション
 
 1. 新しい Beta は一機能ずつ実装し、対象 test と Simulator build を成功させる。
-2. 特徴量 Beta はまず少数の実音源で照合・表示・聴感を確認し、その後に大規模解析へ進む。
+2. Semantic v2はraw head仕様を維持する。変更が必要になった場合は、作品横断の人手ラベル付き評価で現行仕様との回帰を測る。
 3. 実機確認が必要なリリース候補では、再生操作、background、lock screen / Control Center / AirPods、データ削除の非破壊性を検証する。
 4. CI / lint を導入する場合は、既存環境に存在しないことを前提に別タスクとして設計判断を記録する。

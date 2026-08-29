@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-28
+updated: 2026-08-29
 ---
 
 # MyMusic Architecture
@@ -70,6 +70,22 @@ local music files → Python Analyzer → schemaVersion 1 JSON
 
 Analyzer は librosa / Mutagen / SoundFile と SQLite cache を利用する逐次 CLI です。標準 contract は `Documentation/track-feature-schema-v1.json`。iPhone では音響解析や全曲 hash 計算をせず、特徴量は Track 本体と分離します。採用理由は [ADR-0003](decisions/ADR-0003-mac-feature-analyzer.md) を参照してください。
 
+Semantic v2はproduction DSP Analyzerと書込先を分離する。
+
+```text
+music root recursive scan
+  → NFC relativePath + fileSize + mtimeNS reconciliation
+  → changed tracks only: audio decode → Discogs EffNet embedding
+  → all current embeddings: versioned semantic heads
+  → schemaVersion 1 / analysisVersion 2 JSON (atomic replace)
+```
+
+`analyzer/semantic.py --update`はRootを毎回再帰走査し、既存Embeddingをchecksum付きで再利用する。新規・更新Trackだけが音源を読み、削除TrackはSQLiteの`present=0`として履歴とNPZを保持しながらexport対象から外す。Track identityは曲名やfuzzy matchingではなくNFC正規化した`relativePath`を主キーとする。Embedding profileとhead profileを独立versioningするため、head変更時は音源を読まず全曲を再評価できる。1曲ごとのNPZ、shard配置、逐次処理、checkpointにより20,000曲規模とCtrl+C後の再開を想定する。
+
+通常cacheは`analyzer/semantic_cache`、別Rootの独立解析はRoot identityごとの`analyzer/semantic_workspaces/library-<ID>`を使う。いずれも本番`analyzer/cache/analysis.sqlite3`、本番`music_features.json`、PoC dataへ書き込まない。詳細とFIX済みhead仕様は[Semantic運用](analyzer/SEMANTIC_README.md)と[最終特徴量評価](analyzer/SEMANTIC_CALIBRATION_REPORT.md)を参照する。
+
+アプリ利用時は解析cacheを統合せず、`semantic.py --export-all`が各workspaceの完了済みschema v1 JSONだけを読み、`analyzer/output/music_features_semantic_v2_merged.json`へatomic exportする。異なるmusic-rootはrootから導出した`libraryId`で内部的に分離し、同じrelativePathも別entryとして保持する。MyMusic schemaは追加fieldを許可しないため、libraryIdとoutput indexの対応はimport対象外の`.sources.json` sidecarへ保存する。broken sourceがあればfail closedし、空／未完了workspaceだけを理由付きでskipする。解析成功と全library exportの失敗範囲を分離するため、`--update`から自動実行しない。
+
 ### Search, favorites, playlists, history
 
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。
@@ -92,6 +108,10 @@ server / database migration はありません。端末内の file と UserDefau
 | EQ / transition / display preferences | `SettingsStore` 等 | UserDefaults |
 | Analyzer progress | Python analyzer | `analyzer/cache/analysis.sqlite3`（Git ignore） |
 | Analyzer export | Python analyzer | `analyzer/output/music_features.json`（Git ignore） |
+| Semantic v2 progress / embeddings | Python semantic analyzer | `analyzer/semantic_cache/index.sqlite3` / sharded NPZ（Git ignore） |
+| Semantic v2 isolated workspaces | Python semantic analyzer | `analyzer/semantic_workspaces/library-<ID>`（Git ignore） |
+| Semantic v2 export | Python semantic analyzer | cache内 `output/music_features_semantic_v2.json`（Git ignore） |
+| Semantic v2 merged app export | Python semantic exporter | `analyzer/output/music_features_semantic_v2_merged.json` + source sidecar（Git ignore） |
 
 永続化 model を変える場合は既存 decode compatibility と非破壊性を確認します。Track ID を参照するデータが多いため、identity 変更は横断的な migration なしに行いません。
 
@@ -111,3 +131,4 @@ server / database migration はありません。端末内の file と UserDefau
 - Track Feature 表示と検証: [Documentation/TrackFeatureBeta3.md](Documentation/TrackFeatureBeta3.md)
 - JSON Schema / example: [`Documentation/track-feature-schema-v1.json`](Documentation/track-feature-schema-v1.json), [`Documentation/track-feature-v1.example.json`](Documentation/track-feature-v1.example.json)
 - Analyzer 運用: [analyzer/README.md](analyzer/README.md)
+- Semantic v2 運用・評価: [analyzer/SEMANTIC_README.md](analyzer/SEMANTIC_README.md), [analyzer/SEMANTIC_CALIBRATION_REPORT.md](analyzer/SEMANTIC_CALIBRATION_REPORT.md)

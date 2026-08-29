@@ -15,7 +15,8 @@ from mymusic_analyzer.discovery import relative_path
 from mymusic_analyzer.schema import make_document,validate_document
 from mymusic_semantic import cli,models
 from mymusic_semantic.cache import SemanticCache
-from mymusic_semantic.safety import CACHE_HOME,CACHE_SETS_HOME,locked_cache,safe_path,digest
+from mymusic_semantic.exporter import export_all
+from mymusic_semantic.safety import CACHE_HOME,CACHE_SETS_HOME,FORMAT,locked_cache,safe_path,digest,fingerprint
 from mymusic_semantic.scope import (dynamic_cache_name,prepare_dynamic_scope,prepare_scope,
                                     refresh_scope,scan_scope)
 
@@ -386,6 +387,138 @@ class SemanticTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             _,profile=cli.heads(self.cache,repeated,None,runner_factory=FakeHeads)
         self.assertNotIn('track1.m4a',{row['relativePath'] for row in self.cache.export_rows(profile)})
+
+
+class ExportAllTests(unittest.TestCase):
+    def setUp(self):
+        CACHE_HOME.mkdir(parents=True,exist_ok=True)
+        self.tmp=tempfile.TemporaryDirectory(dir=CACHE_HOME)
+        self.parent=Path(self.tmp.name)
+        self.default=self.parent/'semantic_cache'
+        self.workspaces=self.parent/'semantic_workspaces'
+        self.output=self.parent/'output'/'music_features_semantic_v2_merged.json'
+        self.sources=self.parent/'output'/'music_features_semantic_v2_merged.sources.json'
+        self.messages=[]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def track(self,relative='Artist/song.m4a',vocal=.2,file_size=100):
+        return dict(relativePath=relative,fileSize=file_size,duration=120.,title=Path(relative).stem,
+                    artist='Test',album='Test',features=dict(
+                        vocal=vocal,instrumental=1-vocal,aggressive=.3,calm=.6,piano=.2,
+                        electronic=.1,ambient=.1,dark=.05,drumAndBass=.01))
+
+    def source(self,root,tracks=None,default=False,raw=None,with_output=True):
+        root=str(Path(root).absolute())
+        directory=self.default if default else self.workspaces/f'library-{fingerprint(root)[:16]}'
+        (directory/'output').mkdir(parents=True,exist_ok=True)
+        (directory/'owner.json').write_text(json.dumps({'format':FORMAT}))
+        (directory/'scope.json').write_text(json.dumps({'root':root,'mode':'dynamic','tracks':[]}))
+        output=directory/'output/music_features_semantic_v2.json'
+        if with_output:
+            output.write_text(raw if raw is not None else json.dumps(make_document(2,tracks or [])))
+        return directory
+
+    def run_export(self):
+        return export_all(self.default,self.workspaces,self.output,self.sources,self.messages.append)
+
+    def test_export_all_default_cache_only(self):
+        original=self.track(vocal=.123456)
+        self.source(self.parent/'root-default',[original],default=True)
+        before={path.relative_to(self.default):path.read_bytes()
+                for path in self.default.rglob('*') if path.is_file()}
+        result=self.run_export()
+        document=json.loads(self.output.read_text())
+        validate_document(document)
+        self.assertEqual((result['inputTracks'],result['exported'],result['audioReads']),(1,1,0))
+        self.assertEqual(document['tracks'][0],original)
+        self.assertEqual(result['sources'][0]['source'],'default')
+        self.assertEqual(before,{path.relative_to(self.default):path.read_bytes()
+                                 for path in self.default.rglob('*') if path.is_file()})
+
+    def test_export_all_one_workspace_without_default(self):
+        self.source(self.parent/'root-one',[self.track()])
+        result=self.run_export()
+        self.assertEqual((len(result['sources']),result['exported']),(1,1))
+        self.assertTrue(result['sources'][0]['source'].startswith('library-'))
+
+    def test_export_all_multiple_workspaces_and_skips_empty(self):
+        self.source(self.parent/'root-a',[self.track('A/one.m4a')])
+        self.source(self.parent/'root-b',[self.track('B/two.m4a'),self.track('B/three.m4a')])
+        self.source(self.parent/'root-empty',[])
+        self.source(self.parent/'root-missing',with_output=False)
+        result=self.run_export()
+        document=json.loads(self.output.read_text())
+        self.assertEqual((result['inputTracks'],result['exported'],len(document['tracks'])),(3,3,3))
+        statuses=[source['status'] for source in result['sources']]
+        self.assertEqual(statuses.count('included'),2)
+        self.assertEqual(statuses.count('skipped'),2)
+        self.assertTrue(any('zero tracks' in message for message in self.messages))
+        self.assertTrue(any('missing' in message for message in self.messages))
+
+    def test_export_all_broken_or_incomplete_json_fails_without_overwrite(self):
+        previous=make_document(2,[self.track('Previous/keep.m4a')])
+        self.output.parent.mkdir(parents=True)
+        self.output.write_text(json.dumps(previous))
+        before=self.output.read_bytes()
+        self.source(self.parent/'root-good',[self.track()])
+        self.source(self.parent/'root-broken',raw='{"schemaVersion": 1,')
+        with self.assertRaisesRegex(ValueError,'broken JSON'):
+            self.run_export()
+        self.assertEqual(self.output.read_bytes(),before)
+        broken=self.workspaces/f'library-{fingerprint(str((self.parent/"root-broken").absolute()))[:16]}'
+        (broken/'output/music_features_semantic_v2.json').write_text(json.dumps({'schemaVersion':1}))
+        with self.assertRaisesRegex(ValueError,'invalid/incomplete'):
+            self.run_export()
+        self.assertEqual(self.output.read_bytes(),before)
+
+    def test_cross_library_relative_path_collision_retains_both_and_manifest_sources(self):
+        first=self.track('Shared/song.m4a',vocal=.1,file_size=100)
+        second=self.track('Shared/song.m4a',vocal=.8,file_size=200)
+        self.source(self.parent/'root-a',[first])
+        self.source(self.parent/'root-b',[second])
+        result=self.run_export()
+        document=json.loads(self.output.read_text())
+        manifest=json.loads(self.sources.read_text())
+        self.assertEqual((result['exported'],result['relativePathCollisions']),(2,1))
+        self.assertEqual([track['relativePath'] for track in document['tracks']],['Shared/song.m4a']*2)
+        self.assertEqual({track['features']['vocal'] for track in document['tracks']},{.1,.8})
+        self.assertTrue(all(set(track).issubset({'relativePath','fileSize','duration','modificationDate',
+                                                'contentHash','title','artist','album','features'})
+                            for track in document['tracks']))
+        self.assertEqual(len({track['libraryId'] for track in manifest['tracks']}),2)
+        self.assertEqual(manifest['outputTrackCount'],2)
+
+    def test_same_filename_in_different_libraries_is_not_deduplicated(self):
+        self.source(self.parent/'root-a',[self.track('Artist A/song.m4a',file_size=100)])
+        self.source(self.parent/'root-b',[self.track('Artist B/song.m4a',file_size=100)])
+        result=self.run_export()
+        paths=[track['relativePath'] for track in json.loads(self.output.read_text())['tracks']]
+        self.assertEqual((result['exported'],paths),(2,['Artist A/song.m4a','Artist B/song.m4a']))
+
+    def test_duplicate_library_root_or_in_source_path_fails_closed(self):
+        root=self.parent/'same-root'
+        self.source(root,[self.track()],default=True)
+        self.source(root,[self.track()])
+        with self.assertRaisesRegex(ValueError,'duplicate music root'):
+            self.run_export()
+
+        self.default.rename(self.parent/'old-default')
+        workspace=self.workspaces/f'library-{fingerprint(str(root.absolute()))[:16]}'
+        duplicate=self.track()
+        (workspace/'output/music_features_semantic_v2.json').write_text(
+            json.dumps(make_document(2,[duplicate,duplicate])))
+        with self.assertRaisesRegex(ValueError,'duplicate relativePath'):
+            self.run_export()
+
+    def test_export_all_cli_is_independent_from_update_pipeline(self):
+        expected=dict(stage='export-all',exported=2)
+        with patch('mymusic_semantic.exporter.export_all',return_value=expected) as invoked, \
+             contextlib.redirect_stdout(io.StringIO()):
+            status=cli.main(['--export-all'])
+        self.assertEqual(status,0)
+        invoked.assert_called_once_with()
 
 
 if __name__=='__main__':

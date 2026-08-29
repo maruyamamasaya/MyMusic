@@ -6,6 +6,10 @@ Semantic headを適用してMyMusic互換JSONをatomic更新する。
 
 **本番`cache/analysis.sqlite3`、リポジトリルートの`music_features.json`、既存PoCデータは変更しない。**
 
+Semantic headの分布はインスト／OST中心3,837曲、従来3,552曲、追加ボーカル中心441曲で評価済み。
+作品依存の補正やglobal calibrationは追加せず、raw head、mapping、patch mean集約をSemantic v2としてFIXした。
+根拠と既知制約は[`SEMANTIC_CALIBRATION_REPORT.md`](SEMANTIC_CALIBRATION_REPORT.md)を参照。
+
 ## 通常運用コマンド
 
 リポジトリルートから、今後は次の1コマンドだけを実行する。
@@ -22,6 +26,39 @@ analyzer/poc/.venv/bin/python -B analyzer/semantic.py --update
 4. 新規Trackと更新Trackだけmetadataを読み、Embeddingを生成する。
 5. 同じEmbedding/head profileの分類はSkipし、新規・更新分だけheadを適用する。
 6. `semantic_cache/output/music_features_semantic_v2.json`をatomic更新する。
+
+## 全ライブラリのアプリ用JSONを統合
+
+各libraryの解析cache、Embedding、SQLiteは分離したまま、完了済みの最終JSONだけを統合する。
+
+```sh
+analyzer/poc/.venv/bin/python -B analyzer/semantic.py --export-all
+```
+
+自動検出対象は次の直下だけ。
+
+- `analyzer/semantic_cache/output/music_features_semantic_v2.json`
+- `analyzer/semantic_workspaces/library-*/output/music_features_semantic_v2.json`
+
+アプリへimportする統合結果は
+`analyzer/output/music_features_semantic_v2_merged.json`。
+schemaVersion 1 / analysisVersion 2のままで、各TrackのmetadataとSemantic特徴量を変更せずコピーする。
+source情報は既存MyMusic schemaへ追加できないため、アプリ用JSONには含めず、同じ出力directoryの
+`music_features_semantic_v2_merged.sources.json`へ`libraryId`、source、output indexを保存する。
+
+空またはまだ出力のないworkspaceは理由を表示してSkipする。JSON破損、schema不一致、Semantic特徴量不足、
+同一music-rootの重複cache、library内のrelativePath重複はfatal errorとし、前回のアプリ用JSONを置き換えない。
+sourceごとの件数、入力合計、出力件数、異なるlibrary間のrelativePath衝突数を表示する。
+workspaceが更新中の場合も、atomicに確定済みの直前JSONだけを読み、更新中であることを表示する。
+
+異なるmusic-rootの同じrelativePathは別Trackとして両方保持する。単純なrelativePath dedupeは行わない。
+同一library内ではrelativePathがworkspace identityなので重複を拒否する。同一内容・同一relativePathの音源が
+複数rootに複製されている場合、schema v1だけではiPhone import時にrootを区別できずAmbiguousになり得る。
+source manifestはこの診断情報を失わないためのsidecarであり、MyMusic import schemaは変更しない。
+
+`--update`と`--export-all`は意図的に分離している。別workspaceの破損によって正常な差分解析まで失敗扱いにせず、
+解析結果を確認してからアプリ用JSONを明示的に更新するためである。統合処理は音源、Embedding、SQLite、headを
+読み書きせず、`audioReads=0` / `decodeCalls=0`。
 
 既存の3,552曲固定scopeは初回`--update`時に同じcache内で動的scopeへ移行する。
 追加曲は本番DSP JSONへ追記せず、Semantic出力だけへ追加される。削除曲はSQLite行やNPZを
@@ -63,6 +100,9 @@ analyzer/semantic_cache/output/music_features_semantic_v2.json
 
 `--update --music-root` の場合は、対応する
 `analyzer/semantic_workspaces/library-<ID>/output/music_features_semantic_v2.json` が既定出力。
+
+`--export-all`は各workspaceの上記JSONを入力にし、
+`analyzer/output/music_features_semantic_v2_merged.json`だけをアプリ用に生成する。
 
 既存schemaそのまま、`schemaVersion: 1` / `analysisVersion: 2`。
 既存Trackの照合metadataとDSP値はbaselineから保持する。新規Trackと更新Trackは現在の音源metadataを
