@@ -94,6 +94,24 @@ final class AlbumArtistSearchServiceTests: XCTestCase {
         XCTAssertEqual(search([track], query: "Various Artists", filter: filter), [track])
     }
 
+    func testAlbumArtistKeywordUsesAlbumArtistMetadataOnly() {
+        let track = makeTrack()
+        var filter = TrackSearchFilter()
+        filter.keywordField = .albumArtist
+
+        XCTAssertEqual(search([track], query: "Various Artists", filter: filter), [track])
+        XCTAssertTrue(search([track], query: "Aimer", filter: filter).isEmpty)
+    }
+
+    func testYearKeywordUsesYearMetadata() {
+        let track = makeTrack()
+        var filter = TrackSearchFilter()
+        filter.keywordField = .year
+
+        XCTAssertEqual(search([track], query: "2024", filter: filter), [track])
+        XCTAssertTrue(search([track], query: "2023", filter: filter).isEmpty)
+    }
+
     func testArtistConditionSupportsContainsExactAndNotContainsAcrossBothNames() {
         let track = makeTrack()
         var filter = TrackSearchFilter()
@@ -112,6 +130,28 @@ final class AlbumArtistSearchServiceTests: XCTestCase {
         XCTAssertEqual(search([track], filter: filter), [track])
     }
 
+    func testAlbumArtistAndYearConditionsUseTheirOwnMetadata() {
+        let track = makeTrack()
+        var filter = TrackSearchFilter()
+        filter.conditions = [
+            TrackSearchCondition(
+                kind: .albumArtist,
+                textValue: "Various Artists",
+                textMatchMode: .exact
+            ),
+            TrackSearchCondition(kind: .year, value: 2024)
+        ]
+
+        XCTAssertEqual(search([track], filter: filter), [track])
+
+        filter.conditions[0].textValue = "Aimer"
+        XCTAssertTrue(search([track], filter: filter).isEmpty)
+
+        filter.conditions[0].textValue = "Various Artists"
+        filter.conditions[1].value = 2023
+        XCTAssertTrue(search([track], filter: filter).isEmpty)
+    }
+
     private func search(
         _ tracks: [Track],
         query: String = "",
@@ -128,7 +168,8 @@ final class AlbumArtistSearchServiceTests: XCTestCase {
             albumArtistName: "Various Artists",
             albumTitle: "Compilation",
             duration: 180,
-            fileURL: URL(fileURLWithPath: "/tmp/search.m4a")
+            fileURL: URL(fileURLWithPath: "/tmp/search.m4a"),
+            year: 2024
         )
     }
 }

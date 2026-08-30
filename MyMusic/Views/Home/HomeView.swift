@@ -814,6 +814,7 @@ private struct HomeItemTile: View {
     let artworkIdentifiers: [String]
     let width: CGFloat
     @State private var selectedArtworkIdentifier: String?
+    @State private var localBackgroundImage: UIImage?
 
     var body: some View {
         ZStack {
@@ -856,11 +857,21 @@ private struct HomeItemTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
         .task(id: artworkIdentifiers) { selectRandomArtwork() }
+        .task(id: item.localBackgroundImageName) { loadLocalBackgroundImage() }
     }
 
     @ViewBuilder
     private var tileBackground: some View {
-        if categoryID == .myMusic, let selectedArtworkIdentifier {
+        if let localBackgroundImage {
+            GeometryReader { proxy in
+                Image(uiImage: localBackgroundImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+            }
+            .overlay(localImageReadabilityMask)
+        } else if categoryID == .myMusic, let selectedArtworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
                 .overlay(playlistStyleReadabilityMask)
         } else if categoryID == .myMusic {
@@ -987,6 +998,18 @@ private struct HomeItemTile: View {
         )
     }
 
+    private var localImageReadabilityMask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.18), location: 0),
+                .init(color: .black.opacity(0.34), location: 0.48),
+                .init(color: .black.opacity(0.76), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     private var readabilityMask: LinearGradient {
         let maskColor = colorScheme == .dark ? Color.black : Color.white
         return LinearGradient(
@@ -1001,6 +1024,7 @@ private struct HomeItemTile: View {
     }
 
     private var contentColor: Color {
+        if localBackgroundImage != nil { return .white }
         if categoryID == .myMusic { return .white }
         if selectedArtworkIdentifier != nil {
             return colorScheme == .dark ? .white : .black
@@ -1015,6 +1039,14 @@ private struct HomeItemTile: View {
             return
         }
         selectedArtworkIdentifier = artworkIdentifiers.randomElement()
+    }
+
+    private func loadLocalBackgroundImage() {
+        guard let imageName = item.localBackgroundImageName else {
+            localBackgroundImage = nil
+            return
+        }
+        localBackgroundImage = HomeTileBackgroundImage.load(named: imageName)
     }
 }
 

@@ -25,6 +25,10 @@ struct SearchView: View {
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    private var availableYears: [Int] {
+        Array(Set(libraryStore.tracks.compactMap(\.year))).sorted(by: >)
+    }
+
     private var resultAlbums: [Album] { searchStore.resultAlbums }
 
     private var resultArtists: [Artist] { searchStore.resultArtists }
@@ -32,7 +36,7 @@ struct SearchView: View {
     private var resultsAreEmpty: Bool {
         switch selectedKeywordField {
         case .title: results.isEmpty
-        case .album: resultAlbums.isEmpty
+        case .album, .albumArtist, .year: resultAlbums.isEmpty
         case .artist: resultArtists.isEmpty
         }
     }
@@ -63,7 +67,7 @@ struct SearchView: View {
                                     }
                                 }
                             }
-                        case .album:
+                        case .album, .albumArtist, .year:
                             Section("検索結果：\(resultAlbums.count)アルバム") {
                                 ForEach(resultAlbums) { album in
                                     NavigationLink {
@@ -74,10 +78,16 @@ struct SearchView: View {
                                                 .frame(width: 52, height: 52)
                                             VStack(alignment: .leading, spacing: 3) {
                                                 Text(album.title).lineLimit(1)
-                                                Text(album.artistName)
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
+                                                HStack(spacing: 4) {
+                                                    Text(album.artistName)
+                                                    if let year = album.year {
+                                                        Text("•")
+                                                        Text(String(year)).monospacedDigit()
+                                                    }
+                                                }
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
                                             }
                                         }
                                     }
@@ -141,7 +151,11 @@ struct SearchView: View {
                 }
             }
             .sheet(isPresented: $isFilterPresented) {
-                SearchFilterView(filter: $filter, availableGenres: availableGenres)
+                SearchFilterView(
+                    filter: $filter,
+                    availableGenres: availableGenres,
+                    availableYears: availableYears
+                )
             }
             .alert("検索結果をプレイリストに保存", isPresented: $isSavingPlaylist) {
                 TextField("プレイリスト名", text: $playlistName)
@@ -172,6 +186,8 @@ struct SearchView: View {
         case .title: "曲名を検索"
         case .album: "アルバム名を検索"
         case .artist: "アーティスト名を検索"
+        case .albumArtist: "アルバムアーティストを検索"
+        case .year: "年代を検索（例：2024）"
         }
     }
 
@@ -223,11 +239,13 @@ private struct SearchFilterView: View {
     @Binding var filter: TrackSearchFilter
     @State private var draft: TrackSearchFilter
     let availableGenres: [String]
+    let availableYears: [Int]
 
-    init(filter: Binding<TrackSearchFilter>, availableGenres: [String]) {
+    init(filter: Binding<TrackSearchFilter>, availableGenres: [String], availableYears: [Int]) {
         _filter = filter
         _draft = State(initialValue: filter.wrappedValue)
         self.availableGenres = availableGenres
+        self.availableYears = availableYears
     }
 
     var body: some View {
@@ -260,11 +278,15 @@ private struct SearchFilterView: View {
                                 draft.conditions.append(
                                     TrackSearchCondition(
                                         kind: kind,
+                                        value: kind == .year ? availableYears.first ?? 0 : 0,
                                         textValue: kind == .genre ? availableGenres.first : nil
                                     )
                                 )
                             }
-                            .disabled(kind == .genre && availableGenres.isEmpty)
+                            .disabled(
+                                (kind == .genre && availableGenres.isEmpty)
+                                    || (kind == .year && availableYears.isEmpty)
+                            )
                         }
                     }
                 } header: {
@@ -311,7 +333,7 @@ private struct SearchFilterView: View {
                 }
             }
 
-            if condition.wrappedValue.kind.needsValue {
+            if condition.wrappedValue.kind.needsPlayCountValue {
                 HStack {
                     TextField("回数", value: condition.value, format: .number)
                         .keyboardType(.numberPad)
@@ -329,6 +351,12 @@ private struct SearchFilterView: View {
                     Text("回")
                         .foregroundStyle(.secondary)
                 }
+            } else if condition.wrappedValue.kind.needsYearValue {
+                Picker("年代", selection: condition.value) {
+                    ForEach(years(for: condition.wrappedValue), id: \.self) { year in
+                        Text("\(year)年").tag(year)
+                    }
+                }
             } else if condition.wrappedValue.kind.needsGenreValue {
                 Picker("ジャンル", selection: condition.textValue) {
                     ForEach(genres(for: condition.wrappedValue), id: \.self) { genre in
@@ -344,7 +372,7 @@ private struct SearchFilterView: View {
                 .pickerStyle(.segmented)
 
                 TextField(
-                    condition.wrappedValue.kind == .artist ? "アーティスト名" : "アルバム名",
+                    stringValuePrompt(for: condition.wrappedValue.kind),
                     text: textValue(for: condition)
                 )
                 .textInputAutocapitalization(.never)
@@ -379,5 +407,20 @@ private struct SearchFilterView: View {
               !selected.isEmpty,
               !availableGenres.contains(selected) else { return availableGenres }
         return [selected] + availableGenres
+    }
+
+    private func years(for condition: TrackSearchCondition) -> [Int] {
+        guard condition.value != 0,
+              !availableYears.contains(condition.value) else { return availableYears }
+        return [condition.value] + availableYears
+    }
+
+    private func stringValuePrompt(for kind: TrackSearchConditionKind) -> String {
+        switch kind {
+        case .artist: "アーティスト名"
+        case .albumArtist: "アルバムアーティスト名"
+        case .album: "アルバム名"
+        default: "検索語"
+        }
     }
 }

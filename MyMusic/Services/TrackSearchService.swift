@@ -12,6 +12,8 @@ enum TrackKeywordField: String, CaseIterable, Identifiable, Codable, Hashable, S
     case title
     case album
     case artist
+    case albumArtist
+    case year
 
     var id: Self { self }
 
@@ -20,6 +22,8 @@ enum TrackKeywordField: String, CaseIterable, Identifiable, Codable, Hashable, S
         case .title: "曲名"
         case .album: "アルバム名"
         case .artist: "アーティスト名"
+        case .albumArtist: "アルバムアーティスト"
+        case .year: "年代"
         }
     }
 
@@ -28,6 +32,8 @@ enum TrackKeywordField: String, CaseIterable, Identifiable, Codable, Hashable, S
         case .title: "music.note"
         case .album: "square.stack"
         case .artist: "music.mic"
+        case .albumArtist: "person.2"
+        case .year: "calendar"
         }
     }
 }
@@ -35,7 +41,9 @@ enum TrackKeywordField: String, CaseIterable, Identifiable, Codable, Hashable, S
 enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case genre
     case artist
+    case albumArtist
     case album
+    case year
     case favorite
     case notFavorite
     case liked
@@ -50,7 +58,9 @@ enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hash
         switch self {
         case .genre: "ジャンル"
         case .artist: "アーティスト"
+        case .albumArtist: "アルバムアーティスト"
         case .album: "アルバム"
+        case .year: "年代"
         case .favorite: "お気に入り"
         case .notFavorite: "お気に入り以外"
         case .liked: "いいね"
@@ -61,12 +71,13 @@ enum TrackSearchConditionKind: String, CaseIterable, Identifiable, Codable, Hash
         }
     }
 
-    var needsValue: Bool {
+    var needsPlayCountValue: Bool {
         self == .minimumPlayCount || self == .maximumPlayCount
     }
 
+    var needsYearValue: Bool { self == .year }
     var needsGenreValue: Bool { self == .genre }
-    var needsStringValue: Bool { self == .artist || self == .album }
+    var needsStringValue: Bool { self == .artist || self == .albumArtist || self == .album }
 }
 
 enum TrackTextMatchMode: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
@@ -168,6 +179,10 @@ struct TrackSearchService: Sendable {
                 (track.albumTitle ?? "").localizedStandardContains(term)
             case .artist:
                 artistNames(for: track).contains { $0.localizedStandardContains(term) }
+            case .albumArtist:
+                (track.albumArtistName ?? "").localizedStandardContains(term)
+            case .year:
+                track.year.map(String.init)?.localizedStandardContains(term) == true
             }
         }
         return combined(matches, mode: mode)
@@ -191,8 +206,12 @@ struct TrackSearchService: Sendable {
                 } ?? false
             case .artist:
                 matchesArtist(track, condition: condition)
+            case .albumArtist:
+                matchesString(track.albumArtistName ?? "", condition: condition)
             case .album:
                 matchesString(track.albumTitle ?? "", condition: condition)
+            case .year:
+                track.year == condition.value
             case .favorite: isFavorite
             case .notFavorite: !isFavorite
             case .liked: preference > 0

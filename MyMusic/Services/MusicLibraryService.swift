@@ -1,6 +1,6 @@
 import Foundation
 
-struct MusicLibrary: Codable, Sendable {
+nonisolated struct MusicLibrary: Codable, Sendable {
     let tracks: [Track]
     let albums: [Album]
     let artists: [Artist]
@@ -10,6 +10,37 @@ struct MusicLibrary: Codable, Sendable {
 
 protocol MusicLibraryServicing: Sendable {
     func loadLibrary(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibrary
+}
+
+actor GenreLibraryFilterService {
+    func filteredLibrary(
+        from tracks: [Track],
+        disabledGenreNames: Set<String>,
+        unassignedGenreKey: String
+    ) throws -> MusicLibrary {
+        var visibleTracks: [Track] = []
+        visibleTracks.reserveCapacity(tracks.count)
+
+        for (index, track) in tracks.enumerated() {
+            if index.isMultiple(of: 64) { try Task.checkCancellation() }
+            let genreNames = Self.genreNames(in: track.genre)
+            let filterKeys = genreNames.isEmpty ? Set([unassignedGenreKey]) : genreNames
+            if disabledGenreNames.isDisjoint(with: filterKeys) {
+                visibleTracks.append(track)
+            }
+        }
+
+        try Task.checkCancellation()
+        return MusicLibrary.build(from: visibleTracks)
+    }
+
+    private static func genreNames(in value: String?) -> Set<String> {
+        guard let value else { return [] }
+        return Set(value
+            .split(whereSeparator: { $0 == ";" || $0 == "\0" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })
+    }
 }
 
 final class MusicLibraryService: MusicLibraryServicing, Sendable {
@@ -97,7 +128,7 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
 }
 
 extension MusicLibrary {
-    static func build(from tracks: [Track]) -> MusicLibrary {
+    nonisolated static func build(from tracks: [Track]) -> MusicLibrary {
         struct AlbumKey: Hashable { let title: String; let artist: String }
         let albumGroups = Dictionary(grouping: tracks) {
             AlbumKey(
@@ -166,7 +197,7 @@ extension MusicLibrary {
         )
     }
 
-    private static func groupedTracks(
+    private nonisolated static func groupedTracks(
         _ tracks: [Track],
         value: KeyPath<Track, String?>
     ) -> [String: [Track]] {
@@ -183,7 +214,7 @@ extension MusicLibrary {
         return groups
     }
 
-    private static func metadataComponents(from value: String?) -> [String] {
+    private nonisolated static func metadataComponents(from value: String?) -> [String] {
         guard let value else { return [] }
         return value
             .split(whereSeparator: { $0 == ";" || $0 == "\0" })

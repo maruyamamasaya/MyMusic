@@ -73,6 +73,10 @@ struct HomeCategoryItem: Identifiable, Hashable {
     let destination: HomeDestination
 
     var id: HomeDestination { destination }
+
+    var localBackgroundImageName: String? {
+        destination.localBackgroundImageName
+    }
 }
 
 enum HomeDestination: Hashable {
@@ -97,4 +101,17 @@ enum HomeDestination: Hashable {
     case composers
     case analytics
     case musicHistory
+
+    var localBackgroundImageName: String? {
+        switch self {
+        case .songs: "library-songs"
+        case .albums: "library-albums"
+        case .artists: "library-artists"
+        case .genres: "library-genres"
+        case .composers: "library-composers"
+        case .analytics: "activity-analytics"
+        case .musicHistory: "activity-music-history"
+        default: nil
+        }
+    }
 }

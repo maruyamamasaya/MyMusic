@@ -46,7 +46,10 @@ final class LibraryStore {
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
     private let identityService: TrackIdentityServicing
+    private let genreFilterService = GenreLibraryFilterService()
     private let userDefaults: UserDefaults
+    private var genreFilterTask: Task<Void, Never>?
+    private var genreFilterRequestID = UUID()
     private static let disabledGenresKey = "library.disabledGenreNames"
     private static let genrePresetsKey = "library.genreDisplayPresets"
     private static let unassignedGenreKey = "maruyama.MyMusic.genre.unassigned"
@@ -243,6 +246,7 @@ final class LibraryStore {
     }
 
     private func rebuildCombinedLibrary() {
+        cancelPendingGenreFilter()
         var seenPaths: Set<String> = []
         let combined = libraryFolders.flatMap { librariesByFolderID[$0.id]?.tracks ?? [] }.filter {
             seenPaths.insert($0.fileURL.resolvingSymlinksInPath().standardizedFileURL.path).inserted
@@ -250,15 +254,45 @@ final class LibraryStore {
         let completeLibrary = MusicLibrary.build(from: combined)
         allTracks = completeLibrary.tracks
         allGenres = completeLibrary.genres
-        applyGenreFilter()
+        applyGenreFilterSynchronously()
     }
     private func applyGenreFilter() {
+        genreFilterTask?.cancel()
+        let requestID = UUID()
+        genreFilterRequestID = requestID
+        let tracks = allTracks
+        let disabledGenreNames = disabledGenreNames
+        let genreFilterService = genreFilterService
+
+        genreFilterTask = Task(priority: .utility) { [weak self] in
+            do {
+                let library = try await genreFilterService.filteredLibrary(
+                    from: tracks,
+                    disabledGenreNames: disabledGenreNames,
+                    unassignedGenreKey: Self.unassignedGenreKey
+                )
+                try Task.checkCancellation()
+                guard let self, self.genreFilterRequestID == requestID else { return }
+                self.apply(library)
+            } catch is CancellationError {
+                return
+            } catch {
+                return
+            }
+        }
+    }
+    private func applyGenreFilterSynchronously() {
         let visibleTracks = allTracks.filter { track in
             let genreNames = Self.genreNames(in: track.genre)
             let filterKeys = genreNames.isEmpty ? Set([Self.unassignedGenreKey]) : genreNames
             return disabledGenreNames.isDisjoint(with: filterKeys)
         }
         apply(MusicLibrary.build(from: visibleTracks))
+    }
+    private func cancelPendingGenreFilter() {
+        genreFilterTask?.cancel()
+        genreFilterTask = nil
+        genreFilterRequestID = UUID()
     }
     private func saveDisabledGenres() {
         userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)

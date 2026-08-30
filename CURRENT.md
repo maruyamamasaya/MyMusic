@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # MyMusic の現在状態
@@ -20,10 +20,11 @@ updated: 2026-08-29
 ### 基準版
 
 - Files / iCloud Drive の複数フォルダ登録、security-scoped bookmark の復元、音源 scan と library cache。
-- 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。
-- iTunes / ID3のAlbum Artistを保持し、アルバムの統合・表示・検索に使用。検索画面は225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
+- 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。ジャンル設定適用時の全ライブラリ再構築は専用actorで実行し、最新の結果だけをMainActorへ反映する。
+- iTunes / ID3のAlbum Artistと年を保持し、アルバムの統合・表示・検索に使用。検索画面では曲名、アルバム名、アーティスト名、アルバムアーティスト、年代を個別に選べ、225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
 - mini player / Now Playing、audio 情報、簡易 spectrum、lock screen / Control Center 情報、remote command、background audio 設定。
+- ホームのライブラリ／アクティビティ各タイルは、ビルド前に所定名のローカル画像を置くと背景へ使用する。未配置・破損時は既存の個別グラデーションを維持する。
 - 曲・アルバム・アーティストのお気に入り、通常 / 作業用 playlist、playlist import / export。
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
@@ -49,6 +50,9 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - Semantic v2統合testでは、defaultのみ、workspace 1件／複数件、空／破損JSON、relativePath衝突、別libraryの同名file、source manifest、統合件数、fail-closedを確認している。
 - 2026-08-27 の特徴量 Beta 3 記録では iPhone 17 / iOS 26.5 Simulator の XCTest 19件と Debug build が成功。
 - 2026-08-29 のTrack Adjustments追加後、iPhone 17 / iOS 26.5 SimulatorのXCTest 54件とDebug buildが成功。Analyzer / Semantic unittest 36件もPython 3.12環境で成功。
+- 2026-08-30 のジャンルフィルタ非同期化後、連続する設定変更で最新結果だけが反映されるXCTestを追加し、iPhone 17 / iOS 26.5 Simulatorの全XCTestとiOS Device Debug buildが成功。
+- 2026-08-30 のホームタイル画像設定追加後、画像名mappingを含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug test buildが成功。
+- 2026-08-30 のAlbum Artist / 年代検索追加後、metadata field別検索と複合条件のXCTestを追加し、iPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug buildが成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
