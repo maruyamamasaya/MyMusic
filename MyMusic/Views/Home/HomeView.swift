@@ -1,5 +1,16 @@
 import SwiftUI
 
+enum HomeWorkTileLayout {
+    static let maximumTileCount = 12
+    static let fixedPlaybackTileCount = 1
+    static let continuationTileCount = 1
+    static let maximumPlaylistCount = maximumTileCount - fixedPlaybackTileCount - continuationTileCount
+
+    static func showsContinuationTile(for playlistCount: Int) -> Bool {
+        playlistCount > maximumPlaylistCount
+    }
+}
+
 struct HomeView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
@@ -50,8 +61,12 @@ struct HomeView: View {
                             if let workCategory = HomeCategory.all.first(where: { $0.id == .playback }) {
                                 HomeWorkSection(
                                     category: workCategory,
-                                    playlists: Array(homeWorkPlaylists.prefix(4)),
-                                    showsMore: homeWorkPlaylists.count > 4,
+                                    playlists: Array(
+                                        homeWorkPlaylists.prefix(HomeWorkTileLayout.maximumPlaylistCount)
+                                    ),
+                                    showsMore: HomeWorkTileLayout.showsContinuationTile(
+                                        for: homeWorkPlaylists.count
+                                    ),
                                     artworkIdentifiers: artworkIdentifiers,
                                     instantPlaybackIsAvailable: instantPlaybackIsAvailable,
                                     tracksForPlaylist: {

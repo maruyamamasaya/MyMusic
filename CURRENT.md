@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-30
+updated: 2026-08-31
 ---
 
 # MyMusic の現在状態
@@ -39,7 +39,7 @@ updated: 2026-08-30
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。
-- **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。
+- **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。ホームでは全対象曲の再生を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
 - **気分ステーションの年代指定**: 気分・音の特徴に加え、通常再生対象かつ特徴量のある曲の年metadataから10年単位の候補を構成し、任意の年代へ絞って一時queueを生成できる。年がないlibraryでは年代質問を省略し、「すべての年代」では従来の選曲を維持する。
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
@@ -63,6 +63,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-08-30 のプレイリストタグ追加後、旧data decode、正規化、絞り込み、連続保存、import / export、再生中のPlaylist更新とqueue分離を含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug test buildが成功。
 - 2026-08-30 のデータ管理拡張後、解析JSONの内容、EQ／ジャンルプリセットのround-trip・同名merge・永続化・不正値拒否を含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 74件とDebug test buildが成功。
 - 2026-08-30 の共有Popover修正後、iPhone 17 / iOS 26.5 Simulatorの全XCTestと、iPad Pro 11-inch (M5) / iOS 26.5 Simulatorの共有専用XCTest 2件が成功。
+- 2026-08-31 のホーム作業用タイル上限変更後、iPhone 17 / iOS 26.5 Simulatorの全XCTest 79件とDebug buildが成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
