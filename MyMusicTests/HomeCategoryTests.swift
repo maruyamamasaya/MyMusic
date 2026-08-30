@@ -37,4 +37,8 @@ final class HomeCategoryTests: XCTestCase {
 
         XCTAssertTrue(destinations.allSatisfy { $0.localBackgroundImageName == nil })
     }
+
+    func testStationHasStableLocalBackgroundImageName() {
+        XCTAssertEqual(HomeTileBackgroundImage.stationImageName, "station-background")
+    }
 }

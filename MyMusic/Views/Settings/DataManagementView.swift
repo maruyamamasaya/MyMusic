@@ -26,6 +26,7 @@ struct DataManagementView: View {
     @State private var isImportingFile = false
     @State private var resultMessage: String?
     @State private var errorMessage: String?
+    @State private var shareItem: ActivityShareItem?
 
     private let exporter = MusicDataExportService()
 
@@ -93,6 +94,7 @@ struct DataManagementView: View {
             }
         }
         .navigationTitle("データ管理")
+        .activityShareSheet(item: $shareItem)
         .fileImporter(isPresented: $isImportingFile, allowedContentTypes: importTarget.allowedContentTypes) { result in
             switch importTarget {
             case .playlist:
@@ -117,7 +119,13 @@ struct DataManagementView: View {
     }
 
     private func exportLink(_ title: String, systemImage: String, file: MusicExportFile) -> some View {
-        ShareLink(item: file, preview: SharePreview(file.filename)) { Label(title, systemImage: systemImage) }
+        Button(title, systemImage: systemImage) {
+            do {
+                shareItem = try ActivityShareItem(file: file)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     @ViewBuilder private func throwingExportLink(_ title: String, systemImage: String, make: () throws -> MusicExportFile) -> some View {

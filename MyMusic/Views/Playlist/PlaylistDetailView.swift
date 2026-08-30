@@ -17,6 +17,8 @@ struct PlaylistDetailView: View {
     @State private var isSynchronizingSearch = false
     @State private var searchSyncTask: Task<Void, Never>?
     @State private var isEditingTags = false
+    @State private var shareItem: ActivityShareItem?
+    @State private var shareErrorMessage: String?
 
     private let exporter = MusicDataExportService()
     private let searchWorker = TrackSearchWorker()
@@ -88,17 +90,20 @@ struct PlaylistDetailView: View {
             }
             ToolbarItem(placement: .secondaryAction) {
                 if let playlist, let json = try? exporter.playlistJSON(playlist, tracks: tracks) {
-                    ShareLink(item: json, preview: SharePreview("\(playlist.name).json")) { Label("JSONで書き出す", systemImage: "curlybraces") }
+                    Button("JSONで書き出す", systemImage: "curlybraces") {
+                        presentShare(json)
+                    }
                 }
             }
             ToolbarItem(placement: .secondaryAction) {
                 if let playlist {
-                    ShareLink(item: exporter.playlistMarkdown(playlist, tracks: tracks), preview: SharePreview("\(playlist.name).md")) {
-                        Label("Markdownで書き出す", systemImage: "doc.plaintext")
+                    Button("Markdownで書き出す", systemImage: "doc.plaintext") {
+                        presentShare(exporter.playlistMarkdown(playlist, tracks: tracks))
                     }
                 }
             }
         }
+        .activityShareSheet(item: $shareItem)
         .sheet(isPresented: $isAddingSongs) { AddSongsToPlaylistView(playlistID: playlistID) }
         .sheet(isPresented: $isEditingTags) {
             if let playlist {
@@ -117,6 +122,14 @@ struct PlaylistDetailView: View {
             if let syncResult {
                 Text("追加 \(syncResult.addedCount)曲、削除 \(syncResult.removedCount)曲、合計 \(syncResult.totalCount)曲です。")
             }
+        }
+        .alert("共有エラー", isPresented: Binding(
+            get: { shareErrorMessage != nil },
+            set: { if !$0 { shareErrorMessage = nil } }
+        )) {
+            Button("閉じる", role: .cancel) { shareErrorMessage = nil }
+        } message: {
+            Text(shareErrorMessage ?? "")
         }
         .onDisappear {
             searchSyncTask?.cancel()
@@ -192,6 +205,14 @@ struct PlaylistDetailView: View {
 
     private var syncResultIsPresented: Binding<Bool> {
         Binding(get: { syncResult != nil }, set: { if !$0 { syncResult = nil } })
+    }
+
+    private func presentShare(_ file: MusicExportFile) {
+        do {
+            shareItem = try ActivityShareItem(file: file)
+        } catch {
+            shareErrorMessage = error.localizedDescription
+        }
     }
 
     private func synchronizeWithSearch() {

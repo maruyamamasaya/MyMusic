@@ -26,7 +26,9 @@ updated: 2026-08-30
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
 - mini player / Now Playing、audio 情報、簡易 spectrum、lock screen / Control Center 情報、remote command、background audio 設定。
 - ホームのライブラリ／アクティビティ各タイルは、ビルド前に所定名のローカル画像を置くと背景へ使用する。未配置・破損時は既存の個別グラデーションを維持する。
+- ステーションの「気分を伝えて再生」カードは、ビルド前に所定名のローカル画像を置くと背景へ使用する。未配置・破損時は既存のグラデーションを維持する。
 - 曲・アルバム・アーティストのお気に入り、通常 / 作業用 playlist、playlist import / export。
+- プレイリスト、ライブラリ、再生履歴、解析データ、設定、分析CSVの共有は共通の`UIActivityViewController`経路を使い、Popoverが必要な端末では常にsource view / rectを設定する。
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
@@ -60,6 +62,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-08-30 の気分ステーション年代指定追加後、年代候補、年metadata絞り込み、質問遷移、Dynamic Type / Dark Modeを含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug buildが成功。
 - 2026-08-30 のプレイリストタグ追加後、旧data decode、正規化、絞り込み、連続保存、import / export、再生中のPlaylist更新とqueue分離を含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug test buildが成功。
 - 2026-08-30 のデータ管理拡張後、解析JSONの内容、EQ／ジャンルプリセットのround-trip・同名merge・永続化・不正値拒否を含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 74件とDebug test buildが成功。
+- 2026-08-30 の共有Popover修正後、iPhone 17 / iOS 26.5 Simulatorの全XCTestと、iPad Pro 11-inch (M5) / iOS 26.5 Simulatorの共有専用XCTest 2件が成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証

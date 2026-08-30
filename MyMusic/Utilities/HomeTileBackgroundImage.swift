@@ -1,6 +1,7 @@
 import UIKit
 
 enum HomeTileBackgroundImage {
+    static let stationImageName = "station-background"
     static let supportedExtensions = ["jpg", "jpeg", "png", "heic"]
 
     static func load(named baseName: String, bundle: Bundle = .main) -> UIImage? {

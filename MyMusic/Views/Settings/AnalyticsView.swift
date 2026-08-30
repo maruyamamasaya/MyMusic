@@ -8,6 +8,8 @@ struct AnalyticsView: View {
     @Environment(SettingsStore.self) private var settingsStore
     @State private var showsAllMostPlayed = false
     @State private var playbackResetCandidate: Track?
+    @State private var shareItem: ActivityShareItem?
+    @State private var shareErrorMessage: String?
 
     private var snapshot: AnalyticsSnapshot {
         AnalyticsService().makeSnapshot(
@@ -36,6 +38,7 @@ struct AnalyticsView: View {
         }
         .navigationTitle("分析")
         .navigationBarTitleDisplayMode(.inline)
+        .activityShareSheet(item: $shareItem)
         .alert(
             "再生回数をリセットしますか？",
             isPresented: Binding(
@@ -54,10 +57,18 @@ struct AnalyticsView: View {
         } message: { track in
             Text("「\(track.title)」の再生回数と再生履歴が削除されます。この操作は取り消せません。")
         }
+        .alert("共有エラー", isPresented: Binding(
+            get: { shareErrorMessage != nil },
+            set: { if !$0 { shareErrorMessage = nil } }
+        )) {
+            Button("閉じる", role: .cancel) { shareErrorMessage = nil }
+        } message: {
+            Text(shareErrorMessage ?? "")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                ShareLink(item: export, preview: SharePreview("MyMusic分析データ")) {
-                    Label("データをダウンロード", systemImage: "square.and.arrow.down")
+                Button("データをダウンロード", systemImage: "square.and.arrow.down") {
+                    presentShare()
                 }
             }
         }
@@ -70,6 +81,14 @@ struct AnalyticsView: View {
             LabeledContent("再生履歴", value: "\(snapshot.playbackMonths.reduce(0) { $0 + $1.eventCount })件")
             LabeledContent("お気に入りの曲", value: "\(snapshot.favoriteCount)曲")
             LabeledContent("プレイリスト", value: "\(snapshot.playlistCount)件")
+        }
+    }
+
+    private func presentShare() {
+        do {
+            shareItem = try ActivityShareItem(file: export.file)
+        } catch {
+            shareErrorMessage = error.localizedDescription
         }
     }
 
@@ -543,13 +562,14 @@ private struct PlaybackDayDetailView: View {
     }
 }
 
-private struct AnalyticsExport: Transferable {
+private struct AnalyticsExport {
     let csv: String
 
-    static var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .commaSeparatedText) { export in
-            Data(export.csv.utf8)
-        }
-        .suggestedFileName("MyMusic-Analytics.csv")
+    var file: MusicExportFile {
+        MusicExportFile(
+            data: Data(csv.utf8),
+            filename: "MyMusic-Analytics.csv",
+            contentType: .commaSeparatedText
+        )
     }
 }
