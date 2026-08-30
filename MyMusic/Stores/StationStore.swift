@@ -4,13 +4,14 @@ import Observation
 @MainActor
 @Observable
 final class StationStore {
-    enum Phase: Hashable { case mood, sound, refinement, generating, result }
+    enum Phase: Hashable { case mood, sound, refinement, decade, generating, result }
 
     private(set) var phase: Phase = .mood
     private(set) var mood: StationMood?
     private(set) var sound: StationSound?
     private(set) var refinement: StationRefinement?
     private(set) var direction: StationDirection?
+    private(set) var decade: StationDecade?
     private(set) var station: MoodStation?
     private(set) var errorMessage: String?
     private var requestID = UUID()
@@ -35,6 +36,7 @@ final class StationStore {
     }
 
     var availableFeatureCount: Int { candidates.count }
+    var availableDecades: [StationDecade] { service.availableDecades(in: candidates) }
     var hasLibraryTracks: Bool { !libraryStore.tracks.isEmpty }
     var featureLoadError: String? { featureStore.errorMessage }
 
@@ -55,6 +57,7 @@ final class StationStore {
             return StationCandidate(
                 trackID: track.id,
                 artist: track.artistName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                year: track.year,
                 values: feature.values
             )
         }
@@ -72,6 +75,7 @@ final class StationStore {
         sound = nil
         refinement = nil
         direction = nil
+        decade = nil
         errorMessage = nil
         phase = .mood
         // Keep the last station until a new one is successfully generated.
@@ -82,6 +86,7 @@ final class StationStore {
         sound = nil
         refinement = nil
         direction = nil
+        decade = nil
         phase = .sound
     }
 
@@ -89,12 +94,19 @@ final class StationStore {
         guard let mood else { return }
         sound = value
         direction = nil
+        decade = nil
         refinement = service.followUp(for: StationAnswers(mood: mood, sound: value), candidates: candidates)
-        phase = refinement == nil ? .generating : .refinement
+        phase = refinement == nil ? phaseAfterRefinement : .refinement
     }
 
     func chooseDirection(_ value: StationDirection?) {
         direction = value
+        phase = phaseAfterRefinement
+    }
+
+    func chooseDecade(_ value: StationDecade?) {
+        if let value, !availableDecades.contains(value) { return }
+        decade = value
         phase = .generating
     }
 
@@ -103,7 +115,9 @@ final class StationStore {
         switch phase {
         case .sound: phase = .mood
         case .refinement: phase = .sound
-        case .result: phase = refinement == nil ? .sound : .refinement
+        case .decade: phase = refinement == nil ? .sound : .refinement
+        case .result:
+            phase = availableDecades.isEmpty ? (refinement == nil ? .sound : .refinement) : .decade
         case .mood, .generating: break
         }
     }
@@ -112,7 +126,9 @@ final class StationStore {
         guard phase == .generating, let mood, let sound else { return }
         let request = UUID()
         requestID = request
-        let answers = StationAnswers(mood: mood, sound: sound, refinement: refinement, direction: direction)
+        let answers = StationAnswers(
+            mood: mood, sound: sound, refinement: refinement, direction: direction, decade: decade
+        )
         let candidates = candidates
         let service = service
         let result = await Task.detached(priority: .userInitiated) {
@@ -125,8 +141,8 @@ final class StationStore {
             return
         }
         if result.trackIDs.isEmpty {
-            errorMessage = "この気分に近い曲が見つかりませんでした。音の感じを変えるか、特徴量を追加して試してください。"
-            phase = .sound
+            errorMessage = "この条件に近い曲が見つかりませんでした。年代や音の感じを変えるか、特徴量を追加して試してください。"
+            phase = availableDecades.isEmpty ? .sound : .decade
             return
         }
         station = result
@@ -153,5 +169,9 @@ final class StationStore {
         playerStore.setShuffleEnabled(false)
         playerStore.playQueue(tracks, startingAt: index)
         return true
+    }
+
+    private var phaseAfterRefinement: Phase {
+        availableDecades.isEmpty ? .generating : .decade
     }
 }

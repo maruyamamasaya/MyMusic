@@ -198,6 +198,32 @@ final class LibraryStore {
         genreDisplayPresets.removeAll { $0.id == preset.id }
         saveGenreDisplayPresets()
     }
+    @discardableResult
+    func importGenreDisplayPresets(_ importedPresets: [GenreDisplayPreset]) -> (added: Int, updated: Int) {
+        var added = 0
+        var updated = 0
+        for importedPreset in importedPresets {
+            if let index = genreDisplayPresets.firstIndex(where: {
+                $0.name.localizedCaseInsensitiveCompare(importedPreset.name) == .orderedSame
+            }) {
+                genreDisplayPresets[index].name = importedPreset.name
+                genreDisplayPresets[index].enabledGenreNames = importedPreset.enabledGenreNames
+                genreDisplayPresets[index].includesUnassignedGenreSetting = importedPreset.includesUnassignedGenreSetting
+                updated += 1
+            } else {
+                let occupiedIDs = Set(genreDisplayPresets.map(\.id))
+                genreDisplayPresets.append(GenreDisplayPreset(
+                    id: occupiedIDs.contains(importedPreset.id) ? UUID() : importedPreset.id,
+                    name: importedPreset.name,
+                    enabledGenreNames: importedPreset.enabledGenreNames,
+                    includesUnassignedGenreSetting: importedPreset.includesUnassignedGenreSetting
+                ))
+                added += 1
+            }
+        }
+        saveGenreDisplayPresets()
+        return (added, updated)
+    }
     func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
         let availableKeys = Set(availableGenreOptions.map(\.id))
         let currentEnabledKeys = availableKeys.filter(isGenreEnabled)

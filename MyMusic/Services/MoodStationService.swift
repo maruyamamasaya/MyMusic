@@ -18,6 +18,12 @@ nonisolated struct MoodStationService: Sendable {
         }
     }
 
+    func availableDecades(in candidates: [StationCandidate]) -> [StationDecade] {
+        Array(Set(candidates.compactMap { candidate in
+            candidate.year.flatMap(StationDecade.init(year:))
+        })).sorted { $0.startYear > $1.startYear }
+    }
+
     func followUp(for answers: StationAnswers, candidates: [StationCandidate]) -> StationRefinement? {
         guard answers.mood != .surprise else { return nil }
         // Ask only when the relevant pool actually has a measurable difference.
@@ -52,7 +58,10 @@ nonisolated struct MoodStationService: Sendable {
     ) -> MoodStation {
         var seen: Set<Track.ID> = []
         let unique = candidates.filter { seen.insert($0.trackID).inserted }
-        let ranked = unique.compactMap { candidate -> (candidate: StationCandidate, score: Double)? in
+        let periodCandidates = unique.filter { candidate in
+            answers.decade?.contains(candidate.year) ?? true
+        }
+        let ranked = periodCandidates.compactMap { candidate -> (candidate: StationCandidate, score: Double)? in
             guard let score = score(candidate.values, for: answers), score >= 0.6 else { return nil }
             return (candidate, score)
         }
@@ -73,7 +82,7 @@ nonisolated struct MoodStationService: Sendable {
         }
         return MoodStation(
             id: UUID(), answers: answers, trackIDs: selected,
-            analyzedTrackCount: unique.count, matchingTrackCount: ranked.count
+            analyzedTrackCount: periodCandidates.count, matchingTrackCount: ranked.count
         )
 
         func adjusted(_ item: (StationCandidate, Double)) -> Double {

@@ -60,6 +60,11 @@ final class PlaylistStore {
         update(id) { $0.name = trimmedName }
     }
 
+    func setTags(_ tags: [String], for playlistID: Playlist.ID) {
+        let normalizedTags = PlaylistTagRules.normalizedTags(tags)
+        update(playlistID) { $0.tags = normalizedTags }
+    }
+
     func addTrack(_ track: Track, to playlistID: Playlist.ID) {
         update(playlistID) { playlist in
             guard playlist.kind.accepts(track), !playlist.trackIDs.contains(track.id) else { return }
@@ -125,7 +130,8 @@ final class PlaylistStore {
         named name: String,
         tracks: [Track],
         kind: PlaylistKind = .regular,
-        searchDefinition: PlaylistSearchDefinition? = nil
+        searchDefinition: PlaylistSearchDefinition? = nil,
+        tags: [String] = []
     ) -> Playlist.ID? {
         guard let id = createPlaylist(named: name, kind: kind) else { return nil }
         var seen: Set<Track.ID> = []
@@ -135,6 +141,7 @@ final class PlaylistStore {
                 .map(\.id)
                 .filter { seen.insert($0).inserted }
             $0.searchDefinition = searchDefinition
+            $0.tags = PlaylistTagRules.normalizedTags(tags)
         }
         return id
     }
@@ -165,8 +172,22 @@ final class PlaylistStore {
         playlists.filter { $0.kind == kind }
     }
 
+    func playlists(of kind: PlaylistKind, tagged tag: String?) -> [Playlist] {
+        let matchingKind = playlists(of: kind)
+        guard let tag else { return matchingKind }
+        return matchingKind.filter { PlaylistTagRules.contains($0.tags, tag: tag) }
+    }
+
+    var allTags: [String] {
+        PlaylistTagRules.uniqueSortedTags(playlists.flatMap(\.tags))
+    }
+
     func playlists(compatibleWith track: Track) -> [Playlist] {
         playlists(of: track.isEligibleForWorkPlayback ? .work : .regular)
+    }
+
+    func playlists(compatibleWith track: Track, tagged tag: String?) -> [Playlist] {
+        playlists(of: track.isEligibleForWorkPlayback ? .work : .regular, tagged: tag)
     }
 
     func contains(_ trackID: Track.ID, in playlistID: Playlist.ID) -> Bool {
@@ -183,6 +204,10 @@ final class PlaylistStore {
 
     func dismissError() { errorMessage = nil }
 
+    func waitForPendingSave() async {
+        await saveTask?.value
+    }
+
     private func update(_ id: Playlist.ID, change: (inout Playlist) -> Void) {
         guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
         let previous = playlists[index]
@@ -194,12 +219,11 @@ final class PlaylistStore {
 
     private func persist() {
         let snapshot = playlists
-        saveTask?.cancel()
+        let precedingSave = saveTask
         saveTask = Task { [weak self, persistence] in
+            await precedingSave?.value
             do {
                 try await persistence.save(snapshot)
-            } catch is CancellationError {
-                return
             } catch {
                 self?.errorMessage = "Playlists could not be saved: \(error.localizedDescription)"
             }

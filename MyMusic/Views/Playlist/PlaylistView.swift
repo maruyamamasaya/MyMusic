@@ -53,17 +53,31 @@ private struct PlaylistManagementView: View {
     @State private var isSelecting = false
     @State private var selection: Set<Playlist.ID> = []
     @State private var confirmsBulkDelete = false
+    @State private var selectedTag: String?
+    @State private var playlistToEditTags: Playlist?
 
     let kind: PlaylistKind
     let title: String
     let showsLibraryLinks: Bool
 
     private var playlists: [Playlist] {
-        playlistStore.playlists(of: kind)
+        playlistStore.playlists(of: kind, tagged: selectedTag)
+    }
+
+    private var availableTags: [String] {
+        PlaylistTagRules.uniqueSortedTags(playlistStore.playlists(of: kind).flatMap(\.tags))
     }
 
     var body: some View {
         List {
+            if !availableTags.isEmpty {
+                Section {
+                    PlaylistTagFilterBar(tags: availableTags, selectedTag: $selectedTag)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
+                }
+            }
+
             if showsLibraryLinks {
                 Section {
                     NavigationLink {
@@ -100,6 +114,9 @@ private struct PlaylistManagementView: View {
                     ForEach(playlists) { playlist in
                         playlistRow(playlist)
                             .contextMenu {
+                                Button("タグを編集", systemImage: "tag") {
+                                    playlistToEditTags = playlist
+                                }
                                 Button("名前を変更", systemImage: "pencil") { presentRename(playlist) }
                                 Button("削除", systemImage: "trash", role: .destructive) {
                                     playlistToDelete = playlist
@@ -169,6 +186,9 @@ private struct PlaylistManagementView: View {
         .navigationDestination(for: Playlist.ID.self) { playlistID in
             PlaylistDetailView(playlistID: playlistID)
         }
+        .sheet(item: $playlistToEditTags) { playlist in
+            PlaylistTagEditorView(playlist: playlist)
+        }
         .alert(newPlaylistLabel, isPresented: $isCreatingPlaylist) {
             TextField("プレイリスト名", text: $newPlaylistName)
             Button("キャンセル", role: .cancel) {}
@@ -210,6 +230,13 @@ private struct PlaylistManagementView: View {
         .onDisappear {
             if isSelecting { stopSelecting() }
             confirmsBulkDelete = false
+        }
+        .onChange(of: availableTags) { _, tags in
+            if let selectedTag {
+                self.selectedTag = tags.first {
+                    PlaylistTagRules.contains([$0], tag: selectedTag)
+                }
+            }
         }
     }
 
@@ -268,8 +295,11 @@ private struct PlaylistManagementView: View {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selected ? Color.accentColor : .secondary)
             }
-            Label(playlist.name, systemImage: kind == .work ? "timer" : "music.note.list")
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 5) {
+                Label(playlist.name, systemImage: kind == .work ? "timer" : "music.note.list")
+                    .lineLimit(1)
+                PlaylistTagSummary(tags: playlist.tags)
+            }
             Spacer()
             Text("\(playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).count)曲")
                 .font(.caption)

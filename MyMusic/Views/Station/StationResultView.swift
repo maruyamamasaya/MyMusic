@@ -16,7 +16,7 @@ struct StationResultView: View {
                         Text(station.answers.summary).font(.subheadline).foregroundStyle(.secondary)
                         Text("\(tracks.count)曲 · 約\(durationMinutes)分")
                             .font(.subheadline.weight(.medium))
-                        Text("特徴量のある\(station.analyzedTrackCount)曲のうち、近さの基準を満たした\(station.matchingTrackCount)曲から選びました。")
+                        Text(selectionDetail(for: station))
                             .font(.footnote).foregroundStyle(.secondary)
                         Button {
                             if store.play() { onPlay?() }
@@ -48,5 +48,12 @@ struct StationResultView: View {
         }
         .navigationTitle("ステーション")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func selectionDetail(for station: MoodStation) -> String {
+        let prefix = station.answers.decade.map {
+            "\($0.title)に該当する、年と特徴量のある\(station.analyzedTrackCount)曲"
+        } ?? "特徴量のある\(station.analyzedTrackCount)曲"
+        return "\(prefix)のうち、近さの基準を満たした\(station.matchingTrackCount)曲から選びました。"
     }
 }

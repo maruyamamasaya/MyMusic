@@ -19,6 +19,40 @@ struct MusicExportFile: Transferable {
 }
 
 struct MusicDataExportService {
+    private struct TrackFeatureDocument: Codable {
+        let version: Int
+        let exportedAt: Date
+        let tracks: [TrackFeatureDocumentItem]
+    }
+
+    private struct TrackFeatureDocumentItem: Codable {
+        let trackID: UUID
+        let title: String?
+        let artist: String?
+        let sourceIdentity: TrackFeatureSourceIdentity
+        let analysisVersion: Int
+        let analyzedAt: Date
+        let importedAt: Date
+        let features: TrackFeatureValues
+    }
+
+    private struct VolumeNormalizationDocument: Codable {
+        let version: Int
+        let exportedAt: Date
+        let isEnabled: Bool
+        let tracks: [VolumeNormalizationDocumentItem]
+    }
+
+    private struct VolumeNormalizationDocumentItem: Codable {
+        let trackID: UUID
+        let title: String?
+        let artist: String?
+        let relativePath: String
+        let integratedLUFS: Double
+        let truePeakDBTP: Double
+        let normalizationGainDB: Double
+    }
+
     private struct PlaylistDocument: Codable {
         let version: Int
         let name: String
@@ -26,6 +60,7 @@ struct MusicDataExportService {
         let createdAt: Date
         let updatedAt: Date
         let kind: PlaylistKind
+        let tags: [String]
         let tracks: [TrackDocument]
     }
 
@@ -54,7 +89,8 @@ struct MusicDataExportService {
 
     func playlistMarkdown(_ playlist: Playlist, tracks: [Track]) -> MusicExportFile {
         var lines = ["# Playlist: \(playlist.name)", "", "- ID: \(playlist.id.uuidString)", "- Kind: \(playlist.kind.rawValue)",
-                     "- Created: \(iso(playlist.createdAt))", "- Updated: \(iso(playlist.updatedAt))", "", "## Tracks", ""]
+                     "- Tags: \(playlist.tags.joined(separator: ", "))", "- Created: \(iso(playlist.createdAt))",
+                     "- Updated: \(iso(playlist.updatedAt))", "", "## Tracks", ""]
         for (index, track) in tracks.enumerated() {
             lines += ["\(index + 1). \(track.title)", "   - Artist: \(track.artistName)",
                       "   - Album: \(track.albumTitle ?? "")", "   - TrackID: \(track.id.uuidString)", ""]
@@ -92,10 +128,88 @@ struct MusicDataExportService {
         return try jsonFile(Document(version: 1, history: items), filename: "MyMusic-Playback-History.json")
     }
 
+    func trackFeaturesJSON(_ features: [TrackFeature], tracks: [Track], exportedAt: Date = Date()) throws -> MusicExportFile {
+        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        let items = features.sorted { $0.trackID.uuidString < $1.trackID.uuidString }.map { feature in
+            TrackFeatureDocumentItem(
+                trackID: feature.trackID,
+                title: tracksByID[feature.trackID]?.title ?? feature.sourceIdentity.title,
+                artist: tracksByID[feature.trackID]?.artistName ?? feature.sourceIdentity.artist,
+                sourceIdentity: feature.sourceIdentity,
+                analysisVersion: feature.analysisVersion,
+                analyzedAt: feature.analyzedAt,
+                importedAt: feature.importedAt,
+                features: feature.values
+            )
+        }
+        return try jsonFile(
+            TrackFeatureDocument(version: 1, exportedAt: exportedAt, tracks: items),
+            filename: "MyMusic-Track-Features.json"
+        )
+    }
+
+    func volumeNormalizationJSON(
+        _ features: [TrackFeature],
+        tracks: [Track],
+        isEnabled: Bool,
+        exportedAt: Date = Date()
+    ) throws -> MusicExportFile {
+        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        let items = features.compactMap { feature -> VolumeNormalizationDocumentItem? in
+            guard let integratedLUFS = feature.values.integratedLUFS,
+                  let truePeakDBTP = feature.values.truePeakDBTP,
+                  let normalizationGainDB = feature.values.normalizationGainDB else { return nil }
+            return VolumeNormalizationDocumentItem(
+                trackID: feature.trackID,
+                title: tracksByID[feature.trackID]?.title ?? feature.sourceIdentity.title,
+                artist: tracksByID[feature.trackID]?.artistName ?? feature.sourceIdentity.artist,
+                relativePath: feature.sourceIdentity.relativePath,
+                integratedLUFS: integratedLUFS,
+                truePeakDBTP: truePeakDBTP,
+                normalizationGainDB: normalizationGainDB
+            )
+        }.sorted { $0.trackID.uuidString < $1.trackID.uuidString }
+        return try jsonFile(
+            VolumeNormalizationDocument(
+                version: 1,
+                exportedAt: exportedAt,
+                isEnabled: isEnabled,
+                tracks: items
+            ),
+            filename: "MyMusic-Volume-Normalization.json"
+        )
+    }
+
+    func equalizerJSON(
+        settings: EqualizerSettings,
+        customPresets: [EqualizerPreset]
+    ) throws -> MusicExportFile {
+        try jsonFile(
+            EqualizerTransferDocument(
+                kind: .equalizer,
+                version: 1,
+                equalizer: settings,
+                customPresets: customPresets
+            ),
+            filename: "MyMusic-Equalizer.json"
+        )
+    }
+
+    func genreDisplayPresetsJSON(_ presets: [GenreDisplayPreset]) throws -> MusicExportFile {
+        try jsonFile(
+            GenreDisplayPresetTransferDocument(
+                kind: .genreDisplayPresets,
+                version: 1,
+                presets: presets
+            ),
+            filename: "MyMusic-Genre-Display-Presets.json"
+        )
+    }
+
     private func document(for playlist: Playlist, tracks: [Track]) -> PlaylistDocument {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
         return PlaylistDocument(version: 1, name: playlist.name, playlistID: playlist.id,
-            createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind,
+            createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind, tags: playlist.tags,
             tracks: playlist.trackIDs.compactMap { byID[$0] }.map { trackDocument($0, history: nil) })
     }
 

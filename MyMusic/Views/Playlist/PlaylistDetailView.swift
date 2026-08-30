@@ -16,6 +16,7 @@ struct PlaylistDetailView: View {
     @State private var syncResult: PlaylistSyncResult?
     @State private var isSynchronizingSearch = false
     @State private var searchSyncTask: Task<Void, Never>?
+    @State private var isEditingTags = false
 
     private let exporter = MusicDataExportService()
     private let searchWorker = TrackSearchWorker()
@@ -26,6 +27,11 @@ struct PlaylistDetailView: View {
         List {
             if playlist != nil {
                 controls
+                if let playlist, !playlist.tags.isEmpty {
+                    Section("タグ") {
+                        PlaylistTagSummary(tags: playlist.tags, maximumVisibleCount: 4)
+                    }
+                }
                 Section("曲") {
                     if tracks.isEmpty {
                         ContentUnavailableView("曲がありません", systemImage: "music.note.list", description: Text("編集からライブラリの曲を追加できます。"))
@@ -67,6 +73,12 @@ struct PlaylistDetailView: View {
                 }.disabled(playlist == nil)
             }
             ToolbarItem(placement: .secondaryAction) {
+                Button("タグを編集", systemImage: "tag") {
+                    isEditingTags = true
+                }
+                .disabled(playlist == nil)
+            }
+            ToolbarItem(placement: .secondaryAction) {
                 if playlist?.searchDefinition != nil {
                     Button("検索条件で更新", systemImage: "arrow.triangle.2.circlepath") {
                         synchronizeWithSearch()
@@ -88,6 +100,11 @@ struct PlaylistDetailView: View {
             }
         }
         .sheet(isPresented: $isAddingSongs) { AddSongsToPlaylistView(playlistID: playlistID) }
+        .sheet(isPresented: $isEditingTags) {
+            if let playlist {
+                PlaylistTagEditorView(playlist: playlist)
+            }
+        }
         .alert("プレイリスト名を変更", isPresented: $isRenaming) {
             TextField("プレイリスト名", text: $renameText)
             Button("キャンセル", role: .cancel) { }

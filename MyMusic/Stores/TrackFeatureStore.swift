@@ -71,6 +71,10 @@ final class TrackFeatureStore {
         Set(featuresByTrackID.values.map(\.analysisVersion)).sorted()
     }
 
+    var exportedFeatures: [TrackFeature] {
+        featuresByTrackID.values.sorted { $0.trackID.uuidString < $1.trackID.uuidString }
+    }
+
     func statistics(for tracks: [Track]) -> TrackFeatureStatistics {
         let registeredIDs = Set(tracks.map(\.id))
         return TrackFeatureStatistics(

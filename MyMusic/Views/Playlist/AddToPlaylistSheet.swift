@@ -6,18 +6,34 @@ struct AddToPlaylistSheet: View {
     let track: Track
 
     @State private var isCreatingPlaylist = false
+    @State private var selectedTag: String?
+    @State private var searchText = ""
 
     private var playlistKind: PlaylistKind {
         track.isEligibleForWorkPlayback ? .work : .regular
     }
 
     private var compatiblePlaylists: [Playlist] {
-        playlistStore.playlists(compatibleWith: track)
+        playlistStore.playlists(compatibleWith: track, tagged: selectedTag).filter {
+            searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var availableTags: [String] {
+        PlaylistTagRules.uniqueSortedTags(playlistStore.playlists(compatibleWith: track).flatMap(\.tags))
     }
 
     var body: some View {
         NavigationStack {
             List {
+                if !availableTags.isEmpty {
+                    Section {
+                        PlaylistTagFilterBar(tags: availableTags, selectedTag: $selectedTag)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
+                    }
+                }
+
                 Section {
                     Button(
                         playlistKind == .work ? "新規作業用プレイリスト" : "新規プレイリスト",
@@ -38,7 +54,10 @@ struct AddToPlaylistSheet: View {
                                 playlistStore.toggleTrack(track, in: playlist.id)
                             } label: {
                                 HStack {
-                                    Text(playlist.name).foregroundStyle(.primary)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(playlist.name).foregroundStyle(.primary)
+                                        PlaylistTagSummary(tags: playlist.tags)
+                                    }
                                     Spacer()
                                     if alreadyAdded {
                                         Label("追加済み・タップで削除", systemImage: "checkmark.circle.fill")
@@ -54,12 +73,20 @@ struct AddToPlaylistSheet: View {
             }
             .navigationTitle(playlistKind == .work ? "作業用プレイリストに追加" : "プレイリストに追加")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "プレイリストを検索")
             .navigationDestination(isPresented: $isCreatingPlaylist) {
                 CreatePlaylistForTrackView(track: track, kind: playlistKind)
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { dismiss() }
+                }
+            }
+            .onChange(of: availableTags) { _, tags in
+                if let selectedTag {
+                    self.selectedTag = tags.first {
+                        PlaylistTagRules.contains([$0], tag: selectedTag)
+                    }
                 }
             }
         }

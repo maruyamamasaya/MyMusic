@@ -74,11 +74,18 @@ extension StationRefinement {
     }
 }
 
+extension StationDecade {
+    var title: String { "\(startYear)年代" }
+}
+
 extension StationAnswers {
     var summary: String {
         var parts = [mood.title, sound.title]
         if let refinement, let direction {
             parts.append(direction == .first ? refinement.firstTitle : refinement.secondTitle)
+        }
+        if let decade {
+            parts.append(decade.title)
         }
         return parts.joined(separator: " · ")
     }

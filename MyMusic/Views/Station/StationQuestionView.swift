@@ -25,7 +25,7 @@ struct StationQuestionView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }
-                if store.phase == .sound || store.phase == .refinement || store.phase == .result {
+                if store.phase == .sound || store.phase == .refinement || store.phase == .decade || store.phase == .result {
                     ToolbarItem(placement: .primaryAction) {
                         Button("回答を戻る") { store.goBack() }
                     }
@@ -93,6 +93,17 @@ struct StationQuestionView: View {
                             Button("どちらでも・このままつくる") { store.chooseDirection(nil) }
                                 .font(.subheadline).padding(.vertical, 12)
                         }
+                    case .decade:
+                        StationAnswerButton(
+                            title: "すべての年代", symbol: "calendar", selected: store.decade == nil
+                        ) { store.chooseDecade(nil) }
+                        ForEach(store.availableDecades) { decade in
+                            StationAnswerButton(
+                                title: decade.title,
+                                symbol: "calendar.badge.clock",
+                                selected: store.decade == decade
+                            ) { store.chooseDecade(decade) }
+                        }
                     case .generating, .result: EmptyView()
                     }
                 }
@@ -109,6 +120,7 @@ struct StationQuestionView: View {
         switch store.phase {
         case .mood: "QUESTION 1"
         case .sound: "QUESTION 2"
+        case .decade: "最後に、年代を選ぶ"
         default: "最後に、もうひとつ"
         }
     }
@@ -117,6 +129,7 @@ struct StationQuestionView: View {
         switch store.phase {
         case .mood: "今、どんな音楽がほしい？"
         case .sound: "今日はどんな音の感じがいい？"
+        case .decade: "どの年代から聴きたい？"
         default: "最後に、今日はどっち寄り？"
         }
     }
@@ -125,6 +138,7 @@ struct StationQuestionView: View {
         switch store.phase {
         case .mood: "今の気分に近いものを、ひとつ。"
         case .sound: "\(store.mood?.title ?? "")気分に、どんな音を合わせましょう。"
+        case .decade: "曲の年メタデータを使って絞り込みます。迷ったら、すべての年代のままで大丈夫です。"
         default: store.refinement?.explanation ?? ""
         }
     }

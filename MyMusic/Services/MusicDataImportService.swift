@@ -4,6 +4,7 @@ struct PlaylistImportDraft: Sendable {
     let name: String
     let trackIDs: [Track.ID]
     let kind: PlaylistKind
+    let tags: [String]
 }
 
 struct PlaylistImportResult: Sendable {
@@ -43,7 +44,12 @@ struct MusicDataImportService: Sendable {
             imported += accepted.count
             missing += unique.count - found.count
             incompatible += found.count - accepted.count
-            return PlaylistImportDraft(name: draft.name, trackIDs: accepted.map(\.id), kind: draft.kind)
+            return PlaylistImportDraft(
+                name: draft.name,
+                trackIDs: accepted.map(\.id),
+                kind: draft.kind,
+                tags: PlaylistTagRules.normalizedTags(draft.tags)
+            )
         }
         return PlaylistImportResult(
             playlists: resolved,
@@ -66,7 +72,8 @@ struct MusicDataImportService: Sendable {
         let ids = tracks.compactMap { ($0["trackID"] as? String).flatMap(UUID.init(uuidString:)) }
         guard !ids.isEmpty || tracks.isEmpty else { throw MusicDataImportError.noTrackIDs }
         let kind = (object["kind"] as? String).flatMap(PlaylistKind.init(rawValue:)) ?? .regular
-        return PlaylistImportDraft(name: name, trackIDs: ids, kind: kind)
+        let tags = object["tags"] as? [String] ?? []
+        return PlaylistImportDraft(name: name, trackIDs: ids, kind: kind, tags: tags)
     }
 
     private func parseMarkdown(_ data: Data) throws -> [PlaylistImportDraft] {
@@ -84,6 +91,12 @@ struct MusicDataImportService: Sendable {
             let value = line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
             return PlaylistKind(rawValue: value)
         }.first ?? .regular
-        return [PlaylistImportDraft(name: name, trackIDs: ids, kind: kind)]
+        let tags = text.split(separator: "\n").compactMap { line -> [String]? in
+            guard let range = line.range(of: "Tags:") else { return nil }
+            return line[range.upperBound...]
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }.first ?? []
+        return [PlaylistImportDraft(name: name, trackIDs: ids, kind: kind, tags: tags)]
     }
 }

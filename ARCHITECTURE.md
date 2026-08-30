@@ -99,9 +99,12 @@ music root recursive scan
 ### Search, favorites, playlists, history
 
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
-- `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性を持つ。
+- `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`は気分・音の特徴量scoreに加え、任意指定された10年単位の年代で候補を先に絞り、近さとartist分散から一時queueを生成する。年代候補は対象Trackの有効な年metadataから降順で導出し、候補がなければ年代質問を省略する。年代無指定では年の有無にかかわらず従来どおり選曲する。
+- `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
 - `PlaybackHistoryStore` は再生回数、rating、event を保存する。分析画面から1曲の履歴をリセットする場合は、対象Trackの再生回数・event・最終再生日時だけを消去し、お気に入り、rating、飽き度は保持する。`AnalyticsService` と `MusicHistory*Service` は現在 library と履歴から表示用 snapshot を導出する。
-- `MusicDataImportService` / `MusicDataExportService` は playlist、library、history の JSON / Markdown 等の入出力境界を担う。
+- `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
+- `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
+- EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 
 ## 永続化
 

@@ -117,6 +117,45 @@ final class SettingsStore {
         saveCustomPresets()
     }
 
+    @discardableResult
+    func importEqualizer(
+        _ settings: EqualizerSettings,
+        customPresets importedPresets: [EqualizerPreset]
+    ) -> (added: Int, updated: Int) {
+        var settings = settings
+        settings.normalize()
+        equalizer = settings
+
+        var added = 0
+        var updated = 0
+        for importedPreset in importedPresets {
+            if let index = customEqualizerPresets.firstIndex(where: {
+                $0.name.localizedCaseInsensitiveCompare(importedPreset.name) == .orderedSame
+            }) {
+                customEqualizerPresets[index] = EqualizerPreset(
+                    id: customEqualizerPresets[index].id,
+                    name: importedPreset.name,
+                    preamp: importedPreset.preamp,
+                    gains: importedPreset.gains
+                )
+                updated += 1
+            } else {
+                let occupiedIDs = Set(customEqualizerPresets.map(\.id))
+                customEqualizerPresets.append(EqualizerPreset(
+                    id: occupiedIDs.contains(importedPreset.id) ? UUID() : importedPreset.id,
+                    name: importedPreset.name,
+                    preamp: importedPreset.preamp,
+                    gains: importedPreset.gains
+                ))
+                added += 1
+            }
+        }
+        customEqualizerPresets.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        applyAndSaveEqualizer()
+        saveCustomPresets()
+        return (added, updated)
+    }
+
     func setFadeInEnabled(_ isEnabled: Bool) {
         playbackTransition.fadeInEnabled = isEnabled
         if isEnabled { playbackTransition.type = .fade }

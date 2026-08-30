@@ -24,6 +24,7 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
     var artworkIdentifier: String? = nil
     var searchDefinition: PlaylistSearchDefinition? = nil
     var kind: PlaylistKind = .regular
+    var tags: [String] = []
 
     init(
         id: UUID,
@@ -34,7 +35,8 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
         description: String? = nil,
         artworkIdentifier: String? = nil,
         searchDefinition: PlaylistSearchDefinition? = nil,
-        kind: PlaylistKind = .regular
+        kind: PlaylistKind = .regular,
+        tags: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -45,10 +47,11 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
         self.artworkIdentifier = artworkIdentifier
         self.searchDefinition = searchDefinition
         self.kind = kind
+        self.tags = PlaylistTagRules.normalizedTags(tags)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, trackIDs, createdAt, updatedAt, description, artworkIdentifier, searchDefinition, kind
+        case id, name, trackIDs, createdAt, updatedAt, description, artworkIdentifier, searchDefinition, kind, tags
     }
 
     init(from decoder: Decoder) throws {
@@ -62,5 +65,8 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
         artworkIdentifier = try container.decodeIfPresent(String.self, forKey: .artworkIdentifier)
         searchDefinition = try container.decodeIfPresent(PlaylistSearchDefinition.self, forKey: .searchDefinition)
         kind = try container.decodeIfPresent(PlaylistKind.self, forKey: .kind) ?? .regular
+        tags = PlaylistTagRules.normalizedTags(
+            try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        )
     }
 }

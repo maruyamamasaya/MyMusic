@@ -73,6 +73,31 @@ final class MoodStationServiceTests: XCTestCase {
         XCTAssertNotEqual(result.trackIDs, service.makeStation(answers: answers, candidates: candidates, using: &other).trackIDs)
     }
 
+    func testAvailableDecadesAreDerivedFromValidYearMetadataAndFilterTheStation() throws {
+        let nineties = candidate(year: 1994)
+        let twoThousands = candidate(year: 2007)
+        let unknown = candidate(year: nil)
+        let invalid = candidate(year: 0)
+        let candidates = [twoThousands, unknown, nineties, invalid]
+
+        XCTAssertEqual(service.availableDecades(in: candidates).map(\.startYear), [2000, 1990])
+
+        var rng = StationSeed(seed: 1)
+        let decade = try XCTUnwrap(StationDecade(year: 1994))
+        let result = service.makeStation(
+            answers: StationAnswers(mood: .relax, sound: .soft, decade: decade),
+            candidates: candidates,
+            using: &rng
+        )
+
+        XCTAssertEqual(result.trackIDs, [nineties.trackID])
+        XCTAssertEqual(result.analyzedTrackCount, 1)
+        XCTAssertEqual(result.answers.decade, decade)
+        XCTAssertTrue(decade.contains(1999))
+        XCTAssertFalse(decade.contains(2000))
+        XCTAssertFalse(decade.contains(nil))
+    }
+
     func testUnrelatedTracksDoNotFillTheQueue() {
         let close = candidate()
         let unrelated = StationCandidate(trackID: UUID(), artist: "B", values: stationValues([
@@ -100,8 +125,8 @@ final class MoodStationServiceTests: XCTestCase {
         }
     }
 
-    private func candidate(vocal: Double = 0.1, electronic: Double = 0.3) -> StationCandidate {
-        StationCandidate(trackID: UUID(), artist: "Artist", values: stationValues([
+    private func candidate(vocal: Double = 0.1, electronic: Double = 0.3, year: Int? = nil) -> StationCandidate {
+        StationCandidate(trackID: UUID(), artist: "Artist", year: year, values: stationValues([
             "energy": 0.2, "calm": 0.9, "aggressive": 0.1, "ambient": 0.8,
             "vocal": vocal, "instrumental": 1 - vocal, "electronic": electronic
         ]))
@@ -144,6 +169,28 @@ final class StationStoreIntegrationTests: XCTestCase {
         XCTAssertNotNil(fixture.store.errorMessage)
     }
 
+    func testDecadeQuestionUsesOnlyYearsPresentInEligibleTracks() async throws {
+        let fixture = StationFixture(featureCount: 3, years: [1994, 2007, nil])
+        await fixture.store.prepare()
+        fixture.store.begin()
+        fixture.store.chooseMood(.relax)
+        fixture.store.chooseSound(.soft)
+        if fixture.store.phase == .refinement { fixture.store.chooseDirection(nil) }
+
+        XCTAssertEqual(fixture.store.phase, .decade)
+        XCTAssertEqual(fixture.store.availableDecades.map(\.startYear), [2000, 1990])
+
+        let nineties = try XCTUnwrap(fixture.store.availableDecades.last)
+        fixture.store.chooseDecade(nineties)
+        XCTAssertEqual(fixture.store.phase, .generating)
+        await fixture.store.generate()
+
+        XCTAssertEqual(fixture.store.phase, .result)
+        XCTAssertEqual(fixture.store.stationTracks.map(\.year), [1994])
+        XCTAssertEqual(fixture.store.station?.answers.decade, nineties)
+        XCTAssertTrue(fixture.store.station?.answers.summary.contains("1990年代") == true)
+    }
+
     func testNoImportedFeaturesProducesUnavailableState() async {
         let fixture = StationFixture(featureCount: 0)
         await fixture.store.prepare()
@@ -153,7 +200,7 @@ final class StationStoreIntegrationTests: XCTestCase {
     }
 
     func testQuestionAndResultRenderForAccessibilityAndDarkMode() async throws {
-        let fixture = StationFixture(featureCount: 3)
+        let fixture = StationFixture(featureCount: 3, years: [1994, 2007, 2013])
         await fixture.store.prepare()
         fixture.store.begin()
         fixture.store.chooseMood(.focus)
@@ -166,6 +213,15 @@ final class StationStoreIntegrationTests: XCTestCase {
 
         fixture.store.chooseSound(.soft)
         if fixture.store.phase == .refinement { fixture.store.chooseDirection(.second) }
+        XCTAssertEqual(fixture.store.phase, .decade)
+        let decadeQuestion = try await snapshot(
+            StationQuestionView().environment(fixture.store).dynamicTypeSize(.accessibility2),
+            colorScheme: .dark
+        )
+        XCTAssertEqual(decadeQuestion.size, CGSize(width: 390, height: 844))
+        attach(decadeQuestion, name: "Station decade question - Accessibility Dark")
+
+        fixture.store.chooseDecade(nil)
         await fixture.store.generate()
         let result = try await snapshot(
             NavigationStack { StationResultView() }
@@ -216,11 +272,13 @@ private final class StationFixture {
     let playlists = PlaylistStore(persistence: StationPlaylistPersistence())
     let store: StationStore
 
-    init(featureCount: Int) {
+    init(featureCount: Int, years: [Int?]? = nil) {
+        let trackYears = years ?? Array(repeating: nil, count: 3)
         tracks = (0..<3).map { index in
             Track(id: UUID(), title: "Song \(index)", artistName: "Artist \(index)", duration: 180,
                   fileURL: URL(fileURLWithPath: "/tmp/station-\(index).flac"),
-                  relativePath: "station-\(index).flac", fileSize: Int64(100 + index))
+                  relativePath: "station-\(index).flac", fileSize: Int64(100 + index),
+                  year: index < trackYears.count ? trackYears[index] : nil)
         }
         let folder = URL(fileURLWithPath: "/tmp/station-library")
         let importService = StationFileImport(folders: [folder])
