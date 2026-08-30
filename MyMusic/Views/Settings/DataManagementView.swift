@@ -2,14 +2,28 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct DataManagementView: View {
+    private enum ImportTarget {
+        case playlist
+        case equalizer
+        case genreDisplayPresets
+
+        var allowedContentTypes: [UTType] {
+            switch self {
+            case .playlist:
+                [.json, .plainText]
+            case .equalizer, .genreDisplayPresets:
+                [.json]
+            }
+        }
+    }
+
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var historyStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(TrackFeatureStore.self) private var featureStore
-    @State private var isImportingPlaylist = false
-    @State private var isImportingEqualizer = false
-    @State private var isImportingGenrePresets = false
+    @State private var importTarget = ImportTarget.playlist
+    @State private var isImportingFile = false
     @State private var resultMessage: String?
     @State private var errorMessage: String?
 
@@ -29,7 +43,7 @@ struct DataManagementView: View {
                     try exporter.allPlaylistsJSON(playlistStore.playlists, tracks: libraryStore.tracks)
                 }
                 Button("プレイリストを読み込む", systemImage: "square.and.arrow.down") {
-                    isImportingPlaylist = true
+                    presentImporter(for: .playlist)
                 }
             }
             Section("再生データ") {
@@ -64,13 +78,13 @@ struct DataManagementView: View {
                     )
                 }
                 Button("イコライザーを読み込む", systemImage: "square.and.arrow.down") {
-                    isImportingEqualizer = true
+                    presentImporter(for: .equalizer)
                 }
                 throwingExportLink("ジャンルプリセットを書き出す", systemImage: "list.bullet.rectangle.portrait") {
                     try exporter.genreDisplayPresetsJSON(libraryStore.genreDisplayPresets)
                 }
                 Button("ジャンルプリセットを読み込む", systemImage: "square.and.arrow.down") {
-                    isImportingGenrePresets = true
+                    presentImporter(for: .genreDisplayPresets)
                 }
             } header: {
                 Text("設定とプリセット")
@@ -79,14 +93,15 @@ struct DataManagementView: View {
             }
         }
         .navigationTitle("データ管理")
-        .fileImporter(isPresented: $isImportingPlaylist, allowedContentTypes: [.json, .plainText]) { result in
-            importPlaylistFile(result)
-        }
-        .fileImporter(isPresented: $isImportingEqualizer, allowedContentTypes: [.json]) { result in
-            importSettingsFile(result, expectedKind: .equalizer)
-        }
-        .fileImporter(isPresented: $isImportingGenrePresets, allowedContentTypes: [.json]) { result in
-            importSettingsFile(result, expectedKind: .genreDisplayPresets)
+        .fileImporter(isPresented: $isImportingFile, allowedContentTypes: importTarget.allowedContentTypes) { result in
+            switch importTarget {
+            case .playlist:
+                importPlaylistFile(result)
+            case .equalizer:
+                importSettingsFile(result, expectedKind: .equalizer)
+            case .genreDisplayPresets:
+                importSettingsFile(result, expectedKind: .genreDisplayPresets)
+            }
         }
         .alert("インポート結果", isPresented: Binding(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } })) {
             Button("閉じる") { resultMessage = nil }
@@ -94,6 +109,11 @@ struct DataManagementView: View {
         .alert("データエラー", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("閉じる") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private func presentImporter(for target: ImportTarget) {
+        importTarget = target
+        isImportingFile = true
     }
 
     private func exportLink(_ title: String, systemImage: String, file: MusicExportFile) -> some View {
