@@ -33,6 +33,49 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.genres.flatMap(\.trackIDs), [rock.id])
     }
 
+    func testWorkPlaybackGenreExistsAsAlwaysEnabledAndCannotBeFilteredOut() async throws {
+        let ambient = makeTrack(title: "Ambient", genre: "Ambient")
+        let work = makeTrack(title: "Work", genre: Track.workPlaybackGenre)
+        let folder = URL(fileURLWithPath: "/tmp/work-genre-filter-library")
+        let suiteName = "LibraryGenreFilterTests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.set([Track.workPlaybackGenre], forKey: "library.disabledGenreNames")
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = LibraryStore(
+            service: GenreFilterLibraryService(tracks: [ambient, work]),
+            fileImportService: GenreFilterFileImport(folders: [folder]),
+            persistence: GenreFilterLibraryPersistence(),
+            identityService: TrackIdentityService(
+                registryURL: URL(fileURLWithPath: "/tmp/unused-work-genre-filter-identities.json")
+            ),
+            userDefaults: defaults
+        )
+
+        await store.restoreAndLoadIfNeeded()
+
+        XCTAssertTrue(store.availableGenreOptions.contains { $0.id == Track.workPlaybackGenre })
+        XCTAssertTrue(store.isGenreAlwaysEnabled(Track.workPlaybackGenre))
+        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+
+        store.setGenre(Track.workPlaybackGenre, isEnabled: false)
+        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+
+        store.setEnabledGenres([])
+        try await waitUntil { store.tracks.map(\.id) == [work.id] }
+        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+        XCTAssertFalse(store.isGenreEnabled("Ambient"))
+
+        let preset = GenreDisplayPreset(
+            id: UUID(),
+            name: "空の旧プリセット",
+            enabledGenreNames: [],
+            includesUnassignedGenreSetting: true
+        )
+        store.applyGenreDisplayPreset(preset)
+        try await waitUntil { store.tracks.map(\.id) == [work.id] }
+        XCTAssertTrue(store.isGenreDisplayPresetActive(preset))
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(1),
         condition: @MainActor () -> Bool

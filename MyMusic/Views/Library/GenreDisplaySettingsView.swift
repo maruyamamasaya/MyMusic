@@ -127,7 +127,7 @@ struct GenreDisplaySettingsView: View {
                         .foregroundStyle(libraryStore.isGenreDisplayPresetActive(preset) ? Color.accentColor : .secondary)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(preset.name).foregroundStyle(.primary)
-                        Text("\(preset.enabledGenreNames.intersection(Set(libraryStore.availableGenreOptions.map(\.id))).count)件を表示")
+                        Text("\(libraryStore.enabledGenreCount(for: preset))件を表示")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -206,13 +206,13 @@ struct GenreSelectionEditorView: View {
                     .disabled(selection == allIDs)
 
                     Button {
-                        selection.removeAll()
+                        selection = fixedIDs
                     } label: {
                         Label("すべて解除", systemImage: "xmark.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(selection.isEmpty)
+                    .disabled(selection == fixedIDs)
                 }
                 .font(.subheadline.weight(.semibold))
                 .controlSize(.regular)
@@ -223,16 +223,33 @@ struct GenreSelectionEditorView: View {
                         toggle(option.id)
                     } label: {
                         HStack {
-                            Text(option.name).foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.name).foregroundStyle(.primary)
+                                if libraryStore.isGenreAlwaysEnabled(option.id) {
+                                    Text("常に表示")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer()
-                            Image(systemName: selection.contains(option.id) ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: libraryStore.isGenreAlwaysEnabled(option.id)
+                                  ? "lock.circle.fill"
+                                  : selection.contains(option.id) ? "checkmark.circle.fill" : "circle")
                                 .font(.title3)
-                                .foregroundStyle(selection.contains(option.id) ? Color.accentColor : .secondary)
+                                .foregroundStyle(
+                                    selection.contains(option.id) ? Color.accentColor : .secondary
+                                )
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(libraryStore.isGenreAlwaysEnabled(option.id))
                     .accessibilityValue(selection.contains(option.id) ? "表示" : "非表示")
+                    .accessibilityHint(
+                        libraryStore.isGenreAlwaysEnabled(option.id)
+                            ? "作業用の曲を分離するため常に表示されます"
+                            : ""
+                    )
                 }
             } header: {
                 Text("表示するジャンル（\(selection.count)件）")
@@ -262,6 +279,7 @@ struct GenreSelectionEditorView: View {
     }
 
     private var allIDs: Set<String> { Set(libraryStore.availableGenreOptions.map(\.id)) }
+    private var fixedIDs: Set<String> { Set(allIDs.filter(libraryStore.isGenreAlwaysEnabled)) }
     private var canSave: Bool {
         !needsName || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -274,11 +292,12 @@ struct GenreSelectionEditorView: View {
             selection = Set(libraryStore.availableGenreOptions.map(\.id).filter(libraryStore.isGenreEnabled))
         case let .editPreset(preset):
             name = preset.name
-            selection = preset.enabledGenreNames.intersection(allIDs)
+            selection = preset.enabledGenreNames.intersection(allIDs).union(fixedIDs)
         }
     }
 
     private func toggle(_ id: String) {
+        guard !libraryStore.isGenreAlwaysEnabled(id) else { return }
         if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
     }
 
