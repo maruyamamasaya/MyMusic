@@ -117,11 +117,19 @@ struct TrackMusicHistoryView: View {
 
 private extension MusicHistoryTrackSummary {
     var sourceCountsDisplay: String {
-        let ranked = sourceCounts
-            .compactMap { key, count in
-                PlaybackStartSource(rawValue: key).map { (key: $0, count: count) }
+        let parsedItems: [(key: PlaybackStartSource, count: Int)] = sourceCounts.compactMap { entry in
+            let key = PlaybackStartSource(rawValue: entry.key)
+            if let source = key {
+                return (key: source, count: entry.value)
             }
-            .sorted { $0.count == $1.count ? $0.key.rawValue < $1.key.rawValue : $0.count > $1.count }
+            return nil
+        }
+        let ranked = parsedItems.sorted {
+            if $0.count == $1.count {
+                return $0.key.rawValue < $1.key.rawValue
+            }
+            return $0.count > $1.count
+        }
         guard !ranked.isEmpty else { return "記録なし" }
         return ranked
             .prefix(2)
