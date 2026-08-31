@@ -137,16 +137,21 @@ final class AnalyticsService {
         equalizer: EqualizerSettings? = nil,
         customEqualizerPresets: [EqualizerPreset] = []
     ) -> String {
-        var rows = ["種類,日時,曲名,アーティスト,再生回数,値"]
+        var rows = ["種類,日時,曲名,アーティスト,再生回数,値,詳細"]
         for month in snapshot.playbackMonths {
             for day in month.days {
                 for event in day.events {
-                    rows.append(["再生履歴", Self.dateTimeFormatter.string(from: event.playedAt), event.track.title, event.track.artistName, "", ""].map(csvField).joined(separator: ","))
+                    rows.append(["再生履歴", Self.dateTimeFormatter.string(from: event.playedAt), event.track.title, event.track.artistName, "", "", ""].map(csvField).joined(separator: ","))
                 }
             }
         }
         for item in snapshot.mostPlayedTracks {
-            rows.append(["楽曲別再生回数", "", item.track.title, item.track.artistName, "\(item.playCount)", ""].map(csvField).joined(separator: ","))
+            rows.append(["楽曲別再生回数", "", item.track.title, item.track.artistName, "\(item.playCount)", "", ""].map(csvField).joined(separator: ","))
+            let firstPlayedText = item.firstPlayedAt.map(Self.dateTimeFormatter.string) ?? ""
+            let lastPlayedText = item.lastPlayedAt.map(Self.dateTimeFormatter.string) ?? ""
+            let behaviorText = "manual:\(item.manualPlayCount), automatic:\(item.automaticPlayCount), 7日:\(item.playsLast7Days), 30日:\(item.playsLast30Days), 初回:\(firstPlayedText), 最終:\(lastPlayedText)"
+            rows.append(["楽曲別再生行動", "", item.track.title, item.track.artistName, "\(item.playCount)", "", behaviorText].map(csvField).joined(separator: ","))
+            rows.append(["楽曲別再生入口", "", item.track.title, item.track.artistName, "", "", playbackSourceText(from: item.sourceCounts)].map(csvField).joined(separator: ","))
         }
         for item in snapshot.preferenceRatedTracks {
             rows.append([
@@ -155,33 +160,56 @@ final class AnalyticsService {
                 item.track.title,
                 item.track.artistName,
                 "",
-                String(format: "%+d", item.playbackPreference)
+                String(format: "%+d", item.playbackPreference),
+                ""
             ].map(csvField).joined(separator: ","))
         }
         for item in snapshot.currentlyHiddenTracks {
-            rows.append(["飽きた・現在非表示", item.boredomHiddenUntil.map(Self.dateTimeFormatter.string) ?? "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)"].map(csvField).joined(separator: ","))
+            rows.append(["飽きた・現在非表示", item.boredomHiddenUntil.map(Self.dateTimeFormatter.string) ?? "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)", ""].map(csvField).joined(separator: ","))
         }
         for item in snapshot.previouslyHiddenTracks {
-            rows.append(["飽きた・解除済み", "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)"].map(csvField).joined(separator: ","))
+            rows.append(["飽きた・解除済み", "", item.track.title, item.track.artistName, "", "飽き度\(item.boredomLevel)", ""].map(csvField).joined(separator: ","))
         }
         for item in snapshot.permanentlyHiddenTracks {
-            rows.append(["飽きた・永久非表示", "", item.track.title, item.track.artistName, "", "飽き度3"].map(csvField).joined(separator: ","))
+            rows.append(["飽きた・永久非表示", "", item.track.title, item.track.artistName, "", "飽き度3", ""].map(csvField).joined(separator: ","))
         }
-        rows.append(["集計", "", "お気に入り", "", "", "\(snapshot.favoriteCount)"].map(csvField).joined(separator: ","))
-        rows.append(["集計", "", "プレイリスト", "", "", "\(snapshot.playlistCount)"].map(csvField).joined(separator: ","))
+        rows.append(["集計", "", "総再生", "", "\(snapshot.totalPlayCount)", "", ""].map(csvField).joined(separator: ","))
+        rows.append(["集計", "", "手動再生", "", "\(snapshot.totalManualPlayCount)", "", ""].map(csvField).joined(separator: ","))
+        rows.append(["集計", "", "自動再生", "", "\(snapshot.totalAutomaticPlayCount)", "", ""].map(csvField).joined(separator: ","))
+        rows.append(["集計", "", "お気に入り", "", "\(snapshot.favoriteCount)", "", ""].map(csvField).joined(separator: ","))
+        rows.append(["集計", "", "プレイリスト", "", "\(snapshot.playlistCount)", "", ""].map(csvField).joined(separator: ","))
         for playlist in playlists {
-            rows.append(["プレイリスト", Self.dateTimeFormatter.string(from: playlist.updatedAt), playlist.name, "", "", "\(playlist.trackIDs.count)曲"].map(csvField).joined(separator: ","))
+            rows.append(["プレイリスト", Self.dateTimeFormatter.string(from: playlist.updatedAt), playlist.name, "", "", "\(playlist.trackIDs.count)曲", ""].map(csvField).joined(separator: ","))
         }
         if let equalizer {
-            rows.append(["EQ設定", "", "現在の設定", "", "", equalizer.isEnabled ? "ON" : "OFF"].map(csvField).joined(separator: ","))
-            rows.append(["EQ設定", "", "現在の設定", "プリアンプ", "", Self.gainString(equalizer.preamp)].map(csvField).joined(separator: ","))
+            rows.append(["EQ設定", "", "現在の設定", "", "", equalizer.isEnabled ? "ON" : "OFF", ""].map(csvField).joined(separator: ","))
+            rows.append(["EQ設定", "", "現在の設定", "プリアンプ", "", Self.gainString(equalizer.preamp), ""].map(csvField).joined(separator: ","))
             appendEqualizerBands(equalizer.bands, type: "EQ設定", name: "現在の設定", to: &rows)
         }
         for preset in customEqualizerPresets {
-            rows.append(["EQプリセット", "", preset.name, "プリアンプ", "", Self.gainString(preset.preamp)].map(csvField).joined(separator: ","))
+            rows.append(["EQプリセット", "", preset.name, "プリアンプ", "", Self.gainString(preset.preamp), ""].map(csvField).joined(separator: ","))
             appendEqualizerBands(preset.settings().bands, type: "EQプリセット", name: preset.name, to: &rows)
         }
         return rows.joined(separator: "\n")
+    }
+
+    private func playbackSourceText(from sourceCounts: [String: Int]) -> String {
+        if sourceCounts.isEmpty { return "記録なし" }
+
+        let ordered = sourceCounts
+            .compactMap { (key: String, value: Int) -> (String, Int)? in
+                PlaybackStartSource(rawValue: key).map { ($0.rawValue, value) }
+            }
+            .sorted { lhs, rhs in
+                if lhs.1 == rhs.1 { return lhs.0 < rhs.0 }
+                return lhs.1 > rhs.1
+            }
+        guard !ordered.isEmpty else {
+            return "記録なし"
+        }
+        return ordered
+            .map { "\($0.0):\($0.1)" }
+            .joined(separator: " ")
     }
 
     static let dateTimeFormatter: DateFormatter = {
@@ -222,7 +250,7 @@ final class AnalyticsService {
 
     private func appendEqualizerBands(_ bands: [EqualizerBand], type: String, name: String, to rows: inout [String]) {
         for band in bands {
-            rows.append([type, "", name, "\(Int(band.frequency)) Hz", "", Self.gainString(band.gain)].map(csvField).joined(separator: ","))
+            rows.append([type, "", name, "\(Int(band.frequency)) Hz", "", Self.gainString(band.gain), ""].map(csvField).joined(separator: ","))
         }
     }
 
