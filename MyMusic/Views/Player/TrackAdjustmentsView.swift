@@ -3,6 +3,7 @@ import SwiftUI
 struct TrackAdjustmentsView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(TrackPlaybackAdjustmentStore.self) private var adjustmentStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackFeatureStore.self) private var featureStore
     @Environment(SettingsStore.self) private var settingsStore
 
@@ -63,6 +64,21 @@ struct TrackAdjustmentsView: View {
         let duration = resolvedDuration(for: track)
 
         VStack(alignment: .leading, spacing: 10) {
+            Text("再生履歴").font(.subheadline.weight(.semibold))
+            valueRow(
+                "総再生時間",
+                formattedDuration(playbackHistoryStore.totalPlaybackDuration(for: track.id))
+            )
+            valueRow("スキップ回数", "\(playbackHistoryStore.skipCount(for: track.id))回")
+            valueRow("スキップ率", formattedRate(playbackHistoryStore.skipRate(for: track.id)))
+            valueRow("完走回数", "\(playbackHistoryStore.fullPlaybackCount(for: track.id))回")
+            valueRow("完走率", formattedRate(playbackHistoryStore.completionRate(for: track.id)))
+            valueRow("連続再生回数", "\(playbackHistoryStore.consecutivePlayCount(for: track.id))回")
+            valueRow("リピート再生回数", "\(playbackHistoryStore.repeatPlaybackCount(for: track.id))回")
+            valueRow("最終再生日時", formattedDate(playbackHistoryStore.lastPlayedAt(for: track.id)))
+
+            Divider()
+
             Text("Playback").font(.subheadline.weight(.semibold))
             valueRow("現在位置", formatted(playerStore.currentTime))
             valueRow("前回位置", formatted(adjustment.lastPlaybackPosition))
@@ -326,6 +342,35 @@ struct TrackAdjustmentsView: View {
         guard let value, value.isFinite else { return "—" }
         return String(format: "%.1f %@", value, suffix)
     }
+
+    private func formattedDuration(_ time: TimeInterval) -> String {
+        let totalSeconds = max(Int(time.isFinite ? time : 0), 0)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", totalSeconds / 60, seconds)
+    }
+
+    private func formattedRate(_ value: Double) -> String {
+        String(format: "%.1f%%", value * 100)
+    }
+
+    private func formattedDate(_ value: Date?) -> String {
+        guard let value else { return "未再生" }
+        return Self.dateFormatter.string(from: value)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     private func signedDecibels(_ value: Double) -> String {
         String(format: "%+.1f dB", value)

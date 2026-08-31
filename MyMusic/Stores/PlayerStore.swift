@@ -69,7 +69,12 @@ final class PlayerStore {
     private var listenedTime: TimeInterval = 0
     private var lastObservedPlaybackTime: TimeInterval?
     private var playbackCountThresholdOverride: TimeInterval?
+    private var unflushedPlaybackDuration: TimeInterval = 0
+    private var lastPlaybackHistoryPersistenceDate = Date.distantPast
+    private var hasFinalizedCurrentPlaybackSession = false
     private var wasPlayingBeforeInterruption = false
+    private var consecutiveTrackAnchor: Track.ID?
+    private let playbackHistoryPersistInterval: TimeInterval = 15
     private var activeCustomEndPosition: TimeInterval?
     private var usesTrackAdjustmentBoundaries = false
     private var isCompletingCustomEnd = false
@@ -263,6 +268,7 @@ final class PlayerStore {
 
     func next(using transitionReason: PlaybackTransitionReason) {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
+            finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
             persistCurrentPlaybackPosition(force: true)
             audioPlayer.pause()
             isPlaying = false
@@ -384,6 +390,7 @@ final class PlayerStore {
     }
 
     func stop() {
+        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
         persistCurrentPlaybackPosition(force: true)
         playbackTask?.cancel()
         audioInformationTask?.cancel()
@@ -405,6 +412,7 @@ final class PlayerStore {
         activeCustomEndPosition = nil
         usesTrackAdjustmentBoundaries = false
         isCompletingCustomEnd = false
+        consecutiveTrackAnchor = nil
         nowPlayingService.clear()
         updateRemoteCommandAvailability()
     }
@@ -415,6 +423,11 @@ final class PlayerStore {
     /// persistence to a view timer.
     func persistPlaybackPositionForLifecycle() {
         persistCurrentPlaybackPosition(force: true)
+        finalizeCurrentPlaybackSession(isNaturallyCompleted: false, flushOnly: true)
+    }
+
+    func persistPlaybackHistoryForLifecycle() {
+        finalizeCurrentPlaybackSession(isNaturallyCompleted: false, flushOnly: true)
     }
 
     func refreshActiveTrackAdjustment() {
@@ -430,6 +443,7 @@ final class PlayerStore {
         savesPreviousPosition: Bool = true
     ) {
         guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
+        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
@@ -609,6 +623,7 @@ final class PlayerStore {
             nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
             updateRemoteCommandAvailability()
         case .ended:
+            finalizeCurrentPlaybackSession(isNaturallyCompleted: true)
             isPlaying = false
             currentTime = duration
             nowPlayingService.updatePlayback(elapsedTime: duration, isPlaying: false)
@@ -635,7 +650,10 @@ final class PlayerStore {
         hasRecordedPlaybackStart = false
         hasCountedCurrentPlay = false
         listenedTime = 0
+        unflushedPlaybackDuration = 0
         lastObservedPlaybackTime = nil
+        lastPlaybackHistoryPersistenceDate = Date()
+        hasFinalizedCurrentPlaybackSession = false
         playbackCountThresholdOverride = nil
     }
 
@@ -672,6 +690,7 @@ final class PlayerStore {
 
     private func completeCurrentTrack(at endPosition: TimeInterval) {
         isCompletingCustomEnd = true
+        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
         audioPlayer.pause()
         isPlaying = false
         currentTime = endPosition
@@ -713,20 +732,69 @@ final class PlayerStore {
 
     private func recordPlaybackStartIfNeeded() {
         guard let currentTrack, !hasRecordedPlaybackStart else { return }
-        playbackHistoryStore.recordPlaybackStarted(trackID: currentTrack.id)
+        let isConsecutivePlay = currentTrack.id == consecutiveTrackAnchor
+        playbackHistoryStore.recordPlaybackStarted(
+            trackID: currentTrack.id,
+            isRepeatModeActive: repeatMode != .off,
+            isConsecutivePlay: isConsecutivePlay
+        )
+        consecutiveTrackAnchor = currentTrack.id
         hasRecordedPlaybackStart = true
     }
 
     private func recordListenedTime(at time: TimeInterval) {
         defer { lastObservedPlaybackTime = isPlaying ? time : nil }
-        guard isPlaying, !hasCountedCurrentPlay, let previous = lastObservedPlaybackTime else { return }
+        guard isPlaying, let previous = lastObservedPlaybackTime else { return }
         let delta = time - previous
         guard delta > 0, delta <= 1.5 else { return }
         listenedTime += delta
+        unflushedPlaybackDuration += delta
+        flushPlaybackHistoryDuration(force: false)
         let threshold = playbackCountThresholdOverride ?? min(30, duration * 0.5)
-        guard threshold > 0, listenedTime >= threshold, let currentTrack else { return }
+        guard !hasCountedCurrentPlay, threshold > 0, listenedTime >= threshold, let currentTrack else { return }
         playbackHistoryStore.recordPlaybackCompleted(trackID: currentTrack.id)
         hasCountedCurrentPlay = true
+    }
+
+    private func finalizeCurrentPlaybackSession(
+        isNaturallyCompleted: Bool,
+        flushOnly: Bool = false
+    ) {
+        guard let currentTrack else { return }
+        guard !hasFinalizedCurrentPlaybackSession else { return }
+
+        flushPlaybackHistoryDuration(force: true)
+        guard !flushOnly else { return }
+        hasFinalizedCurrentPlaybackSession = true
+        guard hasRecordedPlaybackStart else { return }
+
+        let resolvedDuration = duration > 0 ? duration : currentTrack.duration
+        playbackHistoryStore.recordPlaybackFinished(
+            trackID: currentTrack.id,
+            isFullPlayback: PlaybackHistoryScoring.isFullPlayback(
+                duration: resolvedDuration,
+                listenedSeconds: listenedTime
+            ),
+            isSkipped: PlaybackHistoryScoring.isSkip(
+                duration: resolvedDuration,
+                listenedSeconds: listenedTime,
+                isNaturallyCompleted: isNaturallyCompleted
+            )
+        )
+    }
+
+    private func flushPlaybackHistoryDuration(force: Bool) {
+        guard let track = currentTrack, unflushedPlaybackDuration > 0 else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastPlaybackHistoryPersistenceDate) >= playbackHistoryPersistInterval else {
+            return
+        }
+        lastPlaybackHistoryPersistenceDate = now
+        playbackHistoryStore.addPlaybackDuration(
+            trackID: track.id,
+            seconds: unflushedPlaybackDuration
+        )
+        unflushedPlaybackDuration = 0
     }
 
     private func updateRemoteCommandAvailability() {

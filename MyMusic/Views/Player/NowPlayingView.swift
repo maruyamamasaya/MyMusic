@@ -177,9 +177,12 @@ struct NowPlayingView: View {
                         .foregroundStyle(.secondary)
                 }
                 if let track = playerStore.currentTrack {
-                    Text("再生回数 \(playbackHistoryStore.playCount(for: track.id))回")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Text("再生回数 \(playbackHistoryStore.playCount(for: track.id))回")
+                        Text("総再生時間 \(formatDuration(playbackHistoryStore.totalPlaybackDuration(for: track.id)))")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -198,6 +201,18 @@ struct NowPlayingView: View {
     private var currentArtist: Artist? {
         guard let trackID = playerStore.currentTrack?.id else { return nil }
         return libraryStore.artists.first { $0.trackIDs.contains(trackID) }
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(Int(duration.isFinite ? duration : 0), 0)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", totalSeconds / 60, seconds)
     }
 
 }

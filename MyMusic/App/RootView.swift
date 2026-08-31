@@ -76,6 +76,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .inactive || newPhase == .background {
                 playerStore.persistPlaybackPositionForLifecycle()
+                playerStore.persistPlaybackHistoryForLifecycle()
             }
         }
         .task { await playlistStore.loadIfNeeded() }

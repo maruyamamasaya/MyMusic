@@ -57,6 +57,19 @@ final class PlaybackHistoryStore {
         persist()
     }
 
+    func recordPlaybackStarted(
+        trackID: Track.ID,
+        isRepeatModeActive: Bool,
+        isConsecutivePlay: Bool
+    ) {
+        var entry = entry(for: trackID)
+        entry.lastPlayedAt = Date()
+        entry.consecutivePlayCount = isConsecutivePlay ? entry.consecutivePlayCount + 1 : 1
+        if isRepeatModeActive { entry.repeatPlaybackCount += 1 }
+        entries[trackID] = entry
+        persist()
+    }
+
     func recordPlaybackCompleted(trackID: Track.ID) {
         var entry = entry(for: trackID)
         entry.playCount += 1
@@ -65,16 +78,43 @@ final class PlaybackHistoryStore {
         persist()
     }
 
+    func addPlaybackDuration(trackID: Track.ID, seconds: TimeInterval) {
+        guard seconds > 0 else { return }
+        var entry = entry(for: trackID)
+        entry.totalPlaybackDuration += seconds
+        entries[trackID] = entry
+        persist()
+    }
+
+    func recordPlaybackFinished(
+        trackID: Track.ID,
+        isFullPlayback: Bool,
+        isSkipped: Bool
+    ) {
+        var entry = entry(for: trackID)
+        if isFullPlayback { entry.fullPlaybackCount += 1 }
+        if isSkipped { entry.skipCount += 1 }
+        entries[trackID] = entry
+        persist()
+    }
+
     /// Clears only the playback facts for one track while preserving unrelated
     /// user choices such as favorites, preference ratings, and shuffle hiding.
     func resetPlaybackHistory(for trackID: Track.ID) {
         guard var entry = entries[trackID],
-              entry.playCount > 0 || entry.lastPlayedAt != nil || !entry.playbackEvents.isEmpty else {
+              entry.playCount > 0 || entry.lastPlayedAt != nil || !entry.playbackEvents.isEmpty ||
+              entry.totalPlaybackDuration > 0 || entry.skipCount > 0 || entry.fullPlaybackCount > 0 ||
+              entry.consecutivePlayCount > 0 || entry.repeatPlaybackCount > 0 else {
             return
         }
         entry.playCount = 0
         entry.lastPlayedAt = nil
         entry.playbackEvents.removeAll()
+        entry.totalPlaybackDuration = 0
+        entry.skipCount = 0
+        entry.fullPlaybackCount = 0
+        entry.consecutivePlayCount = 0
+        entry.repeatPlaybackCount = 0
         entries[trackID] = entry
         persist()
     }
@@ -97,6 +137,46 @@ final class PlaybackHistoryStore {
 
     func playbackPreference(for trackID: Track.ID) -> Int {
         entries[trackID]?.playbackPreference ?? 0
+    }
+
+    func totalPlaybackDuration(for trackID: Track.ID) -> TimeInterval {
+        entries[trackID]?.totalPlaybackDuration ?? 0
+    }
+
+    func lastPlayedAt(for trackID: Track.ID) -> Date? {
+        entries[trackID]?.lastPlayedAt
+    }
+
+    func skipCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.skipCount ?? 0
+    }
+
+    func fullPlaybackCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.fullPlaybackCount ?? 0
+    }
+
+    func consecutivePlayCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.consecutivePlayCount ?? 0
+    }
+
+    func repeatPlaybackCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.repeatPlaybackCount ?? 0
+    }
+
+    func skipRate(for trackID: Track.ID) -> Double {
+        let fullPlaybackCount = fullPlaybackCount(for: trackID)
+        return PlaybackHistoryScoring.skipRate(
+            fullPlaybackCount: fullPlaybackCount,
+            skipCount: skipCount(for: trackID)
+        )
+    }
+
+    func completionRate(for trackID: Track.ID) -> Double {
+        let fullPlaybackCount = fullPlaybackCount(for: trackID)
+        return PlaybackHistoryScoring.completionRate(
+            fullPlaybackCount: fullPlaybackCount,
+            skipCount: skipCount(for: trackID)
+        )
     }
 
     func increasePlaybackPreference(for trackID: Track.ID) {
