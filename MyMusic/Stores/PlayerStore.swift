@@ -74,6 +74,7 @@ final class PlayerStore {
     private var hasFinalizedCurrentPlaybackSession = false
     private var wasPlayingBeforeInterruption = false
     private var consecutiveTrackAnchor: Track.ID?
+    private var currentPlaybackStartContext = PlaybackStartContext.manualUnknown
     private let playbackHistoryPersistInterval: TimeInterval = 15
     private var activeCustomEndPosition: TimeInterval?
     private var usesTrackAdjustmentBoundaries = false
@@ -162,7 +163,7 @@ final class PlayerStore {
 
     /// Starts a one-item queue for callers that do not provide playback context.
     func play(_ track: Track) {
-        playQueue([track], startingAt: 0)
+        playQueue([track], startingAt: 0, startContext: PlaybackStartContext(kind: .manual, source: .library))
     }
 
     func playQueue(
@@ -171,7 +172,8 @@ final class PlayerStore {
         playbackStartTime: TimeInterval = 0,
         playbackEndTime: TimeInterval? = nil,
         transitionReason: PlaybackTransitionReason = .manualTrackChange,
-        presentationMode: PlayerPresentationMode = .standard
+        presentationMode: PlayerPresentationMode = .standard,
+        startContext: PlaybackStartContext = .manualUnknown
     ) {
         guard tracks.indices.contains(index) else {
             if tracks.isEmpty { stop() }
@@ -185,27 +187,34 @@ final class PlayerStore {
             at: index,
             playbackStartTime: playbackStartTime,
             playbackEndTime: playbackEndTime,
-            transitionReason: transitionReason
+            transitionReason: transitionReason,
+            startContext: startContext
         )
     }
 
-    func playQueue(_ tracks: [Track], startingWith track: Track) {
+    func playQueue(
+        _ tracks: [Track],
+        startingWith track: Track,
+        startContext: PlaybackStartContext = .manualUnknown
+    ) {
         guard let index = tracks.firstIndex(where: { $0.id == track.id }) else { return }
-        playQueue(tracks, startingAt: index)
+        playQueue(tracks, startingAt: index, startContext: startContext)
     }
 
     func playQueueItem(
         at index: Int,
         playbackStartTime: TimeInterval = 0,
         playbackEndTime: TimeInterval? = nil,
-        transitionReason: PlaybackTransitionReason = .manualTrackChange
+        transitionReason: PlaybackTransitionReason = .manualTrackChange,
+        startContext: PlaybackStartContext = PlaybackStartContext(kind: .manual, source: .queue)
     ) {
         guard queue.indices.contains(index) else { return }
         startPlayback(
             at: index,
             playbackStartTime: playbackStartTime,
             playbackEndTime: playbackEndTime,
-            transitionReason: transitionReason
+            transitionReason: transitionReason,
+            startContext: startContext
         )
     }
 
@@ -276,7 +285,11 @@ final class PlayerStore {
             updateRemoteCommandAvailability()
             return
         }
-        startPlayback(at: playbackOrder[nextPosition], transitionReason: transitionReason)
+        startPlayback(
+            at: playbackOrder[nextPosition],
+            transitionReason: transitionReason,
+            startContext: startContext(for: transitionReason)
+        )
     }
 
     func previous() {
@@ -284,7 +297,11 @@ final class PlayerStore {
         if currentTime >= previousRestartThreshold || position == 0 {
             seek(to: currentTrack.map { effectiveStartPosition(for: $0) } ?? 0)
         } else {
-            startPlayback(at: playbackOrder[position - 1], transitionReason: .manualTrackChange)
+            startPlayback(
+                at: playbackOrder[position - 1],
+                transitionReason: .manualTrackChange,
+                startContext: PlaybackStartContext(kind: .manual, source: .queue)
+            )
         }
     }
 
@@ -413,6 +430,7 @@ final class PlayerStore {
         usesTrackAdjustmentBoundaries = false
         isCompletingCustomEnd = false
         consecutiveTrackAnchor = nil
+        currentPlaybackStartContext = .manualUnknown
         nowPlayingService.clear()
         updateRemoteCommandAvailability()
     }
@@ -440,7 +458,8 @@ final class PlayerStore {
         playbackStartTime: TimeInterval = 0,
         playbackEndTime: TimeInterval? = nil,
         transitionReason: PlaybackTransitionReason,
-        savesPreviousPosition: Bool = true
+        savesPreviousPosition: Bool = true,
+        startContext: PlaybackStartContext
     ) {
         guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
         finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
@@ -450,6 +469,7 @@ final class PlayerStore {
         let track = queue[index]
         currentIndex = index
         currentTrack = track
+        currentPlaybackStartContext = startContext
         loadAudioInformation(for: track)
         resetPlaybackSession()
         playbackCountThresholdOverride = playbackEndTime == nil ? nil : 15
@@ -582,7 +602,8 @@ final class PlayerStore {
             startPlayback(
                 at: currentIndex,
                 transitionReason: .automaticTrackChange,
-                savesPreviousPosition: false
+                savesPreviousPosition: false,
+                startContext: PlaybackStartContext(kind: .automatic, source: .repeatPlayback)
             )
             return
         }
@@ -594,7 +615,8 @@ final class PlayerStore {
         startPlayback(
             at: playbackOrder[nextPosition],
             transitionReason: .automaticTrackChange,
-            savesPreviousPosition: false
+            savesPreviousPosition: false,
+            startContext: startContext(for: .automaticTrackChange)
         )
     }
 
@@ -735,6 +757,7 @@ final class PlayerStore {
         let isConsecutivePlay = currentTrack.id == consecutiveTrackAnchor
         playbackHistoryStore.recordPlaybackStarted(
             trackID: currentTrack.id,
+            context: currentPlaybackStartContext,
             isRepeatModeActive: repeatMode != .off,
             isConsecutivePlay: isConsecutivePlay
         )
@@ -795,6 +818,15 @@ final class PlayerStore {
             seconds: unflushedPlaybackDuration
         )
         unflushedPlaybackDuration = 0
+    }
+
+    private func startContext(for transitionReason: PlaybackTransitionReason) -> PlaybackStartContext {
+        switch transitionReason {
+        case .initialPlayback, .manualTrackChange, .highlightUserInitiated:
+            PlaybackStartContext(kind: .manual, source: isShuffleEnabled ? .shuffle : .queue)
+        case .automaticTrackChange, .highlightAutomatic:
+            PlaybackStartContext(kind: .automatic, source: isShuffleEnabled ? .shuffle : currentPlaybackStartContext.source)
+        }
     }
 
     private func updateRemoteCommandAvailability() {

@@ -57,7 +57,11 @@ struct FavoriteAlbumsView: View {
         let playbackTracks = playbackHistoryStore.preferenceWeightedShuffle(sourceTracks)
         guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(true)
-        playerStore.playQueue(playbackTracks, startingAt: 0)
+        playerStore.playQueue(
+            playbackTracks,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
+        )
     }
 }
 
@@ -114,6 +118,10 @@ struct FavoriteArtistsView: View {
         let playbackTracks = playbackHistoryStore.preferenceWeightedShuffle(sourceTracks)
         guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(true)
-        playerStore.playQueue(playbackTracks, startingAt: 0)
+        playerStore.playQueue(
+            playbackTracks,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
+        )
     }
 }

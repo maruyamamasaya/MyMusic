@@ -4,11 +4,17 @@ struct AnalyticsSnapshot {
     struct TrackItem: Identifiable {
         let track: Track
         let playCount: Int
+        let firstPlayedAt: Date?
         let lastPlayedAt: Date?
         let playbackPreference: Int
         let boredomLevel: Int
         let boredomHiddenUntil: Date?
         let isPermanentlyHiddenFromShuffle: Bool
+        let manualPlayCount: Int
+        let automaticPlayCount: Int
+        let playsLast7Days: Int
+        let playsLast30Days: Int
+        let sourceCounts: [String: Int]
         var id: Track.ID { track.id }
     }
 
@@ -32,6 +38,8 @@ struct AnalyticsSnapshot {
     }
 
     let totalPlayCount: Int
+    let totalManualPlayCount: Int
+    let totalAutomaticPlayCount: Int
     let playedTrackCount: Int
     let favoriteCount: Int
     let playlistCount: Int
@@ -57,11 +65,17 @@ final class AnalyticsService {
             return AnalyticsSnapshot.TrackItem(
                 track: track,
                 playCount: history?.playCount ?? 0,
+                firstPlayedAt: history?.firstPlayedAt,
                 lastPlayedAt: history?.lastPlayedAt,
                 playbackPreference: history?.playbackPreference ?? 0,
                 boredomLevel: history.map { $0.isPermanentlyHiddenFromShuffle ? 3 : min($0.boredomCount, 2) } ?? 0,
                 boredomHiddenUntil: history?.boredomHiddenUntil,
-                isPermanentlyHiddenFromShuffle: history?.isPermanentlyHiddenFromShuffle ?? false
+                isPermanentlyHiddenFromShuffle: history?.isPermanentlyHiddenFromShuffle ?? false,
+                manualPlayCount: history?.manualPlayCount ?? 0,
+                automaticPlayCount: history?.automaticPlayCount ?? 0,
+                playsLast7Days: history.map { playbackCount(inLastDays: 7, of: $0) } ?? 0,
+                playsLast30Days: history.map { playbackCount(inLastDays: 30, of: $0) } ?? 0,
+                sourceCounts: history?.playbackSourceCounts ?? [:]
             )
         }
         let playCounts = trackItems.filter { $0.playCount > 0 }.sorted(by: playCountSort)
@@ -75,6 +89,8 @@ final class AnalyticsService {
 
         return AnalyticsSnapshot(
             totalPlayCount: historyEntries.values.reduce(0) { $0 + $1.playCount },
+            totalManualPlayCount: historyEntries.values.reduce(0) { $0 + $1.manualPlayCount },
+            totalAutomaticPlayCount: historyEntries.values.reduce(0) { $0 + $1.automaticPlayCount },
             playedTrackCount: historyEntries.values.filter { $0.lastPlayedAt != nil }.count,
             favoriteCount: historyEntries.values.filter(\.isFavorite).count,
             playlistCount: playlists.count,
@@ -94,6 +110,25 @@ final class AnalyticsService {
                 .sorted(by: titleSort),
             playbackMonths: groupedEvents(events)
         )
+    }
+
+    private func playbackCount(inLastDays days: Int, of entry: PlaybackHistory, now: Date = Date()) -> Int {
+        guard days > 0 else { return 0 }
+        return Self.dayKeys(inLastDays: days, now: now)
+            .reduce(0) { total, key in
+                total + (entry.dailySummaries[key]?.playCount ?? 0)
+            }
+    }
+
+    private static func dayKeys(inLastDays days: Int, now: Date) -> [String] {
+        var calendar = Calendar.current
+        calendar.timeZone = .current
+        return (0..<days).compactMap { offset in
+            let day = calendar.date(byAdding: .day, value: -offset, to: now)
+            guard let day else { return nil }
+            let components = calendar.dateComponents([.year, .month, .day], from: day)
+            return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+        }
     }
 
     func csv(

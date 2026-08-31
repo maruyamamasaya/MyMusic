@@ -36,7 +36,11 @@ struct AlbumDetailView: View {
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         PlayableTrackRowView(track: track) {
-                            playerStore.playQueue(tracks, startingAt: index)
+                            playerStore.playQueue(
+                                tracks,
+                                startingAt: index,
+                                startContext: PlaybackStartContext(kind: .manual, source: .album)
+                            )
                         }
                     }
                 }
@@ -57,6 +61,10 @@ struct AlbumDetailView: View {
             : tracks
         guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(shuffled)
-        playerStore.playQueue(playbackTracks, startingAt: 0)
+        playerStore.playQueue(
+            playbackTracks,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: shuffled ? .shuffle : .album)
+        )
     }
 }

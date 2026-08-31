@@ -83,7 +83,11 @@ struct SongsView: View {
             }
             PlayableTrackRowView(track: track, showsArtwork: displayMode == .artwork) {
                 guard let index = arrangedTracks.firstIndex(where: { $0.id == track.id }) else { return }
-                playerStore.playQueue(arrangedTracks, startingAt: index)
+                playerStore.playQueue(
+                    arrangedTracks,
+                    startingAt: index,
+                    startContext: PlaybackStartContext(kind: .manual, source: .library)
+                )
             }
         }
         .contextMenu {

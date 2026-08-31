@@ -31,7 +31,11 @@ struct FavoritesView: View {
                 Section("曲") {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         PlayableTrackRowView(track: track) {
-                            playerStore.playQueue(tracks, startingAt: index)
+                            playerStore.playQueue(
+                                tracks,
+                                startingAt: index,
+                                startContext: PlaybackStartContext(kind: .manual, source: .favorite)
+                            )
                         }
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
@@ -48,6 +52,10 @@ struct FavoritesView: View {
     private func play(shuffled: Bool) {
         guard !tracks.isEmpty else { return }
         playerStore.setShuffleEnabled(shuffled)
-        playerStore.playQueue(tracks, startingAt: 0)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: shuffled ? .shuffle : .favorite)
+        )
     }
 }

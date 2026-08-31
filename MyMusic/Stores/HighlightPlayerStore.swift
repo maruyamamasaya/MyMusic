@@ -162,7 +162,8 @@ final class HighlightPlayerStore {
             fullQueue,
             startingAt: index,
             playbackStartTime: 0,
-            transitionReason: .manualTrackChange
+            transitionReason: .manualTrackChange,
+            startContext: PlaybackStartContext(kind: .manual, source: .highlight)
         )
     }
 
@@ -238,7 +239,11 @@ final class HighlightPlayerStore {
                 startingAt: 0,
                 playbackStartTime: candidate.startTime,
                 playbackEndTime: candidate.endTime,
-                transitionReason: reason
+                transitionReason: reason,
+                startContext: PlaybackStartContext(
+                    kind: reason == .highlightAutomatic ? .automatic : .manual,
+                    source: .highlight
+                )
             )
             restartAutoAdvance(for: track, candidate: candidate)
             prefetchHighlights()

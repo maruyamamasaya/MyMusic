@@ -180,7 +180,11 @@ private struct QuickPlayView: View {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     HStack(spacing: 8) {
                         Button {
-                            playerStore.playQueue(tracks, startingAt: index)
+                            playerStore.playQueue(
+                                tracks,
+                                startingAt: index,
+                                startContext: PlaybackStartContext(kind: .manual, source: .home)
+                            )
                         } label: {
                             TrackRowView(track: track)
                                 .contentShape(Rectangle())
@@ -217,7 +221,11 @@ private struct HomeTrackListView: View {
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     PlayableTrackRowView(track: track) {
-                        playerStore.playQueue(tracks, startingAt: index)
+                        playerStore.playQueue(
+                            tracks,
+                            startingAt: index,
+                            startContext: PlaybackStartContext(kind: .manual, source: .history)
+                        )
                     }
                 }
             }
@@ -246,7 +254,11 @@ private struct GeneratedQueueView: View {
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     PlayableTrackRowView(track: track) {
-                        playerStore.playQueue(tracks, startingAt: index)
+                        playerStore.playQueue(
+                            tracks,
+                            startingAt: index,
+                            startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
+                        )
                     }
                 }
             }

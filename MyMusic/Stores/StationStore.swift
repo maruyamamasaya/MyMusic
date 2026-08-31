@@ -167,7 +167,11 @@ final class StationStore {
             index = 0
         }
         playerStore.setShuffleEnabled(false)
-        playerStore.playQueue(tracks, startingAt: index)
+        playerStore.playQueue(
+            tracks,
+            startingAt: index,
+            startContext: PlaybackStartContext(kind: .manual, source: .station)
+        )
         return true
     }
 

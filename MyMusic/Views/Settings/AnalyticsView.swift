@@ -77,6 +77,8 @@ struct AnalyticsView: View {
     private var overviewSection: some View {
         Section("概要") {
             LabeledContent("総再生回数", value: "\(snapshot.totalPlayCount)回")
+            LabeledContent("手動再生", value: "\(snapshot.totalManualPlayCount)回")
+            LabeledContent("自動再生", value: "\(snapshot.totalAutomaticPlayCount)回")
             LabeledContent("再生した楽曲数", value: "\(snapshot.playedTrackCount)曲")
             LabeledContent("再生履歴", value: "\(snapshot.playbackMonths.reduce(0) { $0 + $1.eventCount })件")
             LabeledContent("お気に入りの曲", value: "\(snapshot.favoriteCount)曲")
@@ -537,7 +539,11 @@ private struct PlaybackDayDetailView: View {
         List {
             ForEach(Array(day.events.enumerated()), id: \.element.id) { index, event in
                 Button {
-                    playerStore.playQueue(day.events.map(\.track), startingAt: index)
+                    playerStore.playQueue(
+                        day.events.map(\.track),
+                        startingAt: index,
+                        startContext: PlaybackStartContext(kind: .manual, source: .history)
+                    )
                     isNowPlayingPresented = true
                 } label: {
                     VStack(alignment: .leading, spacing: 3) {

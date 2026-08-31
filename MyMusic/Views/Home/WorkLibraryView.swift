@@ -370,7 +370,8 @@ private struct WorkTrackCollectionView: View {
         playerStore.playQueue(
             playbackTracks,
             startingAt: 0,
-            presentationMode: .workSize
+            presentationMode: .workSize,
+            startContext: PlaybackStartContext(kind: .manual, source: shuffled ? .shuffle : .workLibrary)
         )
     }
 
@@ -380,7 +381,8 @@ private struct WorkTrackCollectionView: View {
         playerStore.playQueue(
             filteredTracks,
             startingAt: index,
-            presentationMode: .workSize
+            presentationMode: .workSize,
+            startContext: PlaybackStartContext(kind: .manual, source: .workLibrary)
         )
     }
 }

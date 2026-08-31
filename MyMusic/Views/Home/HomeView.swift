@@ -136,7 +136,8 @@ struct HomeView: View {
         playerStore.playQueue(
             tracks,
             startingAt: tracks.startIndex,
-            presentationMode: playlist.kind == .work ? .workSize : .standard
+            presentationMode: playlist.kind == .work ? .workSize : .standard,
+            startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
     }
 
@@ -211,8 +212,20 @@ struct HomeView: View {
         playerStore.playQueue(
             tracks,
             startingAt: 0,
-            presentationMode: .standard
+            presentationMode: .standard,
+            startContext: PlaybackStartContext(kind: .manual, source: source(for: destination))
         )
+    }
+
+    private func source(for destination: HomeDestination) -> PlaybackStartSource {
+        switch destination {
+        case .repeatPlay:
+            .repeatPlayback
+        case .favorites:
+            .favorite
+        default:
+            .home
+        }
     }
 
     private var favoriteAlbumTracks: [Track] {

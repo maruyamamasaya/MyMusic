@@ -12,6 +12,11 @@ struct MusicHistoryTrackSummary: Identifiable {
     let firstPlayedAt: Date
     let lastPlayedAt: Date
     let totalPlayCount: Int
+    let manualPlayCount: Int
+    let automaticPlayCount: Int
+    let playsLast7Days: Int
+    let playsLast30Days: Int
+    let sourceCounts: [String: Int]
     let mostPlayedMonth: MusicHistoryTrackMonthSummary
     let months: [MusicHistoryTrackMonthSummary]
 
@@ -90,11 +95,16 @@ final class MusicHistoryMemoryService {
     func makeSnapshot(
         playbackMonths: [AnalyticsSnapshot.MonthGroup],
         events: [AnalyticsSnapshot.PlaybackEvent],
+        historyEntries: [Track.ID: PlaybackHistory],
         now: Date,
         calendar: Calendar
     ) -> MusicHistoryMemorySnapshot {
         MusicHistoryMemorySnapshot(
-            trackHistories: makeTrackHistories(events: events, calendar: calendar),
+            trackHistories: makeTrackHistories(
+                events: events,
+                historyEntries: historyEntries,
+                calendar: calendar
+            ),
             calendarYears: makeCalendarYears(playbackMonths: playbackMonths, calendar: calendar),
             timeCapsules: makeTimeCapsules(events: events, now: now, calendar: calendar)
         )
@@ -102,6 +112,7 @@ final class MusicHistoryMemoryService {
 
     private func makeTrackHistories(
         events: [AnalyticsSnapshot.PlaybackEvent],
+        historyEntries: [Track.ID: PlaybackHistory],
         calendar: Calendar
     ) -> [Track.ID: MusicHistoryTrackSummary] {
         Dictionary(grouping: events, by: { $0.track.id }).compactMapValues { trackEvents in
@@ -119,15 +130,37 @@ final class MusicHistoryMemoryService {
             .sorted { $0.date < $1.date }
 
             guard let mostPlayedMonth = months.sorted(by: monthRankingSort).first else { return nil }
+            let history = historyEntries[track.id]
             return MusicHistoryTrackSummary(
                 track: track,
                 firstPlayedAt: firstPlayedAt,
                 lastPlayedAt: lastPlayedAt,
                 totalPlayCount: trackEvents.count,
+                manualPlayCount: history?.manualPlayCount ?? 0,
+                automaticPlayCount: history?.automaticPlayCount ?? 0,
+                playsLast7Days: daySum(inLastDays: 7, of: history),
+                playsLast30Days: daySum(inLastDays: 30, of: history),
+                sourceCounts: history?.playbackSourceCounts ?? [:],
                 mostPlayedMonth: mostPlayedMonth,
                 months: months
             )
         }
+    }
+
+    private func daySum(inLastDays days: Int, of history: PlaybackHistory?, now: Date = Date()) -> Int {
+        guard days > 0, let history else { return 0 }
+        return (0..<days).reduce(0) { total, offset in
+            guard let day = calendar().date(byAdding: .day, value: -offset, to: now) else { return total }
+            let components = calendar().dateComponents([.year, .month, .day], from: day)
+            let key = String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+            return total + (history.dailySummaries[key]?.playCount ?? 0)
+        }
+    }
+
+    private func calendar() -> Calendar {
+        var calendar = Calendar.current
+        calendar.timeZone = .current
+        return calendar
     }
 
     private func makeCalendarYears(

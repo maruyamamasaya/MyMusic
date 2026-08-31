@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
+    private static let dailySummaryRetentionDays = 400
     static let maximumPreference = 10
 
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
@@ -51,19 +52,43 @@ final class PlaybackHistoryStore {
     }
 
     func recordPlaybackStarted(trackID: Track.ID) {
-        var entry = entry(for: trackID)
-        entry.lastPlayedAt = Date()
-        entries[trackID] = entry
-        persist()
+        recordPlaybackStarted(
+            trackID: trackID,
+            context: .manualUnknown,
+            isRepeatModeActive: false,
+            isConsecutivePlay: false
+        )
     }
 
     func recordPlaybackStarted(
         trackID: Track.ID,
+        context: PlaybackStartContext,
         isRepeatModeActive: Bool,
-        isConsecutivePlay: Bool
+        isConsecutivePlay: Bool,
+        now: Date = Date()
     ) {
         var entry = entry(for: trackID)
-        entry.lastPlayedAt = Date()
+        if entry.firstPlayedAt == nil { entry.firstPlayedAt = now }
+        entry.lastPlayedAt = now
+        switch context.kind {
+        case .manual:
+            entry.manualPlayCount += 1
+        case .automatic:
+            entry.automaticPlayCount += 1
+        }
+        entry.playbackSourceCounts[context.source.rawValue, default: 0] += 1
+        entry.dailySummaries = Self.prunedDailySummaries(entry.dailySummaries, now: now)
+        let dayKey = Self.dayKey(for: now)
+        var summary = entry.dailySummaries[dayKey] ?? PlaybackDailySummary()
+        summary.playCount += 1
+        switch context.kind {
+        case .manual:
+            summary.manualPlayCount += 1
+        case .automatic:
+            summary.automaticPlayCount += 1
+        }
+        summary.sourceCounts[context.source.rawValue, default: 0] += 1
+        entry.dailySummaries[dayKey] = summary
         entry.consecutivePlayCount = isConsecutivePlay ? entry.consecutivePlayCount + 1 : 1
         if isRepeatModeActive { entry.repeatPlaybackCount += 1 }
         entries[trackID] = entry
@@ -103,13 +128,20 @@ final class PlaybackHistoryStore {
     func resetPlaybackHistory(for trackID: Track.ID) {
         guard var entry = entries[trackID],
               entry.playCount > 0 || entry.lastPlayedAt != nil || !entry.playbackEvents.isEmpty ||
+              entry.firstPlayedAt != nil || !entry.dailySummaries.isEmpty ||
+              entry.manualPlayCount > 0 || entry.automaticPlayCount > 0 || !entry.playbackSourceCounts.isEmpty ||
               entry.totalPlaybackDuration > 0 || entry.skipCount > 0 || entry.fullPlaybackCount > 0 ||
               entry.consecutivePlayCount > 0 || entry.repeatPlaybackCount > 0 else {
             return
         }
         entry.playCount = 0
+        entry.firstPlayedAt = nil
         entry.lastPlayedAt = nil
         entry.playbackEvents.removeAll()
+        entry.dailySummaries.removeAll()
+        entry.manualPlayCount = 0
+        entry.automaticPlayCount = 0
+        entry.playbackSourceCounts.removeAll()
         entry.totalPlaybackDuration = 0
         entry.skipCount = 0
         entry.fullPlaybackCount = 0
@@ -145,6 +177,34 @@ final class PlaybackHistoryStore {
 
     func lastPlayedAt(for trackID: Track.ID) -> Date? {
         entries[trackID]?.lastPlayedAt
+    }
+
+    func firstPlayedAt(for trackID: Track.ID) -> Date? {
+        entries[trackID]?.firstPlayedAt
+    }
+
+    func playbackCount(for trackID: Track.ID, inLastDays days: Int, now: Date = Date()) -> Int {
+        guard days > 0, let entry = entries[trackID] else { return 0 }
+        let keys = Self.dayKeys(inLastDays: days, now: now)
+        return keys.reduce(0) { total, key in
+            total + (entry.dailySummaries[key]?.playCount ?? 0)
+        }
+    }
+
+    func manualPlayCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.manualPlayCount ?? 0
+    }
+
+    func automaticPlayCount(for trackID: Track.ID) -> Int {
+        entries[trackID]?.automaticPlayCount ?? 0
+    }
+
+    func playCount(for trackID: Track.ID, source: PlaybackStartSource) -> Int {
+        entries[trackID]?.playbackSourceCounts[source.rawValue] ?? 0
+    }
+
+    func dailySummaries(for trackID: Track.ID) -> [String: PlaybackDailySummary] {
+        entries[trackID]?.dailySummaries ?? [:]
     }
 
     func skipCount(for trackID: Track.ID) -> Int {
@@ -366,6 +426,35 @@ final class PlaybackHistoryStore {
                 self?.errorMessage = "再生履歴を保存できませんでした: \(error.localizedDescription)"
             }
         }
+    }
+
+    private static func dayKey(for date: Date, calendar: Calendar = .playbackHistory) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
+    private static func dayKeys(inLastDays days: Int, now: Date, calendar: Calendar = .playbackHistory) -> Set<String> {
+        guard days > 0 else { return [] }
+        return Set((0..<days).compactMap { offset in
+            calendar.date(byAdding: .day, value: -offset, to: now).map { dayKey(for: $0, calendar: calendar) }
+        })
+    }
+
+    private static func prunedDailySummaries(
+        _ summaries: [String: PlaybackDailySummary],
+        now: Date,
+        calendar: Calendar = .playbackHistory
+    ) -> [String: PlaybackDailySummary] {
+        let retainedKeys = dayKeys(inLastDays: dailySummaryRetentionDays, now: now, calendar: calendar)
+        return summaries.filter { retainedKeys.contains($0.key) }
+    }
+}
+
+private extension Calendar {
+    nonisolated static var playbackHistory: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar
     }
 }
 

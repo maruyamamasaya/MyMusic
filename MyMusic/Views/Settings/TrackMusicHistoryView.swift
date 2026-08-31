@@ -64,6 +64,26 @@ struct TrackMusicHistoryView: View {
                 title: "累計",
                 value: "\(summary.totalPlayCount)回"
             )
+            TrackHistoryFactView(
+                title: "手動再生",
+                value: "\(summary.manualPlayCount)回"
+            )
+            TrackHistoryFactView(
+                title: "自動再生",
+                value: "\(summary.automaticPlayCount)回"
+            )
+            TrackHistoryFactView(
+                title: "直近7日",
+                value: "\(summary.playsLast7Days)回"
+            )
+            TrackHistoryFactView(
+                title: "直近30日",
+                value: "\(summary.playsLast30Days)回"
+            )
+            TrackHistoryFactView(
+                title: "再生入口",
+                value: summary.sourceCountsDisplay
+            )
         }
         .padding(.horizontal, 16)
     }
@@ -91,6 +111,43 @@ struct TrackMusicHistoryView: View {
                 .font(.title3.weight(.bold).monospacedDigit())
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
+        }
+    }
+}
+
+private extension MusicHistoryTrackSummary {
+    var sourceCountsDisplay: String {
+        let ranked = sourceCounts
+            .compactMap { key, count in
+                PlaybackStartSource(rawValue: key).map { (key: $0, count: count) }
+            }
+            .sorted { $0.count == $1.count ? $0.key.rawValue < $1.key.rawValue : $0.count > $1.count }
+        guard !ranked.isEmpty else { return "記録なし" }
+        return ranked
+            .prefix(2)
+            .map { source in
+                "\(sourceKeyLabel(source.key)): \(source.count)回"
+            }
+            .joined(separator: " / ")
+    }
+
+    private func sourceKeyLabel(_ source: PlaybackStartSource) -> String {
+        switch source {
+        case .album: return "アルバム"
+        case .artist: return "アーティスト"
+        case .favorite: return "お気に入り"
+        case .history: return "音楽史"
+        case .home: return "ホーム"
+        case .library: return "ライブラリ"
+        case .playlist: return "プレイリスト"
+        case .queue: return "キュー"
+        case .repeatPlayback: return "リピート"
+        case .search: return "検索"
+        case .shuffle: return "シャッフル"
+        case .station: return "ステーション"
+        case .highlight: return "ハイライト"
+        case .workLibrary: return "Work"
+        case .unknown: return "不明"
         }
     }
 }

@@ -250,7 +250,11 @@ struct MusicHistoryView: View {
             historyEntries: playbackHistoryStore.entries,
             playlists: []
         )
-        snapshot = MusicHistoryService().makeSnapshot(playbackMonths: analytics.playbackMonths)
+        snapshot = MusicHistoryService().makeSnapshot(
+            playbackMonths: analytics.playbackMonths,
+            historyEntries: playbackHistoryStore.entries,
+            now: Date()
+        )
         normalizeSelectedYear()
         hasLoadedSnapshot = true
     }

@@ -189,7 +189,8 @@ struct PlaylistDetailView: View {
         playerStore.playQueue(
             playbackTracks,
             startingAt: 0,
-            presentationMode: playlist.kind == .work ? .workSize : .standard
+            presentationMode: playlist.kind == .work ? .workSize : .standard,
+            startContext: PlaybackStartContext(kind: .manual, source: shuffled ? .shuffle : .playlist)
         )
     }
 
@@ -199,7 +200,8 @@ struct PlaylistDetailView: View {
         playerStore.playQueue(
             tracks,
             startingAt: index,
-            presentationMode: playlist.kind == .work ? .workSize : .standard
+            presentationMode: playlist.kind == .work ? .workSize : .standard,
+            startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
     }
 

@@ -65,6 +65,7 @@ final class MusicHistoryService {
     /// Builds a read-only history from the month groups already resolved by AnalyticsService.
     func makeSnapshot(
         playbackMonths: [AnalyticsSnapshot.MonthGroup],
+        historyEntries: [Track.ID: PlaybackHistory],
         now: Date = Date()
     ) -> MusicHistorySnapshot {
         let calendar = Calendar.current
@@ -102,6 +103,7 @@ final class MusicHistoryService {
             memories: MusicHistoryMemoryService().makeSnapshot(
                 playbackMonths: playbackMonths,
                 events: allEvents,
+                historyEntries: historyEntries,
                 now: now,
                 calendar: calendar
             )

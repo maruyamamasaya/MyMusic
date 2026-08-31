@@ -66,6 +66,10 @@ struct SelectiveRandomPlayView: View {
         )
         guard !queue.isEmpty else { return }
         playerStore.setShuffleEnabled(false)
-        playerStore.playQueue(queue, startingAt: 0)
+        playerStore.playQueue(
+            queue,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
+        )
     }
 }

@@ -63,7 +63,11 @@ struct SearchView: View {
                             Section("検索結果：\(results.count)曲") {
                                 ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
                                     PlayableTrackRowView(track: track) {
-                                        playerStore.playQueue(results, startingAt: index)
+                                        playerStore.playQueue(
+                                            results,
+                                            startingAt: index,
+                                            startContext: PlaybackStartContext(kind: .manual, source: .search)
+                                        )
                                     }
                                 }
                             }

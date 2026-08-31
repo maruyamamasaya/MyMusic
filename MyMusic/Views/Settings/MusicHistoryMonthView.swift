@@ -52,7 +52,11 @@ struct MusicHistoryMonthView: View {
         let tracks = playbackTracks
         guard !tracks.isEmpty else { return }
         playerStore.setShuffleEnabled(false)
-        playerStore.playQueue(tracks, startingAt: 0)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
+            startContext: PlaybackStartContext(kind: .manual, source: .history)
+        )
     }
 
     private var summarySection: some View {
