@@ -17,7 +17,12 @@ struct PlaylistView: View {
     }
 
     private var content: some View {
-        PlaylistManagementView(kind: .regular, title: "プレイリスト", showsLibraryLinks: true)
+        PlaylistManagementView(
+            kind: .regular,
+            title: "プレイリスト",
+            showsLibraryLinks: true,
+            searchPrompt: nil
+        )
     }
 }
 
@@ -38,7 +43,12 @@ struct WorkPlaylistView: View {
     }
 
     private var content: some View {
-        PlaylistManagementView(kind: .work, title: "作業用プレイリスト", showsLibraryLinks: false)
+        PlaylistManagementView(
+            kind: .work,
+            title: "作業用プレイリスト",
+            showsLibraryLinks: false,
+            searchPrompt: "作業用プレイリストを検索"
+        )
     }
 }
 
@@ -55,13 +65,21 @@ private struct PlaylistManagementView: View {
     @State private var confirmsBulkDelete = false
     @State private var selectedTag: String?
     @State private var playlistToEditTags: Playlist?
+    @State private var searchText = ""
 
     let kind: PlaylistKind
     let title: String
     let showsLibraryLinks: Bool
+    let searchPrompt: String?
 
     private var playlists: [Playlist] {
-        playlistStore.playlists(of: kind, tagged: selectedTag)
+        let playlists = playlistStore.playlists(of: kind, tagged: selectedTag)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return playlists }
+        return playlists.filter { playlist in
+            playlist.name.localizedStandardContains(query)
+                || playlist.tags.contains(where: { $0.localizedStandardContains(query) })
+        }
     }
 
     private var availableTags: [String] {
@@ -105,11 +123,15 @@ private struct PlaylistManagementView: View {
 
             Section(kind == .work ? "作業用プレイリスト" : "プレイリスト") {
                 if playlists.isEmpty {
-                    ContentUnavailableView(
-                        kind == .work ? "作業用プレイリストはありません" : "プレイリストはありません",
-                        systemImage: kind == .work ? "timer" : "music.note.list",
-                        description: Text(emptyDescription)
-                    )
+                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        ContentUnavailableView(
+                            kind == .work ? "作業用プレイリストはありません" : "プレイリストはありません",
+                            systemImage: kind == .work ? "timer" : "music.note.list",
+                            description: Text(emptyDescription)
+                        )
+                    } else {
+                        ContentUnavailableView.search(text: searchText)
+                    }
                 } else {
                     ForEach(playlists) { playlist in
                         playlistRow(playlist)
@@ -149,6 +171,7 @@ private struct PlaylistManagementView: View {
             }
         }
         .navigationTitle(title)
+        .playlistSearchable(text: $searchText, prompt: searchPrompt)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 if isSelecting {
@@ -320,5 +343,16 @@ private struct PlaylistManagementView: View {
 
     private func trimmed(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func playlistSearchable(text: Binding<String>, prompt: String?) -> some View {
+        if let prompt {
+            searchable(text: text, prompt: prompt)
+        } else {
+            self
+        }
     }
 }

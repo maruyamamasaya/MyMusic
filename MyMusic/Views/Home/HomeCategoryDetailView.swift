@@ -131,7 +131,9 @@ struct HomeDestinationView: View {
             MusicHistoryView()
         case .workPlaylists:
             WorkPlaylistView(createsNavigationStack: false)
-        case .workSizePlay, .nowPlaying, .queue:
+        case .workSizePlay:
+            WorkLibraryView()
+        case .nowPlaying, .queue:
             EmptyView()
         }
     }

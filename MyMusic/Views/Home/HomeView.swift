@@ -68,7 +68,6 @@ struct HomeView: View {
                                         for: homeWorkPlaylists.count
                                     ),
                                     artworkIdentifiers: artworkIdentifiers,
-                                    instantPlaybackIsAvailable: instantPlaybackIsAvailable,
                                     tracksForPlaylist: {
                                         playlistStore.tracks(for: $0.id, in: libraryStore.tracks)
                                     },
@@ -80,7 +79,6 @@ struct HomeView: View {
                                             )
                                         ).isEmpty
                                     },
-                                    onInstantPlay: playImmediately,
                                     onPlayPlaylist: playPlaylist
                                 )
                             }
@@ -180,8 +178,6 @@ struct HomeView: View {
             }
         case .repeatPlay:
             !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
-        case .workSizePlay:
-            !playbackHistoryStore.workPlaybackTracks(from: libraryStore.tracks).isEmpty
         case .favorites:
             playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
                 .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
@@ -203,8 +199,6 @@ struct HomeView: View {
             tracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
         case .repeatPlay:
             tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
-        case .workSizePlay:
-            tracks = playbackHistoryStore.workPlaybackTracks(from: libraryStore.tracks)
         case .favorites:
             tracks = playbackHistoryStore.preferenceWeightedShuffle(
                 playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
@@ -214,13 +208,10 @@ struct HomeView: View {
         }
 
         guard !tracks.isEmpty else { return }
-        if destination == .workSizePlay {
-            playerStore.setShuffleEnabled(false)
-        }
         playerStore.playQueue(
             tracks,
             startingAt: 0,
-            presentationMode: destination == .workSizePlay ? .workSize : .standard
+            presentationMode: .standard
         )
     }
 
@@ -403,10 +394,8 @@ private struct HomeWorkSection: View {
     let playlists: [Playlist]
     let showsMore: Bool
     let artworkIdentifiers: (HomeDestination) -> [String]
-    let instantPlaybackIsAvailable: (HomeDestination) -> Bool
     let tracksForPlaylist: (Playlist) -> [Track]
     let canPlay: (Playlist) -> Bool
-    let onInstantPlay: (HomeDestination) -> Void
     let onPlayPlaylist: (Playlist) -> Void
 
     private let spacing: CGFloat = 12
@@ -431,9 +420,7 @@ private struct HomeWorkSection: View {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: spacing) {
                         if let item = category.items.first {
-                            Button {
-                                onInstantPlay(item.destination)
-                            } label: {
+                            NavigationLink(value: item.destination) {
                                 HomeItemTile(
                                     item: item,
                                     categoryID: category.id,
@@ -442,8 +429,6 @@ private struct HomeWorkSection: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            .disabled(!instantPlaybackIsAvailable(item.destination))
-                            .opacity(instantPlaybackIsAvailable(item.destination) ? 1 : 0.55)
                         }
 
                         if playlists.isEmpty {
@@ -813,7 +798,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .repeatPlay, .workSizePlay, .favorites:
+        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites:
             true
         default:
             false

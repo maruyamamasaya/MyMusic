@@ -18,6 +18,7 @@ final class LibraryStore {
     private(set) var artists: [Artist] = []
     private(set) var genres: [Genre] = []
     private(set) var composers: [Composer] = []
+    private(set) var workLibraryCatalog = WorkLibraryCatalog.empty
     private(set) var libraryFolders: [LibraryFolder] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
@@ -353,6 +354,7 @@ final class LibraryStore {
     private func apply(_ library: MusicLibrary) {
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
+        workLibraryCatalog = WorkLibraryCatalogService.build(from: library)
     }
     private func resolvedTracks(for ids: [Track.ID]) -> [Track] {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); var seen: Set<Track.ID> = []

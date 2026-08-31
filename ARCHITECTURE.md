@@ -42,6 +42,8 @@ Homeのライブラリ／アクティビティタイルは、`MyMusic/Resources/
 
 HomeとPlaylistで共有するステーション入口カードは、`MyMusic/Resources/HomeTileImages/station-background.*`を同じく任意のbuild resourceとして読み込む。画像がない、またはdecodeできない場合は、`StationEntryView`が従来のグラデーションを表示する。
 
+Homeの「作業用サイズ再生」は即時再生ではなく、作業用対象を曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別に閲覧する入口とする。各一覧は対象内検索を持ち、曲の再生は`PlayerStore`へ`.workSize` presentationを指定して専用playerへ接続する。
+
 ## 主要データフロー
 
 ### Library import
@@ -51,6 +53,8 @@ Library View → LibraryStore → FileImportService
                            → MusicLibraryService → MetadataService / ArtworkService
                            → LibraryPersistenceService / TrackIdentityService
 ```
+
+`LibraryStore`は表示対象ライブラリを反映するとき、`WorkLibraryCatalogService`で20分以上または「作業用BGM」の曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として同時に更新する。`WorkLibraryView`はこの派生catalogだけを読み、通常曲を専用一覧へ混在させない。
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 

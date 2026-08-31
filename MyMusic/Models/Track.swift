@@ -1,8 +1,8 @@
 import Foundation
 
 struct Track: Identifiable, Codable, Hashable, Sendable {
-    static let longFormMinimumDuration: TimeInterval = 20 * 60
-    static let workPlaybackGenre = "作業用BGM"
+    nonisolated static let longFormMinimumDuration: TimeInterval = 20 * 60
+    nonisolated static let workPlaybackGenre = "作業用BGM"
 
     let id: UUID
     var title: String
@@ -24,19 +24,19 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     // Missing in legacy caches; used to run one-time metadata migrations on rescan.
     var metadataRevision: Int? = nil
 
-    var isLongForm: Bool {
+    nonisolated var isLongForm: Bool {
         duration >= Self.longFormMinimumDuration
     }
 
-    var isEligibleForWorkPlayback: Bool {
+    nonisolated var isEligibleForWorkPlayback: Bool {
         isLongForm || normalizedGenreNames.contains(Self.workPlaybackGenre)
     }
 
-    var isEligibleForRegularPlayback: Bool {
+    nonisolated var isEligibleForRegularPlayback: Bool {
         !isEligibleForWorkPlayback
     }
 
-    var normalizedGenreNames: Set<String> {
+    nonisolated var normalizedGenreNames: Set<String> {
         guard let genre else { return [] }
         return Set(
             genre

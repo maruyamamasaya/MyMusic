@@ -50,7 +50,7 @@ struct HomeCategory: Identifiable, Hashable {
             description: "長尺の音楽を作業のお供に",
             systemImage: "timer",
             items: [
-                HomeCategoryItem(title: "作業用サイズ再生", description: "20分以上、またはジャンルが作業用BGMの曲を再生", systemImage: "timer", destination: .workSizePlay)
+                HomeCategoryItem(title: "作業用サイズ再生", description: "作業用の曲を項目別に探す", systemImage: "timer", destination: .workSizePlay)
             ]
         ),
         HomeCategory(

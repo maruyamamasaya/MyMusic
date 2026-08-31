@@ -234,7 +234,7 @@ private struct PreferenceRatingsView: View {
     let items: [AnalyticsSnapshot.TrackItem]
 
     @State private var filter = RatingFilter.all
-    @State private var sortOrder = RatingSortOrder.title
+    @State private var sortOrder = RatingSortOrder.rating
 
     private var displayedItems: [AnalyticsSnapshot.TrackItem] {
         items

@@ -39,7 +39,7 @@ updated: 2026-08-31
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。
-- **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。ホームでは全対象曲の再生を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
+- **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
 - **気分ステーションの年代指定**: 気分・音の特徴に加え、通常再生対象かつ特徴量のある曲の年metadataから10年単位の候補を構成し、任意の年代へ絞って一時queueを生成できる。年がないlibraryでは年代質問を省略し、「すべての年代」では従来の選曲を維持する。
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
@@ -64,6 +64,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-08-30 のデータ管理拡張後、解析JSONの内容、EQ／ジャンルプリセットのround-trip・同名merge・永続化・不正値拒否を含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 74件とDebug test buildが成功。
 - 2026-08-30 の共有Popover修正後、iPhone 17 / iOS 26.5 Simulatorの全XCTestと、iPad Pro 11-inch (M5) / iOS 26.5 Simulatorの共有専用XCTest 2件が成功。
 - 2026-08-31 のホーム作業用タイル上限変更後、iPhone 17 / iOS 26.5 Simulatorの全XCTest 79件とDebug buildが成功。
+- 2026-08-31 の作業用ライブラリ追加後、専用catalog・項目順のテストを含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 81件とDebug buildが成功。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
@@ -73,7 +74,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - Semantic単独では新規Trackの`energy` / `tempo`を生成しない。同一relativePathのproduction DSP baselineがある場合だけ値を継承し、2.048秒未満の曲はmodel patchを構成できないため未解析となる。
 - schema v1はmusic-root識別fieldを持たない。異なるrootの同一relativePathはmerged JSONで両方保持するが、fileSize / durationまで同じ複製音源はiPhone importでAmbiguousになり得る。source/library対応はimport対象外sidecarに保持する。
 - 特徴量 schema v1 の `contentHash` は予約項目で、iPhone での生成・照合は未実装。未照合 / 曖昧項目の修正 UI もない。
-- 作業用の20分境界、暗転時間、完全一致 genre 名は固定。直接選曲時は通常 player を使う。
+- 作業用の20分境界、暗転時間、完全一致 genre 名は固定。通常ライブラリから直接選曲した場合は通常 playerを使い、作業用専用一覧からの選曲時だけ専用 playerを使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
