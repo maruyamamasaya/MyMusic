@@ -63,7 +63,7 @@ nonisolated struct MoodStationService: Sendable {
         }
         let ranked = periodCandidates.compactMap { candidate -> (candidate: StationCandidate, score: Double)? in
             guard let score = score(candidate.values, for: answers), score >= 0.6 else { return nil }
-            return (candidate, score)
+            return (candidate, score * candidate.overplayFactor)
         }
         // Small jitter varies close matches without allowing unrelated tracks into the pool.
         var remaining = ranked.map { ($0.candidate, $0.score + Double.random(in: 0...0.08, using: &generator)) }

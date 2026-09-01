@@ -306,22 +306,23 @@ final class PlaybackHistoryStore {
     /// Returns every track once, ordered by a preference-weighted random draw.
     /// Positive preferences are more likely to appear early, while negative
     /// preferences use the reciprocal weight and remain eligible for playback.
-    func preferenceWeightedShuffle(_ tracks: [Track]) -> [Track] {
-        weightedShuffle(tracks.filter(isEligibleForRegularShuffle))
+    func preferenceWeightedShuffle(_ tracks: [Track], now: Date = Date()) -> [Track] {
+        let eligible = tracks.filter(isEligibleForRegularShuffle)
+        return weightedShuffle(eligible, weights: automaticSelectionWeights(for: eligible, now: now))
     }
 
     /// Work-playback tracks have their own playback entry point and stay out
     /// of the app's regular shuffle flows.
     func workPlaybackTracks(from tracks: [Track]) -> [Track] {
-        weightedShuffle(tracks.filter(\.isEligibleForWorkPlayback))
+        preferenceOnlyWeightedShuffle(tracks.filter(\.isEligibleForWorkPlayback))
     }
 
-    private func weightedShuffle(_ tracks: [Track]) -> [Track] {
+    private func weightedShuffle(_ tracks: [Track], weights: [Track.ID: Double]) -> [Track] {
         tracks
             .filter { !isHiddenFromShuffle(trackID: $0.id) }
             .map { track in
                 let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
-                let key = -log(unitRandom) / playbackSelectionWeight(for: track.id)
+                let key = -log(unitRandom) / (weights[track.id] ?? 1)
                 return (track: track, key: key)
             }
             .sorted { $0.key < $1.key }
@@ -351,7 +352,9 @@ final class PlaybackHistoryStore {
     }
 
     func discoveryPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
-        Array(preferenceWeightedShuffle(tracks.filter { playCount(for: $0.id) == 0 }).prefix(limit))
+        Array(preferenceOnlyWeightedShuffle(
+            tracks.filter { playCount(for: $0.id) == 0 && isEligibleForRegularShuffle($0) }
+        ).prefix(limit))
     }
 
     /// Offers seed tracks for a user-selected, genre-based random queue.
@@ -423,6 +426,37 @@ final class PlaybackHistoryStore {
 
     func playbackSelectionWeight(for trackID: Track.ID) -> Double {
         PlaybackPreferenceWeightPolicy.weight(for: playbackPreference(for: trackID))
+    }
+
+    /// Builds one ephemeral score/weight snapshot for an automatic selection pass.
+    /// No derived score is persisted and each track's daily summaries are aggregated once.
+    func automaticSelectionWeights(for tracks: [Track], now: Date = Date()) -> [Track.ID: Double] {
+        let scores = PlaybackBehaviorAnalyzer().overplayScores(
+            for: tracks.map(\.id), historyByTrackID: entries, now: now
+        )
+        return Dictionary(tracks.map { track in
+            (track.id, PlaybackSelectionPolicy.shuffleWeight(
+                playbackPreference: playbackPreference(for: track.id),
+                overplayScore: scores[track.id] ?? 0
+            ))
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
+    func stationOverplayFactors(for trackIDs: [Track.ID], now: Date = Date()) -> [Track.ID: Double] {
+        let scores = PlaybackBehaviorAnalyzer().overplayScores(
+            for: trackIDs, historyByTrackID: entries, now: now
+        )
+        return Dictionary(trackIDs.map {
+            ($0, PlaybackSelectionPolicy.stationOverplayFactor(overplayScore: scores[$0] ?? 0))
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func preferenceOnlyWeightedShuffle(_ tracks: [Track]) -> [Track] {
+        weightedShuffle(
+            tracks,
+            weights: Dictionary(tracks.map { ($0.id, playbackSelectionWeight(for: $0.id)) },
+                                uniquingKeysWith: { first, _ in first })
+        )
     }
 
     private func entry(for trackID: Track.ID) -> PlaybackHistory {

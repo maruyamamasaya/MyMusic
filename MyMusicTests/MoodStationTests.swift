@@ -125,6 +125,28 @@ final class MoodStationServiceTests: XCTestCase {
         }
     }
 
+    func testOverplayChangesRankingButNotPureMoodEligibility() {
+        let answers = StationAnswers(mood: .relax, sound: .soft)
+        let overplayed = StationCandidate(
+            trackID: UUID(), artist: "A", values: candidate().values, overplayFactor: 0.8
+        )
+        let normal = StationCandidate(
+            trackID: UUID(), artist: "B", values: candidate().values, overplayFactor: 1
+        )
+        let unrelated = StationCandidate(trackID: UUID(), artist: "C", values: stationValues([
+            "energy": 1, "aggressive": 1, "calm": 0
+        ]), overplayFactor: 1)
+        var rng = StationSeed(seed: 8)
+        let result = service.makeStation(
+            answers: answers, candidates: [overplayed, normal, unrelated], using: &rng
+        )
+
+        XCTAssertEqual(result.matchingTrackCount, 2)
+        XCTAssertEqual(Set(result.trackIDs), Set([overplayed.trackID, normal.trackID]))
+        XCTAssertEqual(result.trackIDs.first, normal.trackID)
+        XCTAssertTrue(result.trackIDs.contains(overplayed.trackID))
+    }
+
     private func candidate(vocal: Double = 0.1, electronic: Double = 0.3, year: Int? = nil) -> StationCandidate {
         StationCandidate(trackID: UUID(), artist: "Artist", year: year, values: stationValues([
             "energy": 0.2, "calm": 0.9, "aggressive": 0.1, "ambient": 0.8,

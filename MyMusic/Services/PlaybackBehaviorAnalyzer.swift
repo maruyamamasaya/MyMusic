@@ -28,6 +28,27 @@ struct PreferenceDriftAnalysisResult: Identifiable, Hashable, Sendable {
 }
 
 struct PlaybackBehaviorAnalyzer: Sendable {
+    func overplayScores(
+        for trackIDs: some Sequence<Track.ID>,
+        historyByTrackID: [Track.ID: PlaybackHistory],
+        now: Date = Date(),
+        calendar: Calendar = .playbackHistory
+    ) -> [Track.ID: Double] {
+        let recent = dayKeys(offsets: 0..<OverplayScoring.recentDays, now: now, calendar: calendar)
+        let baseline = dayKeys(
+            offsets: OverplayScoring.recentDays..<(OverplayScoring.recentDays + OverplayScoring.baselineDays),
+            now: now,
+            calendar: calendar
+        )
+        return Dictionary(trackIDs.map { trackID in
+            guard let summaries = historyByTrackID[trackID]?.dailySummaries else { return (trackID, 0) }
+            return (trackID, OverplayScoring.score(
+                recentPlayCount: sum(summaries, keys: recent, value: \.playCount),
+                baselinePlayCount: sum(summaries, keys: baseline, value: \.playCount)
+            ).score)
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
     func analyze(
         tracks: [Track],
         historyByTrackID: [Track.ID: PlaybackHistory],
