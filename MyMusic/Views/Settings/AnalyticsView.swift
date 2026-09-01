@@ -6,26 +6,13 @@ struct AnalyticsView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
-    @State private var showsAllMostPlayed = false
+    @State private var cachedSnapshot: AnalyticsSnapshot?
     @State private var playbackResetCandidate: Track?
     @State private var shareItem: ActivityShareItem?
     @State private var shareErrorMessage: String?
 
     private var snapshot: AnalyticsSnapshot {
-        AnalyticsService().makeSnapshot(
-            tracks: libraryStore.unfilteredTracks,
-            historyEntries: playbackHistoryStore.entries,
-            playlists: playlistStore.playlists
-        )
-    }
-
-    private var export: AnalyticsExport {
-        AnalyticsExport(csv: AnalyticsService().csv(
-            snapshot: snapshot,
-            playlists: playlistStore.playlists,
-            equalizer: settingsStore.equalizer,
-            customEqualizerPresets: settingsStore.customEqualizerPresets
-        ))
+        cachedSnapshot ?? .empty
     }
 
     var body: some View {
@@ -38,6 +25,14 @@ struct AnalyticsView: View {
         }
         .navigationTitle("分析")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if cachedSnapshot == nil {
+                ProgressView("分析データを集計中…")
+            }
+        }
+        .task {
+            await rebuildSnapshot()
+        }
         .activityShareSheet(item: $shareItem)
         .alert(
             "再生回数をリセットしますか？",
@@ -50,6 +45,7 @@ struct AnalyticsView: View {
             Button("リセット", role: .destructive) {
                 playbackHistoryStore.resetPlaybackHistory(for: track.id)
                 playbackResetCandidate = nil
+                Task { await rebuildSnapshot() }
             }
             Button("キャンセル", role: .cancel) {
                 playbackResetCandidate = nil
@@ -70,6 +66,7 @@ struct AnalyticsView: View {
                 Button("データをダウンロード", systemImage: "square.and.arrow.down") {
                     presentShare()
                 }
+                .disabled(cachedSnapshot == nil)
             }
         }
     }
@@ -88,10 +85,26 @@ struct AnalyticsView: View {
 
     private func presentShare() {
         do {
-            shareItem = try ActivityShareItem(file: export.file)
+            let csv = AnalyticsService().csv(
+                snapshot: snapshot,
+                playlists: playlistStore.playlists,
+                equalizer: settingsStore.equalizer,
+                customEqualizerPresets: settingsStore.customEqualizerPresets
+            )
+            shareItem = try ActivityShareItem(file: AnalyticsExport(csv: csv).file)
         } catch {
             shareErrorMessage = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func rebuildSnapshot() async {
+        await Task.yield()
+        cachedSnapshot = AnalyticsService().makeSnapshot(
+            tracks: libraryStore.unfilteredTracks,
+            historyEntries: playbackHistoryStore.entries,
+            playlists: playlistStore.playlists
+        )
     }
 
     private var playbackHistorySection: some View {
@@ -116,7 +129,7 @@ struct AnalyticsView: View {
             if snapshot.mostPlayedTracks.isEmpty {
                 emptyMessage("再生回数の記録はありません。")
             } else {
-                ForEach(showsAllMostPlayed ? snapshot.mostPlayedTracks : Array(snapshot.mostPlayedTracks.prefix(10))) { item in
+                ForEach(snapshot.mostPlayedTracks.prefix(10)) { item in
                     HStack {
                         trackSummary(item.track)
                         Spacer()
@@ -135,7 +148,7 @@ struct AnalyticsView: View {
                 }
             }
         } header: {
-            expandableHeader("よく再生している曲", isExpanded: $showsAllMostPlayed, count: snapshot.mostPlayedTracks.count)
+            Text("よく再生している曲")
         }
     }
 
@@ -169,17 +182,6 @@ struct AnalyticsView: View {
                 BoredomTracksView(title: "永久非表示", items: snapshot.permanentlyHiddenTracks, showsExpiration: false)
             } label: {
                 LabeledContent("永久非表示", value: "\(snapshot.permanentlyHiddenTracks.count)曲")
-            }
-        }
-    }
-
-    private func expandableHeader(_ title: String, isExpanded: Binding<Bool>, count: Int) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            if count > 10 {
-                Button(isExpanded.wrappedValue ? "閉じる" : "すべて表示") { isExpanded.wrappedValue.toggle() }
-                    .textCase(nil)
             }
         }
     }

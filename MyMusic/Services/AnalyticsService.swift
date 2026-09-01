@@ -50,6 +50,22 @@ struct AnalyticsSnapshot {
     let previouslyHiddenTracks: [TrackItem]
     let permanentlyHiddenTracks: [TrackItem]
     let playbackMonths: [MonthGroup]
+
+    static let empty = AnalyticsSnapshot(
+        totalPlayCount: 0,
+        totalManualPlayCount: 0,
+        totalAutomaticPlayCount: 0,
+        playedTrackCount: 0,
+        favoriteCount: 0,
+        playlistCount: 0,
+        mostPlayedTrack: nil,
+        mostPlayedTracks: [],
+        preferenceRatedTracks: [],
+        currentlyHiddenTracks: [],
+        previouslyHiddenTracks: [],
+        permanentlyHiddenTracks: [],
+        playbackMonths: []
+    )
 }
 
 @MainActor
@@ -59,23 +75,26 @@ final class AnalyticsService {
         historyEntries: [Track.ID: PlaybackHistory],
         playlists: [Playlist]
     ) -> AnalyticsSnapshot {
+        let now = Date()
+        let recent30DayKeys = Self.dayKeys(inLastDays: 30, now: now)
+        let recent7DayKeys = Array(recent30DayKeys.prefix(7))
         let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
-        let trackItems = tracks.map { track in
-            let history = historyEntries[track.id]
+        let trackItems = historyEntries.values.compactMap { history -> AnalyticsSnapshot.TrackItem? in
+            guard let track = tracksByID[history.trackID] else { return nil }
             return AnalyticsSnapshot.TrackItem(
                 track: track,
-                playCount: history?.playCount ?? 0,
-                firstPlayedAt: history?.firstPlayedAt,
-                lastPlayedAt: history?.lastPlayedAt,
-                playbackPreference: history?.playbackPreference ?? 0,
-                boredomLevel: history.map { $0.isPermanentlyHiddenFromShuffle ? 3 : min($0.boredomCount, 2) } ?? 0,
-                boredomHiddenUntil: history?.boredomHiddenUntil,
-                isPermanentlyHiddenFromShuffle: history?.isPermanentlyHiddenFromShuffle ?? false,
-                manualPlayCount: history?.manualPlayCount ?? 0,
-                automaticPlayCount: history?.automaticPlayCount ?? 0,
-                playsLast7Days: history.map { playbackCount(inLastDays: 7, of: $0) } ?? 0,
-                playsLast30Days: history.map { playbackCount(inLastDays: 30, of: $0) } ?? 0,
-                sourceCounts: history?.playbackSourceCounts ?? [:]
+                playCount: history.playCount,
+                firstPlayedAt: history.firstPlayedAt,
+                lastPlayedAt: history.lastPlayedAt,
+                playbackPreference: history.playbackPreference,
+                boredomLevel: history.isPermanentlyHiddenFromShuffle ? 3 : min(history.boredomCount, 2),
+                boredomHiddenUntil: history.boredomHiddenUntil,
+                isPermanentlyHiddenFromShuffle: history.isPermanentlyHiddenFromShuffle,
+                manualPlayCount: history.manualPlayCount,
+                automaticPlayCount: history.automaticPlayCount,
+                playsLast7Days: playbackCount(dayKeys: recent7DayKeys, of: history),
+                playsLast30Days: playbackCount(dayKeys: recent30DayKeys, of: history),
+                sourceCounts: history.playbackSourceCounts
             )
         }
         let playCounts = trackItems.filter { $0.playCount > 0 }.sorted(by: playCountSort)
@@ -100,10 +119,10 @@ final class AnalyticsService {
                 .filter { $0.playbackPreference != 0 }
                 .sorted(by: titleSort),
             currentlyHiddenTracks: trackItems
-                .filter { !$0.isPermanentlyHiddenFromShuffle && ($0.boredomHiddenUntil.map { $0 > Date() } ?? false) }
+                .filter { !$0.isPermanentlyHiddenFromShuffle && ($0.boredomHiddenUntil.map { $0 > now } ?? false) }
                 .sorted(by: titleSort),
             previouslyHiddenTracks: trackItems
-                .filter { $0.boredomLevel > 0 && !$0.isPermanentlyHiddenFromShuffle && !($0.boredomHiddenUntil.map { $0 > Date() } ?? false) }
+                .filter { $0.boredomLevel > 0 && !$0.isPermanentlyHiddenFromShuffle && !($0.boredomHiddenUntil.map { $0 > now } ?? false) }
                 .sorted(by: titleSort),
             permanentlyHiddenTracks: trackItems
                 .filter(\.isPermanentlyHiddenFromShuffle)
@@ -112,12 +131,10 @@ final class AnalyticsService {
         )
     }
 
-    private func playbackCount(inLastDays days: Int, of entry: PlaybackHistory, now: Date = Date()) -> Int {
-        guard days > 0 else { return 0 }
-        return Self.dayKeys(inLastDays: days, now: now)
-            .reduce(0) { total, key in
-                total + (entry.dailySummaries[key]?.playCount ?? 0)
-            }
+    private func playbackCount(dayKeys: [String], of entry: PlaybackHistory) -> Int {
+        dayKeys.reduce(0) { total, key in
+            total + (entry.dailySummaries[key]?.playCount ?? 0)
+        }
     }
 
     private static func dayKeys(inLastDays days: Int, now: Date) -> [String] {
