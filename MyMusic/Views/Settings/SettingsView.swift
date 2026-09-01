@@ -39,6 +39,12 @@ struct SettingsView: View {
                 } label: {
                     Label("音楽史", systemImage: "calendar.badge.clock")
                 }
+
+                NavigationLink {
+                    LibraryCleanupCandidatesView()
+                } label: {
+                    Label("ライブラリ整理候補", systemImage: "rectangle.stack.badge.minus")
+                }
             }
 
             Section("Beta機能") {

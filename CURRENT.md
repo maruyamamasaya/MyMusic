@@ -43,6 +43,7 @@ updated: 2026-09-01
   - 通常運用の正本は `Application Support/MyMusic/playback-history.sqlite3`。旧JSONは変更せず永久migration backupへatomic copyし、transaction importと全項目read-back検証後だけ`verified`へ切り替える。通常更新は対象曲と正規化した子レコードだけをtransaction更新する。
   - 起動時に前回から24時間以上ならSQLite snapshotを`Backups/Daily`へatomic JSON出力し、直近7世代を保持する。`Backups/Migration`はrotation対象外。Restore UIは未実装。
   - CSVエクスポートの運用フォーマットは `種類,日時,曲名,アーティスト,再生回数,値,詳細` で固定し、`楽曲別再生行動`（manual/automatic、7日/30日、初回/最終再生）と`楽曲別再生入口`（入口別集計）を追加する。既存CSVインポートは未対応のため、この形式を基準（正）とする。
+- **ライブラリ整理候補 M2**: 設定から、手動再生がありPlayback Event Foundationの日別集計上のearly skipが3回以上ある曲を確認できる。評価値に関係なく候補を表示し、既存Good / Bad操作で手動調整できる。候補提示は評価、飽き度、恒久非表示、履歴を自動変更しない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。
 - **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
@@ -74,6 +75,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-01 のPlayback History分析CSV運用定義を確定。旧インポートが未対応のため、新規ダウンロードCSVの現行ヘッダ定義を正式運用に採用。
 - 2026-09-01 にPlayback HistoryのSQLite正本化、旧JSONのfail-closed migration、永久migration backup、24時間単位の日次JSON snapshotを実装。ユーザー指定によりXcode build / Simulator / 実機検証は後日ローカルMacで実施する。
 - 2026-09-01 にPlayback Event Foundationを追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機、実データschema migrationはローカルMacで未検証。
+- 2026-09-01 にライブラリ整理候補 M2を追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機UIはローカルMacで未検証。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
