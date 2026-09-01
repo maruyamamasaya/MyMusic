@@ -178,15 +178,15 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 id INTEGER PRIMARY KEY AUTOINCREMENT, track_id TEXT NOT NULL, played_at REAL NOT NULL,
                 started_at REAL, ended_at REAL, listened_seconds REAL, completion_ratio REAL,
                 was_skipped INTEGER, start_kind TEXT, start_source TEXT,
-                event_id TEXT, was_full_playback INTEGER,
+                event_id TEXT, was_full_playback INTEGER, end_kind TEXT,
                 FOREIGN KEY(track_id) REFERENCES playback_tracks(track_id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS playback_events_track_date ON playback_events(track_id, played_at);
             """)
-        let version = try schemaVersion()
-        if version < 2 {
+        let originalVersion = try schemaVersion()
+        if originalVersion < 2 {
             try transaction {
-                if version > 0 {
+                if originalVersion > 0 {
                     try execute("ALTER TABLE playback_events ADD COLUMN event_id TEXT")
                     try execute("ALTER TABLE playback_events ADD COLUMN was_full_playback INTEGER")
                     try execute("ALTER TABLE playback_daily_summaries ADD COLUMN full_playback_count INTEGER NOT NULL DEFAULT 0")
@@ -195,6 +195,14 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 }
                 try execute("PRAGMA user_version = 2")
             }
+        }
+        if originalVersion > 0, originalVersion < 3 {
+            try transaction {
+                try execute("ALTER TABLE playback_events ADD COLUMN end_kind TEXT")
+                try execute("PRAGMA user_version = 3")
+            }
+        } else if originalVersion == 0 {
+            try execute("PRAGMA user_version = 3")
         }
         try execute("CREATE UNIQUE INDEX IF NOT EXISTS playback_events_event_id ON playback_events(event_id) WHERE event_id IS NOT NULL")
     }
@@ -240,13 +248,13 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
             try execute("""
                 INSERT OR IGNORE INTO playback_events(
                     track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
-                    was_skipped, start_kind, start_source, event_id, was_full_playback
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    was_skipped, start_kind, start_source, event_id, was_full_playback, end_kind
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, values: [
                     id, event.endedAt.timeIntervalSince1970, event.startedAt.timeIntervalSince1970,
                     event.endedAt.timeIntervalSince1970, event.listenedSeconds, event.completionRatio,
                     event.wasSkipped ? 1 : 0, event.startKind.rawValue, event.startSource.rawValue,
-                    event.id, event.wasFullPlayback ? 1 : 0
+                    event.id, event.wasFullPlayback ? 1 : 0, event.endKind?.rawValue ?? NSNull()
                 ])
         }
         for (day, summary) in entry.dailySummaries {
@@ -272,6 +280,7 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         let statement = try prepare("""
             SELECT id, track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
                    was_skipped, start_kind, start_source, event_id, was_full_playback
+                   , end_kind
             FROM playback_events ORDER BY id
             """)
         defer { sqlite3_finalize(statement) }
@@ -288,7 +297,8 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 wasSkipped: int(statement, 7) != 0,
                 wasFullPlayback: int(statement, 11) != 0,
                 startKind: PlaybackStartKind(rawValue: nullableText(statement, 8) ?? "") ?? .manual,
-                startSource: PlaybackStartSource(rawValue: nullableText(statement, 9) ?? "") ?? .unknown
+                startSource: PlaybackStartSource(rawValue: nullableText(statement, 9) ?? "") ?? .unknown,
+                endKind: PlaybackEndKind(rawValue: nullableText(statement, 12) ?? "")
             ))
             entries[id] = entry
         }
@@ -379,6 +389,7 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         case let value as String: try bind(value, to: index, in: statement)
         case let value as Int: bind(value, to: index, in: statement)
         case let value as Double: bind(value, to: index, in: statement)
+        case is NSNull: sqlite3_bind_null(statement, index)
         default: throw PlaybackHistorySQLiteError.bind("unsupported value")
         }
     }

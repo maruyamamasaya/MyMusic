@@ -19,7 +19,7 @@ struct LibraryCleanupCandidatesView: View {
                 ContentUnavailableView(
                     "整理候補はありません",
                     systemImage: "checkmark.circle",
-                    description: Text("曲を直接選んだことがあり、30秒以内のスキップが3回以上ある曲を表示します。")
+                    description: Text("直近の再生で、途中スキップが半数以上かつ平均再生率が10%以下の曲を表示します。")
                 )
             } else {
                 List(candidates) { candidate in
@@ -54,14 +54,11 @@ private struct LibraryCleanupCandidateRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Text("30秒以内スキップ \(candidate.earlySkipCount)回")
+                Text("途中スキップ \(candidate.userSkipCount)/\(candidate.evaluatedEventCount)回（\(percent(candidate.userSkipRate))）")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.orange)
 
-                HStack(spacing: 10) {
-                    Text("総スキップ \(candidate.skipCount)回")
-                    Text("総再生 \(candidate.playCount)回")
-                }
+                Text("平均再生率 \(percent(candidate.averagePlaybackRatio))")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
 
@@ -89,5 +86,9 @@ private struct LibraryCleanupCandidateRow: View {
 
     private var preferenceText: String {
         candidate.playbackPreference > 0 ? "+\(candidate.playbackPreference)" : "\(candidate.playbackPreference)"
+    }
+
+    private func percent(_ value: Double) -> String {
+        value.formatted(.percent.precision(.fractionLength(0)))
     }
 }

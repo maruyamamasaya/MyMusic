@@ -194,6 +194,8 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         try await waitUntil { historyStore.manualPlayCount(for: first.id) == 1 }
         store.next()
         try await waitUntil { historyStore.manualPlayCount(for: second.id) == 1 }
+        XCTAssertEqual(historyStore.entries[first.id]?.playbackEvents.first?.endKind, .userSkipped)
+        XCTAssertEqual(historyStore.entries[first.id]?.playbackEvents.first?.wasSkipped, true)
         store.previous()
         try await waitUntil { historyStore.entries[second.id]?.playbackEvents.count == 1 }
 

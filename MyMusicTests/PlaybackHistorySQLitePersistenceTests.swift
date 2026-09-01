@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 @testable import MyMusic
 
@@ -115,7 +116,7 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         let event = PlaybackEvent(
             trackID: trackID, startedAt: startedAt, endedAt: startedAt.addingTimeInterval(24),
             listenedSeconds: 24, completionRatio: 0.2, wasSkipped: true, wasFullPlayback: false,
-            startKind: .manual, startSource: .search
+            startKind: .manual, startSource: .search, endKind: .userSkipped
         )
         var history = PlaybackHistory(trackID: trackID, isFavorite: true, playCount: 1,
                                       lastPlayedAt: startedAt, playbackPreference: 5,
@@ -128,6 +129,24 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         let reloaded = try XCTUnwrap(loaded.first)
         XCTAssertEqual(reloaded.playbackEvents, [event])
         XCTAssertEqual(reloaded.playbackPreference, 6)
+    }
+
+    func testVerifiedVersionTwoDatabaseMigratesEndKindColumnToVersionThree() async throws {
+        let root = try temporaryDirectory()
+        do {
+            let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+            _ = try await service.load()
+        }
+        let databaseURL = root.appending(path: "playback-history.sqlite3")
+        try executeSQL("ALTER TABLE playback_events DROP COLUMN end_kind; PRAGMA user_version = 2", at: databaseURL)
+
+        _ = try await PlaybackHistoryPersistenceService(applicationDirectory: root).load()
+
+        XCTAssertEqual(try scalarInt("PRAGMA user_version", at: databaseURL), 3)
+        XCTAssertEqual(try scalarInt(
+            "SELECT count(*) FROM pragma_table_info('playback_events') WHERE name = 'end_kind'",
+            at: databaseURL
+        ), 1)
     }
 
     private func completeHistory() -> PlaybackHistory {
@@ -179,5 +198,32 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
             State.self,
             from: Data(contentsOf: root.appending(path: "playback-history-migration-state.json"))
         ).state
+    }
+
+    private func executeSQL(_ sql: String, at databaseURL: URL) throws {
+        var database: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+            throw NSError(domain: "SQLiteTest", code: 1)
+        }
+        defer { sqlite3_close(database) }
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+            throw NSError(domain: "SQLiteTest", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(database))])
+        }
+    }
+
+    private func scalarInt(_ sql: String, at databaseURL: URL) throws -> Int {
+        var database: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+            throw NSError(domain: "SQLiteTest", code: 3)
+        }
+        defer { sqlite3_close(database) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw NSError(domain: "SQLiteTest", code: 4)
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw NSError(domain: "SQLiteTest", code: 5) }
+        return Int(sqlite3_column_int64(statement, 0))
     }
 }

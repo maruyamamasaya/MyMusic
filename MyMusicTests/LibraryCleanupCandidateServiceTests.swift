@@ -5,134 +5,105 @@ import XCTest
 final class LibraryCleanupCandidateServiceTests: XCTestCase {
     private let service = LibraryCleanupCandidateService()
 
-    func testTwoEarlySkipsAreNotCandidateAndThreeAreCandidate() {
-        let two = makeTrack("Two")
-        let three = makeTrack("Three")
-        let result = service.candidates(
-            tracks: [two, three],
-            historyByTrackID: [two.id: history(two, earlySkips: 2), three.id: history(three, earlySkips: 3)]
-        )
-        XCTAssertEqual(result.map(\.id), [three.id])
+    func testNoEventsAndFewerThanFiveClassifiedEventsAreExcluded() {
+        let none = makeTrack("None")
+        let four = makeTrack("Four")
+        let histories = [
+            none.id: PlaybackHistory(trackID: none.id, isFavorite: false, playCount: 0, lastPlayedAt: nil),
+            four.id: history(four, events: makeEvents(track: four, count: 4, skipped: 4, ratio: 0.05))
+        ]
+        XCTAssertTrue(service.candidates(tracks: [none, four], historyByTrackID: histories).isEmpty)
     }
 
-    func testManualPlayIsRequiredAndUnplayedTracksAreExcluded() {
-        let automaticOnly = makeTrack("Automatic")
-        let missingHistory = makeTrack("Unplayed")
-        let result = service.candidates(
-            tracks: [automaticOnly, missingHistory],
-            historyByTrackID: [automaticOnly.id: history(automaticOnly, earlySkips: 3, manualPlays: 0)]
-        )
-        XCTAssertTrue(result.isEmpty)
+    func testZeroQualifiedPlayCountCanStillBeCandidateFromPlaybackEvents() throws {
+        let track = makeTrack("Zero Count")
+        let events = makeEvents(track: track, count: 5, skipped: 3, ratio: 0.08)
+        let result = try XCTUnwrap(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: history(track, playCount: 0, events: events)]
+        ).first)
+        XCTAssertEqual(result.evaluatedEventCount, 5)
+        XCTAssertEqual(result.userSkipCount, 3)
+        XCTAssertEqual(result.userSkipRate, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(result.averagePlaybackRatio, 0.08, accuracy: 0.0001)
     }
 
-    func testNextButtonStartDoesNotQualifyAsDirectSelection() {
-        let track = makeTrack("Advanced")
-        let startedAt = Date(timeIntervalSince1970: 100)
-        let event = PlaybackEvent(
-            trackID: track.id,
-            startedAt: startedAt,
-            endedAt: startedAt.addingTimeInterval(20),
-            listenedSeconds: 20,
-            completionRatio: 0.1,
-            wasSkipped: true,
-            wasFullPlayback: false,
-            startKind: .userAdvanced,
-            startSource: .shuffle
-        )
-        var advancedHistory = history(track, earlySkips: 3, manualPlays: 3)
-        advancedHistory.playbackEvents = [event]
-
-        XCTAssertTrue(service.candidates(
-            tracks: [track], historyByTrackID: [track.id: advancedHistory]
-        ).isEmpty)
-    }
-
-    func testDirectlySelectedStartStillQualifies() {
-        let track = makeTrack("Selected")
-        let startedAt = Date(timeIntervalSince1970: 100)
-        let event = PlaybackEvent(
-            trackID: track.id,
-            startedAt: startedAt,
-            endedAt: startedAt.addingTimeInterval(20),
-            listenedSeconds: 20,
-            completionRatio: 0.1,
-            wasSkipped: true,
-            wasFullPlayback: false,
-            startKind: .manual,
-            startSource: .library
-        )
-        var selectedHistory = history(track, earlySkips: 3)
-        selectedHistory.playbackEvents = [event]
-
+    func testFiftyPercentSkipAndTenPercentAverageAreInclusive() {
+        let track = makeTrack("Boundary")
+        let events = makeEvents(track: track, count: 10, skipped: 5, ratio: 0.10)
         XCTAssertEqual(service.candidates(
-            tracks: [track], historyByTrackID: [track.id: selectedHistory]
+            tracks: [track], historyByTrackID: [track.id: history(track, events: events)]
         ).map(\.id), [track.id])
     }
 
-    func testPreferenceDoesNotAffectEligibilityIncludingAlreadyBadTrack() {
-        let tracks = [makeTrack("Neutral"), makeTrack("Bad"), makeTrack("Good")]
-        let preferences = [0, -3, 2]
-        let histories = Dictionary(uniqueKeysWithValues: zip(tracks, preferences).map {
-            ($0.0.id, history($0.0, earlySkips: 3, preference: $0.1))
-        })
-        let result = service.candidates(tracks: tracks, historyByTrackID: histories)
-        XCTAssertEqual(Set(result.map(\.playbackPreference)), Set(preferences))
-        XCTAssertEqual(Set(result.map(\.id)), Set(tracks.map(\.id)))
+    func testBothUnhealthyConditionsAreRequired() {
+        let lowSkip = makeTrack("Low Skip")
+        let wellListened = makeTrack("Well Listened")
+        let histories = [
+            lowSkip.id: history(lowSkip, events: makeEvents(track: lowSkip, count: 10, skipped: 4, ratio: 0.05)),
+            wellListened.id: history(wellListened, events: makeEvents(track: wellListened, count: 10, skipped: 9, ratio: 0.11))
+        ]
+        XCTAssertTrue(service.candidates(tracks: [lowSkip, wellListened], historyByTrackID: histories).isEmpty)
     }
 
-    func testCandidatesSortByEarlySkipsThenMostRecentPlayback() {
-        let older = makeTrack("Older")
-        let newer = makeTrack("Newer")
-        let mostSkipped = makeTrack("Most")
-        let result = service.candidates(tracks: [older, mostSkipped, newer], historyByTrackID: [
-            older.id: history(older, earlySkips: 3, lastPlayedAt: Date(timeIntervalSince1970: 100)),
-            newer.id: history(newer, earlySkips: 3, lastPlayedAt: Date(timeIntervalSince1970: 200)),
-            mostSkipped.id: history(mostSkipped, earlySkips: 5, lastPlayedAt: Date(timeIntervalSince1970: 50))
-        ])
-        XCTAssertEqual(result.map(\.id), [mostSkipped.id, newer.id, older.id])
+    func testOnlyLatestTwentyClassifiedEventsAreEvaluated() throws {
+        let track = makeTrack("Recent Window")
+        let oldHealthy = makeEvents(track: track, count: 10, skipped: 0, ratio: 1, startingAt: 100)
+        let recentPoor = makeEvents(track: track, count: 20, skipped: 10, ratio: 0.05, startingAt: 1_000)
+        let candidate = try XCTUnwrap(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: history(track, events: oldHealthy + recentPoor)]
+        ).first)
+        XCTAssertEqual(candidate.evaluatedEventCount, 20)
+        XCTAssertEqual(candidate.userSkipCount, 10)
+        XCTAssertEqual(candidate.averagePlaybackRatio, 0.05, accuracy: 0.0001)
     }
 
-    func testAnalysisDoesNotMutatePreferenceBoredomHideOrEarlySkips() {
-        let track = makeTrack("Unchanged")
-        let original = history(track, earlySkips: 4, preference: -3, boredom: 2, permanentlyHidden: true)
-        let histories = [track.id: original]
-
-        _ = service.candidates(tracks: [track], historyByTrackID: histories)
-
-        XCTAssertEqual(histories[track.id]?.playbackPreference, -3)
-        XCTAssertEqual(histories[track.id]?.boredomCount, 2)
-        XCTAssertEqual(histories[track.id]?.isPermanentlyHiddenFromShuffle, true)
-        XCTAssertEqual(histories[track.id]?.dailySummaries.values.reduce(0) { $0 + $1.earlySkipCount }, 4)
+    func testLegacyEventsWithoutEndKindAreExcluded() {
+        let track = makeTrack("Legacy")
+        let legacy = makeEvents(track: track, count: 10, skipped: 10, ratio: 0.01, endKindKnown: false)
+        XCTAssertTrue(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: history(track, events: legacy)]
+        ).isEmpty)
     }
 
-    func testPreferenceChangeDoesNotChangeEarlySkipCountOrRemoveCandidate() {
-        let track = makeTrack("Rated")
-        var updated = history(track, earlySkips: 3, preference: 0)
-        let before = service.candidates(tracks: [track], historyByTrackID: [track.id: updated])
-        updated.playbackPreference = -1
-        let after = service.candidates(tracks: [track], historyByTrackID: [track.id: updated])
-
-        XCTAssertEqual(before.first?.earlySkipCount, 3)
-        XCTAssertEqual(after.first?.earlySkipCount, 3)
-        XCTAssertEqual(after.first?.playbackPreference, -1)
+    func testWorkSizedTracksAreExcluded() {
+        let track = makeTrack("Work", duration: Track.longFormMinimumDuration)
+        let events = makeEvents(track: track, count: 10, skipped: 10, ratio: 0.01)
+        XCTAssertTrue(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: history(track, events: events)]
+        ).isEmpty)
     }
 
-    private func makeTrack(_ title: String) -> Track {
-        Track(id: UUID(), title: title, artistName: "Artist", albumTitle: "Album", duration: 180,
+    private func makeTrack(_ title: String, duration: TimeInterval = 180) -> Track {
+        Track(id: UUID(), title: title, artistName: "Artist", albumTitle: "Album", duration: duration,
               fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"))
     }
 
-    private func history(
-        _ track: Track, earlySkips: Int, manualPlays: Int = 1, preference: Int = 0,
-        lastPlayedAt: Date = Date(timeIntervalSince1970: 100), boredom: Int = 0,
-        permanentlyHidden: Bool = false
-    ) -> PlaybackHistory {
+    private func history(_ track: Track, playCount: Int = 1, events: [PlaybackEvent]) -> PlaybackHistory {
         PlaybackHistory(
-            trackID: track.id, isFavorite: false, playCount: 1, lastPlayedAt: lastPlayedAt,
-            playbackPreference: preference,
-            dailySummaries: ["2026-09-01": PlaybackDailySummary(earlySkipCount: earlySkips)],
-            manualPlayCount: manualPlays, skipCount: earlySkips, boredomCount: boredom,
-            isPermanentlyHiddenFromShuffle: permanentlyHidden
+            trackID: track.id, isFavorite: false, playCount: playCount,
+            lastPlayedAt: events.map(\.endedAt).max(), playbackEvents: events
         )
+    }
+
+    private func makeEvents(
+        track: Track,
+        count: Int,
+        skipped: Int,
+        ratio: Double,
+        startingAt: TimeInterval = 100,
+        endKindKnown: Bool = true
+    ) -> [PlaybackEvent] {
+        (0..<count).map { index in
+            let start = Date(timeIntervalSince1970: startingAt + Double(index * 10))
+            let isSkipped = index < skipped
+            return PlaybackEvent(
+                trackID: track.id, startedAt: start,
+                endedAt: start.addingTimeInterval(track.duration * ratio),
+                listenedSeconds: track.duration * ratio, completionRatio: ratio,
+                wasSkipped: isSkipped, wasFullPlayback: false,
+                startKind: .automatic, startSource: .shuffle,
+                endKind: endKindKnown ? (isSkipped ? .userSkipped : .other) : nil
+            )
+        }
     }
 }

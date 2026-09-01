@@ -25,6 +25,12 @@ enum PlaybackStartSource: String, Codable, CaseIterable, Sendable {
     case unknown
 }
 
+enum PlaybackEndKind: String, Codable, CaseIterable, Sendable {
+    case natural
+    case userSkipped = "user_skipped"
+    case other
+}
+
 struct PlaybackStartContext: Codable, Hashable, Sendable {
     var kind: PlaybackStartKind
     var source: PlaybackStartSource
@@ -44,6 +50,8 @@ struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
     let wasFullPlayback: Bool
     let startKind: PlaybackStartKind
     let startSource: PlaybackStartSource
+    /// Nil identifies an event written before precise end-reason tracking.
+    let endKind: PlaybackEndKind?
 
     var isEarlySkip: Bool { wasSkipped && listenedSeconds <= 30 }
 
@@ -57,7 +65,8 @@ struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
         wasSkipped: Bool,
         wasFullPlayback: Bool,
         startKind: PlaybackStartKind,
-        startSource: PlaybackStartSource
+        startSource: PlaybackStartSource,
+        endKind: PlaybackEndKind? = nil
     ) {
         self.id = id
         self.trackID = trackID
@@ -69,6 +78,7 @@ struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
         self.wasFullPlayback = wasFullPlayback
         self.startKind = startKind
         self.startSource = startSource
+        self.endKind = endKind
     }
 }
 

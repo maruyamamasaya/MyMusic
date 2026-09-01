@@ -2,10 +2,10 @@ import Foundation
 
 struct LibraryCleanupCandidate: Identifiable, Hashable, Sendable {
     let track: Track
-    let earlySkipCount: Int
-    let skipCount: Int
-    let playCount: Int
-    let directSelectionPlayCount: Int
+    let evaluatedEventCount: Int
+    let userSkipCount: Int
+    let userSkipRate: Double
+    let averagePlaybackRatio: Double
     let lastPlayedAt: Date?
     let playbackPreference: Int
 
@@ -14,44 +14,54 @@ struct LibraryCleanupCandidate: Identifiable, Hashable, Sendable {
 
 struct LibraryCleanupCandidateService: Sendable {
     enum SortOrder: Sendable {
-        case earlySkipsThenRecentlyPlayed
+        case behaviorThenRecentlyPlayed
     }
 
-    static let minimumEarlySkipCount = 3
+    static let maximumEvaluatedEventCount = 20
+    static let minimumEvaluatedEventCount = 5
+    static let minimumUserSkipRate = 0.50
+    static let maximumAveragePlaybackRatio = 0.10
 
     func candidates(
         tracks: [Track],
         historyByTrackID: [Track.ID: PlaybackHistory],
-        sortOrder: SortOrder = .earlySkipsThenRecentlyPlayed
+        sortOrder: SortOrder = .behaviorThenRecentlyPlayed
     ) -> [LibraryCleanupCandidate] {
         let candidates = tracks.compactMap { track -> LibraryCleanupCandidate? in
-            guard let history = historyByTrackID[track.id] else { return nil }
-            let earlySkipCount = history.dailySummaries.values.reduce(0) { $0 + $1.earlySkipCount }
-            // `manualPlayCount` also includes transport actions such as next/previous.
-            // Events recorded after userAdvanced was introduced let cleanup require a
-            // direct selection instead. The aggregate is retained only for histories
-            // that predate event-level classification.
-            let directSelectionPlayCount = history.playbackEvents.isEmpty
-                ? history.manualPlayCount
-                : history.playbackEvents.count { $0.startKind == .manual }
-            guard earlySkipCount >= Self.minimumEarlySkipCount, directSelectionPlayCount > 0 else { return nil }
+            guard track.isEligibleForRegularPlayback,
+                  let history = historyByTrackID[track.id] else { return nil }
+            let events = history.playbackEvents
+                .filter { $0.endKind != nil }
+                .sorted { $0.endedAt > $1.endedAt }
+                .prefix(Self.maximumEvaluatedEventCount)
+            guard events.count >= Self.minimumEvaluatedEventCount else { return nil }
+
+            let userSkipCount = events.count { $0.endKind == .userSkipped }
+            let userSkipRate = Double(userSkipCount) / Double(events.count)
+            let averagePlaybackRatio = events.reduce(0.0) { $0 + min(max($1.completionRatio, 0), 1) }
+                / Double(events.count)
+            guard userSkipRate >= Self.minimumUserSkipRate,
+                  averagePlaybackRatio <= Self.maximumAveragePlaybackRatio else { return nil }
 
             return LibraryCleanupCandidate(
                 track: track,
-                earlySkipCount: earlySkipCount,
-                skipCount: history.skipCount,
-                playCount: history.playCount,
-                directSelectionPlayCount: directSelectionPlayCount,
+                evaluatedEventCount: events.count,
+                userSkipCount: userSkipCount,
+                userSkipRate: userSkipRate,
+                averagePlaybackRatio: averagePlaybackRatio,
                 lastPlayedAt: history.lastPlayedAt,
                 playbackPreference: history.playbackPreference
             )
         }
 
         switch sortOrder {
-        case .earlySkipsThenRecentlyPlayed:
+        case .behaviorThenRecentlyPlayed:
             return candidates.sorted {
-                if $0.earlySkipCount != $1.earlySkipCount {
-                    return $0.earlySkipCount > $1.earlySkipCount
+                if $0.userSkipRate != $1.userSkipRate {
+                    return $0.userSkipRate > $1.userSkipRate
+                }
+                if $0.averagePlaybackRatio != $1.averagePlaybackRatio {
+                    return $0.averagePlaybackRatio < $1.averagePlaybackRatio
                 }
                 if $0.lastPlayedAt != $1.lastPlayedAt {
                     return ($0.lastPlayedAt ?? .distantPast) > ($1.lastPlayedAt ?? .distantPast)

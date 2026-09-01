@@ -278,7 +278,7 @@ final class PlayerStore {
 
     func next(using transitionReason: PlaybackTransitionReason) {
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
-            finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
+            finalizeCurrentPlaybackSession(endKind: .userSkipped)
             persistCurrentPlaybackPosition(force: true)
             audioPlayer.pause()
             isPlaying = false
@@ -289,7 +289,8 @@ final class PlayerStore {
         startPlayback(
             at: playbackOrder[nextPosition],
             transitionReason: transitionReason,
-            startContext: startContext(for: transitionReason)
+            startContext: startContext(for: transitionReason),
+            outgoingEndKind: .userSkipped
         )
     }
 
@@ -408,7 +409,7 @@ final class PlayerStore {
     }
 
     func stop() {
-        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
+        finalizeCurrentPlaybackSession(endKind: .other)
         persistCurrentPlaybackPosition(force: true)
         playbackTask?.cancel()
         audioInformationTask?.cancel()
@@ -442,11 +443,11 @@ final class PlayerStore {
     /// persistence to a view timer.
     func persistPlaybackPositionForLifecycle() {
         persistCurrentPlaybackPosition(force: true)
-        finalizeCurrentPlaybackSession(isNaturallyCompleted: false, flushOnly: true)
+        finalizeCurrentPlaybackSession(endKind: .other, flushOnly: true)
     }
 
     func persistPlaybackHistoryForLifecycle() {
-        finalizeCurrentPlaybackSession(isNaturallyCompleted: false, flushOnly: true)
+        finalizeCurrentPlaybackSession(endKind: .other, flushOnly: true)
     }
 
     func refreshActiveTrackAdjustment() {
@@ -460,10 +461,11 @@ final class PlayerStore {
         playbackEndTime: TimeInterval? = nil,
         transitionReason: PlaybackTransitionReason,
         savesPreviousPosition: Bool = true,
-        startContext: PlaybackStartContext
+        startContext: PlaybackStartContext,
+        outgoingEndKind: PlaybackEndKind = .other
     ) {
         guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
-        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
+        finalizeCurrentPlaybackSession(endKind: outgoingEndKind)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
@@ -651,7 +653,7 @@ final class PlayerStore {
             nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
             updateRemoteCommandAvailability()
         case .ended:
-            finalizeCurrentPlaybackSession(isNaturallyCompleted: true)
+            finalizeCurrentPlaybackSession(endKind: .natural)
             isPlaying = false
             currentTime = duration
             nowPlayingService.updatePlayback(elapsedTime: duration, isPlaying: false)
@@ -719,7 +721,7 @@ final class PlayerStore {
 
     private func completeCurrentTrack(at endPosition: TimeInterval) {
         isCompletingCustomEnd = true
-        finalizeCurrentPlaybackSession(isNaturallyCompleted: false)
+        finalizeCurrentPlaybackSession(endKind: .natural)
         audioPlayer.pause()
         isPlaying = false
         currentTime = endPosition
@@ -790,7 +792,7 @@ final class PlayerStore {
     }
 
     private func finalizeCurrentPlaybackSession(
-        isNaturallyCompleted: Bool,
+        endKind: PlaybackEndKind,
         flushOnly: Bool = false
     ) {
         guard let currentTrack else { return }
@@ -813,11 +815,8 @@ final class PlayerStore {
             duration: resolvedDuration,
             context: currentPlaybackStartContext,
             isFullPlayback: isFullPlayback,
-            isSkipped: PlaybackHistoryScoring.isSkip(
-                duration: resolvedDuration,
-                listenedSeconds: listenedTime,
-                isNaturallyCompleted: isNaturallyCompleted
-            )
+            isSkipped: endKind == .userSkipped && !isFullPlayback,
+            endKind: endKind
         )
     }
 

@@ -118,7 +118,8 @@ final class PlaybackHistoryStore {
         duration: TimeInterval,
         context: PlaybackStartContext,
         isFullPlayback: Bool,
-        isSkipped: Bool
+        isSkipped: Bool,
+        endKind: PlaybackEndKind? = nil
     ) {
         var entry = entry(for: trackID)
         let event = PlaybackEvent(
@@ -130,7 +131,8 @@ final class PlaybackHistoryStore {
             wasSkipped: isSkipped,
             wasFullPlayback: isFullPlayback,
             startKind: context.kind,
-            startSource: context.source
+            startSource: context.source,
+            endKind: endKind
         )
         entry.playbackEvents.append(event)
         if event.wasFullPlayback { entry.fullPlaybackCount += 1 }
