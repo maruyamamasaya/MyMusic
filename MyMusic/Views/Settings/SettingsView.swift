@@ -45,6 +45,12 @@ struct SettingsView: View {
                 } label: {
                     Label("ライブラリ整理候補", systemImage: "rectangle.stack.badge.minus")
                 }
+
+                NavigationLink {
+                    PlaybackBehaviorView()
+                } label: {
+                    Label("再生傾向", systemImage: "chart.line.uptrend.xyaxis")
+                }
             }
 
             Section("Beta機能") {
