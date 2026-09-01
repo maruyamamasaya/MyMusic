@@ -112,6 +112,7 @@ music root recursive scan
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`は気分・音の特徴量scoreに加え、任意指定された10年単位の年代で候補を先に絞り、近さとartist分散から一時queueを生成する。年代候補は対象Trackの有効な年metadataから降順で導出し、候補がなければ年代質問を省略する。年代無指定では年の有無にかかわらず従来どおり選曲する。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
 - `PlaybackHistoryStore` は再生回数、rating、event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。入口と開始種別はenumで受け取り、永続化上の入口別集計は将来値を壊さないraw string keyで保持する。直近7日／30日の再生傾向は日別集計から算出し、日別集計は再生があった日だけを保持して無制限に増やさない。分析画面から1曲の履歴をリセットする場合は、対象Trackの再生事実だけを消去し、お気に入り、rating、飽き度は保持する。`AnalyticsService` と `MusicHistory*Service` は現在 library と履歴から表示用 snapshot を導出する。
+- 永続化は`PlaybackHistoryPersistenceService` actorから`PlaybackHistorySQLiteRepository`を呼び、`Application Support/MyMusic/playback-history.sqlite3`を正本とする。通常変更は1曲snapshotだけを渡し、その曲の`playback_tracks`、event、日別、入口別行を1 transactionで更新する。初回は`PlaybackHistoryMigrationService`が旧JSONを上書きなしの永久backupへcopyし、transaction import後の全Model一致でのみDB metadataとDB外stateを`verified`にする。`PlaybackHistoryBackupService`は起動load時に24時間条件の日次JSON snapshot（7世代）を作る。
 - `AnalyticsService` のCSV exportは、運用上の共通契約としてヘッダを `種類,日時,曲名,アーティスト,再生回数,値,詳細` とし、分析データを以下の行種別で出力する。
 - `楽曲別再生回数`, `楽曲別再生行動`, `楽曲別再生入口`, `再生傾向評価` はそれぞれTrack別に追加行する。
 - `再生履歴` は再生イベントの時系列（日別にグループ化済み）を出力し、`集計` は全体件数（総再生、手動、自動、お気に入り、プレイリスト）を追加する。

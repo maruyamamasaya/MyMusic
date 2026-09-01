@@ -48,7 +48,7 @@ final class PlaybackHistoryStore {
         var entry = entry(for: trackID)
         entry.isFavorite.toggle()
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func recordPlaybackStarted(trackID: Track.ID) {
@@ -92,7 +92,7 @@ final class PlaybackHistoryStore {
         entry.consecutivePlayCount = isConsecutivePlay ? entry.consecutivePlayCount + 1 : 1
         if isRepeatModeActive { entry.repeatPlaybackCount += 1 }
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func recordPlaybackCompleted(trackID: Track.ID) {
@@ -100,7 +100,7 @@ final class PlaybackHistoryStore {
         entry.playCount += 1
         entry.playbackEvents.append(Date())
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func addPlaybackDuration(trackID: Track.ID, seconds: TimeInterval) {
@@ -108,7 +108,7 @@ final class PlaybackHistoryStore {
         var entry = entry(for: trackID)
         entry.totalPlaybackDuration += seconds
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func recordPlaybackFinished(
@@ -120,7 +120,7 @@ final class PlaybackHistoryStore {
         if isFullPlayback { entry.fullPlaybackCount += 1 }
         if isSkipped { entry.skipCount += 1 }
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     /// Clears only the playback facts for one track while preserving unrelated
@@ -148,7 +148,7 @@ final class PlaybackHistoryStore {
         entry.consecutivePlayCount = 0
         entry.repeatPlaybackCount = 0
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func recentTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
@@ -260,7 +260,7 @@ final class PlaybackHistoryStore {
         entry.boredomHiddenUntil = Calendar.current.date(byAdding: .day, value: days, to: now)
         entry.isPermanentlyHiddenFromShuffle = false
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func permanentlyHideFromShuffle(trackID: Track.ID) {
@@ -269,7 +269,7 @@ final class PlaybackHistoryStore {
         entry.boredomHiddenUntil = nil
         entry.isPermanentlyHiddenFromShuffle = true
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func isHiddenFromShuffle(trackID: Track.ID, now: Date = Date()) -> Bool {
@@ -396,7 +396,7 @@ final class PlaybackHistoryStore {
             max(-Self.maximumPreference, entry.playbackPreference + adjustment)
         )
         entries[trackID] = entry
-        persist()
+        persist(entry)
     }
 
     func playbackSelectionWeight(for trackID: Track.ID) -> Double {
@@ -414,14 +414,15 @@ final class PlaybackHistoryStore {
         tracks.filter { track in entries[track.id].map(predicate) == true }
     }
 
-    private func persist() {
-        let snapshot = Array(entries.values)
-        saveTask?.cancel()
+    private func persist(_ entry: PlaybackHistory) {
+        // Do not cancel an earlier per-track write: a later mutation may belong to a
+        // different track. Explicit chaining also preserves mutation order even when
+        // unstructured tasks are scheduled in a different order.
+        let precedingSave = saveTask
         saveTask = Task { [weak self, persistence] in
             do {
-                try await persistence.save(snapshot)
-            } catch is CancellationError {
-                return
+                await precedingSave?.value
+                try await persistence.save(entry)
             } catch {
                 self?.errorMessage = "再生履歴を保存できませんでした: \(error.localizedDescription)"
             }
