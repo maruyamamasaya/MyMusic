@@ -55,11 +55,14 @@ nonisolated struct StationCandidate: Sendable {
     let artist: String
     let year: Int?
     let values: TrackFeatureValues
+    let overplayFactor: Double
 
-    init(trackID: Track.ID, artist: String, year: Int? = nil, values: TrackFeatureValues) {
+    init(trackID: Track.ID, artist: String, year: Int? = nil, values: TrackFeatureValues,
+         overplayFactor: Double = 1) {
         self.trackID = trackID
         self.artist = artist
         self.year = year
         self.values = values
+        self.overplayFactor = overplayFactor
     }
 }

@@ -49,16 +49,18 @@ final class StationStore {
     }
 
     private var candidates: [StationCandidate] {
-        libraryStore.tracks.compactMap { track in
-            guard historyStore.isEligibleForRegularShuffle(track),
-                  let feature = featureStore.feature(for: track.id),
+        let eligibleTracks = libraryStore.tracks.filter(historyStore.isEligibleForRegularShuffle)
+        let overplayFactors = historyStore.stationOverplayFactors(for: eligibleTracks.map(\.id))
+        return eligibleTracks.compactMap { track in
+            guard let feature = featureStore.feature(for: track.id),
                   service.hasUsableFeatures(feature.values)
             else { return nil }
             return StationCandidate(
                 trackID: track.id,
                 artist: track.artistName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
                 year: track.year,
-                values: feature.values
+                values: feature.values,
+                overplayFactor: overplayFactors[track.id] ?? 1
             )
         }
     }

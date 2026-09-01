@@ -576,6 +576,11 @@ final class PlayerStore {
             playbackOrder = naturalOrder
             return
         }
+        let eligibleTracks = naturalOrder.compactMap { queueIndex in
+            queueIndex == index || !playbackHistoryStore.isEligibleForRegularShuffle(queue[queueIndex])
+                ? nil : queue[queueIndex]
+        }
+        let selectionWeights = playbackHistoryStore.automaticSelectionWeights(for: eligibleTracks)
         let weightedIndexes = naturalOrder
             .filter {
                 $0 != index
@@ -583,7 +588,7 @@ final class PlayerStore {
             }
             .map { queueIndex in
                 let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
-                let weight = playbackHistoryStore.playbackSelectionWeight(for: queue[queueIndex].id)
+                let weight = selectionWeights[queue[queueIndex].id] ?? 1
                 return (index: queueIndex, key: -log(unitRandom) / weight)
             }
             .sorted { $0.key < $1.key }
