@@ -6,7 +6,7 @@ import Observation
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
     private static let dailySummaryRetentionDays = 400
-    static let maximumPreference = 10
+    static let maximumPreference = PlaybackPreferenceWeightPolicy.maximumPreference
 
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var isLoaded = false
@@ -422,10 +422,7 @@ final class PlaybackHistoryStore {
     }
 
     func playbackSelectionWeight(for trackID: Track.ID) -> Double {
-        let preference = playbackPreference(for: trackID)
-        if preference > 0 { return Double(preference + 1) }
-        if preference < 0 { return 1 / Double(abs(preference) + 1) }
-        return 1
+        PlaybackPreferenceWeightPolicy.weight(for: playbackPreference(for: trackID))
     }
 
     private func entry(for trackID: Track.ID) -> PlaybackHistory {
@@ -470,14 +467,6 @@ final class PlaybackHistoryStore {
     ) -> [String: PlaybackDailySummary] {
         let retainedKeys = dayKeys(inLastDays: dailySummaryRetentionDays, now: now, calendar: calendar)
         return summaries.filter { retainedKeys.contains($0.key) }
-    }
-}
-
-private extension Calendar {
-    nonisolated static var playbackHistory: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
-        return calendar
     }
 }
 
