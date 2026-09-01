@@ -837,8 +837,10 @@ final class PlayerStore {
 
     private func startContext(for transitionReason: PlaybackTransitionReason) -> PlaybackStartContext {
         switch transitionReason {
-        case .initialPlayback, .manualTrackChange, .highlightUserInitiated:
+        case .initialPlayback, .highlightUserInitiated:
             PlaybackStartContext(kind: .manual, source: isShuffleEnabled ? .shuffle : .queue)
+        case .manualTrackChange:
+            PlaybackStartContext(kind: .userAdvanced, source: isShuffleEnabled ? .shuffle : .queue)
         case .automaticTrackChange, .highlightAutomatic:
             PlaybackStartContext(kind: .automatic, source: isShuffleEnabled ? .shuffle : currentPlaybackStartContext.source)
         }

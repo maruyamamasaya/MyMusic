@@ -19,7 +19,7 @@ struct LibraryCleanupCandidatesView: View {
                 ContentUnavailableView(
                     "整理候補はありません",
                     systemImage: "checkmark.circle",
-                    description: Text("手動で再生され、30秒以内のスキップが3回以上ある曲を表示します。")
+                    description: Text("曲を直接選んだことがあり、30秒以内のスキップが3回以上ある曲を表示します。")
                 )
             } else {
                 List(candidates) { candidate in

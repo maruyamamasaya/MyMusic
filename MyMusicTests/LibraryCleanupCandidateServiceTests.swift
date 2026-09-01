@@ -25,6 +25,50 @@ final class LibraryCleanupCandidateServiceTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
+    func testNextButtonStartDoesNotQualifyAsDirectSelection() {
+        let track = makeTrack("Advanced")
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let event = PlaybackEvent(
+            trackID: track.id,
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(20),
+            listenedSeconds: 20,
+            completionRatio: 0.1,
+            wasSkipped: true,
+            wasFullPlayback: false,
+            startKind: .userAdvanced,
+            startSource: .shuffle
+        )
+        var advancedHistory = history(track, earlySkips: 3, manualPlays: 3)
+        advancedHistory.playbackEvents = [event]
+
+        XCTAssertTrue(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: advancedHistory]
+        ).isEmpty)
+    }
+
+    func testDirectlySelectedStartStillQualifies() {
+        let track = makeTrack("Selected")
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let event = PlaybackEvent(
+            trackID: track.id,
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(20),
+            listenedSeconds: 20,
+            completionRatio: 0.1,
+            wasSkipped: true,
+            wasFullPlayback: false,
+            startKind: .manual,
+            startSource: .library
+        )
+        var selectedHistory = history(track, earlySkips: 3)
+        selectedHistory.playbackEvents = [event]
+
+        XCTAssertEqual(service.candidates(
+            tracks: [track], historyByTrackID: [track.id: selectedHistory]
+        ).map(\.id), [track.id])
+    }
+
     func testPreferenceDoesNotAffectEligibilityIncludingAlreadyBadTrack() {
         let tracks = [makeTrack("Neutral"), makeTrack("Bad"), makeTrack("Good")]
         let preferences = [0, -3, 2]

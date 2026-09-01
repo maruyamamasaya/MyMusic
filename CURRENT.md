@@ -43,7 +43,7 @@ updated: 2026-09-01
   - 通常運用の正本は `Application Support/MyMusic/playback-history.sqlite3`。旧JSONは変更せず永久migration backupへatomic copyし、transaction importと全項目read-back検証後だけ`verified`へ切り替える。通常更新は対象曲と正規化した子レコードだけをtransaction更新する。
   - 起動時に前回から24時間以上ならSQLite snapshotを`Backups/Daily`へatomic JSON出力し、直近7世代を保持する。`Backups/Migration`はrotation対象外。Restore UIは未実装。
   - CSVエクスポートの運用フォーマットは `種類,日時,曲名,アーティスト,再生回数,値,詳細` で固定し、`楽曲別再生行動`（manual/automatic、7日/30日、初回/最終再生）と`楽曲別再生入口`（入口別集計）を追加する。既存CSVインポートは未対応のため、この形式を基準（正）とする。
-- **ライブラリ整理候補 M2**: 設定から、手動再生がありPlayback Event Foundationの日別集計上のearly skipが3回以上ある曲を確認できる。評価値に関係なく候補を表示し、既存Good / Bad操作で手動調整できる。候補提示は評価、飽き度、恒久非表示、履歴を自動変更しない。
+- **ライブラリ整理候補 M2**: 設定から、ユーザーが曲を直接選んだ記録がありPlayback Event Foundationの日別集計上のearly skipが3回以上ある曲を確認できる。「次へ／前へ」で移動した先は`user_advanced`として直接選択と区別する。評価値に関係なく候補を表示し、既存Good / Bad操作で手動調整できる。候補提示は評価、飽き度、恒久非表示、履歴を自動変更しない。
 - **Behavior Scoring M3**: 保存済み日別集計から直近7日対過去56日のOverplayと、直近30日対それ以前の完走率によるPreference Driftを都度導出する。Good / Bad重みは専用Policyの-10〜+10テーブルへ分離し、設定の「再生傾向」で候補を確認できる。スコアは保存せず、評価・飽き度・恒久非表示を自動変更しない。選曲補正はM4対象。
 - **Selection Integration M4**: Overplayを保存済み日別集計から選曲処理ごとに導出し、通常の自動shuffle系は最大50%、Mood Stationは候補pool確定後のrankingだけを最大20%減衰する。手動選択、未再生Discovery、作業用再生には適用せず、Preference Drift、Good / Bad、Boredom、永続データを変更しない。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。

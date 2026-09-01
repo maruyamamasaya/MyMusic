@@ -175,6 +175,31 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(historyStore.entries[track.id]?.playbackEvents.count, 1)
     }
 
+    func testNextButtonMarksDestinationAsUserAdvancedRatherThanDirectSelection() async throws {
+        let first = makeTrack("First")
+        let second = makeTrack("Second")
+        let historyStore = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let store = PlayerStore(
+            audioPlayer: PlaybackHistoryAudioPlayerSpy(),
+            playbackHistoryStore: historyStore,
+            nowPlayingService: PlaybackHistoryNowPlayingSpy(),
+            remoteCommandService: PlaybackHistoryRemoteCommandSpy(),
+            trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore(
+                persistence: PlaybackHistoryAdjustmentPersistence()
+            )
+        )
+        await historyStore.loadIfNeeded()
+
+        store.playQueue([first, second], startingAt: 0)
+        try await waitUntil { historyStore.manualPlayCount(for: first.id) == 1 }
+        store.next()
+        try await waitUntil { historyStore.manualPlayCount(for: second.id) == 1 }
+        store.previous()
+        try await waitUntil { historyStore.entries[second.id]?.playbackEvents.count == 1 }
+
+        XCTAssertEqual(historyStore.entries[second.id]?.playbackEvents.first?.startKind, .userAdvanced)
+    }
+
     private func makeTrack(_ title: String) -> Track {
         Track(
             id: UUID(),

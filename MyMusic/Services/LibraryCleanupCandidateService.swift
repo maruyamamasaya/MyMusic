@@ -5,7 +5,7 @@ struct LibraryCleanupCandidate: Identifiable, Hashable, Sendable {
     let earlySkipCount: Int
     let skipCount: Int
     let playCount: Int
-    let manualPlayCount: Int
+    let directSelectionPlayCount: Int
     let lastPlayedAt: Date?
     let playbackPreference: Int
 
@@ -27,14 +27,21 @@ struct LibraryCleanupCandidateService: Sendable {
         let candidates = tracks.compactMap { track -> LibraryCleanupCandidate? in
             guard let history = historyByTrackID[track.id] else { return nil }
             let earlySkipCount = history.dailySummaries.values.reduce(0) { $0 + $1.earlySkipCount }
-            guard earlySkipCount >= Self.minimumEarlySkipCount, history.manualPlayCount > 0 else { return nil }
+            // `manualPlayCount` also includes transport actions such as next/previous.
+            // Events recorded after userAdvanced was introduced let cleanup require a
+            // direct selection instead. The aggregate is retained only for histories
+            // that predate event-level classification.
+            let directSelectionPlayCount = history.playbackEvents.isEmpty
+                ? history.manualPlayCount
+                : history.playbackEvents.count { $0.startKind == .manual }
+            guard earlySkipCount >= Self.minimumEarlySkipCount, directSelectionPlayCount > 0 else { return nil }
 
             return LibraryCleanupCandidate(
                 track: track,
                 earlySkipCount: earlySkipCount,
                 skipCount: history.skipCount,
                 playCount: history.playCount,
-                manualPlayCount: history.manualPlayCount,
+                directSelectionPlayCount: directSelectionPlayCount,
                 lastPlayedAt: history.lastPlayedAt,
                 playbackPreference: history.playbackPreference
             )

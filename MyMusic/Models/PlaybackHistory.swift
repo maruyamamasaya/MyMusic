@@ -2,6 +2,8 @@ import Foundation
 
 enum PlaybackStartKind: String, Codable, CaseIterable, Sendable {
     case manual
+    /// The user pressed next/previous, but did not directly choose the destination track.
+    case userAdvanced = "user_advanced"
     case automatic
 }
 

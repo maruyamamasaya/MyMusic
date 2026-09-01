@@ -71,7 +71,7 @@ final class PlaybackHistoryStore {
         if entry.firstPlayedAt == nil { entry.firstPlayedAt = now }
         entry.lastPlayedAt = now
         switch context.kind {
-        case .manual:
+        case .manual, .userAdvanced:
             entry.manualPlayCount += 1
         case .automatic:
             entry.automaticPlayCount += 1
@@ -82,7 +82,7 @@ final class PlaybackHistoryStore {
         var summary = entry.dailySummaries[dayKey] ?? PlaybackDailySummary()
         summary.playCount += 1
         switch context.kind {
-        case .manual:
+        case .manual, .userAdvanced:
             summary.manualPlayCount += 1
         case .automatic:
             summary.automaticPlayCount += 1
