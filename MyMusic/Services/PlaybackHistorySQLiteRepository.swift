@@ -159,6 +159,8 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
             CREATE TABLE IF NOT EXISTS playback_daily_summaries (
                 track_id TEXT NOT NULL, play_date TEXT NOT NULL, play_count INTEGER NOT NULL,
                 manual_play_count INTEGER NOT NULL, automatic_play_count INTEGER NOT NULL,
+                full_playback_count INTEGER NOT NULL DEFAULT 0, skip_count INTEGER NOT NULL DEFAULT 0,
+                early_skip_count INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(track_id, play_date),
                 FOREIGN KEY(track_id) REFERENCES playback_tracks(track_id) ON DELETE CASCADE
             );
@@ -176,11 +178,25 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 id INTEGER PRIMARY KEY AUTOINCREMENT, track_id TEXT NOT NULL, played_at REAL NOT NULL,
                 started_at REAL, ended_at REAL, listened_seconds REAL, completion_ratio REAL,
                 was_skipped INTEGER, start_kind TEXT, start_source TEXT,
+                event_id TEXT, was_full_playback INTEGER,
                 FOREIGN KEY(track_id) REFERENCES playback_tracks(track_id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS playback_events_track_date ON playback_events(track_id, played_at);
-            PRAGMA user_version = 1;
             """)
+        let version = try schemaVersion()
+        if version < 2 {
+            try transaction {
+                if version > 0 {
+                    try execute("ALTER TABLE playback_events ADD COLUMN event_id TEXT")
+                    try execute("ALTER TABLE playback_events ADD COLUMN was_full_playback INTEGER")
+                    try execute("ALTER TABLE playback_daily_summaries ADD COLUMN full_playback_count INTEGER NOT NULL DEFAULT 0")
+                    try execute("ALTER TABLE playback_daily_summaries ADD COLUMN skip_count INTEGER NOT NULL DEFAULT 0")
+                    try execute("ALTER TABLE playback_daily_summaries ADD COLUMN early_skip_count INTEGER NOT NULL DEFAULT 0")
+                }
+                try execute("PRAGMA user_version = 2")
+            }
+        }
+        try execute("CREATE UNIQUE INDEX IF NOT EXISTS playback_events_event_id ON playback_events(event_id) WHERE event_id IS NOT NULL")
     }
 
     private func write(_ entry: PlaybackHistory) throws {
@@ -210,39 +226,83 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         try step(statement)
 
         let id = entry.trackID.uuidString
-        try execute("DELETE FROM playback_events WHERE track_id = ?", values: [id])
-        try execute("DELETE FROM playback_daily_summaries WHERE track_id = ?", values: [id])
-        try execute("DELETE FROM playback_source_counts WHERE track_id = ?", values: [id])
+        if entry.playbackEvents.isEmpty {
+            // An empty event collection is the explicit per-track reset boundary.
+            try execute("DELETE FROM playback_events WHERE track_id = ?", values: [id])
+        }
+        if entry.dailySummaries.isEmpty {
+            try execute("DELETE FROM playback_daily_summaries WHERE track_id = ?", values: [id])
+        }
+        if entry.playbackSourceCounts.isEmpty {
+            try execute("DELETE FROM playback_source_counts WHERE track_id = ?", values: [id])
+        }
         for event in entry.playbackEvents {
-            try execute("INSERT INTO playback_events(track_id, played_at) VALUES(?, ?)", values: [id, event.timeIntervalSince1970])
+            try execute("""
+                INSERT OR IGNORE INTO playback_events(
+                    track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
+                    was_skipped, start_kind, start_source, event_id, was_full_playback
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, values: [
+                    id, event.endedAt.timeIntervalSince1970, event.startedAt.timeIntervalSince1970,
+                    event.endedAt.timeIntervalSince1970, event.listenedSeconds, event.completionRatio,
+                    event.wasSkipped ? 1 : 0, event.startKind.rawValue, event.startSource.rawValue,
+                    event.id, event.wasFullPlayback ? 1 : 0
+                ])
         }
         for (day, summary) in entry.dailySummaries {
-            try execute("INSERT INTO playback_daily_summaries VALUES(?, ?, ?, ?, ?)", values: [id, day, summary.playCount, summary.manualPlayCount, summary.automaticPlayCount])
+            try execute("""
+                INSERT INTO playback_daily_summaries VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(track_id, play_date) DO UPDATE SET
+                  play_count=excluded.play_count, manual_play_count=excluded.manual_play_count,
+                  automatic_play_count=excluded.automatic_play_count, full_playback_count=excluded.full_playback_count,
+                  skip_count=excluded.skip_count, early_skip_count=excluded.early_skip_count
+                """, values: [id, day, summary.playCount, summary.manualPlayCount, summary.automaticPlayCount,
+                                summary.fullPlaybackCount, summary.skipCount, summary.earlySkipCount])
+            try execute("DELETE FROM playback_daily_sources WHERE track_id = ? AND play_date = ?", values: [id, day])
             for (source, count) in summary.sourceCounts {
-                try execute("INSERT INTO playback_daily_sources VALUES(?, ?, ?, ?)", values: [id, day, source, count])
+                try execute("INSERT OR REPLACE INTO playback_daily_sources VALUES(?, ?, ?, ?)", values: [id, day, source, count])
             }
         }
         for (source, count) in entry.playbackSourceCounts {
-            try execute("INSERT INTO playback_source_counts VALUES(?, ?, ?)", values: [id, source, count])
+            try execute("INSERT OR REPLACE INTO playback_source_counts VALUES(?, ?, ?)", values: [id, source, count])
         }
     }
 
     private func loadEvents(into entries: inout [UUID: PlaybackHistory]) throws {
-        let statement = try prepare("SELECT track_id, played_at FROM playback_events ORDER BY id")
+        let statement = try prepare("""
+            SELECT id, track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
+                   was_skipped, start_kind, start_source, event_id, was_full_playback
+            FROM playback_events ORDER BY id
+            """)
         defer { sqlite3_finalize(statement) }
         while sqlite3_step(statement) == SQLITE_ROW {
-            guard let id = UUID(uuidString: text(statement, 0)), var entry = entries[id] else { continue }
-            entry.playbackEvents.append(Date(timeIntervalSince1970: sqlite3_column_double(statement, 1)))
+            guard let id = UUID(uuidString: text(statement, 1)), var entry = entries[id] else { continue }
+            let playedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 2))
+            entry.playbackEvents.append(PlaybackEvent(
+                id: nullableText(statement, 10) ?? "legacy-sqlite-\(int(statement, 0))",
+                trackID: id,
+                startedAt: date(statement, 3) ?? playedAt,
+                endedAt: date(statement, 4) ?? playedAt,
+                listenedSeconds: sqlite3_column_double(statement, 5),
+                completionRatio: sqlite3_column_double(statement, 6),
+                wasSkipped: int(statement, 7) != 0,
+                wasFullPlayback: int(statement, 11) != 0,
+                startKind: PlaybackStartKind(rawValue: nullableText(statement, 8) ?? "") ?? .manual,
+                startSource: PlaybackStartSource(rawValue: nullableText(statement, 9) ?? "") ?? .unknown
+            ))
             entries[id] = entry
         }
     }
 
     private func loadDailySummaries(into entries: inout [UUID: PlaybackHistory]) throws {
-        let statement = try prepare("SELECT track_id, play_date, play_count, manual_play_count, automatic_play_count FROM playback_daily_summaries")
+        let statement = try prepare("SELECT track_id, play_date, play_count, manual_play_count, automatic_play_count, full_playback_count, skip_count, early_skip_count FROM playback_daily_summaries")
         defer { sqlite3_finalize(statement) }
         while sqlite3_step(statement) == SQLITE_ROW {
             guard let id = UUID(uuidString: text(statement, 0)), var entry = entries[id] else { continue }
-            entry.dailySummaries[text(statement, 1)] = PlaybackDailySummary(playCount: int(statement, 2), manualPlayCount: int(statement, 3), automaticPlayCount: int(statement, 4))
+            entry.dailySummaries[text(statement, 1)] = PlaybackDailySummary(
+                playCount: int(statement, 2), manualPlayCount: int(statement, 3), automaticPlayCount: int(statement, 4),
+                fullPlaybackCount: int(statement, 5), skipCount: int(statement, 6), earlySkipCount: int(statement, 7)
+            )
             entries[id] = entry
         }
     }
@@ -301,6 +361,13 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         return statement
     }
 
+    private func schemaVersion() throws -> Int {
+        let statement = try prepare("PRAGMA user_version")
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return int(statement, 0)
+    }
+
     private func step(_ statement: OpaquePointer) throws {
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw PlaybackHistorySQLiteError.execute(database.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown")
@@ -328,6 +395,9 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         if let value { bind(value.timeIntervalSince1970, to: index, in: statement) } else { sqlite3_bind_null(statement, index) }
     }
     private func text(_ statement: OpaquePointer, _ index: Int32) -> String { String(cString: sqlite3_column_text(statement, index)) }
+    private func nullableText(_ statement: OpaquePointer, _ index: Int32) -> String? {
+        sqlite3_column_type(statement, index) == SQLITE_NULL ? nil : text(statement, index)
+    }
     private func int(_ statement: OpaquePointer, _ index: Int32) -> Int { Int(sqlite3_column_int64(statement, index)) }
     private func date(_ statement: OpaquePointer, _ index: Int32) -> Date? {
         sqlite3_column_type(statement, index) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, index))

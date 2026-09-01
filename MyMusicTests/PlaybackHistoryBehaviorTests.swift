@@ -112,6 +112,69 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(historyStore.repeatPlaybackCount(for: second.id), 1)
     }
 
+    func testPlaybackEventClassificationAndDailySummaryCounters() async throws {
+        let trackID = UUID()
+        let store = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        await store.loadIfNeeded()
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let context = PlaybackStartContext(kind: .automatic, source: .station)
+        store.recordPlaybackStarted(trackID: trackID, context: context, isRepeatModeActive: false,
+                                    isConsecutivePlay: false, now: startedAt)
+        store.recordPlaybackFinished(trackID: trackID, startedAt: startedAt,
+                                     endedAt: startedAt.addingTimeInterval(30), listenedSeconds: 30,
+                                     duration: 100, context: context, isFullPlayback: false, isSkipped: true)
+
+        let event = try XCTUnwrap(store.entries[trackID]?.playbackEvents.single)
+        XCTAssertEqual(event.listenedSeconds, 30)
+        XCTAssertEqual(event.completionRatio, 0.3, accuracy: 0.0001)
+        XCTAssertTrue(event.isEarlySkip)
+        XCTAssertEqual(event.startKind, .automatic)
+        XCTAssertEqual(event.startSource, .station)
+        let summary = try XCTUnwrap(store.dailySummaries(for: trackID).values.first)
+        XCTAssertEqual(summary.skipCount, 1)
+        XCTAssertEqual(summary.earlySkipCount, 1)
+        XCTAssertEqual(summary.fullPlaybackCount, 0)
+
+        let fullStartedAt = startedAt.addingTimeInterval(120)
+        store.recordPlaybackStarted(trackID: trackID, context: .manualUnknown,
+                                    isRepeatModeActive: false, isConsecutivePlay: false, now: fullStartedAt)
+        store.recordPlaybackFinished(trackID: trackID, startedAt: fullStartedAt,
+                                     endedAt: fullStartedAt.addingTimeInterval(100), listenedSeconds: 100,
+                                     duration: 100, context: .manualUnknown,
+                                     isFullPlayback: true, isSkipped: false)
+        XCTAssertEqual(store.dailySummaries(for: trackID).values.first?.fullPlaybackCount, 1)
+
+        let thirtyOneSecondSkip = PlaybackEvent(
+            trackID: trackID, startedAt: startedAt, endedAt: startedAt.addingTimeInterval(31),
+            listenedSeconds: 31, completionRatio: 0.31, wasSkipped: true, wasFullPlayback: false,
+            startKind: .manual, startSource: .search
+        )
+        XCTAssertFalse(thirtyOneSecondSkip.isEarlySkip)
+        let fullPlayback = PlaybackEvent(
+            trackID: trackID, startedAt: startedAt, endedAt: startedAt.addingTimeInterval(100),
+            listenedSeconds: 100, completionRatio: 1, wasSkipped: true, wasFullPlayback: true,
+            startKind: .manual, startSource: .library
+        )
+        XCTAssertFalse(fullPlayback.wasSkipped)
+    }
+
+    func testPlayerFinalizesOnlyOneEventForDuplicateEndedSignal() async throws {
+        let track = makeTrack("Only")
+        let historyStore = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let store = PlayerStore(audioPlayer: player, playbackHistoryStore: historyStore,
+                                nowPlayingService: PlaybackHistoryNowPlayingSpy(),
+                                remoteCommandService: PlaybackHistoryRemoteCommandSpy(),
+                                trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore(
+                                    persistence: PlaybackHistoryAdjustmentPersistence()))
+        await historyStore.loadIfNeeded()
+        store.playQueue([track], startingAt: 0)
+        try await waitUntil { historyStore.manualPlayCount(for: track.id) == 1 }
+        player.send(.ended)
+        player.send(.ended)
+        XCTAssertEqual(historyStore.entries[track.id]?.playbackEvents.count, 1)
+    }
+
     private func makeTrack(_ title: String) -> Track {
         Track(
             id: UUID(),
@@ -130,6 +193,10 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         }
         XCTFail("Timed out waiting for player state")
     }
+}
+
+private extension Array {
+    var single: Element? { count == 1 ? first : nil }
 }
 
 private actor PlaybackHistoryBehaviorPersistence: PlaybackHistoryPersistenceServicing {

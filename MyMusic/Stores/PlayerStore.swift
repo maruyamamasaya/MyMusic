@@ -65,6 +65,7 @@ final class PlayerStore {
     private var audioInformationTask: Task<Void, Never>?
     private var playbackRequestID = UUID()
     private var hasRecordedPlaybackStart = false
+    private var playbackSessionStartedAt: Date?
     private var hasCountedCurrentPlay = false
     private var listenedTime: TimeInterval = 0
     private var lastObservedPlaybackTime: TimeInterval?
@@ -670,6 +671,7 @@ final class PlayerStore {
 
     private func resetPlaybackSession() {
         hasRecordedPlaybackStart = false
+        playbackSessionStartedAt = nil
         hasCountedCurrentPlay = false
         listenedTime = 0
         unflushedPlaybackDuration = 0
@@ -755,12 +757,15 @@ final class PlayerStore {
     private func recordPlaybackStartIfNeeded() {
         guard let currentTrack, !hasRecordedPlaybackStart else { return }
         let isConsecutivePlay = currentTrack.id == consecutiveTrackAnchor
+        let startedAt = Date()
         playbackHistoryStore.recordPlaybackStarted(
             trackID: currentTrack.id,
             context: currentPlaybackStartContext,
             isRepeatModeActive: repeatMode != .off,
-            isConsecutivePlay: isConsecutivePlay
+            isConsecutivePlay: isConsecutivePlay,
+            now: startedAt
         )
+        playbackSessionStartedAt = startedAt
         consecutiveTrackAnchor = currentTrack.id
         hasRecordedPlaybackStart = true
     }
@@ -789,15 +794,20 @@ final class PlayerStore {
         flushPlaybackHistoryDuration(force: true)
         guard !flushOnly else { return }
         hasFinalizedCurrentPlaybackSession = true
-        guard hasRecordedPlaybackStart else { return }
+        guard hasRecordedPlaybackStart, let playbackSessionStartedAt else { return }
 
         let resolvedDuration = duration > 0 ? duration : currentTrack.duration
+        let isFullPlayback = PlaybackHistoryScoring.isFullPlayback(
+            duration: resolvedDuration,
+            listenedSeconds: listenedTime
+        )
         playbackHistoryStore.recordPlaybackFinished(
             trackID: currentTrack.id,
-            isFullPlayback: PlaybackHistoryScoring.isFullPlayback(
-                duration: resolvedDuration,
-                listenedSeconds: listenedTime
-            ),
+            startedAt: playbackSessionStartedAt,
+            listenedSeconds: listenedTime,
+            duration: resolvedDuration,
+            context: currentPlaybackStartContext,
+            isFullPlayback: isFullPlayback,
             isSkipped: PlaybackHistoryScoring.isSkip(
                 duration: resolvedDuration,
                 listenedSeconds: listenedTime,

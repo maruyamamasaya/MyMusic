@@ -97,13 +97,44 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         XCTAssertEqual(files.count, 1)
     }
 
+    func testPlaybackEventRoundTripsAndOrdinaryUpsertDoesNotDuplicateIt() async throws {
+        let root = try temporaryDirectory()
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+        _ = try await service.load()
+        let trackID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let event = PlaybackEvent(
+            trackID: trackID, startedAt: startedAt, endedAt: startedAt.addingTimeInterval(24),
+            listenedSeconds: 24, completionRatio: 0.2, wasSkipped: true, wasFullPlayback: false,
+            startKind: .manual, startSource: .search
+        )
+        var history = PlaybackHistory(trackID: trackID, isFavorite: true, playCount: 1,
+                                      lastPlayedAt: startedAt, playbackPreference: 5,
+                                      playbackEvents: [event], boredomCount: 2)
+        try await service.save(history)
+        history.playbackPreference = 6
+        try await service.save(history)
+
+        let reloaded = try XCTUnwrap(try await service.load().first)
+        XCTAssertEqual(reloaded.playbackEvents, [event])
+        XCTAssertEqual(reloaded.playbackPreference, 6)
+    }
+
     private func completeHistory() -> PlaybackHistory {
+        let trackID = UUID()
         let first = Date(timeIntervalSince1970: 1_700_000_000)
         let last = first.addingTimeInterval(300)
         return PlaybackHistory(
-            trackID: UUID(), isFavorite: true, playCount: 7,
+            trackID: trackID, isFavorite: true, playCount: 7,
             firstPlayedAt: first, lastPlayedAt: last, playbackPreference: -3,
-            playbackEvents: [first, last],
+            playbackEvents: [
+                PlaybackEvent(trackID: trackID, startedAt: first, endedAt: first, listenedSeconds: 0,
+                              completionRatio: 0, wasSkipped: false, wasFullPlayback: false,
+                              startKind: .manual, startSource: .unknown),
+                PlaybackEvent(trackID: trackID, startedAt: last, endedAt: last, listenedSeconds: 0,
+                              completionRatio: 0, wasSkipped: false, wasFullPlayback: false,
+                              startKind: .manual, startSource: .unknown)
+            ],
             dailySummaries: ["2023-11-14": PlaybackDailySummary(
                 playCount: 2, manualPlayCount: 1, automaticPlayCount: 1,
                 sourceCounts: [PlaybackStartSource.search.rawValue: 1, PlaybackStartSource.station.rawValue: 1]
