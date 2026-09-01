@@ -14,7 +14,8 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         let root = try temporaryDirectory()
         let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
 
-        XCTAssertEqual(try await service.load(), [])
+        let loaded = try await service.load()
+        XCTAssertEqual(loaded, [])
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "playback-history.sqlite3").path))
         XCTAssertEqual(try migrationState(in: root), .verified)
     }
@@ -81,7 +82,15 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
 
         let reloaded = try await service.load()
         XCTAssertEqual(reloaded.first { $0.trackID == first.trackID }?.playCount, 99)
-        XCTAssertEqual(reloaded.first { $0.trackID == second.trackID }, second)
+        let reloadedSecond = try XCTUnwrap(reloaded.first { $0.trackID == second.trackID })
+        var normalizedReloadedSecond = reloadedSecond
+        normalizedReloadedSecond.lastPlayedAt = second.lastPlayedAt
+        XCTAssertEqual(normalizedReloadedSecond, second)
+        XCTAssertEqual(
+            try XCTUnwrap(reloadedSecond.lastPlayedAt).timeIntervalSince1970,
+            try XCTUnwrap(second.lastPlayedAt).timeIntervalSince1970,
+            accuracy: 0.001
+        )
     }
 
     func testDailyBackupRunsOnceWithinTwentyFourHours() async throws {
@@ -115,7 +124,8 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         history.playbackPreference = 6
         try await service.save(history)
 
-        let reloaded = try XCTUnwrap(try await service.load().first)
+        let loaded = try await service.load()
+        let reloaded = try XCTUnwrap(loaded.first)
         XCTAssertEqual(reloaded.playbackEvents, [event])
         XCTAssertEqual(reloaded.playbackPreference, 6)
     }

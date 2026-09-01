@@ -116,7 +116,20 @@ nonisolated final class PlaybackHistoryMigrationService: @unchecked Sendable {
     private func preserveMigrationBackup(_ data: Data) throws {
         guard !fileManager.fileExists(atPath: migrationBackupURL.path) else { return }
         try fileManager.createDirectory(at: migrationBackupURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: migrationBackupURL, options: [.atomic, .withoutOverwriting])
+        try writeAtomicallyWithoutOverwriting(data, to: migrationBackupURL)
+    }
+
+    private func writeAtomicallyWithoutOverwriting(_ data: Data, to destination: URL) throws {
+        let temporaryURL = destination.deletingLastPathComponent().appending(
+            path: ".\(destination.lastPathComponent).\(UUID().uuidString).tmp"
+        )
+        do {
+            try data.write(to: temporaryURL, options: .atomic)
+            try fileManager.moveItem(at: temporaryURL, to: destination)
+        } catch {
+            try? fileManager.removeItem(at: temporaryURL)
+            throw error
+        }
     }
 
     private func readState() throws -> PlaybackHistoryMigrationState {

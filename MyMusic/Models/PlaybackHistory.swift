@@ -185,32 +185,36 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        trackID = try container.decode(Track.ID.self, forKey: .trackID)
+        let decodedTrackID = try container.decode(Track.ID.self, forKey: .trackID)
+        trackID = decodedTrackID
         isFavorite = try container.decode(Bool.self, forKey: .isFavorite)
         playCount = try container.decode(Int.self, forKey: .playCount)
         let decodedFirstPlayedAt = try container.decodeIfPresent(Date.self, forKey: .firstPlayedAt)
-        lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
+        let decodedLastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
+        lastPlayedAt = decodedLastPlayedAt
         playbackPreference = try container.decodeIfPresent(Int.self, forKey: .playbackPreference) ?? 0
+        let decodedPlaybackEvents: [PlaybackEvent]
         if let events = try? container.decode([PlaybackEvent].self, forKey: .playbackEvents) {
-            playbackEvents = events
+            decodedPlaybackEvents = events
         } else {
             let legacyDates = try container.decodeIfPresent([Date].self, forKey: .playbackEvents)
-                ?? lastPlayedAt.map { [$0] }
+                ?? decodedLastPlayedAt.map { [$0] }
                 ?? []
-            playbackEvents = legacyDates.enumerated().map { offset, date in
+            decodedPlaybackEvents = legacyDates.enumerated().map { offset, date in
                 PlaybackEvent(
-                    id: "legacy-json-\(trackID.uuidString)-\(offset)-\(date.timeIntervalSince1970)",
-                    trackID: trackID, startedAt: date, endedAt: date, listenedSeconds: 0,
+                    id: "legacy-json-\(decodedTrackID.uuidString)-\(offset)-\(date.timeIntervalSince1970)",
+                    trackID: decodedTrackID, startedAt: date, endedAt: date, listenedSeconds: 0,
                     completionRatio: 0, wasSkipped: false, wasFullPlayback: false,
                     startKind: .manual, startSource: .unknown
                 )
             }
         }
-        firstPlayedAt = decodedFirstPlayedAt ?? playbackEvents.map(\.startedAt).min() ?? lastPlayedAt
+        playbackEvents = decodedPlaybackEvents
+        firstPlayedAt = decodedFirstPlayedAt ?? decodedPlaybackEvents.map(\.startedAt).min() ?? decodedLastPlayedAt
         dailySummaries = try container.decodeIfPresent(
             [String: PlaybackDailySummary].self,
             forKey: .dailySummaries
-        ) ?? Self.dailySummaries(from: playbackEvents.map(\.startedAt))
+        ) ?? Self.dailySummaries(from: decodedPlaybackEvents.map(\.startedAt))
         manualPlayCount = try container.decodeIfPresent(Int.self, forKey: .manualPlayCount) ?? 0
         automaticPlayCount = try container.decodeIfPresent(Int.self, forKey: .automaticPlayCount) ?? 0
         playbackSourceCounts = try container.decodeIfPresent([String: Int].self, forKey: .playbackSourceCounts) ?? [:]

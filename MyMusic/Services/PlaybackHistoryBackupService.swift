@@ -34,10 +34,25 @@ nonisolated final class PlaybackHistoryBackupService: @unchecked Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(entries.sorted { $0.trackID.uuidString < $1.trackID.uuidString })
-            .write(to: destination, options: [.atomic, .withoutOverwriting])
+        try writeAtomicallyWithoutOverwriting(
+            encoder.encode(entries.sorted { $0.trackID.uuidString < $1.trackID.uuidString }),
+            to: destination
+        )
         try Data(String(currentDate.timeIntervalSince1970).utf8).write(to: metadataURL, options: .atomic)
         try rotateDailyBackups()
+    }
+
+    private func writeAtomicallyWithoutOverwriting(_ data: Data, to destination: URL) throws {
+        let temporaryURL = destination.deletingLastPathComponent().appending(
+            path: ".\(destination.lastPathComponent).\(UUID().uuidString).tmp"
+        )
+        do {
+            try data.write(to: temporaryURL, options: .atomic)
+            try fileManager.moveItem(at: temporaryURL, to: destination)
+        } catch {
+            try? fileManager.removeItem(at: temporaryURL)
+            throw error
+        }
     }
 
     private func rotateDailyBackups() throws {
