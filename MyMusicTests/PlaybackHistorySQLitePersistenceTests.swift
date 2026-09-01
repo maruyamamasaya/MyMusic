@@ -1,0 +1,142 @@
+import Foundation
+import XCTest
+@testable import MyMusic
+
+final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
+    private var temporaryDirectories: [URL] = []
+
+    override func tearDownWithError() throws {
+        for url in temporaryDirectories { try? FileManager.default.removeItem(at: url) }
+        temporaryDirectories.removeAll()
+    }
+
+    func testNewUserCreatesVerifiedSQLiteWithoutLegacyJSON() async throws {
+        let root = try temporaryDirectory()
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+
+        XCTAssertEqual(try await service.load(), [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appending(path: "playback-history.sqlite3").path))
+        XCTAssertEqual(try migrationState(in: root), .verified)
+    }
+
+    func testLegacyJSONMigratesEveryFieldAndPreservesOriginalAndPermanentCopy() async throws {
+        let root = try temporaryDirectory()
+        let originalURL = root.appending(path: "playback-history.json")
+        let source = [completeHistory()]
+        let originalData = try encoded(source)
+        try originalData.write(to: originalURL)
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+
+        let imported = try await service.load()
+
+        XCTAssertNoThrow(try PlaybackHistoryMigrationValidator.validate(source: source, imported: imported))
+        XCTAssertEqual(try Data(contentsOf: originalURL), originalData)
+        XCTAssertEqual(
+            try Data(contentsOf: root.appending(path: "Backups/Migration/playback-history-pre-sqlite.json")),
+            originalData
+        )
+        XCTAssertEqual(try migrationState(in: root), .verified)
+    }
+
+    func testCorruptJSONFailsClosedAndLeavesOriginalUntouched() async throws {
+        let root = try temporaryDirectory()
+        let originalURL = root.appending(path: "playback-history.json")
+        let corrupt = Data("not-json".utf8)
+        try corrupt.write(to: originalURL)
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+
+        do {
+            _ = try await service.load()
+            XCTFail("Corrupt legacy JSON must not activate SQLite")
+        } catch {}
+
+        XCTAssertEqual(try Data(contentsOf: originalURL), corrupt)
+        XCTAssertEqual(try Data(contentsOf: root.appending(path: "Backups/Migration/playback-history-pre-sqlite.json")), corrupt)
+        XCTAssertEqual(try migrationState(in: root), .failed)
+    }
+
+    func testUnverifiedLeftoverDatabaseIsRebuiltFromJSONOnNextLaunch() async throws {
+        let root = try temporaryDirectory()
+        let source = [completeHistory()]
+        try encoded(source).write(to: root.appending(path: "playback-history.json"))
+        try Data(#"{"state":"in_progress","updatedAt":"2026-09-01T00:00:00Z"}"#.utf8)
+            .write(to: root.appending(path: "playback-history-migration-state.json"))
+        try Data("incomplete database".utf8).write(to: root.appending(path: "playback-history.sqlite3"))
+
+        let imported = try await PlaybackHistoryPersistenceService(applicationDirectory: root).load()
+
+        XCTAssertNoThrow(try PlaybackHistoryMigrationValidator.validate(source: source, imported: imported))
+        XCTAssertEqual(try migrationState(in: root), .verified)
+    }
+
+    func testVerifiedStoreUsesDifferentialTrackUpsert() async throws {
+        let root = try temporaryDirectory()
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+        _ = try await service.load()
+        var first = completeHistory()
+        let second = PlaybackHistory(trackID: UUID(), isFavorite: true, playCount: 1, lastPlayedAt: .now)
+        try await service.save([first, second])
+        first.playCount = 99
+        try await service.save(first)
+
+        let reloaded = try await service.load()
+        XCTAssertEqual(reloaded.first { $0.trackID == first.trackID }?.playCount, 99)
+        XCTAssertEqual(reloaded.first { $0.trackID == second.trackID }, second)
+    }
+
+    func testDailyBackupRunsOnceWithinTwentyFourHours() async throws {
+        let root = try temporaryDirectory()
+        let instant = Date(timeIntervalSince1970: 1_788_220_800)
+        let service = PlaybackHistoryPersistenceService(applicationDirectory: root, now: { instant })
+        _ = try await service.load()
+        _ = try await service.load()
+
+        let daily = root.appending(path: "Backups/Daily")
+        let files = try FileManager.default.contentsOfDirectory(at: daily, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+        XCTAssertEqual(files.count, 1)
+    }
+
+    private func completeHistory() -> PlaybackHistory {
+        let first = Date(timeIntervalSince1970: 1_700_000_000)
+        let last = first.addingTimeInterval(300)
+        return PlaybackHistory(
+            trackID: UUID(), isFavorite: true, playCount: 7,
+            firstPlayedAt: first, lastPlayedAt: last, playbackPreference: -3,
+            playbackEvents: [first, last],
+            dailySummaries: ["2023-11-14": PlaybackDailySummary(
+                playCount: 2, manualPlayCount: 1, automaticPlayCount: 1,
+                sourceCounts: [PlaybackStartSource.search.rawValue: 1, PlaybackStartSource.station.rawValue: 1]
+            )],
+            manualPlayCount: 4, automaticPlayCount: 3,
+            playbackSourceCounts: [PlaybackStartSource.search.rawValue: 4, PlaybackStartSource.shuffle.rawValue: 3],
+            totalPlaybackDuration: 1234.5, skipCount: 2, fullPlaybackCount: 5,
+            consecutivePlayCount: 3, repeatPlaybackCount: 2, boredomCount: 2,
+            boredomHiddenUntil: last.addingTimeInterval(86_400), isPermanentlyHiddenFromShuffle: true
+        )
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        temporaryDirectories.append(url)
+        return url
+    }
+
+    private func encoded(_ entries: [PlaybackHistory]) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(entries)
+    }
+
+    private func migrationState(in root: URL) throws -> PlaybackHistoryMigrationState {
+        struct State: Decodable { let state: PlaybackHistoryMigrationState }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(
+            State.self,
+            from: Data(contentsOf: root.appending(path: "playback-history-migration-state.json"))
+        ).state
+    }
+}
