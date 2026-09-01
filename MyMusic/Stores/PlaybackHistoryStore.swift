@@ -98,7 +98,6 @@ final class PlaybackHistoryStore {
     func recordPlaybackCompleted(trackID: Track.ID) {
         var entry = entry(for: trackID)
         entry.playCount += 1
-        entry.playbackEvents.append(Date())
         entries[trackID] = entry
         persist(entry)
     }
@@ -113,12 +112,35 @@ final class PlaybackHistoryStore {
 
     func recordPlaybackFinished(
         trackID: Track.ID,
+        startedAt: Date,
+        endedAt: Date = Date(),
+        listenedSeconds: TimeInterval,
+        duration: TimeInterval,
+        context: PlaybackStartContext,
         isFullPlayback: Bool,
         isSkipped: Bool
     ) {
         var entry = entry(for: trackID)
-        if isFullPlayback { entry.fullPlaybackCount += 1 }
-        if isSkipped { entry.skipCount += 1 }
+        let event = PlaybackEvent(
+            trackID: trackID,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            listenedSeconds: listenedSeconds,
+            completionRatio: duration > 0 ? listenedSeconds / duration : 0,
+            wasSkipped: isSkipped,
+            wasFullPlayback: isFullPlayback,
+            startKind: context.kind,
+            startSource: context.source
+        )
+        entry.playbackEvents.append(event)
+        if event.wasFullPlayback { entry.fullPlaybackCount += 1 }
+        if event.wasSkipped { entry.skipCount += 1 }
+        let dayKey = Self.dayKey(for: startedAt)
+        var summary = entry.dailySummaries[dayKey] ?? PlaybackDailySummary()
+        if event.wasFullPlayback { summary.fullPlaybackCount += 1 }
+        if event.wasSkipped { summary.skipCount += 1 }
+        if event.isEarlySkip { summary.earlySkipCount += 1 }
+        entry.dailySummaries[dayKey] = summary
         entries[trackID] = entry
         persist(entry)
     }

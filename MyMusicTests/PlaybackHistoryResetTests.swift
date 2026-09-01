@@ -14,8 +14,8 @@ final class PlaybackHistoryResetTests: XCTestCase {
             lastPlayedAt: Date(timeIntervalSince1970: 300),
             playbackPreference: 4,
             playbackEvents: [
-                Date(timeIntervalSince1970: 100),
-                Date(timeIntervalSince1970: 200)
+                playbackEvent(trackID: targetID, at: 100),
+                playbackEvent(trackID: targetID, at: 200)
             ],
             boredomCount: 2,
             boredomHiddenUntil: Date(timeIntervalSince1970: 400),
@@ -26,7 +26,7 @@ final class PlaybackHistoryResetTests: XCTestCase {
             isFavorite: false,
             playCount: 3,
             lastPlayedAt: Date(timeIntervalSince1970: 250),
-            playbackEvents: [Date(timeIntervalSince1970: 250)]
+            playbackEvents: [playbackEvent(trackID: untouchedID, at: 250)]
         )
         let persistence = PlaybackHistoryResetPersistence(history: [target, untouched])
         let store = PlaybackHistoryStore(persistence: persistence)
@@ -49,6 +49,13 @@ final class PlaybackHistoryResetTests: XCTestCase {
         XCTAssertEqual(saved.first(where: { $0.trackID == targetID }), resetEntry)
         XCTAssertEqual(saved.first(where: { $0.trackID == untouchedID }), untouched)
     }
+}
+
+private func playbackEvent(trackID: UUID, at timestamp: TimeInterval) -> PlaybackEvent {
+    let date = Date(timeIntervalSince1970: timestamp)
+    return PlaybackEvent(trackID: trackID, startedAt: date, endedAt: date, listenedSeconds: 0,
+                         completionRatio: 0, wasSkipped: false, wasFullPlayback: false,
+                         startKind: .manual, startSource: .unknown)
 }
 
 private actor PlaybackHistoryResetPersistence: PlaybackHistoryPersistenceServicing {

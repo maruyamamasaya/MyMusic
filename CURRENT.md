@@ -39,6 +39,7 @@ updated: 2026-09-01
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **Playback History 拡張**: 再生履歴は初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保持する。再生中はPlayerStore内で軽量に集計し、曲変更・停止・一定間隔・background移行でまとめて保存する。日別集計は再生された日のみ保持し、直近7日／30日は保存値ではなく集計から算出する。
+  - Playback Event Foundationは開始／終了日時、実聴秒数、完走率、skip／完走、開始種別／入口をセッション終了時に1件へ確定する。early skipの基礎定義は`wasSkipped && listenedSeconds <= 30`。日別集計は完走、skip、early skip件数も保持するが、候補判定やUI、Overplay、Preference Drift、選曲補正は未実装。
   - 通常運用の正本は `Application Support/MyMusic/playback-history.sqlite3`。旧JSONは変更せず永久migration backupへatomic copyし、transaction importと全項目read-back検証後だけ`verified`へ切り替える。通常更新は対象曲と正規化した子レコードだけをtransaction更新する。
   - 起動時に前回から24時間以上ならSQLite snapshotを`Backups/Daily`へatomic JSON出力し、直近7世代を保持する。`Backups/Migration`はrotation対象外。Restore UIは未実装。
   - CSVエクスポートの運用フォーマットは `種類,日時,曲名,アーティスト,再生回数,値,詳細` で固定し、`楽曲別再生行動`（manual/automatic、7日/30日、初回/最終再生）と`楽曲別再生入口`（入口別集計）を追加する。既存CSVインポートは未対応のため、この形式を基準（正）とする。
@@ -72,6 +73,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-01 のPlayback History拡張後、履歴基盤のXCTestを追加し、Debug test buildが成功。Simulator runtime検出がCoreSimulatorの`simdiskimaged`不調で失敗したため、実行XCTestは未完了。
 - 2026-09-01 のPlayback History分析CSV運用定義を確定。旧インポートが未対応のため、新規ダウンロードCSVの現行ヘッダ定義を正式運用に採用。
 - 2026-09-01 にPlayback HistoryのSQLite正本化、旧JSONのfail-closed migration、永久migration backup、24時間単位の日次JSON snapshotを実装。ユーザー指定によりXcode build / Simulator / 実機検証は後日ローカルMacで実施する。
+- 2026-09-01 にPlayback Event Foundationを追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機、実データschema migrationはローカルMacで未検証。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証
@@ -84,7 +86,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 作業用の20分境界、暗転時間、完全一致 genre 名は固定。通常ライブラリから直接選曲した場合は通常 playerを使い、作業用専用一覧からの選曲時だけ専用 playerを使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
-- Playback History SQLite移行のXCTestは追加済みだが未実行。Xcode build、Simulator、実機でのmigration／長期運用／ディスク障害検証、Restore UI、月次集約、生event retentionは未検証または将来拡張である。
+- Playback History SQLite移行とPlayback Event FoundationのXCTestは追加済みだが未実行。Xcode build、Simulator、実機でのmigration／長期運用／ディスク障害検証、Restore UI、月次集約、生event retentionは未検証または将来拡張である。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
 - 気分ステーションの年代指定はTrackの年metadataを10年単位で扱う。年代指定時、年がない曲は候補外となり、年metadata自体の正確性は音源tagに依存する。

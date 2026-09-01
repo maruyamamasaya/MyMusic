@@ -31,22 +31,85 @@ struct PlaybackStartContext: Codable, Hashable, Sendable {
     nonisolated static let automaticUnknown = PlaybackStartContext(kind: .automatic, source: .unknown)
 }
 
+struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let trackID: Track.ID
+    let startedAt: Date
+    let endedAt: Date
+    let listenedSeconds: TimeInterval
+    let completionRatio: Double
+    let wasSkipped: Bool
+    let wasFullPlayback: Bool
+    let startKind: PlaybackStartKind
+    let startSource: PlaybackStartSource
+
+    var isEarlySkip: Bool { wasSkipped && listenedSeconds <= 30 }
+
+    init(
+        id: String = UUID().uuidString,
+        trackID: Track.ID,
+        startedAt: Date,
+        endedAt: Date,
+        listenedSeconds: TimeInterval,
+        completionRatio: Double,
+        wasSkipped: Bool,
+        wasFullPlayback: Bool,
+        startKind: PlaybackStartKind,
+        startSource: PlaybackStartSource
+    ) {
+        self.id = id
+        self.trackID = trackID
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.listenedSeconds = max(0, listenedSeconds)
+        self.completionRatio = min(max(completionRatio, 0), 1)
+        self.wasSkipped = wasFullPlayback ? false : wasSkipped
+        self.wasFullPlayback = wasFullPlayback
+        self.startKind = startKind
+        self.startSource = startSource
+    }
+}
+
 struct PlaybackDailySummary: Codable, Hashable, Sendable {
     var playCount: Int
     var manualPlayCount: Int
     var automaticPlayCount: Int
+    var fullPlaybackCount: Int
+    var skipCount: Int
+    var earlySkipCount: Int
     var sourceCounts: [String: Int]
 
     init(
         playCount: Int = 0,
         manualPlayCount: Int = 0,
         automaticPlayCount: Int = 0,
+        fullPlaybackCount: Int = 0,
+        skipCount: Int = 0,
+        earlySkipCount: Int = 0,
         sourceCounts: [String: Int] = [:]
     ) {
         self.playCount = playCount
         self.manualPlayCount = manualPlayCount
         self.automaticPlayCount = automaticPlayCount
+        self.fullPlaybackCount = fullPlaybackCount
+        self.skipCount = skipCount
+        self.earlySkipCount = earlySkipCount
         self.sourceCounts = sourceCounts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case playCount, manualPlayCount, automaticPlayCount, fullPlaybackCount, skipCount, earlySkipCount, sourceCounts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        playCount = try container.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
+        manualPlayCount = try container.decodeIfPresent(Int.self, forKey: .manualPlayCount) ?? 0
+        automaticPlayCount = try container.decodeIfPresent(Int.self, forKey: .automaticPlayCount) ?? 0
+        fullPlaybackCount = try container.decodeIfPresent(Int.self, forKey: .fullPlaybackCount) ?? 0
+        skipCount = try container.decodeIfPresent(Int.self, forKey: .skipCount) ?? 0
+        earlySkipCount = try container.decodeIfPresent(Int.self, forKey: .earlySkipCount) ?? 0
+        sourceCounts = try container.decodeIfPresent([String: Int].self, forKey: .sourceCounts) ?? [:]
     }
 }
 
@@ -57,7 +120,7 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
     var firstPlayedAt: Date?
     var lastPlayedAt: Date?
     var playbackPreference: Int
-    var playbackEvents: [Date]
+    var playbackEvents: [PlaybackEvent]
     var dailySummaries: [String: PlaybackDailySummary]
     var manualPlayCount: Int
     var automaticPlayCount: Int
@@ -78,7 +141,7 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
         firstPlayedAt: Date? = nil,
         lastPlayedAt: Date?,
         playbackPreference: Int = 0,
-        playbackEvents: [Date] = [],
+        playbackEvents: [PlaybackEvent] = [],
         dailySummaries: [String: PlaybackDailySummary] = [:],
         manualPlayCount: Int = 0,
         automaticPlayCount: Int = 0,
@@ -128,14 +191,26 @@ struct PlaybackHistory: Codable, Hashable, Sendable {
         let decodedFirstPlayedAt = try container.decodeIfPresent(Date.self, forKey: .firstPlayedAt)
         lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
         playbackPreference = try container.decodeIfPresent(Int.self, forKey: .playbackPreference) ?? 0
-        playbackEvents = try container.decodeIfPresent([Date].self, forKey: .playbackEvents)
-            ?? lastPlayedAt.map { [$0] }
-            ?? []
-        firstPlayedAt = decodedFirstPlayedAt ?? playbackEvents.min() ?? lastPlayedAt
+        if let events = try? container.decode([PlaybackEvent].self, forKey: .playbackEvents) {
+            playbackEvents = events
+        } else {
+            let legacyDates = try container.decodeIfPresent([Date].self, forKey: .playbackEvents)
+                ?? lastPlayedAt.map { [$0] }
+                ?? []
+            playbackEvents = legacyDates.enumerated().map { offset, date in
+                PlaybackEvent(
+                    id: "legacy-json-\(trackID.uuidString)-\(offset)-\(date.timeIntervalSince1970)",
+                    trackID: trackID, startedAt: date, endedAt: date, listenedSeconds: 0,
+                    completionRatio: 0, wasSkipped: false, wasFullPlayback: false,
+                    startKind: .manual, startSource: .unknown
+                )
+            }
+        }
+        firstPlayedAt = decodedFirstPlayedAt ?? playbackEvents.map(\.startedAt).min() ?? lastPlayedAt
         dailySummaries = try container.decodeIfPresent(
             [String: PlaybackDailySummary].self,
             forKey: .dailySummaries
-        ) ?? Self.dailySummaries(from: playbackEvents)
+        ) ?? Self.dailySummaries(from: playbackEvents.map(\.startedAt))
         manualPlayCount = try container.decodeIfPresent(Int.self, forKey: .manualPlayCount) ?? 0
         automaticPlayCount = try container.decodeIfPresent(Int.self, forKey: .automaticPlayCount) ?? 0
         playbackSourceCounts = try container.decodeIfPresent([String: Int].self, forKey: .playbackSourceCounts) ?? [:]

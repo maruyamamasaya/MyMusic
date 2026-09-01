@@ -82,7 +82,7 @@ final class AnalyticsService {
         let events = historyEntries.values.flatMap { history in
             guard let track = tracksByID[history.trackID] else { return [AnalyticsSnapshot.PlaybackEvent]() }
             return history.playbackEvents.map {
-                AnalyticsSnapshot.PlaybackEvent(track: track, playedAt: $0)
+                AnalyticsSnapshot.PlaybackEvent(track: track, playedAt: $0.endedAt)
             }
         }
         .sorted { $0.playedAt > $1.playedAt }
