@@ -248,6 +248,30 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(len(tracks), 1)
         self.assertEqual(tracks[0]["playCount"], 2)
 
+    def test_dashboard_custom_period_and_legacy_detail_metrics(self):
+        self.upload(document([
+            event("legacy", playedAt="2026-08-31T10:00:00+09:00", playDuration=0,
+                  completed=False, skipped=False),
+            event("current", playedAt="2026-09-01T10:00:00+09:00", playDuration=90,
+                  completed=True, skipped=False),
+        ]))
+        crossing = self.client.get(
+            "/api/dashboard?period=custom&startDate=2026-08-31&endDate=2026-09-01"
+        ).json()
+        self.assertEqual(crossing["metrics"]["play_count"], 2)
+        self.assertEqual(crossing["metrics"]["detail_event_count"], 1)
+        self.assertEqual(crossing["metrics"]["total_play_time"], 90)
+        self.assertEqual(crossing["metrics"]["completion_rate"], 100)
+        legacy = self.client.get(
+            "/api/dashboard?period=custom&startDate=2026-08-31&endDate=2026-08-31"
+        ).json()["metrics"]
+        self.assertEqual(legacy["play_count"], 1)
+        self.assertIsNone(legacy["total_play_time"])
+        self.assertIsNone(legacy["completion_rate"])
+        self.assertEqual(self.client.get(
+            "/api/dashboard?period=custom&startDate=2026-09-02&endDate=2026-09-01"
+        ).status_code, 422)
+
     def test_tracks_periods_custom_dates_and_unplayed_library_tracks(self):
         now = datetime.now().astimezone()
         dates = [now, now - timedelta(days=10), now - timedelta(days=40)]
@@ -457,6 +481,13 @@ class AnalyticsAPITests(unittest.TestCase):
         second = self.client.get("/api/sources/volume_normalization?page=2").json()
         self.assertEqual((first["count"], first["pageSize"], len(first["items"])), (201, 200, 200))
         self.assertEqual((second["page"], len(second["items"])), (2, 1))
+        descending = self.client.get(
+            "/api/sources/volume_normalization?sort=title&order=desc"
+        ).json()["items"]
+        self.assertEqual(descending[0]["title"], "Track 200")
+        self.assertEqual(self.client.get(
+            "/api/sources/volume_normalization?sort=unknown"
+        ).status_code, 404)
 
     def test_api_rejects_bad_period_and_non_json_file(self):
         self.assertEqual(self.client.get("/api/dashboard?period=year").status_code, 422)

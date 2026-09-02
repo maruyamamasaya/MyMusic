@@ -107,16 +107,16 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 
 ## Dashboard / API
 
-- Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間の再生回数、時間、Skip率、完走率、日別・時間帯別・曲別・Artist別集計
+- Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間／任意期間の再生回数、時間、Skip率、完走率、日付・件数付き日別グラフ、時間帯別・曲別・Artist別集計。ランキングは初期10件から10件ずつ最大50件まで展開
 - Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・最終再生日時、項目別AND検索、列ソート、Import済みPreferenceの編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットをタブ別に表示。曲単位データはLibraryとのTrack ID照合状況も表示
 - Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
 
 主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks`、`POST /api/import`、`GET /api/imports`、`PUT /api/preferences/{track_id}`、`GET /api/preferences/export`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
 
-Tracks APIは従来の`period=7d|30d|all`と`search=`を維持し、`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`、`page`を追加で受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。TracksとData Sourcesは1ページ200件で、APIも`LIMIT`／`OFFSET`によるサーバー側ページングを行います。
+Dashboard APIとTracks APIは`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`に対応します。Tracks APIは従来の`period=7d|30d|all`と`search=`を維持し、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`、`page`も受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。TracksとData Sourcesは1ページ200件で、APIも`LIMIT`／`OFFSET`によるサーバー側ページングを行います。Data Sourcesは許可リスト方式で名称、補足情報、Library紐付け、取込日時を昇順／降順に並べ替えられます。
 
-Playback詳細指標の信頼開始日は`2026-09-01`です。選択期間のPlay Countはそれ以前のイベントも含めますが、総再生時間、完走率、Skip率、最終再生日時は開始日以降のイベントだけで集計します。旧イベントしかない曲では詳細指標を`null`で返し、画面では`0`や`0%`ではなく「データなし」または`—`と表示します。Rawイベントは変更・削除しません。
+Playback詳細指標の信頼開始日は`2026-09-01`です。DashboardとTracksのPlay Countはそれ以前のイベントも含めますが、総再生時間、完走率、Skip率、最終再生日時は開始日以降のイベントだけで集計します。旧イベントしかない場合は詳細指標を`null`で返し、画面では`0`や`0%`ではなく「データなし」または`—`と表示します。説明はOverviewに表示し、Tracksの一覧には重ねて表示しません。Rawイベントは変更・削除しません。
 
 ## テスト
 

@@ -39,9 +39,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/api/dashboard")
-    def dashboard(period: str = Query("7d")):
+    def dashboard(
+        period: str = Query("7d"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None),
+    ):
         try:
-            return queries.dashboard(period)
+            return queries.dashboard(period, startDate, endDate) | {
+                "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF
+            }
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -84,9 +89,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.get("/api/sources/{data_kind}")
-    def sources(data_kind: str, page: int = Query(1, ge=1)):
+    def sources(
+        data_kind: str, page: int = Query(1, ge=1), sort: str = Query("title"),
+        order: str = Query("asc"),
+    ):
         try:
-            result = queries.sources(data_kind, page)
+            result = queries.sources(data_kind, page, sort=sort, order=order)
             return result | {"page": page, "pageSize": 200}
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

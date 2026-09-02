@@ -17,6 +17,27 @@ TRACK_SORT_COLUMNS = {
     "completionRate": "completionRate", "skipRate": "skipRate",
     "lastPlayedAt": "lastPlayedAt",
 }
+SOURCE_SORT_COLUMNS = {
+    "title": "sr.title COLLATE NOCASE", "subtitle": "sr.subtitle COLLATE NOCASE",
+    "linked": "linked", "importedAt": "sr.imported_at",
+}
+
+
+def _period_where(
+    period: str, start_date: str | None = None, end_date: str | None = None,
+) -> tuple[str, list[Any]]:
+    if period == "custom":
+        try:
+            start = date.fromisoformat(start_date or "")
+            end = date.fromisoformat(end_date or "")
+        except ValueError as exc:
+            raise ValueError("期間指定には開始日と終了日をYYYY-MM-DD形式で指定してください") from exc
+        if start > end:
+            raise ValueError("開始日は終了日以前にしてください")
+        return ("WHERE date(played_at, 'localtime') >= ? "
+                "AND date(played_at, 'localtime') <= ?", [start.isoformat(), end.isoformat()])
+    since = _since(period)
+    return ("WHERE played_at >= ?", [since]) if since else ("", [])
 
 
 def _since(period: str) -> str | None:
@@ -40,14 +61,21 @@ class AnalyticsQueries:
     def __init__(self, database: Database):
         self.database = database
 
-    def dashboard(self, period: str) -> dict[str, Any]:
-        since = _since(period)
-        where, params = _where(since)
+    def dashboard(
+        self, period: str, start_date: str | None = None, end_date: str | None = None,
+    ) -> dict[str, Any]:
+        where, params = _period_where(period, start_date, end_date)
         with self.database.connect() as connection:
             metrics = dict(connection.execute(
-                f"""SELECT COUNT(*) play_count, COALESCE(SUM(play_duration), 0) total_play_time,
-                    COALESCE(AVG(skipped) * 100, 0) skip_rate,
-                    COALESCE(AVG(completed) * 100, 0) completion_rate
+                f"""SELECT COUNT(*) play_count,
+                    COUNT(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN 1 END) detail_event_count,
+                    SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN play_duration END) total_play_time,
+                    AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN skipped END) * 100 skip_rate,
+                    AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN completed END) * 100 completion_rate
                     FROM playback_events {where}""", params).fetchone())
             library_metrics = dict(connection.execute(
                 """SELECT COUNT(*) library_count,
@@ -75,10 +103,14 @@ class AnalyticsQueries:
                 f"""SELECT CAST(strftime('%H', played_at, 'localtime') AS INTEGER) label, COUNT(*) value
                     FROM playback_events {where} GROUP BY label ORDER BY label""", params)]
             top_tracks = self._top(connection, where, params, "COUNT(*)", "plays")
-            skipped_tracks = self._top(connection, where, params, "SUM(skipped)", "skips", "HAVING SUM(skipped) > 0")
+            skipped_tracks = self._top(
+                connection, where, params,
+                f"SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}' THEN skipped END)",
+                "skips", "HAVING value > 0",
+            )
             artists = [dict(row) for row in connection.execute(
                 f"""SELECT artist label, COUNT(*) value FROM playback_events {where}
-                    GROUP BY artist ORDER BY value DESC, artist COLLATE NOCASE LIMIT 10""", params)]
+                    GROUP BY artist ORDER BY value DESC, artist COLLATE NOCASE LIMIT 50""", params)]
             preference_distribution = [dict(row) for row in connection.execute(
                 """SELECT bucket label, COUNT(*) value FROM (
                     SELECT CASE
@@ -103,7 +135,7 @@ class AnalyticsQueries:
         rows = connection.execute(
             f"""SELECT track_id trackId, MAX(track_title) title, MAX(artist) artist,
                 {expression} value FROM playback_events {where} GROUP BY track_id {having}
-                ORDER BY value DESC, title COLLATE NOCASE LIMIT 10""", params)
+                ORDER BY value DESC, title COLLATE NOCASE LIMIT 50""", params)
         return [dict(row) | {"metric": alias} for row in rows]
 
     def tracks(
@@ -112,28 +144,11 @@ class AnalyticsQueries:
         album: str = "", genre: str = "", sort: str = "playCount",
         order: str = "desc", page: int = 1, page_size: int = 200,
     ) -> dict[str, Any]:
-        if period == "custom":
-            try:
-                start = date.fromisoformat(start_date or "")
-                end = date.fromisoformat(end_date or "")
-            except ValueError as exc:
-                raise ValueError("期間指定には開始日と終了日をYYYY-MM-DD形式で指定してください") from exc
-            if start > end:
-                raise ValueError("開始日は終了日以前にしてください")
-            since = None
-        else:
-            since = _since(period)
+        event_where, params = _period_where(period, start_date, end_date)
         if sort not in TRACK_SORT_COLUMNS:
             raise ValueError("unsupported track sort")
         if order not in {"asc", "desc"}:
             raise ValueError("order must be asc or desc")
-        event_conditions, params = [], []
-        if period == "custom":
-            event_conditions.extend(["date(played_at, 'localtime') >= ?", "date(played_at, 'localtime') <= ?"])
-            params.extend([start.isoformat(), end.isoformat()])
-        elif since:
-            event_conditions.append("played_at >= ?")
-            params.append(since)
         search_conditions = []
         if search:
             search_conditions.append(
@@ -147,7 +162,6 @@ class AnalyticsQueries:
                 search_conditions.append(f"c.{column} LIKE ? ESCAPE '\\'")
                 escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 params.append(f"%{escaped}%")
-        event_where = "WHERE " + " AND ".join(event_conditions) if event_conditions else ""
         search_where = "WHERE " + " AND ".join(search_conditions) if search_conditions else ""
         sort_column, sort_order = TRACK_SORT_COLUMNS[sort], order.upper()
         with self.database.connect() as connection:
@@ -263,17 +277,25 @@ class AnalyticsQueries:
                 "exportedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "tracks": tracks}
 
-    def sources(self, data_kind: str, page: int = 1, page_size: int = 200) -> dict[str, Any]:
+    def sources(
+        self, data_kind: str, page: int = 1, page_size: int = 200,
+        sort: str = "title", order: str = "asc",
+    ) -> dict[str, Any]:
         allowed = {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
         if data_kind not in allowed:
             raise ValueError("unsupported source kind")
+        if sort not in SOURCE_SORT_COLUMNS:
+            raise ValueError("unsupported source sort")
+        if order not in {"asc", "desc"}:
+            raise ValueError("order must be asc or desc")
+        sort_column = SOURCE_SORT_COLUMNS[sort]
         with self.database.connect() as connection:
             rows = connection.execute(
-                """SELECT sr.item_key, sr.track_id, sr.title, sr.subtitle, sr.imported_at,
+                f"""SELECT sr.item_key, sr.track_id, sr.title, sr.subtitle, sr.imported_at,
                     sr.raw_json, CASE WHEN lt.track_id IS NULL THEN 0 ELSE 1 END linked
                     FROM source_records sr
                     LEFT JOIN library_tracks lt ON lt.track_id=sr.track_id AND lt.is_present=1
-                    WHERE sr.data_kind=? ORDER BY sr.title COLLATE NOCASE
+                    WHERE sr.data_kind=? ORDER BY {sort_column} {order.upper()}, sr.item_key
                     LIMIT ? OFFSET ?""", (data_kind, page_size, (page - 1) * page_size)
             ).fetchall()
             total = connection.execute(
