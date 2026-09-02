@@ -4,13 +4,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import ROOT_DIR, Settings
 from app.database import Database
 from app.queries import AnalyticsQueries
 from importer.service import ImportService
+from importer.schema import PlaybackPreferenceUpdate
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,6 +55,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/imports")
     def imports():
         return {"imports": queries.imports()}
+
+    @app.get("/api/preferences/export")
+    def export_preferences() -> JSONResponse:
+        return JSONResponse(
+            queries.export_preferences(),
+            headers={"Content-Disposition":
+                     'attachment; filename="MyMusic-Playback-Preferences.json"'},
+        )
+
+    @app.put("/api/preferences/{track_id}")
+    def update_preference(track_id: str, update: PlaybackPreferenceUpdate):
+        try:
+            return queries.update_preference(track_id, update.playbackPreference, update.favorite)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.get("/api/sources/{data_kind}")
     def sources(data_kind: str):

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyMusic Analytics</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/preferences.css">
   <style>.source-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.source-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer}.source-tabs button.active{background:#2a3140;color:#fff;border-color:#4a5568}</style>
 </head>
 <body>
@@ -27,7 +28,7 @@
     </section>
     <section id="tracks" class="page">
       <header><div><p class="eyebrow">TRACK LIBRARY</p><h1>曲ごとの傾向</h1></div><div class="periods" data-target="tracks"><button data-period="7d">7日</button><button data-period="30d">30日</button><button class="active" data-period="all">全期間</button></div></header>
-      <div class="toolbar"><input id="track-search" type="search" placeholder="曲名・アーティスト・アルバムを検索"></div>
+      <div class="toolbar"><input id="track-search" type="search" placeholder="曲名・アーティスト・アルバムを検索"><a class="export-button" href="/api/preferences/export" download="MyMusic-Playback-Preferences.json">再生傾向を書き出す</a></div>
       <article class="panel table-wrap"><table><thead><tr><th>曲</th><th>Good / Bad</th><th>お気に入り</th><th>Fingerprint</th><th>再生</th><th>再生時間</th><th>完走率</th><th>Skip率</th><th>最終再生</th></tr></thead><tbody id="tracks-body"></tbody></table></article>
     </section>
     <section id="sources" class="page">

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct DataManagementView: View {
     private enum ImportTarget {
         case playlist
+        case playbackPreferences
         case equalizer
         case genreDisplayPresets
 
@@ -11,7 +12,7 @@ struct DataManagementView: View {
             switch self {
             case .playlist:
                 [.json, .plainText]
-            case .equalizer, .genreDisplayPresets:
+            case .playbackPreferences, .equalizer, .genreDisplayPresets:
                 [.json]
             }
         }
@@ -79,6 +80,9 @@ struct DataManagementView: View {
                 throwingExportLink("再生傾向を書き出す", systemImage: "hand.thumbsup") {
                     try exporter.playbackPreferencesJSON(preferenceStore.entries)
                 }
+                Button("再生傾向を読み込む", systemImage: "square.and.arrow.down") {
+                    presentImporter(for: .playbackPreferences)
+                }
             }
             Section {
                 throwingExportLink("音量ノーマライズを書き出す", systemImage: "waveform.badge.magnifyingglass") {
@@ -130,6 +134,8 @@ struct DataManagementView: View {
             switch importTarget {
             case .playlist:
                 importPlaylistFile(result)
+            case .playbackPreferences:
+                importPreferenceFile(result)
             case .equalizer:
                 importSettingsFile(result, expectedKind: .equalizer)
             case .genreDisplayPresets:
@@ -208,5 +214,22 @@ struct DataManagementView: View {
             }
         } catch let error as CocoaError where error.code == .userCancelled { }
         catch { errorMessage = error.localizedDescription }
+    }
+
+    private func importPreferenceFile(_ result: Result<URL, Error>) {
+        Task { @MainActor in
+            do {
+                let url = try result.get()
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let imported = try TrackPreferenceImportService().parse(data: Data(contentsOf: url))
+                let report = try await preferenceStore.importPreferences(
+                    imported,
+                    libraryTrackIDs: Set(libraryStore.unfilteredTracks.map(\.id))
+                )
+                resultMessage = "合計: \(report.total)件\n更新: \(report.updated)件\n変更なし: \(report.unchanged)件\nLibraryに存在しないTrack: \(report.missingTrack)件\n不正: \(report.invalid)件"
+            } catch let error as CocoaError where error.code == .userCancelled { }
+            catch { errorMessage = error.localizedDescription }
+        }
     }
 }

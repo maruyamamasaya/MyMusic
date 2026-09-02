@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -311,6 +312,65 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/dashboard?period=year").status_code, 422)
         response = self.client.post("/api/import", files={"file": ("history.txt", b"{}", "text/plain")})
         self.assertEqual(response.status_code, 415)
+
+    def test_preference_edit_persists_and_export_round_trips_without_mutating_sources(self):
+        track_id = str(uuid4())
+        missing_id = str(uuid4())
+        self.upload(library_document([library_track(track_id)]), "MyMusic-Library.json")
+        self.upload(preferences_document([
+            {"trackId": track_id, "playbackPreference": 1, "favorite": False},
+            {"trackId": missing_id, "playbackPreference": -2, "favorite": True},
+        ]), "MyMusic-Playback-Preferences.json")
+        before_library = self._table_rows("library_tracks")
+        before_events = self._table_rows("playback_events")
+
+        response = self.client.put(
+            f"/api/preferences/{track_id}",
+            json={"playbackPreference": 6, "favorite": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        exported = self.client.get("/api/preferences/export")
+        self.assertEqual(exported.status_code, 200)
+        self.assertIn(
+            'filename="MyMusic-Playback-Preferences.json"',
+            exported.headers["content-disposition"],
+        )
+        payload = exported.json()
+        self.assertEqual(payload["schemaVersion"], 2)
+        self.assertEqual(payload["tracks"], [{
+            "trackId": track_id, "playbackPreference": 6, "favorite": True,
+        }])
+        round_trip = self.upload(payload, "MyMusic-Playback-Preferences.json").json()
+        self.assertEqual(round_trip["errorCount"], 0)
+        self.assertEqual(self._table_rows("library_tracks"), before_library)
+        self.assertEqual(self._table_rows("playback_events"), before_events)
+
+        connection = sqlite3.connect(self.settings.database_path)
+        try:
+            saved = connection.execute(
+                "SELECT playback_preference, favorite FROM playback_preferences WHERE track_id=?",
+                (track_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        self.assertEqual(saved, (6, 1))
+
+    def test_preference_edit_rejects_missing_row_and_invalid_values(self):
+        self.assertEqual(self.client.put(
+            "/api/preferences/missing",
+            json={"playbackPreference": 0, "favorite": False},
+        ).status_code, 404)
+        self.assertEqual(self.client.put(
+            "/api/preferences/missing",
+            json={"playbackPreference": 11, "favorite": False},
+        ).status_code, 422)
+
+    def _table_rows(self, table):
+        connection = sqlite3.connect(self.settings.database_path)
+        try:
+            return connection.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
+        finally:
+            connection.close()
 
 
 class DatabaseMigrationTests(unittest.TestCase):

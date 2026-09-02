@@ -1,0 +1,36 @@
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.export-button,
+.favorite-editor,
+.preference-editor {
+  border: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--text);
+  border-radius: 9px;
+  font: inherit;
+}
+
+.export-button {
+  padding: 11px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.favorite-editor {
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.favorite-editor.active { color: var(--accent); }
+.preference-editor { padding: 7px 9px; }
+
+@media (max-width: 600px) {
+  .toolbar { align-items: stretch; flex-direction: column; }
+}

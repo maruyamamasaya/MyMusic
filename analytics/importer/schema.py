@@ -121,6 +121,12 @@ class PlaybackPreferencesExportV1(BaseModel):
         return self
 
 
+class PlaybackPreferenceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    playbackPreference: int = Field(ge=-10, le=10)
+    favorite: bool
+
+
 class SourceIdentityV1(BaseModel):
     model_config = ConfigDict(extra="forbid")
     relativePath: str = Field(min_length=1, max_length=4000)

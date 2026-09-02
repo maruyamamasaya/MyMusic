@@ -21,14 +21,21 @@ function renderBars(sel,rows){if(!rows.length){$(sel).innerHTML=empty();return}c
 function renderHours(rows){const map=Object.fromEntries(rows.map(x=>[x.label,x.value])),max=Math.max(...Object.values(map),1);$('#hourly').innerHTML=Array.from({length:24},(_,h)=>`<div class="hour" style="--level:${(map[h]||0)/max}" title="${h}時: ${map[h]||0}回">${h}</div>`).join('')}
 function renderRanks(sel,rows,labelOnly=false){$(sel).innerHTML=rows.length?rows.map((x,i)=>`<div class="rank-row"><span class="rank">${i+1}</span><div><strong>${esc(labelOnly?x.label:x.title)}</strong>${labelOnly?'':`<small>${esc(x.artist)}</small>`}</div><span>${x.value}${labelOnly?'曲':'回'}</span></div>`).join(''):empty()}
 function preference(value){if(value==null)return '<span class="preference">未取込</span>';const cls=value>0?'good':value<0?'bad':'';return `<span class="preference ${cls}">${value>0?'+':''}${value}</span>`}
+function preferenceEditor(x){if(x.playbackPreference==null)return preference(null);return `<select class="preference-editor" data-track-id="${esc(x.trackId)}" aria-label="${esc(x.title)}のGood / Bad">${Array.from({length:21},(_,i)=>i-10).map(v=>`<option value="${v}" ${v===x.playbackPreference?'selected':''}>${v>0?'+':''}${v}</option>`).join('')}</select>`}
+function favoriteEditor(x){if(x.playbackPreference==null)return `<span class="favorite">${x.favorite===1?'♥':'—'}</span>`;return `<button class="favorite-editor ${x.favorite===1?'active':''}" data-track-id="${esc(x.trackId)}" data-favorite="${x.favorite===1}" aria-label="${esc(x.title)}のお気に入り">${x.favorite===1?'♥':'♡'}</button>`}
 async function loadTracks(){
   const q=encodeURIComponent($('#track-search').value),d=await api(`/api/tracks?period=${state.tracksPeriod}&search=${q}`);
   $('#tracks-body').innerHTML=d.tracks.length?d.tracks.map(x=>`<tr>
     <td><strong>${esc(x.title)}</strong><small>${esc(x.artist)}${x.album?` · ${esc(x.album)}`:''}${x.genre?` · ${esc(x.genre)}`:''}${x.inLibrary?'':' · 履歴のみ'}</small></td>
-    <td>${preference(x.playbackPreference)}</td><td><span class="favorite">${x.favorite===1?'♥':'—'}</span></td><td>${x.hasFingerprint?'✓':'—'}</td>
+    <td>${preferenceEditor(x)}</td><td>${favoriteEditor(x)}</td><td>${x.hasFingerprint?'✓':'—'}</td>
     <td>${x.playCount}回</td><td>${duration(x.totalPlayTime)}</td><td>${percent(x.completionRate)}</td><td>${percent(x.skipRate)}</td>
     <td>${x.lastPlayedAt?new Date(x.lastPlayedAt).toLocaleString('ja-JP'):'—'}</td></tr>`).join(''):`<tr><td colspan="9">${empty()}</td></tr>`;
+  $$('.preference-editor').forEach(el=>el.onchange=()=>savePreference(el.dataset.trackId,Number(el.value),favoriteValue(el.dataset.trackId)));
+  $$('.favorite-editor').forEach(el=>el.onclick=()=>savePreference(el.dataset.trackId,preferenceValue(el.dataset.trackId),el.dataset.favorite!=='true'));
 }
+function preferenceValue(trackId){return Number($(`.preference-editor[data-track-id="${CSS.escape(trackId)}"]`).value)}
+function favoriteValue(trackId){return $(`.favorite-editor[data-track-id="${CSS.escape(trackId)}"]`).dataset.favorite==='true'}
+async function savePreference(trackId,playbackPreference,favorite){try{await api(`/api/preferences/${encodeURIComponent(trackId)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({playbackPreference,favorite})});await Promise.all([loadTracks(),loadDashboard()])}catch(e){alert(`再生傾向を保存できませんでした: ${e.message}`);await loadTracks()}}
 const value=(v,digits=2)=>v==null?'—':Number(v).toFixed(digits);
 async function loadSources(){
   const d=await api(`/api/sources/${state.sourceKind}`),trackKind=['track_features','volume_normalization'].includes(state.sourceKind);

@@ -82,6 +82,43 @@ final class TrackPreferenceStore {
 
     func dismissError() { errorMessage = nil }
 
+    func importPreferences(
+        _ imported: [TrackPreference],
+        libraryTrackIDs: Set<Track.ID>
+    ) async throws -> TrackPreferenceImportResult {
+        guard isLoaded else { throw CocoaError(.fileReadUnknown) }
+        await saveTask?.value
+
+        var merged = entries
+        var updated = 0
+        var unchanged = 0
+        var missingTrack = 0
+        for preference in imported {
+            guard libraryTrackIDs.contains(preference.trackID) else {
+                missingTrack += 1
+                continue
+            }
+            if merged[preference.trackID] == preference {
+                unchanged += 1
+            } else {
+                merged[preference.trackID] = preference
+                updated += 1
+            }
+        }
+
+        if updated > 0 {
+            try await persistence.save(Array(merged.values))
+            entries = merged
+        }
+        return TrackPreferenceImportResult(
+            total: imported.count,
+            updated: updated,
+            unchanged: unchanged,
+            missingTrack: missingTrack,
+            invalid: 0
+        )
+    }
+
     private func adjust(_ trackID: Track.ID, by value: Int) {
         var preference = entry(for: trackID)
         preference.playbackPreference = Self.clamped(preference.playbackPreference + value)

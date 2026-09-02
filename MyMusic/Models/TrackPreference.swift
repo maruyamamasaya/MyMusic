@@ -10,3 +10,11 @@ nonisolated struct TrackPreferencesDocument: Codable, Sendable {
     let schemaVersion: Int
     let tracks: [TrackPreference]
 }
+
+nonisolated struct TrackPreferenceImportResult: Equatable, Sendable {
+    let total: Int
+    let updated: Int
+    let unchanged: Int
+    let missingTrack: Int
+    let invalid: Int
+}

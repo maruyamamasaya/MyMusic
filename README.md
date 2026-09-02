@@ -80,7 +80,7 @@
 - 音量ノーマライズは、解析済み曲のIntegrated LUFS、True Peak、固定ゲインと現在のON/OFFを出力
 - 音楽特徴量は、保存済みの全特徴量、解析version、照合元情報を出力
 - Analytics用再生イベントは、再生日時、実聴秒数、完走／Skip、再生入口、選択種別と曲metadataを`MyMusic-Playback-Events.json`へ出力
-- 曲のお気に入りと再生傾向（`-10...+10`）はPreference層で一緒に管理し、schema v2の`MyMusic-Playback-Preferences.json`へ出力（再生履歴は含めない）
+- 曲のお気に入りと再生傾向（`-10...+10`）はPreference層で一緒に管理し、schema v2の`MyMusic-Playback-Preferences.json`へ出力／再読込（再生履歴は含めない）。読込は現在LibraryのTrackだけをmergeし、不正な文書は全件適用しない
 - 現在の10バンドEQとオリジナルEQプリセットをまとめて出力し、同じ形式から読み込み可能
 - ジャンル表示プリセットを順序ごと出力し、同じ形式から読み込み可能
 - プリセット読み込みは同名項目を更新し、新しい項目を追加。読み込み対象外の既存プリセットは保持

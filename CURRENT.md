@@ -20,9 +20,9 @@ updated: 2026-09-02
 ### ローカルWeb Analytics v0
 
 - リポジトリ直下の`analytics/`に、再生履歴JSON v1を独自SQLiteへ取り込み、Dashboard／Tracks／Import履歴をPCブラウザで確認するFastAPI製ローカルツールを追加した。
-- `MyMusic-Library.json`と`MyMusic-Playback-Preferences.json`も自動判別して専用tableへupsertし、Track IDで再生イベントと結合する。DashboardはLibrary／お気に入り／Good・Bad分布、Tracksは未再生曲を含むmetadataと現在評価を表示する。
+- `MyMusic-Library.json`と`MyMusic-Playback-Preferences.json`も自動判別して専用tableへupsertし、Track IDで再生イベントと結合する。DashboardはLibrary／お気に入り／Good・Bad分布、Tracksは未再生曲を含むmetadataと現在評価を表示し、Import済みPreferenceのFavorite／Good・Badを編集できる。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、曲単位データはLibraryとのTrack ID照合状況を表示する。
-- iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離し、AnalyticsからMyMusicへの書き戻しは行わない。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
+- iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
 - macOSは`analytics/start.sh`、Windowsは`analytics/start.ps1`から`127.0.0.1:8766`で起動する。データ契約とセットアップは`analytics/README.md`を正とする。
 
 ### 基準版
@@ -42,8 +42,9 @@ updated: 2026-09-02
 ### Beta
 
 - **Track Preference責務分離**: 曲Favoriteと`playbackPreference`の正本を`TrackPreferenceStore`／`Application Support/MyMusic/track-preferences.json`（schema v2）へ移した。初回は旧Playback Historyの値をatomic保存・read-back検証して移行し、以後UI、検索、選曲、分析、ExportはPreferenceを参照する。旧History field／SQLite列は後方互換migration用に残す。Preference Exportは`trackId`、`playbackPreference`、`favorite`を含むschema v2とする。
+- **Track Preference手動双方向連携**: アプリは同じschema v2 Preference JSONを厳格に全体検証し、現在LibraryにあるTrackだけをmerge保存してからStoreへ反映する。未知field、UUID不正、重複、範囲外、不正構造は全件拒否し、未収録Trackは既存値を変えずskipする。AnalyticsはImport済みPreferenceだけを編集し、現在Libraryと照合できる有効UUIDだけを同契約でExportする。
 
-- **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させない。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。解析データ・PreferenceのiOS再Importは対象外。
+- **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、Preferenceだけは厳格検証付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。解析データのiOS再Importは対象外。
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を1日最大100曲ずつ逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
 - **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。開始／終了位置に共通の1秒戻る操作と、登録成功時のインラインフィードバックを持つ。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。

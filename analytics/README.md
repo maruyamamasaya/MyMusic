@@ -1,6 +1,6 @@
 # MyMusic Analytics v0
 
-MyMusicの再生履歴JSONをPCへ取り込み、ローカルブラウザで閲覧する独立ツールです。iOSアプリのファイル、内部DB、再生処理には接続せず、AnalyticsからMyMusicへの書き戻しも行いません。
+MyMusicの再生履歴JSONをPCへ取り込み、ローカルブラウザで閲覧する独立ツールです。iOSアプリのファイル、内部DB、再生処理には接続しません。PreferenceだけはAnalytics内で編集し、明示的に書き出したJSONをアプリで読み込む手動連携に対応します。
 
 iPhoneの「設定」→「データ管理」から生成される8種類のJSONに対応します。Library、再生、特徴量、音量、プレイリスト内の曲は共通のTrack IDで結合されます。EQとジャンルプリセットは曲単位ではないため、独立した設定スナップショットとして保持します。
 
@@ -99,6 +99,8 @@ Import画面ではドラッグ&ドロップまたはファイル選択ができ�
 
 Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、値が変わった項目は更新として記録します。`audioFingerprint`はoptionalの64文字lowercase SHA-256として検証し、Tracks画面で作成済み状態を確認できます。Fingerprintが同じ別Track IDの候補検出・alias統合は将来対応であり、現在は自動統合しません。完全に検証できた新しいLibrary snapshotに含まれない曲は現在Libraryから外れたものとして画面から除外しますが、SQLiteのRaw rowは削除せず保持します。Import順は問いません。
 
+Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
+
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
 
 SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Artistに索引を持ちます。`data/`と`imports/`の内容はGit対象外です。バックアップ時はサーバーを停止して両ディレクトリをまとめてコピーしてください。
@@ -106,11 +108,11 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 ## Dashboard / API
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間の再生回数、時間、Skip率、完走率、日別・時間帯別・曲別・Artist別集計
-- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、再生回数、総再生時間、完走率、Skip率、最終再生日時、検索
+- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、再生回数、総再生時間、完走率、Skip率、最終再生日時、検索、Import済みPreferenceの編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットをタブ別に表示。曲単位データはLibraryとのTrack ID照合状況も表示
 - Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
 
-主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks?period=all&search=`、`POST /api/import`、`GET /api/imports`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
+主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks?period=all&search=`、`POST /api/import`、`GET /api/imports`、`PUT /api/preferences/{track_id}`、`GET /api/preferences/export`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
 
 ## テスト
 

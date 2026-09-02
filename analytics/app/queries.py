@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Any
+from uuid import UUID
 
 from app.database import Database
 
@@ -164,6 +165,51 @@ class AnalyticsQueries:
                     duplicate_count duplicateCount, error_count errorCount,
                     error_details errorDetails FROM import_runs ORDER BY id DESC LIMIT 100""")
             return [dict(row) for row in rows]
+
+    def update_preference(
+        self, track_id: str, playback_preference: int, favorite: bool
+    ) -> dict[str, Any]:
+        with self.database.connect() as connection:
+            existing = connection.execute(
+                "SELECT track_id FROM playback_preferences WHERE track_id=?", (track_id,)
+            ).fetchone()
+            if existing is None:
+                raise LookupError("Import済みの再生傾向がありません。")
+            edited_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            raw = json.dumps(
+                {"trackId": track_id, "playbackPreference": playback_preference,
+                 "favorite": favorite},
+                ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            )
+            connection.execute(
+                """UPDATE playback_preferences
+                   SET playback_preference=?, favorite=?, exported_at=?, imported_at=?, raw_json=?
+                   WHERE track_id=?""",
+                (playback_preference, int(favorite), edited_at, edited_at, raw, track_id),
+            )
+        return {"trackId": track_id, "playbackPreference": playback_preference,
+                "favorite": favorite}
+
+    def export_preferences(self) -> dict[str, Any]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """SELECT pp.track_id, pp.playback_preference, pp.favorite
+                   FROM playback_preferences pp
+                   JOIN library_tracks lt ON lt.track_id=pp.track_id
+                   WHERE lt.is_present=1 ORDER BY pp.track_id"""
+            ).fetchall()
+        tracks = []
+        for row in rows:
+            try:
+                UUID(row["track_id"])
+            except (ValueError, AttributeError):
+                continue
+            tracks.append({"trackId": row["track_id"],
+                           "playbackPreference": row["playback_preference"],
+                           "favorite": bool(row["favorite"]) if row["favorite"] is not None else False})
+        return {"schemaVersion": 2,
+                "exportedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "tracks": tracks}
 
     def sources(self, data_kind: str) -> dict[str, Any]:
         allowed = {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
