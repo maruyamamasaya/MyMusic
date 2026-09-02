@@ -294,6 +294,17 @@ class AnalyticsAPITests(unittest.TestCase):
                 rows = self.client.get(f"/api/tracks?period=all&{query}").json()["tracks"]
                 self.assertEqual(sorted(row["trackId"] for row in rows), expected)
 
+    def test_tracks_are_paginated_at_two_hundred_rows(self):
+        self.upload(library_document([
+            library_track(f"track-{index:03}", title=f"Track {index:03}")
+            for index in range(201)
+        ]), "MyMusic-Library.json")
+        first = self.client.get("/api/tracks?period=all&sort=title&order=asc").json()
+        second = self.client.get("/api/tracks?period=all&sort=title&order=asc&page=2").json()
+        self.assertEqual((first["total"], first["pageSize"], len(first["tracks"])), (201, 200, 200))
+        self.assertEqual((second["page"], len(second["tracks"])), (2, 1))
+        self.assertEqual(second["tracks"][0]["trackId"], "track-200")
+
     def test_tracks_all_allowed_sorts_and_orders(self):
         self.upload(library_document([
             library_track("one", title="Alpha", artist="Zulu", album="Beta"),
@@ -431,6 +442,21 @@ class AnalyticsAPITests(unittest.TestCase):
         result = self.upload(changed, "MyMusic-Volume-Normalization.json").json()
         self.assertEqual(result["updatedCount"], 1)
         self.assertEqual(self.client.get("/api/sources/volume_normalization").json()["count"], 1)
+
+    def test_data_sources_are_paginated_at_two_hundred_rows(self):
+        payload = {
+            "version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
+            "tracks": [{
+                "trackID": f"track-{index:03}", "title": f"Track {index:03}",
+                "artist": "Artist", "relativePath": f"music/{index}.m4a",
+                "integratedLUFS": -14, "truePeakDBTP": -1, "normalizationGainDB": 0,
+            } for index in range(201)],
+        }
+        self.upload(payload, "MyMusic-Volume-Normalization.json")
+        first = self.client.get("/api/sources/volume_normalization").json()
+        second = self.client.get("/api/sources/volume_normalization?page=2").json()
+        self.assertEqual((first["count"], first["pageSize"], len(first["items"])), (201, 200, 200))
+        self.assertEqual((second["page"], len(second["items"])), (2, 1))
 
     def test_api_rejects_bad_period_and_non_json_file(self):
         self.assertEqual(self.client.get("/api/dashboard?period=year").status_code, 422)

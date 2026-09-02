@@ -52,12 +52,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title: str = Query("", max_length=200), artist: str = Query("", max_length=200),
         album: str = Query("", max_length=200), genre: str = Query("", max_length=200),
         sort: str = Query("playCount"), order: str = Query("desc"),
+        page: int = Query(1, ge=1),
     ):
         try:
-            return {"tracks": queries.tracks(
+            result = queries.tracks(
                 period, search.strip(), startDate, endDate, title.strip(), artist.strip(),
-                album.strip(), genre.strip(), sort, order,
-            ), "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+                album.strip(), genre.strip(), sort, order, page,
+            )
+            return {"tracks": result["items"], "total": result["total"], "page": page,
+                    "pageSize": 200, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -81,9 +84,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.get("/api/sources/{data_kind}")
-    def sources(data_kind: str):
+    def sources(data_kind: str, page: int = Query(1, ge=1)):
         try:
-            return queries.sources(data_kind)
+            result = queries.sources(data_kind, page)
+            return result | {"page": page, "pageSize": 200}
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

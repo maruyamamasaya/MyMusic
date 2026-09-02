@@ -110,8 +110,8 @@ class AnalyticsQueries:
         self, period: str, search: str = "", start_date: str | None = None,
         end_date: str | None = None, title: str = "", artist: str = "",
         album: str = "", genre: str = "", sort: str = "playCount",
-        order: str = "desc",
-    ) -> list[dict[str, Any]]:
+        order: str = "desc", page: int = 1, page_size: int = 200,
+    ) -> dict[str, Any]:
         if period == "custom":
             try:
                 start = date.fromisoformat(start_date or "")
@@ -193,14 +193,21 @@ class AnalyticsQueries:
                         es.total_play_time totalPlayTime,
                         es.completion_rate completionRate, es.skip_rate skipRate,
                         es.last_played_at lastPlayedAt,
-                        COALESCE(es.detail_event_count, 0) detailEventCount
+                        COALESCE(es.detail_event_count, 0) detailEventCount,
+                        COUNT(*) OVER() totalCount
                     FROM catalog c
                     LEFT JOIN event_stats es ON es.track_id = c.track_id
                     LEFT JOIN playback_preferences pp ON pp.track_id = c.track_id
                     {search_where}
                     ORDER BY {sort_column} {sort_order}, c.title COLLATE NOCASE, c.track_id
-                    LIMIT 1000""", params)
-            return [dict(row) for row in rows]
+                    LIMIT ? OFFSET ?""", (*params, page_size, (page - 1) * page_size)).fetchall()
+            total = rows[0]["totalCount"] if rows else 0
+            items = []
+            for row in rows:
+                item = dict(row)
+                item.pop("totalCount")
+                items.append(item)
+            return {"items": items, "total": total}
 
     def imports(self) -> list[dict[str, Any]]:
         with self.database.connect() as connection:
@@ -256,7 +263,7 @@ class AnalyticsQueries:
                 "exportedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "tracks": tracks}
 
-    def sources(self, data_kind: str) -> dict[str, Any]:
+    def sources(self, data_kind: str, page: int = 1, page_size: int = 200) -> dict[str, Any]:
         allowed = {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
         if data_kind not in allowed:
             raise ValueError("unsupported source kind")
@@ -266,8 +273,17 @@ class AnalyticsQueries:
                     sr.raw_json, CASE WHEN lt.track_id IS NULL THEN 0 ELSE 1 END linked
                     FROM source_records sr
                     LEFT JOIN library_tracks lt ON lt.track_id=sr.track_id AND lt.is_present=1
-                    WHERE sr.data_kind=? ORDER BY sr.title COLLATE NOCASE""", (data_kind,)
+                    WHERE sr.data_kind=? ORDER BY sr.title COLLATE NOCASE
+                    LIMIT ? OFFSET ?""", (data_kind, page_size, (page - 1) * page_size)
             ).fetchall()
+            total = connection.execute(
+                "SELECT COUNT(*) FROM source_records WHERE data_kind=?", (data_kind,)
+            ).fetchone()[0]
+            linked_total = connection.execute(
+                """SELECT COUNT(*) FROM source_records sr JOIN library_tracks lt
+                   ON lt.track_id=sr.track_id AND lt.is_present=1 WHERE sr.data_kind=?""",
+                (data_kind,),
+            ).fetchone()[0]
             library_ids = {row[0] for row in connection.execute(
                 "SELECT track_id FROM library_tracks WHERE is_present=1"
             )}
@@ -282,5 +298,5 @@ class AnalyticsQueries:
                 item["trackCount"] = len(tracks)
                 item["linkedTrackCount"] = sum(1 for track in tracks if track.get("trackID") in library_ids)
             items.append(item)
-        linked = sum(1 for item in items if item["linked"])
-        return {"dataKind": data_kind, "count": len(items), "linkedCount": linked, "items": items}
+        return {"dataKind": data_kind, "count": total, "pageCount": len(items),
+                "linkedCount": linked_total, "items": items}

@@ -16,6 +16,24 @@
 .sort-button { border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 0; cursor: pointer; white-space: nowrap; }
 .sort-button::after { content: attr(data-indicator); margin-left: 5px; color: var(--accent); }
 .sort-button.active { color: var(--text); }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 12px; min-height: 54px; color: var(--muted); font-size: 12px; }
+.pagination button { border: 1px solid var(--line); background: var(--surface2); color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.pagination button:disabled { opacity: .4; cursor: default; }
+.compact-table { width: 100%; }
+.compact-table td { overflow: hidden; text-overflow: ellipsis; }
+.tracks-table th:nth-child(1), .tracks-table td:nth-child(1) { width: clamp(140px, 16vw, 240px); max-width: clamp(140px, 16vw, 240px); }
+.tracks-table th:nth-child(2), .tracks-table td:nth-child(2),
+.tracks-table th:nth-child(3), .tracks-table td:nth-child(3) { width: clamp(120px, 13vw, 200px); max-width: clamp(120px, 13vw, 200px); }
+.tracks-table td:nth-child(1) strong, .tracks-table td:nth-child(1) small,
+.sources-table td:nth-child(1), .sources-table td:nth-child(1) small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sources-table th:nth-child(1), .sources-table td:nth-child(1) { width: clamp(180px, 22vw, 320px); max-width: clamp(180px, 22vw, 320px); }
+.sources-table td:last-child { max-width: clamp(160px, 24vw, 360px); overflow: hidden; text-overflow: ellipsis; }
+main { max-width: none; }
+.rank-row > div { min-width: 0; }
+.bar-chart { overflow-x: auto; align-items: stretch; padding-bottom: 2px; }
+.bar-item { flex: 1 0 28px; max-width: 52px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 7px; }
+.bar-item .bar { width: 100%; flex: none; min-height: 4px; }
+.bar-item > span { color: var(--muted); font-size: 10px; line-height: 1; white-space: nowrap; }
 @media (max-width: 1100px) {
   .track-filters { grid-template-columns: repeat(2, minmax(180px, 1fr)) auto; }
   .export-button { justify-self: start; }
