@@ -27,16 +27,28 @@ struct DataManagementView: View {
     @State private var resultMessage: String?
     @State private var errorMessage: String?
     @State private var shareItem: ActivityShareItem?
+    @State private var libraryFingerprints: [Track.ID: String] = [:]
 
     private let exporter = MusicDataExportService()
 
     var body: some View {
         List {
+            Section("Track識別") {
+                NavigationLink {
+                    TrackFingerprintBuildView()
+                } label: {
+                    Label("Fingerprintを作成", systemImage: "waveform.badge.magnifyingglass")
+                }
+            }
             Section("ライブラリ") {
                 exportLink("ライブラリをMarkdownで書き出す", systemImage: "doc.plaintext",
                     file: exporter.libraryMarkdown(tracks: libraryStore.tracks, history: historyStore.entries))
                 throwingExportLink("ライブラリをJSONで書き出す", systemImage: "curlybraces") {
-                    try exporter.libraryJSON(tracks: libraryStore.tracks, history: historyStore.entries)
+                    try exporter.libraryJSON(
+                        tracks: libraryStore.unfilteredTracks,
+                        history: historyStore.entries,
+                        fingerprints: libraryFingerprints
+                    )
                 }
             }
             Section("プレイリスト") {
@@ -104,6 +116,9 @@ struct DataManagementView: View {
         }
         .navigationTitle("データ管理")
         .activityShareSheet(item: $shareItem)
+        .onAppear {
+            Task { libraryFingerprints = await libraryStore.trackFingerprintsForExport() }
+        }
         .fileImporter(isPresented: $isImportingFile, allowedContentTypes: importTarget.allowedContentTypes) { result in
             switch importTarget {
             case .playlist:

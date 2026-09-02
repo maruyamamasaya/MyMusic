@@ -120,26 +120,44 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(response.json()["errorCount"], 1)
 
     def test_library_import_is_detected_saved_and_updated(self):
-        first = self.upload(library_document([library_track()]), "MyMusic-Library.json").json()
+        fingerprint = "a" * 64
+        first = self.upload(
+            library_document([library_track(audioFingerprint=fingerprint)]),
+            "MyMusic-Library.json",
+        ).json()
         self.assertEqual(first["dataKind"], "library")
         self.assertEqual(first["newCount"], 1)
 
-        duplicate = self.upload(library_document([library_track()]), "MyMusic-Library.json").json()
+        duplicate = self.upload(
+            library_document([library_track(audioFingerprint=fingerprint)]),
+            "MyMusic-Library.json",
+        ).json()
         self.assertEqual(duplicate["duplicateCount"], 1)
 
         changed = self.upload(
-            library_document([library_track(title="Night Drive Remastered", favorite=False)]),
+            library_document([library_track(
+                title="Night Drive Remastered", favorite=False, audioFingerprint=fingerprint
+            )]),
             "MyMusic-Library.json",
         ).json()
         self.assertEqual(changed["updatedCount"], 1)
         connection = sqlite3.connect(self.settings.database_path)
         try:
             stored = connection.execute(
-                "SELECT title, favorite, genre FROM library_tracks WHERE track_id = 'track-1'"
+                """SELECT title, favorite, genre, audio_fingerprint
+                   FROM library_tracks WHERE track_id = 'track-1'"""
             ).fetchone()
         finally:
             connection.close()
-        self.assertEqual(stored, ("Night Drive Remastered", 0, "Electronic"))
+        self.assertEqual(stored, ("Night Drive Remastered", 0, "Electronic", fingerprint))
+
+    def test_library_rejects_invalid_audio_fingerprint(self):
+        result = self.upload(
+            library_document([library_track(audioFingerprint="not-a-sha256")]),
+            "MyMusic-Library.json",
+        ).json()
+        self.assertEqual(result["newCount"], 0)
+        self.assertEqual(result["errorCount"], 1)
 
     def test_new_library_snapshot_hides_removed_tracks_without_deleting_raw_row(self):
         self.upload(library_document([
@@ -270,6 +288,7 @@ class DatabaseMigrationTests(unittest.TestCase):
             finally:
                 connection.close()
             self.assertIn("is_present", library_columns)
+            self.assertIn("audio_fingerprint", library_columns)
 
 
 if __name__ == "__main__":

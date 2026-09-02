@@ -177,21 +177,23 @@ class ImportService:
         connection.execute(
             """INSERT INTO library_tracks (
                 track_id, title, artist, album, genre, year, duration, format, favorite,
-                source_play_count, source_last_played_at, is_present,
-                imported_at, import_id, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                source_play_count, source_last_played_at, audio_fingerprint,
+                is_present, imported_at, import_id, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             ON CONFLICT(track_id) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, album=excluded.album,
                 genre=excluded.genre, year=excluded.year, duration=excluded.duration,
                 format=excluded.format, favorite=excluded.favorite,
                 source_play_count=excluded.source_play_count,
                 source_last_played_at=excluded.source_last_played_at,
+                audio_fingerprint=excluded.audio_fingerprint,
                 is_present=1,
                 imported_at=excluded.imported_at, import_id=excluded.import_id,
                 raw_json=excluded.raw_json""",
             (track.track_id, track.title, track.artist, track.album, track.genre, track.year,
              track.duration, track.format, None if track.favorite is None else int(track.favorite),
-             track.play_count, _utc(track.last_played_at), imported_at, import_id, raw_json),
+             track.play_count, _utc(track.last_played_at), track.audio_fingerprint,
+             imported_at, import_id, raw_json),
         )
         return "new" if existing is None else "updated"
 

@@ -89,10 +89,10 @@ Import画面ではドラッグ&ドロップまたはファイル選択ができ�
 | ファイル | 判別契約 | 保存内容 |
 | --- | --- | --- |
 | `MyMusic-Playback-Events.json` | `schemaVersion: 1` + `events` | 追記型のRaw再生イベント。`eventId`で重複排除 |
-| `MyMusic-Library.json` | `version: 1` + `tracks` | 曲名、Artist、Album、Genre、年、長さ、Format、お気に入り等のLibrary snapshot |
+| `MyMusic-Library.json` | `version: 1` + `tracks` | 曲名、Artist、Album、Genre、年、長さ、Format、お気に入り、作成済み音声Fingerprint等のLibrary snapshot |
 | `MyMusic-Playback-Preferences.json` | `schemaVersion: 1` + `tracks[].playbackPreference` | Track IDごとの現在のGood／Bad値（-10〜+10） |
 
-Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、値が変わった項目は更新として記録します。完全に検証できた新しいLibrary snapshotに含まれない曲は現在Libraryから外れたものとして画面から除外しますが、SQLiteのRaw rowは削除せず保持します。Import順は問いません。
+Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、値が変わった項目は更新として記録します。`audioFingerprint`はoptionalの64文字lowercase SHA-256として検証し、Tracks画面で作成済み状態を確認できます。Fingerprintが同じ別Track IDの候補検出・alias統合は将来対応であり、現在は自動統合しません。完全に検証できた新しいLibrary snapshotに含まれない曲は現在Libraryから外れたものとして画面から除外しますが、SQLiteのRaw rowは削除せず保持します。Import順は問いません。
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
 

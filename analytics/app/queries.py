@@ -122,10 +122,11 @@ class AnalyticsQueries:
                         FROM playback_events GROUP BY track_id
                     ), catalog AS (
                         SELECT track_id, title, artist, album, genre, year, duration, format,
-                            favorite, 1 in_library FROM library_tracks WHERE is_present = 1
+                            favorite, audio_fingerprint, 1 in_library
+                        FROM library_tracks WHERE is_present = 1
                         UNION ALL
                         SELECT ec.track_id, ec.title, ec.artist, ec.album, NULL, NULL,
-                            ec.duration, NULL, NULL, 0
+                            ec.duration, NULL, NULL, NULL, 0
                         FROM event_catalog ec
                         WHERE NOT EXISTS (
                             SELECT 1 FROM library_tracks lt
@@ -133,7 +134,9 @@ class AnalyticsQueries:
                         )
                     )
                     SELECT c.track_id trackId, c.title, c.artist, c.album, c.genre, c.year,
-                        c.duration, c.format, c.favorite, c.in_library inLibrary,
+                        c.duration, c.format, c.favorite,
+                        CASE WHEN c.audio_fingerprint IS NULL THEN 0 ELSE 1 END hasFingerprint,
+                        c.in_library inLibrary,
                         pp.playback_preference playbackPreference,
                         COALESCE(es.play_count, 0) playCount,
                         COALESCE(es.total_play_time, 0) totalPlayTime,

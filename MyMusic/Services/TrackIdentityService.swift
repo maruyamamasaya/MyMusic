@@ -13,6 +13,20 @@ protocol TrackIdentityServicing: Sendable {
         duration: TimeInterval
     ) async -> Track.ID
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async
+    func fingerprints(for trackIDs: [Track.ID]) async -> [Track.ID: String]
+    func buildFingerprint(
+        for track: Track,
+        in folderURL: URL,
+        allowDownloading: Bool
+    ) async -> TrackFingerprintBuildResult
+}
+
+enum TrackFingerprintBuildResult: Sendable, Equatable {
+    case built(String)
+    case alreadyExists(String)
+    case requiresDownload
+    case unavailable
+    case failed
 }
 
 actor TrackIdentityService: TrackIdentityServicing {
@@ -169,6 +183,76 @@ actor TrackIdentityService: TrackIdentityServicing {
         }
         isDirty = true
         persistNow()
+    }
+
+    func fingerprints(for trackIDs: [Track.ID]) async -> [Track.ID: String] {
+        await loadIfNeeded()
+        return Dictionary(uniqueKeysWithValues: trackIDs.compactMap { trackID -> (Track.ID, String)? in
+            guard let index = idIndex[trackID],
+                  let fingerprint = records?[index].audioFingerprint else { return nil }
+            return (trackID, fingerprint)
+        })
+    }
+
+    func buildFingerprint(
+        for track: Track,
+        in folderURL: URL,
+        allowDownloading: Bool
+    ) async -> TrackFingerprintBuildResult {
+        await loadIfNeeded()
+        if let index = idIndex[track.id], let fingerprint = records?[index].audioFingerprint {
+            return .alreadyExists(fingerprint)
+        }
+
+        let hasAccess = folderURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
+        guard hasAccess || FileManager.default.isReadableFile(atPath: folderURL.path) else {
+            return .unavailable
+        }
+
+        if !allowDownloading,
+           let values = try? track.fileURL.resourceValues(forKeys: [
+               .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey
+           ]),
+           values.isUbiquitousItem == true {
+            let status = values.ubiquitousItemDownloadingStatus
+            guard status == .current || status == .downloaded else {
+                return .requiresDownload
+            }
+        }
+
+        guard FileManager.default.fileExists(atPath: track.fileURL.path) else {
+            return .unavailable
+        }
+        guard let fingerprint = await Self.audioFingerprint(
+            for: track.fileURL,
+            duration: track.duration
+        ) else {
+            return .failed
+        }
+        guard !Task.isCancelled else { return .failed }
+
+        let index: Int
+        if let existingIndex = idIndex[track.id] {
+            index = existingIndex
+        } else {
+            let scopedPath = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping
+                + "/" + (track.relativePath ?? track.fileURL.lastPathComponent)
+            append(Record(
+                id: track.id,
+                relativePath: scopedPath,
+                resourceIdentifier: Self.resourceIdentifier(for: track.fileURL),
+                audioFingerprint: nil,
+                fileSize: track.fileSize,
+                modificationDate: track.modificationDate,
+                duration: track.duration
+            ))
+            guard let appendedIndex = idIndex[track.id] else { return .failed }
+            index = appendedIndex
+        }
+        records?[index].audioFingerprint = fingerprint
+        markDirty()
+        return .built(fingerprint)
     }
 
     private func loadIfNeeded() async {

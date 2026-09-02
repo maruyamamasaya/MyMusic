@@ -2,6 +2,29 @@ import XCTest
 @testable import MyMusic
 
 final class AnalysisDataExportTests: XCTestCase {
+    func testLibraryExportIncludesOnlyAvailableAudioFingerprints() throws {
+        let identified = makeTrack(title: "Identified")
+        let pending = makeTrack(title: "Pending")
+        let fingerprint = String(repeating: "a", count: 64)
+
+        let file = try MusicDataExportService().libraryJSON(
+            tracks: [identified, pending],
+            history: [:],
+            fingerprints: [identified.id: fingerprint]
+        )
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: file.data) as? [String: Any]
+        )
+        let tracks = try XCTUnwrap(root["tracks"] as? [[String: Any]])
+        let byID = Dictionary(uniqueKeysWithValues: tracks.compactMap { item -> (String, [String: Any])? in
+            guard let id = item["trackID"] as? String else { return nil }
+            return (id, item)
+        })
+
+        XCTAssertEqual(byID[identified.id.uuidString]?["audioFingerprint"] as? String, fingerprint)
+        XCTAssertNil(byID[pending.id.uuidString]?["audioFingerprint"])
+    }
+
     func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {
         let track = makeTrack(title: "Night Drive")
         let startedAt = Date(timeIntervalSince1970: 1_799_999_000)

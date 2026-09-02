@@ -71,6 +71,10 @@ class LibraryTrackV1(BaseModel):
     favorite: bool | None = None
     play_count: int | None = Field(default=None, alias="playCount", ge=0)
     last_played_at: datetime | None = Field(default=None, alias="lastPlayedAt")
+    audio_fingerprint: str | None = Field(
+        default=None, alias="audioFingerprint", min_length=64, max_length=64,
+        pattern=r"^[0-9a-f]{64}$"
+    )
 
     @field_validator("last_played_at")
     @classmethod

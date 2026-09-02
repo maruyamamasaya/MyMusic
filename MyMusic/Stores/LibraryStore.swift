@@ -124,6 +124,9 @@ final class LibraryStore {
     }
 
     func dismissError() { errorMessage = nil }
+    func trackFingerprintsForExport() async -> [Track.ID: String] {
+        await identityService.fingerprints(for: allTracks.map(\.id))
+    }
     func isGenreAlwaysEnabled(_ genreName: String) -> Bool {
         genreName == Track.workPlaybackGenre
     }

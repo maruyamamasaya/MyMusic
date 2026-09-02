@@ -71,6 +71,8 @@ Library View → LibraryStore → FileImportService
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 
+Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を1日最大100曲まで逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。日次件数はUserDefaults、処理済みの正本はidentity registryとする。
+
 ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorが表示曲の抽出とAlbum / Artist / Genre / Composerの再構築をutility priorityで実行し、`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanは従来どおり同期的に一貫したlibrary snapshotを確定してから公開する。
 
 「作業用BGM」は通常曲と作業用再生を分離する分類マーカーでもあるため、ライブラリに存在する場合はジャンル表示フィルターの固定ON項目とする。`LibraryStore`が保存済み設定、個別変更、全解除、プリセット適用の各入口で無効化を拒否し、UIは存在を示したまま解除操作を無効にする。
@@ -136,6 +138,7 @@ music root recursive scan
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
 - `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
 - `MusicDataExportService`は保存済みPlayback HistoryからTrack IDと`playbackPreference`だけを安定順で`MyMusic-Playback-Preferences.json`へ出力する。これは現在値のschema v1 snapshotであり、お気に入り、再生事実、派生Behavior score、Import経路は含まない。
+- Library JSONはidentity registryに保存済みのFingerprintだけをoptional `audioFingerprint`として出力し、Export操作自体では音声を読まない。Analyticsは64文字のlowercase SHA-256として検証・保存するが、v0では別Track IDの自動統合は行わない。
 - 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-01
+updated: 2026-09-02
 ---
 
 # MyMusic の現在状態
@@ -41,6 +41,7 @@ updated: 2026-09-01
 ### Beta
 
 - **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics v1契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。再生傾向はTrack IDと現在値だけのschema v1専用JSONへ分離して出力し、お気に入りや再生履歴を混在させない。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込でき、同名プリセットを更新し新規項目を追加する。プレイリスト／EQ／ジャンル設定のファイル選択は単一のImporterで対象を切り替え、同種presentationの競合を避ける。解析データ・再生傾向の再読込と曲別手動調整の出力は対象外。
+- **Track Fingerprint作成**: データ管理の専用画面で未作成曲を1日最大100曲ずつ逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
 - **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。開始／終了位置に共通の1秒戻る操作と、登録成功時のインラインフィードバックを持つ。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。

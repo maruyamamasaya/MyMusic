@@ -115,6 +115,7 @@ struct MusicDataExportService {
         let favorite: Bool?
         let playCount: Int?
         let lastPlayedAt: Date?
+        let audioFingerprint: String?
     }
 
     func playlistJSON(_ playlist: Playlist, tracks: [Track]) throws -> MusicExportFile {
@@ -136,9 +137,18 @@ struct MusicDataExportService {
         try jsonFile(PlaylistsDocument(version: 1, playlists: playlists.map { document(for: $0, tracks: tracks) }), filename: "MyMusic-Playlists.json")
     }
 
-    func libraryJSON(tracks: [Track], history: [Track.ID: PlaybackHistory]) throws -> MusicExportFile {
+    func libraryJSON(
+        tracks: [Track],
+        history: [Track.ID: PlaybackHistory],
+        fingerprints: [Track.ID: String] = [:]
+    ) throws -> MusicExportFile {
         struct Document: Codable { let version: Int; let tracks: [TrackDocument] }
-        return try jsonFile(Document(version: 1, tracks: tracks.map { trackDocument($0, history: history[$0.id]) }), filename: "MyMusic-Library.json")
+        return try jsonFile(
+            Document(version: 1, tracks: tracks.map {
+                trackDocument($0, history: history[$0.id], audioFingerprint: fingerprints[$0.id])
+            }),
+            filename: "MyMusic-Library.json"
+        )
     }
 
     func libraryMarkdown(tracks: [Track], history: [Track.ID: PlaybackHistory]) -> MusicExportFile {
@@ -307,13 +317,20 @@ struct MusicDataExportService {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
         return PlaylistDocument(version: 1, name: playlist.name, playlistID: playlist.id,
             createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind, tags: playlist.tags,
-            tracks: playlist.trackIDs.compactMap { byID[$0] }.map { trackDocument($0, history: nil) })
+            tracks: playlist.trackIDs.compactMap { byID[$0] }.map {
+                trackDocument($0, history: nil, audioFingerprint: nil)
+            })
     }
 
-    private func trackDocument(_ track: Track, history: PlaybackHistory?) -> TrackDocument {
+    private func trackDocument(
+        _ track: Track,
+        history: PlaybackHistory?,
+        audioFingerprint: String?
+    ) -> TrackDocument {
         TrackDocument(trackID: track.id, title: track.title, artist: track.artistName, album: track.albumTitle,
             genre: track.genre, year: track.year, duration: track.duration, format: track.audioFormat?.codec.rawValue,
-            favorite: history?.isFavorite, playCount: history?.playCount, lastPlayedAt: history?.lastPlayedAt)
+            favorite: history?.isFavorite, playCount: history?.playCount, lastPlayedAt: history?.lastPlayedAt,
+            audioFingerprint: audioFingerprint)
     }
 
     private func jsonFile<T: Encodable>(_ value: T, filename: String) throws -> MusicExportFile {

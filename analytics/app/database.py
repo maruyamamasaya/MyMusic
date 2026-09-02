@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     favorite INTEGER CHECK (favorite IS NULL OR favorite IN (0, 1)),
     source_play_count INTEGER,
     source_last_played_at TEXT,
+    audio_fingerprint TEXT,
     is_present INTEGER NOT NULL DEFAULT 1 CHECK (is_present IN (0, 1)),
     imported_at TEXT NOT NULL,
     import_id INTEGER NOT NULL,
@@ -100,6 +101,13 @@ class Database:
                 connection.execute(
                     "ALTER TABLE library_tracks ADD COLUMN is_present INTEGER NOT NULL DEFAULT 1"
                 )
+            if "audio_fingerprint" not in library_columns:
+                connection.execute(
+                    "ALTER TABLE library_tracks ADD COLUMN audio_fingerprint TEXT"
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_library_fingerprint ON library_tracks(audio_fingerprint)"
+            )
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
