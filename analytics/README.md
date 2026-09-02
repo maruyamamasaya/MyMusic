@@ -116,6 +116,8 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 
 Tracks APIは従来の`period=7d|30d|all`と`search=`を維持し、`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`を追加で受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。
 
+Playback詳細指標の信頼開始日は`2026-09-01`です。選択期間のPlay Countはそれ以前のイベントも含めますが、総再生時間、完走率、Skip率、最終再生日時は開始日以降のイベントだけで集計します。旧イベントしかない曲では詳細指標を`null`で返し、画面では`0`や`0%`ではなく「データなし」または`—`と表示します。Rawイベントは変更・削除しません。
+
 ## テスト
 
 ```bash

@@ -2,6 +2,7 @@ const state={dashboardPeriod:'7d',tracksPeriod:'all',tracksSort:'playCount',trac
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const duration=s=>{s=Math.round(Number(s)||0);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h?`${h}時間 ${m}分`:`${m}分`};
+const playbackDuration=s=>s==null?'データなし':duration(s);
 const percent=v=>v==null?'—':`${Number(v).toFixed(1)}%`;
 const kindLabel=k=>({playback_events:'再生イベント',library:'Library',playback_preferences:'再生傾向',track_features:'音楽特徴量',volume_normalization:'音量ノーマライズ',playlists:'プレイリスト',equalizer:'イコライザー',genre_presets:'ジャンルプリセット',unknown:'不明'}[k]||k);
 async function api(url,options){const r=await fetch(url,options);if(!r.ok){let d;try{d=await r.json()}catch{d={}}throw new Error(d.detail||`HTTP ${r.status}`)}return r.json()}
@@ -28,12 +29,13 @@ async function loadTracks(){
   [['title','#track-title'],['artist','#track-artist'],['album','#track-album'],['genre','#track-genre']].forEach(([key,selector])=>{const v=$(selector).value.trim();if(v)params.set(key,v)});
   if(state.tracksPeriod==='custom'){params.set('startDate',$('#track-start-date').value);params.set('endDate',$('#track-end-date').value)}
   const error=$('#period-error');error.textContent='';
-  let d;try{d=await api(`/api/tracks?${params}`)}catch(e){error.textContent=e.message;$('#tracks-body').innerHTML=`<tr><td colspan="11">${empty('期間を確認してください')}</td></tr>`;return}
+  let d;try{d=await api(`/api/tracks?${params}`)}catch(e){error.textContent=e.message;$('#legacy-playback-note').hidden=true;$('#tracks-body').innerHTML=`<tr><td colspan="11">${empty('期間を確認してください')}</td></tr>`;return}
+  const hasLegacy=d.tracks.some(x=>x.playCount>x.detailEventCount),legacyNote=$('#legacy-playback-note');legacyNote.hidden=!hasLegacy;legacyNote.textContent=hasLegacy?`※ ${d.legacyPlaybackCutoff}より前は再生回数のみ利用できるデータがあります。`:'';
   $$('.sort-button').forEach(button=>{const active=button.dataset.sort===state.tracksSort;button.classList.toggle('active',active);button.setAttribute('aria-sort',active?(state.tracksOrder==='asc'?'ascending':'descending'):'none');button.dataset.indicator=active?(state.tracksOrder==='asc'?'↑':'↓'):''});
   $('#tracks-body').innerHTML=d.tracks.length?d.tracks.map(x=>`<tr>
     <td><strong>${esc(x.title)}</strong><small>${x.genre?esc(x.genre):'—'}${x.inLibrary?'':' · 履歴のみ'}</small></td><td>${esc(x.artist)||'—'}</td><td>${esc(x.album)||'—'}</td>
     <td>${preferenceEditor(x)}</td><td>${favoriteEditor(x)}</td><td>${x.hasFingerprint?'✓':'—'}</td>
-    <td>${x.playCount}回</td><td>${duration(x.totalPlayTime)}</td><td>${percent(x.completionRate)}</td><td>${percent(x.skipRate)}</td>
+    <td>${x.playCount}回</td><td>${playbackDuration(x.totalPlayTime)}</td><td>${percent(x.completionRate)}</td><td>${percent(x.skipRate)}</td>
     <td>${x.lastPlayedAt?new Date(x.lastPlayedAt).toLocaleString('ja-JP'):'—'}</td></tr>`).join(''):`<tr><td colspan="11">${empty()}</td></tr>`;
   $$('.preference-editor').forEach(el=>el.onchange=()=>savePreference(el.dataset.trackId,Number(el.value),favoriteValue(el.dataset.trackId)));
   $$('.favorite-editor').forEach(el=>el.onclick=()=>savePreference(el.dataset.trackId,preferenceValue(el.dataset.trackId),el.dataset.favorite!=='true'));

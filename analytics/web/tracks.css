@@ -11,6 +11,8 @@
 .custom-period { display: flex; align-items: end; gap: 12px; margin: -10px 0 18px; }
 .custom-period[hidden] { display: none; }
 .form-error { color: var(--warn); font-size: 12px; margin: 0 0 10px; }
+.legacy-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+.legacy-note[hidden] { display: none; }
 .sort-button { border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 0; cursor: pointer; white-space: nowrap; }
 .sort-button::after { content: attr(data-indicator); margin-left: 5px; color: var(--accent); }
 .sort-button.active { color: var(--text); }

@@ -9,6 +9,7 @@ from app.database import Database
 
 
 PERIOD_DAYS = {"today": 0, "7d": 7, "30d": 30, "all": None}
+LEGACY_PLAYBACK_CUTOFF = "2026-09-01"
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
@@ -154,9 +155,17 @@ class AnalyticsQueries:
                 f"""WITH filtered_events AS (
                         SELECT * FROM playback_events {event_where}
                     ), event_stats AS (
-                        SELECT track_id, COUNT(*) play_count, SUM(play_duration) total_play_time,
-                            AVG(completed) * 100 completion_rate, AVG(skipped) * 100 skip_rate,
-                            MAX(played_at) last_played_at
+                        SELECT track_id, COUNT(*) play_count,
+                            SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN play_duration END) total_play_time,
+                            AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN completed END) * 100 completion_rate,
+                            AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN skipped END) * 100 skip_rate,
+                            MAX(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN played_at END) last_played_at,
+                            COUNT(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN 1 END) detail_event_count
                         FROM filtered_events GROUP BY track_id
                     ), event_catalog AS (
                         SELECT track_id, MAX(track_title) title, MAX(artist) artist, MAX(album) album,
@@ -181,9 +190,10 @@ class AnalyticsQueries:
                         c.in_library inLibrary,
                         pp.playback_preference playbackPreference,
                         COALESCE(es.play_count, 0) playCount,
-                        COALESCE(es.total_play_time, 0) totalPlayTime,
+                        es.total_play_time totalPlayTime,
                         es.completion_rate completionRate, es.skip_rate skipRate,
-                        es.last_played_at lastPlayedAt
+                        es.last_played_at lastPlayedAt,
+                        COALESCE(es.detail_event_count, 0) detailEventCount
                     FROM catalog c
                     LEFT JOIN event_stats es ON es.track_id = c.track_id
                     LEFT JOIN playback_preferences pp ON pp.track_id = c.track_id

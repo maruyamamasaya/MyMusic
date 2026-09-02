@@ -270,8 +270,8 @@ class AnalyticsAPITests(unittest.TestCase):
         ).json()["tracks"]
         by_id = {item["trackId"]: item for item in custom}
         self.assertEqual(by_id["track-1"]["playCount"], 1)
-        self.assertEqual(by_id["track-1"]["totalPlayTime"], 20)
-        self.assertEqual(by_id["track-1"]["skipRate"], 100)
+        self.assertIsNone(by_id["track-1"]["totalPlayTime"])
+        self.assertIsNone(by_id["track-1"]["skipRate"])
         self.assertIsNone(by_id["track-unplayed"]["lastPlayedAt"])
         self.assertEqual(self.client.get(
             "/api/tracks?period=custom&startDate=2026-09-02&endDate=2026-09-01"
@@ -305,13 +305,13 @@ class AnalyticsAPITests(unittest.TestCase):
         ]), "MyMusic-Playback-Preferences.json")
         self.upload(document([
             event("one-a", "one", trackTitle="Alpha", artist="Zulu", album="Beta",
-                  playedAt="2026-08-01T10:00:00+09:00", playDuration=100,
+                  playedAt="2026-09-01T10:00:00+09:00", playDuration=100,
                   completed=True, skipped=False),
             event("one-b", "one", trackTitle="Alpha", artist="Zulu", album="Beta",
-                  playedAt="2026-08-02T10:00:00+09:00", playDuration=50,
+                  playedAt="2026-09-02T10:00:00+09:00", playDuration=50,
                   completed=False, skipped=True),
             event("two-a", "two", trackTitle="Beta", artist="Alpha", album="Alpha",
-                  playedAt="2026-08-03T10:00:00+09:00", playDuration=25,
+                  playedAt="2026-09-03T10:00:00+09:00", playDuration=25,
                   completed=False, skipped=False),
         ]))
         sorts = ["title", "artist", "album", "preference", "playCount", "totalPlayTime",
@@ -324,12 +324,52 @@ class AnalyticsAPITests(unittest.TestCase):
                 self.assertEqual(desc.status_code, 200)
                 self.assertNotEqual(asc.json()["tracks"][0]["trackId"], desc.json()["tracks"][0]["trackId"])
         combined = self.client.get(
-            "/api/tracks?period=custom&startDate=2026-08-01&endDate=2026-08-02"
+            "/api/tracks?period=custom&startDate=2026-09-01&endDate=2026-09-02"
             "&artist=Zulu&sort=totalPlayTime&order=desc"
         ).json()["tracks"]
         self.assertEqual([(row["trackId"], row["playCount"]) for row in combined], [("one", 2)])
         self.assertEqual(self.client.get("/api/tracks?sort=drop_table").status_code, 422)
         self.assertEqual(self.client.get("/api/tracks?order=sideways").status_code, 422)
+
+    def test_legacy_events_count_plays_but_do_not_supply_detail_metrics(self):
+        self.upload(library_document([library_track()]), "MyMusic-Library.json")
+        self.upload(document([
+            event("legacy-1", playedAt="2026-08-20T10:00:00+09:00", playDuration=0,
+                  trackDuration=0, completed=False, skipped=False),
+            event("legacy-2", playedAt="2026-08-31T23:59:59+09:00", playDuration=0,
+                  trackDuration=0, completed=False, skipped=False),
+            event("current-1", playedAt="2026-09-01T00:00:00+09:00", playDuration=120,
+                  completed=True, skipped=False),
+            event("current-2", playedAt="2026-09-02T10:00:00+09:00", playDuration=30,
+                  completed=False, skipped=True),
+        ]))
+
+        legacy_only = self.client.get(
+            "/api/tracks?period=custom&startDate=2026-08-01&endDate=2026-08-31"
+        ).json()["tracks"][0]
+        self.assertEqual(legacy_only["playCount"], 2)
+        self.assertEqual(legacy_only["detailEventCount"], 0)
+        self.assertIsNone(legacy_only["totalPlayTime"])
+        self.assertIsNone(legacy_only["completionRate"])
+        self.assertIsNone(legacy_only["skipRate"])
+        self.assertIsNone(legacy_only["lastPlayedAt"])
+
+        crossing = self.client.get(
+            "/api/tracks?period=custom&startDate=2026-08-01&endDate=2026-09-30"
+        ).json()["tracks"][0]
+        self.assertEqual(crossing["playCount"], 4)
+        self.assertEqual(crossing["detailEventCount"], 2)
+        self.assertEqual(crossing["totalPlayTime"], 150)
+        self.assertEqual(crossing["completionRate"], 50)
+        self.assertEqual(crossing["skipRate"], 50)
+        self.assertIn("2026-09-02", crossing["lastPlayedAt"])
+
+        current_only = self.client.get(
+            "/api/tracks?period=custom&startDate=2026-09-01&endDate=2026-09-30"
+        ).json()["tracks"][0]
+        self.assertEqual(current_only["playCount"], 2)
+        self.assertEqual(current_only["detailEventCount"], 2)
+        self.assertEqual(current_only["totalPlayTime"], 150)
 
     def test_extended_source_jsons_are_imported_and_exposed(self):
         self.upload(library_document([library_track()]), "MyMusic-Library.json")

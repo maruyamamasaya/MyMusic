@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import ROOT_DIR, Settings
 from app.database import Database
-from app.queries import AnalyticsQueries
+from app.queries import AnalyticsQueries, LEGACY_PLAYBACK_CUTOFF
 from importer.service import ImportService
 from importer.schema import PlaybackPreferenceUpdate
 
@@ -57,7 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return {"tracks": queries.tracks(
                 period, search.strip(), startDate, endDate, title.strip(), artist.strip(),
                 album.strip(), genre.strip(), sort, order,
-            )}
+            ), "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
