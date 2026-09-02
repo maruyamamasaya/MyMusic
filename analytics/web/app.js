@@ -1,4 +1,4 @@
-const state={dashboardPeriod:'7d',tracksPeriod:'all',sourceKind:'track_features'};
+const state={dashboardPeriod:'7d',tracksPeriod:'all',tracksSort:'playCount',tracksOrder:'desc',sourceKind:'track_features'};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const duration=s=>{s=Math.round(Number(s)||0);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h?`${h}時間 ${m}分`:`${m}分`};
@@ -24,12 +24,17 @@ function preference(value){if(value==null)return '<span class="preference">未�
 function preferenceEditor(x){if(x.playbackPreference==null)return preference(null);return `<select class="preference-editor" data-track-id="${esc(x.trackId)}" aria-label="${esc(x.title)}のGood / Bad">${Array.from({length:21},(_,i)=>i-10).map(v=>`<option value="${v}" ${v===x.playbackPreference?'selected':''}>${v>0?'+':''}${v}</option>`).join('')}</select>`}
 function favoriteEditor(x){if(x.playbackPreference==null)return `<span class="favorite">${x.favorite===1?'♥':'—'}</span>`;return `<button class="favorite-editor ${x.favorite===1?'active':''}" data-track-id="${esc(x.trackId)}" data-favorite="${x.favorite===1}" aria-label="${esc(x.title)}のお気に入り">${x.favorite===1?'♥':'♡'}</button>`}
 async function loadTracks(){
-  const q=encodeURIComponent($('#track-search').value),d=await api(`/api/tracks?period=${state.tracksPeriod}&search=${q}`);
+  const params=new URLSearchParams({period:state.tracksPeriod,sort:state.tracksSort,order:state.tracksOrder});
+  [['title','#track-title'],['artist','#track-artist'],['album','#track-album'],['genre','#track-genre']].forEach(([key,selector])=>{const v=$(selector).value.trim();if(v)params.set(key,v)});
+  if(state.tracksPeriod==='custom'){params.set('startDate',$('#track-start-date').value);params.set('endDate',$('#track-end-date').value)}
+  const error=$('#period-error');error.textContent='';
+  let d;try{d=await api(`/api/tracks?${params}`)}catch(e){error.textContent=e.message;$('#tracks-body').innerHTML=`<tr><td colspan="11">${empty('期間を確認してください')}</td></tr>`;return}
+  $$('.sort-button').forEach(button=>{const active=button.dataset.sort===state.tracksSort;button.classList.toggle('active',active);button.setAttribute('aria-sort',active?(state.tracksOrder==='asc'?'ascending':'descending'):'none');button.dataset.indicator=active?(state.tracksOrder==='asc'?'↑':'↓'):''});
   $('#tracks-body').innerHTML=d.tracks.length?d.tracks.map(x=>`<tr>
-    <td><strong>${esc(x.title)}</strong><small>${esc(x.artist)}${x.album?` · ${esc(x.album)}`:''}${x.genre?` · ${esc(x.genre)}`:''}${x.inLibrary?'':' · 履歴のみ'}</small></td>
+    <td><strong>${esc(x.title)}</strong><small>${x.genre?esc(x.genre):'—'}${x.inLibrary?'':' · 履歴のみ'}</small></td><td>${esc(x.artist)||'—'}</td><td>${esc(x.album)||'—'}</td>
     <td>${preferenceEditor(x)}</td><td>${favoriteEditor(x)}</td><td>${x.hasFingerprint?'✓':'—'}</td>
     <td>${x.playCount}回</td><td>${duration(x.totalPlayTime)}</td><td>${percent(x.completionRate)}</td><td>${percent(x.skipRate)}</td>
-    <td>${x.lastPlayedAt?new Date(x.lastPlayedAt).toLocaleString('ja-JP'):'—'}</td></tr>`).join(''):`<tr><td colspan="9">${empty()}</td></tr>`;
+    <td>${x.lastPlayedAt?new Date(x.lastPlayedAt).toLocaleString('ja-JP'):'—'}</td></tr>`).join(''):`<tr><td colspan="11">${empty()}</td></tr>`;
   $$('.preference-editor').forEach(el=>el.onchange=()=>savePreference(el.dataset.trackId,Number(el.value),favoriteValue(el.dataset.trackId)));
   $$('.favorite-editor').forEach(el=>el.onclick=()=>savePreference(el.dataset.trackId,preferenceValue(el.dataset.trackId),el.dataset.favorite!=='true'));
 }
@@ -47,7 +52,10 @@ async function loadImports(){const d=await api('/api/imports');$('#imports-body'
 async function upload(file){if(!file)return;const zone=$('#drop-zone'),result=$('#import-result');zone.querySelector('strong').textContent='Import中…';try{const form=new FormData();form.append('file',file);const d=await api('/api/import',{method:'POST',body:form});result.innerHTML=`<p class="subtitle">${esc(kindLabel(d.dataKind))}としてImportしました。</p><div class="result"><div><strong>${d.newCount}</strong><span>新規</span></div><div><strong>${d.updatedCount}</strong><span>更新</span></div><div><strong>${d.duplicateCount}</strong><span>重複</span></div><div><strong>${d.errorCount}</strong><span>エラー</span></div></div>${d.errors.length?`<p class="subtitle">${d.errors.map(esc).join('<br>')}</p>`:''}`;await Promise.all([loadImports(),loadDashboard()])}catch(e){result.innerHTML=`<p class="subtitle">Importできませんでした: ${esc(e.message)}</p>`}finally{zone.querySelector('strong').textContent='JSONをここへドロップ';$('#file-input').value=''}}
 $$('.nav-item').forEach(b=>b.onclick=()=>{$$('.nav-item,.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(`#${b.dataset.page}`).classList.add('active');if(b.dataset.page==='tracks')loadTracks();if(b.dataset.page==='sources')loadSources();if(b.dataset.page==='import')loadImports()});
 $$('#source-tabs button').forEach(b=>b.onclick=()=>{$$('#source-tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.sourceKind=b.dataset.kind;loadSources()});
-$$('.periods button').forEach(b=>b.onclick=()=>{const group=b.closest('.periods');group.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(group.dataset.target==='dashboard'){state.dashboardPeriod=b.dataset.period;loadDashboard()}else{state.tracksPeriod=b.dataset.period;loadTracks()}});
-let searchTimer;$('#track-search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadTracks,250)};
+$$('.periods button').forEach(b=>b.onclick=()=>{const group=b.closest('.periods');group.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(group.dataset.target==='dashboard'){state.dashboardPeriod=b.dataset.period;loadDashboard()}else{state.tracksPeriod=b.dataset.period;$('#custom-period').hidden=b.dataset.period!=='custom';loadTracks()}});
+let searchTimer;$$('.track-filters input').forEach(input=>input.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadTracks,250)});
+$$('#custom-period input').forEach(input=>input.onchange=loadTracks);
+$('#clear-track-filters').onclick=()=>{$$('.track-filters input').forEach(input=>input.value='');loadTracks()};
+$$('.sort-button').forEach(button=>button.onclick=()=>{if(state.tracksSort===button.dataset.sort)state.tracksOrder=state.tracksOrder==='asc'?'desc':'asc';else{state.tracksSort=button.dataset.sort;state.tracksOrder='asc'}loadTracks()});
 $('#file-input').onchange=e=>upload(e.target.files[0]);const zone=$('#drop-zone');['dragenter','dragover'].forEach(n=>zone.addEventListener(n,e=>{e.preventDefault();zone.classList.add('drag')}));['dragleave','drop'].forEach(n=>zone.addEventListener(n,e=>{e.preventDefault();zone.classList.remove('drag')}));zone.addEventListener('drop',e=>upload(e.dataTransfer.files[0]));
 loadDashboard();

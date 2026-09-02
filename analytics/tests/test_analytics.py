@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -246,6 +247,89 @@ class AnalyticsAPITests(unittest.TestCase):
         tracks = self.client.get("/api/tracks?period=all&search=Night").json()["tracks"]
         self.assertEqual(len(tracks), 1)
         self.assertEqual(tracks[0]["playCount"], 2)
+
+    def test_tracks_periods_custom_dates_and_unplayed_library_tracks(self):
+        now = datetime.now().astimezone()
+        dates = [now, now - timedelta(days=10), now - timedelta(days=40)]
+        self.upload(library_document([
+            library_track("track-1"),
+            library_track("track-unplayed", title="Never Played", artist="Quiet Artist"),
+        ]), "MyMusic-Library.json")
+        self.upload(document([
+            event(f"event-{index}", playedAt=value.isoformat(), playDuration=10 * index,
+                  completed=index == 1, skipped=index == 2)
+            for index, value in enumerate(dates, 1)
+        ]))
+
+        self.assertEqual(self.client.get("/api/tracks?period=7d").json()["tracks"][0]["playCount"], 1)
+        self.assertEqual(self.client.get("/api/tracks?period=30d").json()["tracks"][0]["playCount"], 2)
+        self.assertEqual(self.client.get("/api/tracks?period=all").json()["tracks"][0]["playCount"], 3)
+        day = dates[1].date().isoformat()
+        custom = self.client.get(
+            f"/api/tracks?period=custom&startDate={day}&endDate={day}"
+        ).json()["tracks"]
+        by_id = {item["trackId"]: item for item in custom}
+        self.assertEqual(by_id["track-1"]["playCount"], 1)
+        self.assertEqual(by_id["track-1"]["totalPlayTime"], 20)
+        self.assertEqual(by_id["track-1"]["skipRate"], 100)
+        self.assertIsNone(by_id["track-unplayed"]["lastPlayedAt"])
+        self.assertEqual(self.client.get(
+            "/api/tracks?period=custom&startDate=2026-09-02&endDate=2026-09-01"
+        ).status_code, 422)
+        self.assertEqual(self.client.get("/api/tracks?period=custom").status_code, 422)
+
+    def test_tracks_field_filters_are_partial_and_combined_with_and(self):
+        self.upload(library_document([
+            library_track("one", title="Brave Shine", artist="Aimer", album="Sun Dance", genre="Rock"),
+            library_track("two", title="Sunset", artist="Aimer", album="Other", genre="Pop"),
+            library_track("three", title="Brave", artist="Other", album="Sun Dance", genre="Rock"),
+        ]), "MyMusic-Library.json")
+        cases = {
+            "title=Shine": ["one"], "artist=aimer": ["one", "two"],
+            "album=Sun%20Dan": ["one", "three"], "genre=rock": ["one", "three"],
+            "artist=Aimer&album=Sun%20Dance&genre=Rock": ["one"],
+        }
+        for query, expected in cases.items():
+            with self.subTest(query=query):
+                rows = self.client.get(f"/api/tracks?period=all&{query}").json()["tracks"]
+                self.assertEqual(sorted(row["trackId"] for row in rows), expected)
+
+    def test_tracks_all_allowed_sorts_and_orders(self):
+        self.upload(library_document([
+            library_track("one", title="Alpha", artist="Zulu", album="Beta"),
+            library_track("two", title="Beta", artist="Alpha", album="Alpha"),
+        ]), "MyMusic-Library.json")
+        self.upload(preferences_document([
+            {"trackId": "one", "playbackPreference": 5},
+            {"trackId": "two", "playbackPreference": -2},
+        ]), "MyMusic-Playback-Preferences.json")
+        self.upload(document([
+            event("one-a", "one", trackTitle="Alpha", artist="Zulu", album="Beta",
+                  playedAt="2026-08-01T10:00:00+09:00", playDuration=100,
+                  completed=True, skipped=False),
+            event("one-b", "one", trackTitle="Alpha", artist="Zulu", album="Beta",
+                  playedAt="2026-08-02T10:00:00+09:00", playDuration=50,
+                  completed=False, skipped=True),
+            event("two-a", "two", trackTitle="Beta", artist="Alpha", album="Alpha",
+                  playedAt="2026-08-03T10:00:00+09:00", playDuration=25,
+                  completed=False, skipped=False),
+        ]))
+        sorts = ["title", "artist", "album", "preference", "playCount", "totalPlayTime",
+                 "completionRate", "skipRate", "lastPlayedAt"]
+        for sort in sorts:
+            asc = self.client.get(f"/api/tracks?period=all&sort={sort}&order=asc")
+            desc = self.client.get(f"/api/tracks?period=all&sort={sort}&order=desc")
+            with self.subTest(sort=sort):
+                self.assertEqual(asc.status_code, 200)
+                self.assertEqual(desc.status_code, 200)
+                self.assertNotEqual(asc.json()["tracks"][0]["trackId"], desc.json()["tracks"][0]["trackId"])
+        combined = self.client.get(
+            "/api/tracks?period=custom&startDate=2026-08-01&endDate=2026-08-02"
+            "&artist=Zulu&sort=totalPlayTime&order=desc"
+        ).json()["tracks"]
+        self.assertEqual([(row["trackId"], row["playCount"]) for row in combined], [("one", 2)])
+        self.assertEqual(self.client.get("/api/tracks?sort=drop_table").status_code, 422)
+        self.assertEqual(self.client.get("/api/tracks?order=sideways").status_code, 422)
 
     def test_extended_source_jsons_are_imported_and_exposed(self):
         self.upload(library_document([library_track()]), "MyMusic-Library.json")

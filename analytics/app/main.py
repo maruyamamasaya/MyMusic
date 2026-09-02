@@ -46,9 +46,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get("/api/tracks")
-    def tracks(period: str = Query("all"), search: str = Query("", max_length=200)):
+    def tracks(
+        period: str = Query("all"), search: str = Query("", max_length=200),
+        startDate: str | None = Query(None), endDate: str | None = Query(None),
+        title: str = Query("", max_length=200), artist: str = Query("", max_length=200),
+        album: str = Query("", max_length=200), genre: str = Query("", max_length=200),
+        sort: str = Query("playCount"), order: str = Query("desc"),
+    ):
         try:
-            return {"tracks": queries.tracks(period, search.strip())}
+            return {"tracks": queries.tracks(
+                period, search.strip(), startDate, endDate, title.strip(), artist.strip(),
+                album.strip(), genre.strip(), sort, order,
+            )}
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

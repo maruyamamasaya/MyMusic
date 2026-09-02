@@ -1,0 +1,20 @@
+.track-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.track-filters label, .custom-period label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.track-filters input, .custom-period input { width: 100%; background: var(--surface); border: 1px solid var(--line); color: #fff; padding: 10px 12px; border-radius: 9px; font: inherit; color-scheme: dark; }
+.track-filters button { border: 1px solid var(--line); background: var(--surface2); color: var(--text); padding: 10px 13px; border-radius: 9px; cursor: pointer; }
+.custom-period { display: flex; align-items: end; gap: 12px; margin: -10px 0 18px; }
+.custom-period[hidden] { display: none; }
+.form-error { color: var(--warn); font-size: 12px; margin: 0 0 10px; }
+.sort-button { border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 0; cursor: pointer; white-space: nowrap; }
+.sort-button::after { content: attr(data-indicator); margin-left: 5px; color: var(--accent); }
+.sort-button.active { color: var(--text); }
+@media (max-width: 1100px) {
+  .track-filters { grid-template-columns: repeat(2, minmax(180px, 1fr)) auto; }
+  .export-button { justify-self: start; }
+}

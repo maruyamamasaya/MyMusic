@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Any
 from uuid import UUID
@@ -9,6 +9,13 @@ from app.database import Database
 
 
 PERIOD_DAYS = {"today": 0, "7d": 7, "30d": 30, "all": None}
+TRACK_SORT_COLUMNS = {
+    "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
+    "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
+    "playCount": "playCount", "totalPlayTime": "totalPlayTime",
+    "completionRate": "completionRate", "skipRate": "skipRate",
+    "lastPlayedAt": "lastPlayedAt",
+}
 
 
 def _since(period: str) -> str | None:
@@ -98,10 +105,32 @@ class AnalyticsQueries:
                 ORDER BY value DESC, title COLLATE NOCASE LIMIT 10""", params)
         return [dict(row) | {"metric": alias} for row in rows]
 
-    def tracks(self, period: str, search: str = "") -> list[dict[str, Any]]:
-        since = _since(period)
+    def tracks(
+        self, period: str, search: str = "", start_date: str | None = None,
+        end_date: str | None = None, title: str = "", artist: str = "",
+        album: str = "", genre: str = "", sort: str = "playCount",
+        order: str = "desc",
+    ) -> list[dict[str, Any]]:
+        if period == "custom":
+            try:
+                start = date.fromisoformat(start_date or "")
+                end = date.fromisoformat(end_date or "")
+            except ValueError as exc:
+                raise ValueError("期間指定には開始日と終了日をYYYY-MM-DD形式で指定してください") from exc
+            if start > end:
+                raise ValueError("開始日は終了日以前にしてください")
+            since = None
+        else:
+            since = _since(period)
+        if sort not in TRACK_SORT_COLUMNS:
+            raise ValueError("unsupported track sort")
+        if order not in {"asc", "desc"}:
+            raise ValueError("order must be asc or desc")
         event_conditions, params = [], []
-        if since:
+        if period == "custom":
+            event_conditions.extend(["date(played_at, 'localtime') >= ?", "date(played_at, 'localtime') <= ?"])
+            params.extend([start.isoformat(), end.isoformat()])
+        elif since:
             event_conditions.append("played_at >= ?")
             params.append(since)
         search_conditions = []
@@ -112,8 +141,14 @@ class AnalyticsQueries:
             )
             escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             params.extend([f"%{escaped}%"] * 4)
+        for column, value in (("title", title), ("artist", artist), ("album", album), ("genre", genre)):
+            if value:
+                search_conditions.append(f"c.{column} LIKE ? ESCAPE '\\'")
+                escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                params.append(f"%{escaped}%")
         event_where = "WHERE " + " AND ".join(event_conditions) if event_conditions else ""
         search_where = "WHERE " + " AND ".join(search_conditions) if search_conditions else ""
+        sort_column, sort_order = TRACK_SORT_COLUMNS[sort], order.upper()
         with self.database.connect() as connection:
             rows = connection.execute(
                 f"""WITH filtered_events AS (
@@ -153,7 +188,7 @@ class AnalyticsQueries:
                     LEFT JOIN event_stats es ON es.track_id = c.track_id
                     LEFT JOIN playback_preferences pp ON pp.track_id = c.track_id
                     {search_where}
-                    ORDER BY playCount DESC, lastPlayedAt DESC, c.title COLLATE NOCASE
+                    ORDER BY {sort_column} {sort_order}, c.title COLLATE NOCASE, c.track_id
                     LIMIT 1000""", params)
             return [dict(row) for row in rows]
 

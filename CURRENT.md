@@ -92,6 +92,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-01 にライブラリ整理候補 M2を追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機UIはローカルMacで未検証。
 - 2026-09-01 にライブラリ整理候補をPlayback Event比率判定へ更新。SQLite schema v3、終了理由、直近20件／最低5件、途中スキップ率50%以上、平均再生率10%以下を対象とし、iPhone 17 / iOS 26.5 Simulatorの全XCTest 120件とDebug buildが成功。
 - 2026-09-01 にBehavior Scoring M3を追加。CloudではSwift parse、独立Scoring typecheck、diff静的検査のみ実施し、Xcode build、Simulator XCTest、実機はローカルMacで未検証。Overplayの選曲適用はM4へ保留。
+- 2026-09-02 にTrack Preference責務分離後のMood Station描画testへ不足していた`TrackPreferenceStore`のtest fixture注入を追加し、Xcode 26.6、iPhone 17 / iOS 26.5 Simulatorで全XCTest 129件が成功した。
 - 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
 
 ## 既知の制約・未検証

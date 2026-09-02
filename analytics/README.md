@@ -108,11 +108,13 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 ## Dashboard / API
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間の再生回数、時間、Skip率、完走率、日別・時間帯別・曲別・Artist別集計
-- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、再生回数、総再生時間、完走率、Skip率、最終再生日時、検索、Import済みPreferenceの編集と手動Export
+- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・最終再生日時、項目別AND検索、列ソート、Import済みPreferenceの編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットをタブ別に表示。曲単位データはLibraryとのTrack ID照合状況も表示
 - Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
 
-主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks?period=all&search=`、`POST /api/import`、`GET /api/imports`、`PUT /api/preferences/{track_id}`、`GET /api/preferences/export`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
+主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks`、`POST /api/import`、`GET /api/imports`、`PUT /api/preferences/{track_id}`、`GET /api/preferences/export`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
+
+Tracks APIは従来の`period=7d|30d|all`と`search=`を維持し、`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`を追加で受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。
 
 ## テスト
 
