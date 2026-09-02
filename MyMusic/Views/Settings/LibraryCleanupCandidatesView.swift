@@ -3,13 +3,15 @@ import SwiftUI
 struct LibraryCleanupCandidatesView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
 
     private let service = LibraryCleanupCandidateService()
 
     private var candidates: [LibraryCleanupCandidate] {
         service.candidates(
             tracks: libraryStore.tracks,
-            historyByTrackID: playbackHistoryStore.entries
+            historyByTrackID: playbackHistoryStore.entries,
+            preferencesByTrackID: trackPreferenceStore.entries
         )
     }
 

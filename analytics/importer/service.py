@@ -17,6 +17,8 @@ from importer.schema import (
     PlaybackExportV1,
     PlaybackPreferenceV1,
     PlaybackPreferencesExportV1,
+    TrackFeaturesExportV1, VolumeExportV1, PlaylistsExportV1,
+    EqualizerExportV1, GenrePresetsExportV1,
 )
 
 
@@ -93,6 +95,11 @@ class ImportService:
                 connection.execute(
                     "UPDATE library_tracks SET is_present = 0 WHERE import_id <> ?", (import_id,)
                 )
+            if data_kind in {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"} and not errors:
+                connection.execute(
+                    "DELETE FROM source_records WHERE data_kind = ? AND import_id <> ?",
+                    (data_kind, import_id),
+                )
             connection.execute(
                 """UPDATE import_runs SET new_count = ?, updated_count = ?, duplicate_count = ?,
                    error_count = ?, error_details = ? WHERE id = ?""",
@@ -118,13 +125,31 @@ class ImportService:
         if "events" in decoded:
             document = PlaybackExportV1.model_validate(decoded)
             return "playback_events", document.events, document.exportedAt
+        if decoded.get("kind") == "mymusic.equalizer":
+            document = EqualizerExportV1.model_validate(decoded)
+            items = [{"recordType": "current", **document.equalizer}]
+            items += [{"recordType": "preset", **item} for item in document.customPresets]
+            return "equalizer", items, None
+        if decoded.get("kind") == "mymusic.genre-display-presets":
+            document = GenrePresetsExportV1.model_validate(decoded)
+            return "genre_presets", document.presets, None
+        if "playlists" in decoded:
+            document = PlaylistsExportV1.model_validate(decoded)
+            return "playlists", [item.model_dump(mode="json", by_alias=True) for item in document.playlists], None
         if "tracks" in decoded and "schemaVersion" in decoded:
             document = PlaybackPreferencesExportV1.model_validate(decoded)
             return "playback_preferences", document.tracks, document.exportedAt
         if "tracks" in decoded and "version" in decoded:
+            filename_markers = set(decoded.get("tracks", [{}])[0].keys()) if decoded.get("tracks") else set()
+            if "features" in filename_markers or "sourceIdentity" in filename_markers or ("exportedAt" in decoded and "isEnabled" not in decoded):
+                document = TrackFeaturesExportV1.model_validate(decoded)
+                return "track_features", [item.model_dump(mode="json") for item in document.tracks], document.exportedAt
+            if "integratedLUFS" in filename_markers or "normalizationGainDB" in filename_markers or "isEnabled" in decoded:
+                document = VolumeExportV1.model_validate(decoded)
+                return "volume_normalization", [item.model_dump(mode="json") for item in document.tracks], document.exportedAt
             document = LibraryExportV1.model_validate(decoded)
             return "library", document.tracks, None
-        raise ValueError("対応形式ではありません。Playback Events、Library、Playback Preferencesを選択してください")
+        raise ValueError("対応しているMyMusic JSONではありません")
 
     def _import_item(
         self, connection: Any, data_kind: str, raw: Any, exported_at: datetime | None,
@@ -137,6 +162,8 @@ class ImportService:
         if data_kind == "playback_preferences":
             assert exported_at is not None
             return self._import_preference(connection, raw, exported_at, imported_at, import_id)
+        if data_kind in {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}:
+            return self._import_source_record(connection, data_kind, raw, imported_at, import_id)
         raise ValueError("unsupported data kind")
 
     @staticmethod
@@ -198,6 +225,43 @@ class ImportService:
         return "new" if existing is None else "updated"
 
     @staticmethod
+    def _import_source_record(connection: Any, data_kind: str, raw: dict[str, Any], imported_at: str, import_id: int) -> str:
+        if data_kind in {"track_features", "volume_normalization"}:
+            item_key = track_id = str(raw["trackID"])
+            title = raw.get("title") or track_id
+            subtitle = raw.get("artist")
+        elif data_kind == "playlists":
+            item_key, track_id = str(raw["playlistID"]), None
+            title, subtitle = raw["name"], raw.get("kind")
+        elif data_kind == "equalizer":
+            item_key = "current" if raw.get("recordType") == "current" else "preset:" + str(raw.get("id", raw.get("name", "preset")))
+            track_id = None
+            title = "現在の設定" if item_key == "current" else str(raw.get("name", "名称なし"))
+            subtitle = raw.get("recordType")
+        else:
+            item_key = "preset:" + str(raw.get("id", raw.get("name", "preset")))
+            track_id = None
+            title, subtitle = str(raw.get("name", "名称なし")), "genre preset"
+        raw_json = _canonical(raw)
+        existing = connection.execute(
+            "SELECT raw_json FROM source_records WHERE data_kind=? AND item_key=?", (data_kind, item_key)
+        ).fetchone()
+        if existing is not None and existing["raw_json"] == raw_json:
+            connection.execute(
+                "UPDATE source_records SET imported_at=?, import_id=? WHERE data_kind=? AND item_key=?",
+                (imported_at, import_id, data_kind, item_key),
+            )
+            return "duplicate"
+        connection.execute(
+            """INSERT INTO source_records(data_kind,item_key,track_id,title,subtitle,imported_at,import_id,raw_json)
+               VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(data_kind,item_key) DO UPDATE SET
+               track_id=excluded.track_id,title=excluded.title,subtitle=excluded.subtitle,
+               imported_at=excluded.imported_at,import_id=excluded.import_id,raw_json=excluded.raw_json""",
+            (data_kind, item_key, track_id, title, subtitle, imported_at, import_id, raw_json),
+        )
+        return "new" if existing is None else "updated"
+
+    @staticmethod
     def _import_preference(
         connection: Any, raw: Any, exported_at: datetime, imported_at: str, import_id: int,
     ) -> str:
@@ -210,20 +274,22 @@ class ImportService:
             return "duplicate"
         connection.execute(
             """INSERT INTO playback_preferences (
-                track_id, playback_preference, exported_at, imported_at, import_id, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                track_id, playback_preference, favorite, exported_at, imported_at, import_id, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(track_id) DO UPDATE SET
                 playback_preference=excluded.playback_preference,
+                favorite=excluded.favorite,
                 exported_at=excluded.exported_at, imported_at=excluded.imported_at,
                 import_id=excluded.import_id, raw_json=excluded.raw_json""",
-            (preference.track_id, preference.playback_preference, _utc(exported_at),
+            (preference.track_id, preference.playback_preference,
+             None if preference.favorite is None else int(preference.favorite), _utc(exported_at),
              imported_at, import_id, raw_json),
         )
         return "new" if existing is None else "updated"
 
     @staticmethod
     def _item_label(data_kind: str) -> str:
-        return "events" if data_kind == "playback_events" else "tracks"
+        return "events" if data_kind == "playback_events" else "items"
 
     @staticmethod
     def _error_text(exc: Exception) -> str:

@@ -19,6 +19,7 @@ struct DataManagementView: View {
 
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var historyStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(TrackFeatureStore.self) private var featureStore
@@ -42,11 +43,15 @@ struct DataManagementView: View {
             }
             Section("ライブラリ") {
                 exportLink("ライブラリをMarkdownで書き出す", systemImage: "doc.plaintext",
-                    file: exporter.libraryMarkdown(tracks: libraryStore.tracks, history: historyStore.entries))
+                    file: exporter.libraryMarkdown(
+                        tracks: libraryStore.tracks, history: historyStore.entries,
+                        preferences: preferenceStore.entries
+                    ))
                 throwingExportLink("ライブラリをJSONで書き出す", systemImage: "curlybraces") {
                     try exporter.libraryJSON(
                         tracks: libraryStore.unfilteredTracks,
                         history: historyStore.entries,
+                        preferences: preferenceStore.entries,
                         fingerprints: libraryFingerprints
                     )
                 }
@@ -61,7 +66,9 @@ struct DataManagementView: View {
             }
             Section("再生データ") {
                 throwingExportLink("再生履歴を書き出す", systemImage: "clock.arrow.circlepath") {
-                    try exporter.playbackHistoryJSON(historyStore.entries)
+                    try exporter.playbackHistoryJSON(
+                        historyStore.entries, preferences: preferenceStore.entries
+                    )
                 }
                 throwingExportLink("Analytics用再生イベントを書き出す", systemImage: "chart.bar.doc.horizontal") {
                     try exporter.playbackEventsJSON(
@@ -70,7 +77,7 @@ struct DataManagementView: View {
                     )
                 }
                 throwingExportLink("再生傾向を書き出す", systemImage: "hand.thumbsup") {
-                    try exporter.playbackPreferencesJSON(historyStore.entries)
+                    try exporter.playbackPreferencesJSON(preferenceStore.entries)
                 }
             }
             Section {

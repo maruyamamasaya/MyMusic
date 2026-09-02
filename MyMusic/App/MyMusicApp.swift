@@ -4,6 +4,7 @@ import SwiftUI
 struct MyMusicApp: App {
     @State private var playerStore: PlayerStore
     @State private var playbackHistoryStore: PlaybackHistoryStore
+    @State private var trackPreferenceStore: TrackPreferenceStore
     @State private var libraryStore: LibraryStore
     @State private var playlistStore = PlaylistStore()
     @State private var favoriteStore = FavoriteStore()
@@ -14,7 +15,8 @@ struct MyMusicApp: App {
     @State private var stationStore: StationStore
 
     init() {
-        let historyStore = PlaybackHistoryStore()
+        let preferenceStore = TrackPreferenceStore()
+        let historyStore = PlaybackHistoryStore(preferenceStore: preferenceStore)
         let audioPlayer = AudioPlayerService()
         let featureStore = TrackFeatureStore()
         let adjustmentStore = TrackPlaybackAdjustmentStore()
@@ -40,6 +42,7 @@ struct MyMusicApp: App {
             historyStore: historyStore, playerStore: playerStore
         ))
         _playbackHistoryStore = State(initialValue: historyStore)
+        _trackPreferenceStore = State(initialValue: preferenceStore)
         _playerStore = State(initialValue: playerStore)
         _highlightPlayerStore = State(initialValue: HighlightPlayerStore(playerStore: playerStore))
         _settingsStore = State(initialValue: SettingsStore(
@@ -57,6 +60,7 @@ struct MyMusicApp: App {
                 .environment(playlistStore)
                 .environment(favoriteStore)
                 .environment(playbackHistoryStore)
+                .environment(trackPreferenceStore)
                 .environment(settingsStore)
                 .environment(highlightPlayerStore)
                 .environment(trackFeatureStore)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import json
 from typing import Any
 
 from app.database import Database
@@ -41,7 +42,7 @@ class AnalyticsQueries:
                     FROM playback_events {where}""", params).fetchone())
             library_metrics = dict(connection.execute(
                 """SELECT COUNT(*) library_count,
-                    COALESCE(SUM(CASE WHEN favorite = 1 THEN 1 ELSE 0 END), 0) favorite_count
+                    0 favorite_count
                     FROM library_tracks WHERE is_present = 1""").fetchone())
             preference_metrics = dict(connection.execute(
                 """SELECT
@@ -53,6 +54,11 @@ class AnalyticsQueries:
                     WHERE lt.is_present = 1""").fetchone())
             metrics.update(library_metrics)
             metrics.update(preference_metrics)
+            metrics["favorite_count"] = connection.execute(
+                """SELECT COUNT(*) FROM library_tracks lt LEFT JOIN playback_preferences pp
+                   ON lt.track_id=pp.track_id
+                   WHERE lt.is_present=1 AND COALESCE(pp.favorite, lt.favorite)=1"""
+            ).fetchone()[0]
             daily = [dict(row) for row in connection.execute(
                 f"""SELECT date(played_at, 'localtime') label, COUNT(*) value
                     FROM playback_events {where} GROUP BY label ORDER BY label""", params)]
@@ -134,7 +140,7 @@ class AnalyticsQueries:
                         )
                     )
                     SELECT c.track_id trackId, c.title, c.artist, c.album, c.genre, c.year,
-                        c.duration, c.format, c.favorite,
+                        c.duration, c.format, COALESCE(pp.favorite, c.favorite) favorite,
                         CASE WHEN c.audio_fingerprint IS NULL THEN 0 ELSE 1 END hasFingerprint,
                         c.in_library inLibrary,
                         pp.playback_preference playbackPreference,
@@ -158,3 +164,32 @@ class AnalyticsQueries:
                     duplicate_count duplicateCount, error_count errorCount,
                     error_details errorDetails FROM import_runs ORDER BY id DESC LIMIT 100""")
             return [dict(row) for row in rows]
+
+    def sources(self, data_kind: str) -> dict[str, Any]:
+        allowed = {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
+        if data_kind not in allowed:
+            raise ValueError("unsupported source kind")
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """SELECT sr.item_key, sr.track_id, sr.title, sr.subtitle, sr.imported_at,
+                    sr.raw_json, CASE WHEN lt.track_id IS NULL THEN 0 ELSE 1 END linked
+                    FROM source_records sr
+                    LEFT JOIN library_tracks lt ON lt.track_id=sr.track_id AND lt.is_present=1
+                    WHERE sr.data_kind=? ORDER BY sr.title COLLATE NOCASE""", (data_kind,)
+            ).fetchall()
+            library_ids = {row[0] for row in connection.execute(
+                "SELECT track_id FROM library_tracks WHERE is_present=1"
+            )}
+        items = []
+        for row in rows:
+            raw = json.loads(row["raw_json"])
+            item = {"key": row["item_key"], "trackId": row["track_id"], "title": row["title"],
+                    "subtitle": row["subtitle"], "importedAt": row["imported_at"],
+                    "linked": bool(row["linked"]), "data": raw}
+            if data_kind == "playlists":
+                tracks = raw.get("tracks", [])
+                item["trackCount"] = len(tracks)
+                item["linkedTrackCount"] = sum(1 for track in tracks if track.get("trackID") in library_ids)
+            items.append(item)
+        linked = sum(1 for item in items if item["linked"])
+        return {"dataKind": data_kind, "count": len(items), "linkedCount": linked, "items": items}

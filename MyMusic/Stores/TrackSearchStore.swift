@@ -26,7 +26,8 @@ final class TrackSearchStore {
         artists: [Artist],
         query: String,
         filter: TrackSearchFilter,
-        historyEntries: [Track.ID: PlaybackHistory]
+        historyEntries: [Track.ID: PlaybackHistory],
+        preferenceEntries: [Track.ID: TrackPreference] = [:]
     ) {
         searchTask?.cancel()
         results = []
@@ -45,7 +46,8 @@ final class TrackSearchStore {
             artists: artists,
             query: query,
             filter: filter,
-            historyEntries: historyEntries
+            historyEntries: historyEntries,
+            preferenceEntries: preferenceEntries
         )
         searchTask = Task { [weak self, debounceDuration, worker] in
             do {
@@ -73,6 +75,7 @@ private struct TrackSearchRequest: Sendable {
     let query: String
     let filter: TrackSearchFilter
     let historyEntries: [Track.ID: PlaybackHistory]
+    let preferenceEntries: [Track.ID: TrackPreference]
 }
 
 private struct TrackSearchOutput: Sendable {
@@ -92,13 +95,15 @@ actor TrackSearchWorker {
         tracks: [Track],
         query: String,
         filter: TrackSearchFilter,
-        historyEntries: [Track.ID: PlaybackHistory]
+        historyEntries: [Track.ID: PlaybackHistory],
+        preferenceEntries: [Track.ID: TrackPreference] = [:]
     ) -> [Track] {
         searchService.search(
             tracks: tracks,
             query: query,
             filter: filter,
-            historyEntries: historyEntries
+            historyEntries: historyEntries,
+            preferenceEntries: preferenceEntries
         )
     }
 
@@ -107,7 +112,8 @@ actor TrackSearchWorker {
             tracks: request.tracks,
             query: request.query,
             filter: request.filter,
-            historyEntries: request.historyEntries
+            historyEntries: request.historyEntries,
+            preferenceEntries: request.preferenceEntries
         )
         guard !Task.isCancelled else { return TrackSearchOutput(tracks: [], albums: [], artists: []) }
 

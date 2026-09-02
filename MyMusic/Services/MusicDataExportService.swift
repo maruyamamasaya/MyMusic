@@ -78,6 +78,7 @@ struct MusicDataExportService {
     private struct PlaybackPreferencesDocumentItem: Codable {
         let trackId: UUID
         let playbackPreference: Int
+        let favorite: Bool
     }
 
     private struct PlaybackEventsDocument: Codable {
@@ -140,40 +141,52 @@ struct MusicDataExportService {
     func libraryJSON(
         tracks: [Track],
         history: [Track.ID: PlaybackHistory],
+        preferences: [Track.ID: TrackPreference] = [:],
         fingerprints: [Track.ID: String] = [:]
     ) throws -> MusicExportFile {
         struct Document: Codable { let version: Int; let tracks: [TrackDocument] }
         return try jsonFile(
             Document(version: 1, tracks: tracks.map {
-                trackDocument($0, history: history[$0.id], audioFingerprint: fingerprints[$0.id])
+                trackDocument(
+                    $0, history: history[$0.id], favorite: preferences[$0.id]?.favorite,
+                    audioFingerprint: fingerprints[$0.id]
+                )
             }),
             filename: "MyMusic-Library.json"
         )
     }
 
-    func libraryMarkdown(tracks: [Track], history: [Track.ID: PlaybackHistory]) -> MusicExportFile {
+    func libraryMarkdown(
+        tracks: [Track], history: [Track.ID: PlaybackHistory],
+        preferences: [Track.ID: TrackPreference] = [:]
+    ) -> MusicExportFile {
         var lines = ["# MyMusic Library", ""]
         for track in tracks {
             let entry = history[track.id]
             lines += ["## Track", "", "- TrackID: \(track.id.uuidString)", "- Title: \(track.title)",
                       "- Artist: \(track.artistName)", "- Album: \(track.albumTitle ?? "")", "- Genre: \(track.genre ?? "")",
                       "- Year: \(track.year.map(String.init) ?? "")", "- Duration: \(duration(track.duration))",
-                      "- Format: \(track.audioFormat?.codec.rawValue ?? "")", "- Favorite: \(entry?.isFavorite ?? false)",
+                      "- Format: \(track.audioFormat?.codec.rawValue ?? "")",
+                      "- Favorite: \(preferences[track.id]?.favorite ?? false)",
                       "- PlayCount: \(entry?.playCount ?? 0)", "- LastPlayedAt: \(entry?.lastPlayedAt.map(iso) ?? "")", ""]
         }
         return textFile(lines.joined(separator: "\n"), filename: "MyMusic-Library.md", type: .plainText)
     }
 
-    func playbackHistoryJSON(_ entries: [Track.ID: PlaybackHistory]) throws -> MusicExportFile {
+    func playbackHistoryJSON(
+        _ entries: [Track.ID: PlaybackHistory],
+        preferences: [Track.ID: TrackPreference] = [:]
+    ) throws -> MusicExportFile {
         struct Item: Codable { let trackID: UUID; let favorite: Bool; let playCount: Int; let lastPlayedAt: Date? }
         struct Document: Codable { let version: Int; let history: [Item] }
         let items = entries.values.sorted { $0.trackID.uuidString < $1.trackID.uuidString }
-            .map { Item(trackID: $0.trackID, favorite: $0.isFavorite, playCount: $0.playCount, lastPlayedAt: $0.lastPlayedAt) }
+            .map { Item(trackID: $0.trackID, favorite: preferences[$0.trackID]?.favorite ?? false,
+                        playCount: $0.playCount, lastPlayedAt: $0.lastPlayedAt) }
         return try jsonFile(Document(version: 1, history: items), filename: "MyMusic-Playback-History.json")
     }
 
     func playbackPreferencesJSON(
-        _ entries: [Track.ID: PlaybackHistory],
+        _ entries: [Track.ID: TrackPreference],
         exportedAt: Date = Date()
     ) throws -> MusicExportFile {
         let items = entries.values
@@ -181,12 +194,13 @@ struct MusicDataExportService {
             .map {
                 PlaybackPreferencesDocumentItem(
                     trackId: $0.trackID,
-                    playbackPreference: $0.playbackPreference
+                    playbackPreference: $0.playbackPreference,
+                    favorite: $0.favorite
                 )
             }
         return try jsonFile(
             PlaybackPreferencesDocument(
-                schemaVersion: 1,
+                schemaVersion: 2,
                 exportedAt: exportedAt,
                 tracks: items
             ),
@@ -318,18 +332,19 @@ struct MusicDataExportService {
         return PlaylistDocument(version: 1, name: playlist.name, playlistID: playlist.id,
             createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind, tags: playlist.tags,
             tracks: playlist.trackIDs.compactMap { byID[$0] }.map {
-                trackDocument($0, history: nil, audioFingerprint: nil)
+                trackDocument($0, history: nil, favorite: nil, audioFingerprint: nil)
             })
     }
 
     private func trackDocument(
         _ track: Track,
         history: PlaybackHistory?,
+        favorite: Bool?,
         audioFingerprint: String?
     ) -> TrackDocument {
         TrackDocument(trackID: track.id, title: track.title, artist: track.artistName, album: track.albumTitle,
             genre: track.genre, year: track.year, duration: track.duration, format: track.audioFormat?.codec.rawValue,
-            favorite: history?.isFavorite, playCount: history?.playCount, lastPlayedAt: history?.lastPlayedAt,
+            favorite: favorite, playCount: history?.playCount, lastPlayedAt: history?.lastPlayedAt,
             audioFingerprint: audioFingerprint)
     }
 

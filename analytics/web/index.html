@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyMusic Analytics</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <style>.source-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.source-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer}.source-tabs button.active{background:#2a3140;color:#fff;border-color:#4a5568}</style>
 </head>
 <body>
   <aside class="sidebar">
@@ -12,6 +13,7 @@
     <nav>
       <button class="nav-item active" data-page="dashboard">Overview</button>
       <button class="nav-item" data-page="tracks">Tracks</button>
+      <button class="nav-item" data-page="sources">Data Sources</button>
       <button class="nav-item" data-page="import">Import</button>
     </nav>
     <p class="local-badge">● Local only</p>
@@ -28,9 +30,15 @@
       <div class="toolbar"><input id="track-search" type="search" placeholder="曲名・アーティスト・アルバムを検索"></div>
       <article class="panel table-wrap"><table><thead><tr><th>曲</th><th>Good / Bad</th><th>お気に入り</th><th>Fingerprint</th><th>再生</th><th>再生時間</th><th>完走率</th><th>Skip率</th><th>最終再生</th></tr></thead><tbody id="tracks-body"></tbody></table></article>
     </section>
+    <section id="sources" class="page">
+      <header><div><p class="eyebrow">LIBRARY &amp; SETTINGS</p><h1>データソース管理</h1><p class="subtitle">特徴量・音量・プレイリストはTrack IDでLibraryとの紐付け状況も確認できます。</p></div></header>
+      <div id="source-tabs" class="source-tabs"><button class="active" data-kind="track_features">音楽特徴量</button><button data-kind="volume_normalization">音量ノーマライズ</button><button data-kind="playlists">プレイリスト</button><button data-kind="equalizer">イコライザー</button><button data-kind="genre_presets">ジャンルプリセット</button></div>
+      <div id="source-summary" class="metrics"></div>
+      <article class="panel table-wrap"><table><thead id="sources-head"></thead><tbody id="sources-body"></tbody></table></article>
+    </section>
     <section id="import" class="page">
-      <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">再生イベント、Library、再生傾向を自動判別し、ローカルのSQLiteへ安全に保存します。</p></div></header>
-      <label id="drop-zone" class="drop-zone"><input id="file-input" type="file" accept="application/json,.json"><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックしてファイルを選択</span><small>Playback Events / Library / Playback Preferences・最大20 MB</small></label>
+      <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">MyMusicのLibrary、再生、解析、プレイリスト、設定JSONを自動判別して保存します。</p></div></header>
+      <label id="drop-zone" class="drop-zone"><input id="file-input" type="file" accept="application/json,.json"><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックしてファイルを選択</span><small>MyMusic JSON 8形式・最大20 MB</small></label>
       <div id="import-result"></div>
       <article class="panel table-wrap"><h2>Import履歴</h2><table><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table></article>
     </section>

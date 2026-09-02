@@ -50,14 +50,14 @@ Homeの「作業用サイズ再生」は即時再生ではなく、作業用対�
 
 ```text
 MyMusic / future data sources
-  → Playback Events / Library / Playback Preferences JSON
+  → Playback Events / Library / Preferences / Features / Volume / Playlists / Settings JSON
   → analytics/importer (contract detection, validation, deduplication / upsert)
-  → analytics/data/analytics.sqlite3 (events + catalog + preferences + import history)
+  → analytics/data/analytics.sqlite3 (events + catalog + preferences + source records + import history)
   → analytics/app (FastAPI + on-demand aggregation)
   → analytics/web (local browser dashboard)
 ```
 
-`analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。Library、評価、再生事実はquery時にTrack IDで結合するため、未再生曲と現在のGood／Badも再生統計と同じ画面で扱える。完全なLibrary snapshotから外れたrowは非表示化するがRaw rowを削除しない。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
+`analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQとジャンルプリセットは曲非依存の設定スナップショットとして扱う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
 
 ### Library import
 
@@ -126,7 +126,7 @@ music root recursive scan
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`は気分・音の特徴量scoreに加え、任意指定された10年単位の年代で候補を先に絞り、近さとartist分散から一時queueを生成する。年代候補は対象Trackの有効な年metadataから降順で導出し、候補がなければ年代質問を省略する。年代無指定では年の有無にかかわらず従来どおり選曲する。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
-- `PlaybackHistoryStore` は再生回数、rating、正式なPlayback Event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。Playback EventはTrack ID、開始／終了日時、実聴秒数、完走率、skip／完走、開始種別／入口を持ち、early skipは`wasSkipped && listenedSeconds <= 30`である。日別集計にも完走、skip、early skip件数を保持する。分析画面から1曲の履歴をリセットする場合はeventと日別集計を含む対象Trackの再生事実だけを消去し、お気に入り、rating、飽き度は保持する。`AnalyticsService` と `MusicHistory*Service` は現在 library と履歴から表示用 snapshot を導出する。
+- `PlaybackHistoryStore` は再生回数、正式なPlayback Event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。曲Favoriteと`playbackPreference`の正本は`TrackPreferenceStore`であり、Historyの旧fieldはmigration互換用に限る。分析画面から1曲の履歴をリセットしてもPreferenceは変更しない。
 - `LibraryCleanupCandidateService` は通常曲と履歴snapshotを読み、終了理由を持つ直近20件までのPlayback Eventを評価する。最低5件、`user_skipped`率50%以上、平均completion ratio 10%以下をすべて満たす曲だけを候補にする。既存`playCount`、直接選択、Good / Badは判定に使わず、終了理由のない旧eventも誤分類防止のため除外する。途中スキップ率降順、次に平均再生率昇順、同数時は最終再生の新しい順に並べ、履歴・評価・飽き度・shuffle非表示を変更しない。
 - `PlaybackPreferenceWeightPolicy` はGood / Bad（-10〜+10）を正の選曲重みへ写像し、`PlaybackSelectionPolicy`はOverplayによるshuffle（最大50%）／Station（最大20%）の一時的な減衰を一元管理する。`PlaybackBehaviorAnalyzer`はlibraryと保存済み日別集計のsnapshotから`OverplayScoring`（直近7日／その前56日）と`PreferenceDriftScoring`（直近30日／それ以前、historical最低8件）を呼び、分析結果と候補を純粋に導出する。通常shuffle、Quick Play、Selective Randomの候補と選択後queue、PlayerStoreの自動shuffle orderは1選曲単位のOverplay snapshotを使う。未再生Discoveryと作業用再生は目的を維持するためPreferenceだけを使う。Stationは純粋なMood scoreでthreshold判定した後にだけOverplay factorをrankingへ掛け、既存artist減点を続ける。Preference Driftは候補表示専用のままである。派生score／weightはSQLiteへ保存せず、手動選択、Good / Bad、飽き度、恒久非表示を変更しない。
 - 永続化は`PlaybackHistoryPersistenceService` actorから`PlaybackHistorySQLiteRepository`を呼び、`Application Support/MyMusic/playback-history.sqlite3`を正本とする。schema version 2ではevent IDと完走flag、version 3では終了理由`natural / user_skipped / other`を追加する。通常変更は1曲snapshotを1 transactionで渡し、`playback_events`はevent IDによる`INSERT OR IGNORE`でappendし、track／日別／入口別はupsertする。空event snapshotだけが曲別resetの削除境界となる。初回は`PlaybackHistoryMigrationService`が旧JSONを上書きなしの永久backupへcopyし、transaction import後の全Model一致でのみDB metadataとDB外stateを`verified`にする。`PlaybackHistoryBackupService`は起動load時に24時間条件の日次JSON snapshot（7世代）を作る。
@@ -137,7 +137,8 @@ music root recursive scan
 - CSVインポート経路は現時点で未実装のため、上記CSVが現行正規フォーマットとする。
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
 - `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
-- `MusicDataExportService`は保存済みPlayback HistoryからTrack IDと`playbackPreference`だけを安定順で`MyMusic-Playback-Preferences.json`へ出力する。これは現在値のschema v1 snapshotであり、お気に入り、再生事実、派生Behavior score、Import経路は含まない。
+- `TrackPreferencePersistenceService`は`Application Support/MyMusic/track-preferences.json`を曲Preferenceの正本とする。schema v2 fileがない初回だけ旧Playback HistoryのFavorite／評価を移し、atomic write後のread-back一致を確認する。History読込失敗時は空migrationを確定しない。
+- `MusicDataExportService`はTrack ID、`playbackPreference`、`favorite`を安定順でschema v2の`MyMusic-Playback-Preferences.json`へ出力する。Library／History JSONのFavorite fieldは互換目的で新Preference値をミラーするが正本ではない。
 - Library JSONはidentity registryに保存済みのFingerprintだけをoptional `audioFingerprint`として出力し、Export操作自体では音声を読まない。Analyticsは64文字のlowercase SHA-256として検証・保存するが、v0では別Track IDの自動統合は行わない。
 - 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
@@ -152,7 +153,7 @@ server / database migration はありません。端末内の file と UserDefau
 | Folder scan cache | `LibraryPersistenceService` | Application Support 内 JSON |
 | Stable Track identity | `TrackIdentityService` | Application Support 内 JSON |
 | Artwork / highlight | `ArtworkService` / `HighlightRepository` | Caches 内 file / JSON |
-| Favorites / playlists / playback history | 各 PersistenceService | JSON / Application Support `MyMusic/playback-history.sqlite3` |
+| Track preferences / playlists / playback history | 各 PersistenceService | `track-preferences.json` / JSON / `playback-history.sqlite3` |
 | Track features | `TrackFeaturePersistenceService` | Application Support `MyMusic/track-features.json` |
 | Track playback adjustments | `TrackPlaybackAdjustmentPersistenceService` | Application Support `MyMusic/TrackPlaybackAdjustments/<ID先頭2文字>/<Stable Track ID>.json` |
 | EQ / transition / volume normalization / display preferences | `SettingsStore` 等 | UserDefaults |

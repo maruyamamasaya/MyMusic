@@ -73,6 +73,7 @@ final class AnalyticsService {
     func makeSnapshot(
         tracks: [Track],
         historyEntries: [Track.ID: PlaybackHistory],
+        preferenceEntries: [Track.ID: TrackPreference],
         playlists: [Playlist]
     ) -> AnalyticsSnapshot {
         let now = Date()
@@ -86,7 +87,7 @@ final class AnalyticsService {
                 playCount: history.playCount,
                 firstPlayedAt: history.firstPlayedAt,
                 lastPlayedAt: history.lastPlayedAt,
-                playbackPreference: history.playbackPreference,
+                playbackPreference: preferenceEntries[history.trackID]?.playbackPreference ?? 0,
                 boredomLevel: history.isPermanentlyHiddenFromShuffle ? 3 : min(history.boredomCount, 2),
                 boredomHiddenUntil: history.boredomHiddenUntil,
                 isPermanentlyHiddenFromShuffle: history.isPermanentlyHiddenFromShuffle,
@@ -111,7 +112,7 @@ final class AnalyticsService {
             totalManualPlayCount: historyEntries.values.reduce(0) { $0 + $1.manualPlayCount },
             totalAutomaticPlayCount: historyEntries.values.reduce(0) { $0 + $1.automaticPlayCount },
             playedTrackCount: historyEntries.values.filter { $0.lastPlayedAt != nil }.count,
-            favoriteCount: historyEntries.values.filter(\.isFavorite).count,
+            favoriteCount: preferenceEntries.values.filter(\.favorite).count,
             playlistCount: playlists.count,
             mostPlayedTrack: playCounts.first,
             mostPlayedTracks: playCounts,

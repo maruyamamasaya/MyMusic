@@ -3,6 +3,7 @@ import SwiftUI
 struct SongsView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
     @State private var trackToAddToPlaylist: Track?
     @State private var query = ""
     @State private var sortOrder: SongSortOrder = .random
@@ -93,10 +94,10 @@ struct SongsView: View {
         .contextMenu {
             if track.isEligibleForRegularPlayback {
                 Button(
-                    playbackHistoryStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
-                    systemImage: playbackHistoryStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
+                    preferenceStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
+                    systemImage: preferenceStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
                 ) {
-                    playbackHistoryStore.toggleFavorite(trackID: track.id)
+                    preferenceStore.toggleFavorite(trackID: track.id)
                 }
             }
             Button("プレイリストに追加", systemImage: "text.badge.plus") {

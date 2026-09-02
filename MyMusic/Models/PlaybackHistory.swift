@@ -127,10 +127,12 @@ struct PlaybackDailySummary: Codable, Hashable, Sendable {
 
 struct PlaybackHistory: Codable, Hashable, Sendable {
     let trackID: Track.ID
+    /// Legacy migration field. TrackPreferenceStore is the authoritative owner.
     var isFavorite: Bool
     var playCount: Int
     var firstPlayedAt: Date?
     var lastPlayedAt: Date?
+    /// Legacy migration field. TrackPreferenceStore is the authoritative owner.
     var playbackPreference: Int
     var playbackEvents: [PlaybackEvent]
     var dailySummaries: [String: PlaybackDailySummary]

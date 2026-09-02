@@ -2,7 +2,7 @@
 
 MyMusicの再生履歴JSONをPCへ取り込み、ローカルブラウザで閲覧する独立ツールです。iOSアプリのファイル、内部DB、再生処理には接続せず、AnalyticsからMyMusicへの書き戻しも行いません。
 
-iPhoneの「設定」→「データ管理」から生成される`MyMusic-Playback-Events.json`、`MyMusic-Library.json`、`MyMusic-Playback-Preferences.json`に対応します。3ファイルは共通のTrack IDで結合されます。
+iPhoneの「設定」→「データ管理」から生成される8種類のJSONに対応します。Library、再生、特徴量、音量、プレイリスト内の曲は共通のTrack IDで結合されます。EQとジャンルプリセットは曲単位ではないため、独立した設定スナップショットとして保持します。
 
 ## 構成
 
@@ -89,8 +89,13 @@ Import画面ではドラッグ&ドロップまたはファイル選択ができ�
 | ファイル | 判別契約 | 保存内容 |
 | --- | --- | --- |
 | `MyMusic-Playback-Events.json` | `schemaVersion: 1` + `events` | 追記型のRaw再生イベント。`eventId`で重複排除 |
-| `MyMusic-Library.json` | `version: 1` + `tracks` | 曲名、Artist、Album、Genre、年、長さ、Format、お気に入り、作成済み音声Fingerprint等のLibrary snapshot |
-| `MyMusic-Playback-Preferences.json` | `schemaVersion: 1` + `tracks[].playbackPreference` | Track IDごとの現在のGood／Bad値（-10〜+10） |
+| `MyMusic-Library.json` | `version: 1` + `tracks` | 曲名、Artist、Album、Genre、年、長さ、Format、作成済み音声Fingerprint等のLibrary snapshot。旧Favorite fieldは互換入力として受理 |
+| `MyMusic-Playback-Preferences.json` | `schemaVersion: 2` + `tracks[].playbackPreference/favorite` | Track IDごとの現在のGood／Bad値（-10〜+10）と曲Favorite。schema v1も後方互換で受理 |
+| `MyMusic-Track-Features.json` | `version: 1` + `tracks[].features` | Track IDごとの音楽特徴量と解析情報 |
+| `MyMusic-Volume-Normalization.json` | `version: 1` + `isEnabled` + `tracks` | Track IDごとのLUFS、True Peak、補正Gain |
+| `MyMusic-Playlists.json` | `version: 1` + `playlists` | Playlist metadata、タグ、収録曲とLibrary照合状況 |
+| `MyMusic-Equalizer.json` | `kind: mymusic.equalizer` | 現在のEQ設定とカスタムプリセット |
+| `MyMusic-Genre-Display-Presets.json` | `kind: mymusic.genre-display-presets` | ジャンル表示プリセットと有効ジャンル |
 
 Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、値が変わった項目は更新として記録します。`audioFingerprint`はoptionalの64文字lowercase SHA-256として検証し、Tracks画面で作成済み状態を確認できます。Fingerprintが同じ別Track IDの候補検出・alias統合は将来対応であり、現在は自動統合しません。完全に検証できた新しいLibrary snapshotに含まれない曲は現在Libraryから外れたものとして画面から除外しますが、SQLiteのRaw rowは削除せず保持します。Import順は問いません。
 
@@ -102,7 +107,8 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間の再生回数、時間、Skip率、完走率、日別・時間帯別・曲別・Artist別集計
 - Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、再生回数、総再生時間、完走率、Skip率、最終再生日時、検索
-- Import: 3種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
+- Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットをタブ別に表示。曲単位データはLibraryとのTrack ID照合状況も表示
+- Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
 
 主なAPIは`GET /api/dashboard?period=7d`、`GET /api/tracks?period=all&search=`、`POST /api/import`、`GET /api/imports`です。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
 

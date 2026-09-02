@@ -117,7 +117,7 @@ struct HighlightPlayerView: View {
 
 private struct HighlightTrackPage: View {
     @Environment(PlayerStore.self) private var playerStore
-    @Environment(PlaybackHistoryStore.self) private var historyStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(SettingsStore.self) private var settingsStore
 
     let track: Track
@@ -136,7 +136,7 @@ private struct HighlightTrackPage: View {
     let onFullPlayback: () -> Void
     let onResumeHighlight: () -> Void
 
-    private var isFavorite: Bool { historyStore.isFavorite(trackID: track.id) }
+    private var isFavorite: Bool { preferenceStore.isFavorite(trackID: track.id) }
 
     var body: some View {
         GeometryReader { proxy in
@@ -237,7 +237,7 @@ private struct HighlightTrackPage: View {
     private var actionBar: some View {
         HStack(spacing: 8) {
             Button {
-                historyStore.toggleFavorite(trackID: track.id)
+                preferenceStore.toggleFavorite(trackID: track.id)
             } label: {
                 Image(systemName: isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(isFavorite ? .pink : .white)
@@ -245,7 +245,7 @@ private struct HighlightTrackPage: View {
             .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
 
             Button {
-                historyStore.increasePlaybackPreference(for: track.id)
+                preferenceStore.increasePlaybackPreference(for: track.id)
             } label: {
                 Image(systemName: "hand.thumbsup.fill")
                     .foregroundStyle(playbackPreference > 0 ? .green : .white)
@@ -254,7 +254,7 @@ private struct HighlightTrackPage: View {
             .accessibilityValue("評価 \(playbackPreference)")
 
             Button {
-                historyStore.decreasePlaybackPreference(for: track.id)
+                preferenceStore.decreasePlaybackPreference(for: track.id)
             } label: {
                 Image(systemName: "hand.thumbsdown.fill")
                     .foregroundStyle(playbackPreference < 0 ? .orange : .white)
@@ -328,7 +328,7 @@ private struct HighlightTrackPage: View {
     }
 
     private var playbackPreference: Int {
-        historyStore.playbackPreference(for: track.id)
+        preferenceStore.playbackPreference(for: track.id)
     }
 
     private func togglePlaybackFromArtwork() {
@@ -347,7 +347,7 @@ private struct HighlightTrackPage: View {
 
 private struct HighlightTrackInformationView: View {
     @Environment(LibraryStore.self) private var libraryStore
-    @Environment(PlaybackHistoryStore.self) private var historyStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(\.dismiss) private var dismiss
 
@@ -392,10 +392,10 @@ private struct HighlightTrackInformationView: View {
                         NavigationLink("アルバムを表示") { AlbumDetailView(album: album) }
                     }
                     Button(
-                        historyStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
-                        systemImage: historyStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
+                        preferenceStore.isFavorite(trackID: track.id) ? "お気に入りから削除" : "お気に入りに追加",
+                        systemImage: preferenceStore.isFavorite(trackID: track.id) ? "heart.slash" : "heart"
                     ) {
-                        historyStore.toggleFavorite(trackID: track.id)
+                        preferenceStore.toggleFavorite(trackID: track.id)
                     }
                     Menu("プレイリストに追加", systemImage: "text.badge.plus") {
                         ForEach(playlistStore.playlists(compatibleWith: track)) { playlist in

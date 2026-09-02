@@ -3,10 +3,10 @@ import SwiftUI
 struct FavoritesView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
-    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
 
     private var tracks: [Track] {
-        playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+        preferenceStore.favoriteTracks(from: libraryStore.tracks)
     }
 
     var body: some View {
@@ -39,7 +39,7 @@ struct FavoritesView: View {
                         }
                         .swipeActions {
                             Button("お気に入り解除", systemImage: "heart.slash", role: .destructive) {
-                                playbackHistoryStore.toggleFavorite(trackID: track.id)
+                                preferenceStore.toggleFavorite(trackID: track.id)
                             }
                         }
                     }

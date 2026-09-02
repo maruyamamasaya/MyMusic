@@ -207,17 +207,19 @@ class AnalyticsAPITests(unittest.TestCase):
             library_track("track-unplayed", title="Never Played", favorite=False, playCount=0,
                           lastPlayedAt=None),
         ]), "MyMusic-Library.json")
-        self.upload(preferences_document([
-            {"trackId": "track-1", "playbackPreference": 5},
-            {"trackId": "track-unplayed", "playbackPreference": 0},
-        ]), "MyMusic-Playback-Preferences.json")
+        preference_payload = preferences_document([
+            {"trackId": "track-1", "playbackPreference": 5, "favorite": False},
+            {"trackId": "track-unplayed", "playbackPreference": 0, "favorite": True},
+        ])
+        preference_payload["schemaVersion"] = 2
+        self.upload(preference_payload, "MyMusic-Playback-Preferences.json")
         self.upload(document([event()]), "MyMusic-Playback-Events.json")
 
         tracks = self.client.get("/api/tracks?period=all").json()["tracks"]
         by_id = {item["trackId"]: item for item in tracks}
         self.assertEqual(len(by_id), 2)
         self.assertEqual(by_id["track-1"]["playbackPreference"], 5)
-        self.assertEqual(by_id["track-1"]["favorite"], 1)
+        self.assertEqual(by_id["track-1"]["favorite"], 0)
         self.assertEqual(by_id["track-1"]["playCount"], 1)
         self.assertEqual(by_id["track-unplayed"]["playCount"], 0)
         self.assertIsNone(by_id["track-unplayed"]["lastPlayedAt"])
@@ -243,6 +245,67 @@ class AnalyticsAPITests(unittest.TestCase):
         tracks = self.client.get("/api/tracks?period=all&search=Night").json()["tracks"]
         self.assertEqual(len(tracks), 1)
         self.assertEqual(tracks[0]["playCount"], 2)
+
+    def test_extended_source_jsons_are_imported_and_exposed(self):
+        self.upload(library_document([library_track()]), "MyMusic-Library.json")
+        feature = {
+            "version": 1, "exportedAt": "2026-09-02T12:00:00Z", "tracks": [{
+                "trackID": "track-1", "title": "Night Drive", "artist": "Example Artist",
+                "sourceIdentity": {"relativePath": "Music/night.m4a", "fileSize": 123,
+                    "duration": 210, "modificationDate": None, "contentHash": None,
+                    "title": "Night Drive", "artist": "Example Artist", "album": "City Lights"},
+                "analysisVersion": 2, "analyzedAt": "2026-09-01T12:00:00Z",
+                "importedAt": "2026-09-02T12:00:00Z", "features": {"tempo": 120, "energy": .7}
+            }]
+        }
+        volume = {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
+            "tracks": [{"trackID": "track-1", "title": "Night Drive", "artist": "Example Artist",
+                "relativePath": "Music/night.m4a", "integratedLUFS": -14.2,
+                "truePeakDBTP": -1.1, "normalizationGainDB": 0.0}]}
+        playlist_track = library_track()
+        playlists = {"version": 1, "playlists": [{"version": 1, "name": "Favorites",
+            "playlistID": "playlist-1", "createdAt": "2026-09-01T12:00:00Z",
+            "updatedAt": "2026-09-02T12:00:00Z", "kind": "regular", "tags": ["夜"],
+            "tracks": [playlist_track]}]}
+        equalizer = {"kind": "mymusic.equalizer", "version": 1,
+            "equalizer": {"isEnabled": True, "preamp": -2, "bands": [{"frequency": 31, "gain": 1}]},
+            "customPresets": [{"id": "preset-1", "name": "My EQ", "preamp": -2,
+                "gains": [0, 1], "isBuiltIn": False}]}
+        genres = {"kind": "mymusic.genre-display-presets", "version": 1,
+            "presets": [{"id": "genre-1", "name": "Focus",
+                "enabledGenreNames": ["Ambient"], "includesUnassignedGenreSetting": False}]}
+
+        for name, payload, kind in [
+            ("MyMusic-Track-Features.json", feature, "track_features"),
+            ("MyMusic-Volume-Normalization.json", volume, "volume_normalization"),
+            ("MyMusic-Playlists.json", playlists, "playlists"),
+            ("MyMusic-Equalizer.json", equalizer, "equalizer"),
+            ("MyMusic-Genre-Display-Presets.json", genres, "genre_presets"),
+        ]:
+            result = self.upload(payload, name).json()
+            self.assertEqual(result["dataKind"], kind)
+            self.assertGreater(result["newCount"], 0)
+            self.assertEqual(result["errorCount"], 0)
+
+        features_api = self.client.get("/api/sources/track_features").json()
+        self.assertEqual(features_api["linkedCount"], 1)
+        self.assertEqual(features_api["items"][0]["data"]["features"]["tempo"], 120)
+        playlists_api = self.client.get("/api/sources/playlists").json()
+        self.assertEqual(playlists_api["items"][0]["linkedTrackCount"], 1)
+        self.assertEqual(self.client.get("/api/sources/equalizer").json()["count"], 2)
+        self.assertEqual(self.client.get("/api/sources/genre_presets").json()["count"], 1)
+
+    def test_extended_source_reimport_updates_without_duplicate_rows(self):
+        base = {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
+            "tracks": [{"trackID": "track-1", "title": "A", "artist": "B",
+                "relativePath": "a.m4a", "integratedLUFS": -14,
+                "truePeakDBTP": -1, "normalizationGainDB": 0}]}
+        self.upload(base, "MyMusic-Volume-Normalization.json")
+        changed = json.loads(json.dumps(base))
+        changed["tracks"][0]["normalizationGainDB"] = -1.5
+        result = self.upload(changed, "MyMusic-Volume-Normalization.json").json()
+        self.assertEqual(result["updatedCount"], 1)
+        self.assertEqual(self.client.get("/api/sources/volume_normalization").json()["count"], 1)
 
     def test_api_rejects_bad_period_and_non_json_file(self):
         self.assertEqual(self.client.get("/api/dashboard?period=year").status_code, 422)
@@ -289,6 +352,14 @@ class DatabaseMigrationTests(unittest.TestCase):
                 connection.close()
             self.assertIn("is_present", library_columns)
             self.assertIn("audio_fingerprint", library_columns)
+            connection = sqlite3.connect(path)
+            try:
+                preference_columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(playback_preferences)")
+                }
+            finally:
+                connection.close()
+            self.assertIn("favorite", preference_columns)
 
 
 if __name__ == "__main__":

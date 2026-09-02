@@ -3,6 +3,7 @@ import SwiftUI
 struct MusicHistoryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @State private var snapshot = MusicHistorySnapshot.empty
     @State private var selectedYear: Int?
     @State private var hasLoadedSnapshot = false
@@ -248,6 +249,7 @@ struct MusicHistoryView: View {
         let analytics = AnalyticsService().makeSnapshot(
             tracks: libraryStore.unfilteredTracks,
             historyEntries: playbackHistoryStore.entries,
+            preferenceEntries: trackPreferenceStore.entries,
             playlists: []
         )
         snapshot = MusicHistoryService().makeSnapshot(

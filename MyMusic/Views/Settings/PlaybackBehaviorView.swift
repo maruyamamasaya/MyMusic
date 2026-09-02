@@ -3,11 +3,16 @@ import SwiftUI
 struct PlaybackBehaviorView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
 
     private let analyzer = PlaybackBehaviorAnalyzer()
 
     private var analysis: PlaybackBehaviorAnalysis {
-        analyzer.analyze(tracks: libraryStore.tracks, historyByTrackID: playbackHistoryStore.entries)
+        analyzer.analyze(
+            tracks: libraryStore.tracks,
+            historyByTrackID: playbackHistoryStore.entries,
+            preferencesByTrackID: trackPreferenceStore.entries
+        )
     }
 
     var body: some View {

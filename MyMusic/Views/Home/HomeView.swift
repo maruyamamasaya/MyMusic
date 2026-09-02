@@ -15,6 +15,7 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var randomizedPlaylistIDs: [Playlist.ID] = []
@@ -155,7 +156,7 @@ struct HomeView: View {
         case .workSizePlay:
             tracks = libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
         case .favorites:
-            tracks = playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+            tracks = trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
         case .favoriteAlbums:
             tracks = favoriteAlbumTracks
         case .favoriteArtists:
@@ -180,7 +181,7 @@ struct HomeView: View {
         case .repeatPlay:
             !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
         case .favorites:
-            playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+            trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
                 .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
         case .favoriteAlbums:
             !favoriteAlbumTracks.isEmpty
@@ -202,7 +203,7 @@ struct HomeView: View {
             tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
         case .favorites:
             tracks = playbackHistoryStore.preferenceWeightedShuffle(
-                playbackHistoryStore.favoriteTracks(from: libraryStore.tracks)
+                trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
             )
         default:
             return

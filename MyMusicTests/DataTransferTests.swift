@@ -10,6 +10,9 @@ final class AnalysisDataExportTests: XCTestCase {
         let file = try MusicDataExportService().libraryJSON(
             tracks: [identified, pending],
             history: [:],
+            preferences: [identified.id: TrackPreference(
+                trackID: identified.id, playbackPreference: 0, favorite: true
+            )],
             fingerprints: [identified.id: fingerprint]
         )
         let root = try XCTUnwrap(
@@ -22,7 +25,9 @@ final class AnalysisDataExportTests: XCTestCase {
         })
 
         XCTAssertEqual(byID[identified.id.uuidString]?["audioFingerprint"] as? String, fingerprint)
+        XCTAssertEqual(byID[identified.id.uuidString]?["favorite"] as? Bool, true)
         XCTAssertNil(byID[pending.id.uuidString]?["audioFingerprint"])
+        XCTAssertNil(byID[pending.id.uuidString]?["favorite"])
     }
 
     func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {
@@ -91,25 +96,13 @@ final class AnalysisDataExportTests: XCTestCase {
         let firstTrackID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let secondTrackID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
         let exportedAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let histories = [
-            secondTrackID: PlaybackHistory(
-                trackID: secondTrackID,
-                isFavorite: true,
-                playCount: 1,
-                lastPlayedAt: exportedAt,
-                playbackPreference: -2
-            ),
-            firstTrackID: PlaybackHistory(
-                trackID: firstTrackID,
-                isFavorite: false,
-                playCount: 0,
-                lastPlayedAt: nil,
-                playbackPreference: 0
-            )
+        let preferences = [
+            secondTrackID: TrackPreference(trackID: secondTrackID, playbackPreference: -2, favorite: true),
+            firstTrackID: TrackPreference(trackID: firstTrackID, playbackPreference: 0, favorite: false)
         ]
 
         let file = try MusicDataExportService().playbackPreferencesJSON(
-            histories,
+            preferences,
             exportedAt: exportedAt
         )
         let root = try XCTUnwrap(
@@ -118,14 +111,16 @@ final class AnalysisDataExportTests: XCTestCase {
         let tracks = try XCTUnwrap(root["tracks"] as? [[String: Any]])
 
         XCTAssertEqual(file.filename, "MyMusic-Playback-Preferences.json")
-        XCTAssertEqual(root["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(root["schemaVersion"] as? Int, 2)
         XCTAssertEqual(root.keys.sorted(), ["exportedAt", "schemaVersion", "tracks"])
         XCTAssertEqual(tracks.count, 2)
         XCTAssertEqual(tracks[0]["trackId"] as? String, firstTrackID.uuidString)
         XCTAssertEqual(tracks[0]["playbackPreference"] as? Int, 0)
-        XCTAssertEqual(tracks[0].keys.sorted(), ["playbackPreference", "trackId"])
+        XCTAssertEqual(tracks[0]["favorite"] as? Bool, false)
+        XCTAssertEqual(tracks[0].keys.sorted(), ["favorite", "playbackPreference", "trackId"])
         XCTAssertEqual(tracks[1]["trackId"] as? String, secondTrackID.uuidString)
         XCTAssertEqual(tracks[1]["playbackPreference"] as? Int, -2)
+        XCTAssertEqual(tracks[1]["favorite"] as? Bool, true)
     }
 
     func testFeatureAndNormalizationExportsContainExpectedTracks() throws {

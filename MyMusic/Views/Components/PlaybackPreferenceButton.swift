@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlaybackPreferenceButton: View {
-    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
 
     let track: Track
     let direction: Direction
@@ -20,7 +20,7 @@ struct PlaybackPreferenceButton: View {
     }
 
     private var preference: Int {
-        playbackHistoryStore.playbackPreference(for: track.id)
+        preferenceStore.playbackPreference(for: track.id)
     }
 
     private var level: Int {
@@ -99,7 +99,7 @@ struct PlaybackPreferenceButton: View {
 
     private var effectColor: Color {
         guard isActive else { return .secondary }
-        let progress = Double(level) / Double(PlaybackHistoryStore.maximumPreference)
+        let progress = Double(level) / Double(TrackPreferenceStore.maximumPreference)
         if direction == .increase {
             return Color(
                 hue: 0.56 + progress * 0.16,
@@ -116,9 +116,9 @@ struct PlaybackPreferenceButton: View {
 
     private func updatePreference() {
         if direction == .increase {
-            playbackHistoryStore.increasePlaybackPreference(for: track.id)
+            preferenceStore.increasePlaybackPreference(for: track.id)
         } else {
-            playbackHistoryStore.decreasePlaybackPreference(for: track.id)
+            preferenceStore.decreasePlaybackPreference(for: track.id)
         }
 
         effectTrigger += 1

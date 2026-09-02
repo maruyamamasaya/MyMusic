@@ -42,7 +42,12 @@ final class PlaybackSelectionIntegrationTests: XCTestCase {
             playbackPreference: 3,
             dailySummaries: ["2026-09-07": PlaybackDailySummary(playCount: 12)]
         )
-        let store = PlaybackHistoryStore(persistence: SelectionHistoryPersistence(entries: [history]))
+        let preferenceStore = TrackPreferenceStore(persistence: SelectionPreferencePersistence())
+        await preferenceStore.loadIfNeeded(legacyHistory: [track.id: history])
+        let store = PlaybackHistoryStore(
+            persistence: SelectionHistoryPersistence(entries: [history]),
+            preferenceStore: preferenceStore
+        )
         await store.loadIfNeeded()
 
         let burstWeight = try XCTUnwrap(store.automaticSelectionWeights(for: [track], now: now)[track.id])
@@ -51,7 +56,7 @@ final class PlaybackSelectionIntegrationTests: XCTestCase {
         )[track.id])
         XCTAssertLessThan(burstWeight, PlaybackPreferenceWeightPolicy.weight(for: 3))
         XCTAssertEqual(recoveredWeight, PlaybackPreferenceWeightPolicy.weight(for: 3))
-        XCTAssertEqual(store.playbackPreference(for: track.id), 3)
+        XCTAssertEqual(preferenceStore.playbackPreference(for: track.id), 3)
         XCTAssertEqual(store.boredomLevel(for: track.id), 0)
         XCTAssertEqual(store.playCount(for: track.id), 12)
     }
@@ -73,4 +78,10 @@ private actor SelectionHistoryPersistence: PlaybackHistoryPersistenceServicing {
     init(entries: [PlaybackHistory]) { self.entries = entries }
     func load() async throws -> [PlaybackHistory] { entries }
     func save(_ history: [PlaybackHistory]) async throws { entries = history }
+}
+
+private actor SelectionPreferencePersistence: TrackPreferencePersistenceServicing {
+    var entries: [TrackPreference]?
+    func load() async throws -> [TrackPreference]? { entries }
+    func save(_ preferences: [TrackPreference]) async throws { entries = preferences }
 }

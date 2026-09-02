@@ -4,6 +4,7 @@ struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @Environment(HighlightPlayerStore.self) private var highlightStore
@@ -68,6 +69,11 @@ struct RootView: View {
         } message: {
             Text(favoriteStore.errorMessage ?? "お気に入りを保存できませんでした。")
         }
+        .alert("曲の設定エラー", isPresented: preferenceErrorIsPresented) {
+            Button("閉じる") { trackPreferenceStore.dismissError() }
+        } message: {
+            Text(trackPreferenceStore.errorMessage ?? "曲の設定を保存できませんでした。")
+        }
         .alert("曲別設定のエラー", isPresented: adjustmentErrorIsPresented) {
             Button("閉じる") { trackPlaybackAdjustmentStore.dismissError() }
         } message: {
@@ -80,7 +86,14 @@ struct RootView: View {
             }
         }
         .task { await playlistStore.loadIfNeeded() }
-        .task { await playbackHistoryStore.loadIfNeeded() }
+        .task {
+            await playbackHistoryStore.loadIfNeeded()
+            await trackPreferenceStore.loadIfNeeded(
+                legacyHistory: playbackHistoryStore.errorMessage == nil
+                    ? playbackHistoryStore.entries
+                    : nil
+            )
+        }
         .task { await favoriteStore.loadIfNeeded() }
         .task { await libraryStore.restoreAndLoadIfNeeded() }
         .task { await trackFeatureStore.loadIfNeeded() }
@@ -110,6 +123,13 @@ struct RootView: View {
         Binding(
             get: { favoriteStore.errorMessage != nil },
             set: { if !$0 { favoriteStore.dismissError() } }
+        )
+    }
+
+    private var preferenceErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { trackPreferenceStore.errorMessage != nil },
+            set: { if !$0 { trackPreferenceStore.dismissError() } }
         )
     }
 

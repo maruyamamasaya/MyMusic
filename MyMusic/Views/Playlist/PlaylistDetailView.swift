@@ -5,6 +5,7 @@ struct PlaylistDetailView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     let playlistID: Playlist.ID
 
     @State private var isEditingPlaylist = false
@@ -221,6 +222,7 @@ struct PlaylistDetailView: View {
         guard let definition = playlist?.searchDefinition else { return }
         let tracks = libraryStore.tracks
         let historyEntries = playbackHistoryStore.entries
+        let preferenceEntries = trackPreferenceStore.entries
         searchSyncTask?.cancel()
         isSynchronizingSearch = true
         searchSyncTask = Task { [searchWorker] in
@@ -228,7 +230,8 @@ struct PlaylistDetailView: View {
                 tracks: tracks,
                 query: definition.query,
                 filter: definition.filter,
-                historyEntries: historyEntries
+                historyEntries: historyEntries,
+                preferenceEntries: preferenceEntries
             )
             guard !Task.isCancelled else { return }
             syncResult = playlistStore.synchronizeSearchPlaylist(

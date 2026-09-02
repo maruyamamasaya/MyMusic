@@ -55,6 +55,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def imports():
         return {"imports": queries.imports()}
 
+    @app.get("/api/sources/{data_kind}")
+    def sources(data_kind: str):
+        try:
+            return queries.sources(data_kind)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.post("/api/import")
     async def import_json(request: Request, file: UploadFile = File(...)):
         if not (file.filename or "").lower().endswith(".json"):

@@ -70,12 +70,28 @@ CREATE INDEX IF NOT EXISTS idx_library_album ON library_tracks(album);
 CREATE TABLE IF NOT EXISTS playback_preferences (
     track_id TEXT PRIMARY KEY,
     playback_preference INTEGER NOT NULL CHECK (playback_preference BETWEEN -10 AND 10),
+    favorite INTEGER CHECK (favorite IS NULL OR favorite IN (0, 1)),
     exported_at TEXT NOT NULL,
     imported_at TEXT NOT NULL,
     import_id INTEGER NOT NULL,
     raw_json TEXT NOT NULL,
     FOREIGN KEY(import_id) REFERENCES import_runs(id)
 );
+
+CREATE TABLE IF NOT EXISTS source_records (
+    data_kind TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    track_id TEXT,
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    imported_at TEXT NOT NULL,
+    import_id INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
+    PRIMARY KEY(data_kind, item_key),
+    FOREIGN KEY(import_id) REFERENCES import_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_source_records_track ON source_records(track_id);
+CREATE INDEX IF NOT EXISTS idx_source_records_kind ON source_records(data_kind, title);
 """
 
 
@@ -105,6 +121,9 @@ class Database:
                 connection.execute(
                     "ALTER TABLE library_tracks ADD COLUMN audio_fingerprint TEXT"
                 )
+            preference_columns = {row[1] for row in connection.execute("PRAGMA table_info(playback_preferences)")}
+            if "favorite" not in preference_columns:
+                connection.execute("ALTER TABLE playback_preferences ADD COLUMN favorite INTEGER")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_library_fingerprint ON library_tracks(audio_fingerprint)"
             )

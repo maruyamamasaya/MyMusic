@@ -25,6 +25,7 @@ struct LibraryCleanupCandidateService: Sendable {
     func candidates(
         tracks: [Track],
         historyByTrackID: [Track.ID: PlaybackHistory],
+        preferencesByTrackID: [Track.ID: TrackPreference] = [:],
         sortOrder: SortOrder = .behaviorThenRecentlyPlayed
     ) -> [LibraryCleanupCandidate] {
         let candidates = tracks.compactMap { track -> LibraryCleanupCandidate? in
@@ -50,7 +51,7 @@ struct LibraryCleanupCandidateService: Sendable {
                 userSkipRate: userSkipRate,
                 averagePlaybackRatio: averagePlaybackRatio,
                 lastPlayedAt: history.lastPlayedAt,
-                playbackPreference: history.playbackPreference
+                playbackPreference: preferencesByTrackID[track.id]?.playbackPreference ?? 0
             )
         }
 

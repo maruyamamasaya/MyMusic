@@ -4,6 +4,7 @@ struct SearchView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
 
     @State private var query = ""
@@ -233,7 +234,8 @@ struct SearchView: View {
             artists: libraryStore.artists,
             query: query,
             filter: filter,
-            historyEntries: playbackHistoryStore.entries
+            historyEntries: playbackHistoryStore.entries,
+            preferenceEntries: trackPreferenceStore.entries
         )
     }
 }

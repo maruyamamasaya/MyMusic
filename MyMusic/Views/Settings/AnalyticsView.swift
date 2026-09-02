@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct AnalyticsView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(SettingsStore.self) private var settingsStore
     @State private var cachedSnapshot: AnalyticsSnapshot?
@@ -103,6 +104,7 @@ struct AnalyticsView: View {
         cachedSnapshot = AnalyticsService().makeSnapshot(
             tracks: libraryStore.unfilteredTracks,
             historyEntries: playbackHistoryStore.entries,
+            preferenceEntries: trackPreferenceStore.entries,
             playlists: playlistStore.playlists
         )
     }

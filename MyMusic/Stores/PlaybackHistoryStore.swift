@@ -6,18 +6,21 @@ import Observation
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
     private static let dailySummaryRetentionDays = 400
-    static let maximumPreference = PlaybackPreferenceWeightPolicy.maximumPreference
-
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
     private let persistence: PlaybackHistoryPersistenceServicing
+    private let preferenceStore: TrackPreferenceStore
     private var saveTask: Task<Void, Never>?
     private var isLoading = false
 
-    init(persistence: PlaybackHistoryPersistenceServicing? = nil) {
+    init(
+        persistence: PlaybackHistoryPersistenceServicing? = nil,
+        preferenceStore: TrackPreferenceStore? = nil
+    ) {
         self.persistence = persistence ?? PlaybackHistoryPersistenceService()
+        self.preferenceStore = preferenceStore ?? TrackPreferenceStore()
     }
 
     func loadIfNeeded() async {
@@ -30,7 +33,7 @@ final class PlaybackHistoryStore {
         do {
             let loaded = try await persistence.load()
             var merged = Dictionary(uniqueKeysWithValues: loaded.map { ($0.trackID, $0) })
-            // Preserve favorites or playback events recorded while disk loading was in flight.
+            // Preserve playback events recorded while disk loading was in flight.
             for (trackID, currentEntry) in entries {
                 merged[trackID] = currentEntry
             }
@@ -38,17 +41,6 @@ final class PlaybackHistoryStore {
         } catch {
             errorMessage = "再生履歴を読み込めませんでした: \(error.localizedDescription)"
         }
-    }
-
-    func isFavorite(trackID: Track.ID) -> Bool {
-        entries[trackID]?.isFavorite == true
-    }
-
-    func toggleFavorite(trackID: Track.ID) {
-        var entry = entry(for: trackID)
-        entry.isFavorite.toggle()
-        entries[trackID] = entry
-        persist(entry)
     }
 
     func recordPlaybackStarted(trackID: Track.ID) {
@@ -148,7 +140,7 @@ final class PlaybackHistoryStore {
     }
 
     /// Clears only the playback facts for one track while preserving unrelated
-    /// user choices such as favorites, preference ratings, and shuffle hiding.
+    /// preference data and shuffle hiding.
     func resetPlaybackHistory(for trackID: Track.ID) {
         guard var entry = entries[trackID],
               entry.playCount > 0 || entry.lastPlayedAt != nil || !entry.playbackEvents.isEmpty ||
@@ -181,18 +173,8 @@ final class PlaybackHistoryStore {
             .limited(to: limit)
     }
 
-    func favoriteTracks(from tracks: [Track], limit: Int? = nil) -> [Track] {
-        resolvedTracks(from: tracks.filter(\.isEligibleForRegularPlayback)) { $0.isFavorite }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-            .limited(to: limit)
-    }
-
     func playCount(for trackID: Track.ID) -> Int {
         entries[trackID]?.playCount ?? 0
-    }
-
-    func playbackPreference(for trackID: Track.ID) -> Int {
-        entries[trackID]?.playbackPreference ?? 0
     }
 
     func totalPlaybackDuration(for trackID: Track.ID) -> TimeInterval {
@@ -263,14 +245,6 @@ final class PlaybackHistoryStore {
         )
     }
 
-    func increasePlaybackPreference(for trackID: Track.ID) {
-        adjustPlaybackPreference(for: trackID, by: 1)
-    }
-
-    func decreasePlaybackPreference(for trackID: Track.ID) {
-        adjustPlaybackPreference(for: trackID, by: -1)
-    }
-
     func boredomLevel(for trackID: Track.ID) -> Int {
         guard let entry = entries[trackID] else { return 0 }
         if entry.isPermanentlyHiddenFromShuffle { return 3 }
@@ -336,12 +310,12 @@ final class PlaybackHistoryStore {
 
         let shuffleEligibleTracks = tracks.filter(isEligibleForRegularShuffle)
         let recentFavorites = shuffleEligibleTracks
-            .filter { isFavorite(trackID: $0.id) }
+            .filter { preferenceStore.isFavorite(trackID: $0.id) }
             .sorted {
                 (entries[$0.id]?.lastPlayedAt ?? .distantPast) >
                     (entries[$1.id]?.lastPlayedAt ?? .distantPast)
             }
-        let otherTracks = shuffleEligibleTracks.filter { !isFavorite(trackID: $0.id) }
+        let otherTracks = shuffleEligibleTracks.filter { !preferenceStore.isFavorite(trackID: $0.id) }
         let pairCount = min(limit / 2, recentFavorites.count, otherTracks.count)
 
         guard pairCount > 0 else {
@@ -416,18 +390,8 @@ final class PlaybackHistoryStore {
 
     func dismissError() { errorMessage = nil }
 
-    private func adjustPlaybackPreference(for trackID: Track.ID, by adjustment: Int) {
-        var entry = entry(for: trackID)
-        entry.playbackPreference = min(
-            Self.maximumPreference,
-            max(-Self.maximumPreference, entry.playbackPreference + adjustment)
-        )
-        entries[trackID] = entry
-        persist(entry)
-    }
-
     func playbackSelectionWeight(for trackID: Track.ID) -> Double {
-        PlaybackPreferenceWeightPolicy.weight(for: playbackPreference(for: trackID))
+        PlaybackPreferenceWeightPolicy.weight(for: preferenceStore.playbackPreference(for: trackID))
     }
 
     /// Builds one ephemeral score/weight snapshot for an automatic selection pass.
@@ -438,7 +402,7 @@ final class PlaybackHistoryStore {
         )
         return Dictionary(tracks.map { track in
             (track.id, PlaybackSelectionPolicy.shuffleWeight(
-                playbackPreference: playbackPreference(for: track.id),
+                playbackPreference: preferenceStore.playbackPreference(for: track.id),
                 overplayScore: scores[track.id] ?? 0
             ))
         }, uniquingKeysWith: { first, _ in first })

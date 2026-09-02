@@ -142,7 +142,8 @@ struct TrackSearchService: Sendable {
         tracks: [Track],
         query: String,
         filter: TrackSearchFilter,
-        historyEntries: [Track.ID: PlaybackHistory]
+        historyEntries: [Track.ID: PlaybackHistory],
+        preferenceEntries: [Track.ID: TrackPreference] = [:]
     ) -> [Track] {
         let terms = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
 
@@ -157,7 +158,12 @@ struct TrackSearchService: Sendable {
                 mode: filter.keywordMatchMode,
                 field: filter.keywordField ?? .title
             )
-                && matchesConditions(track, history: historyEntries[track.id], filter: filter) {
+                && matchesConditions(
+                    track,
+                    history: historyEntries[track.id],
+                    preference: preferenceEntries[track.id],
+                    filter: filter
+                ) {
                 results.append(track)
             }
         }
@@ -191,12 +197,13 @@ struct TrackSearchService: Sendable {
     private nonisolated func matchesConditions(
         _ track: Track,
         history: PlaybackHistory?,
+        preference: TrackPreference?,
         filter: TrackSearchFilter
     ) -> Bool {
         guard !filter.conditions.isEmpty else { return true }
-        let isFavorite = history?.isFavorite ?? false
+        let isFavorite = preference?.favorite ?? false
         let playCount = history?.playCount ?? 0
-        let preference = history?.playbackPreference ?? 0
+        let preferenceValue = preference?.playbackPreference ?? 0
 
         let matches = filter.conditions.map { condition in
             switch condition.kind {
@@ -214,9 +221,9 @@ struct TrackSearchService: Sendable {
                 track.year == condition.value
             case .favorite: isFavorite
             case .notFavorite: !isFavorite
-            case .liked: preference > 0
-            case .disliked: preference < 0
-            case .unrated: preference == 0
+            case .liked: preferenceValue > 0
+            case .disliked: preferenceValue < 0
+            case .unrated: preferenceValue == 0
             case .minimumPlayCount: playCount >= condition.value
             case .maximumPlayCount: playCount <= condition.value
             }

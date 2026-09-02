@@ -52,6 +52,7 @@ struct PlaybackBehaviorAnalyzer: Sendable {
     func analyze(
         tracks: [Track],
         historyByTrackID: [Track.ID: PlaybackHistory],
+        preferencesByTrackID: [Track.ID: TrackPreference] = [:],
         now: Date = Date(),
         calendar: Calendar = .playbackHistory
     ) -> PlaybackBehaviorAnalysis {
@@ -87,8 +88,9 @@ struct PlaybackBehaviorAnalyzer: Sendable {
             }
             let historicalFull = historicalSummaries.values.reduce(0) { $0 + $1.fullPlaybackCount }
             let historicalSkip = historicalSummaries.values.reduce(0) { $0 + $1.skipCount }
+            let playbackPreference = preferencesByTrackID[track.id]?.playbackPreference ?? 0
             let drift = PreferenceDriftScoring.score(
-                playbackPreference: history.playbackPreference,
+                playbackPreference: playbackPreference,
                 recentFullPlaybackCount: recentFull,
                 recentSkipCount: recentSkip,
                 historicalFullPlaybackCount: historicalFull,
@@ -97,10 +99,10 @@ struct PlaybackBehaviorAnalyzer: Sendable {
             )
             driftResults.append(PreferenceDriftAnalysisResult(
                 track: track,
-                playbackPreference: history.playbackPreference,
+                playbackPreference: playbackPreference,
                 score: drift,
                 isCandidate: PreferenceDriftScoring.isCandidate(
-                    playbackPreference: history.playbackPreference, score: drift
+                    playbackPreference: playbackPreference, score: drift
                 )
             ))
         }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TrackFavoriteButton: View {
-    @Environment(PlaybackHistoryStore.self) private var historyStore
+    @Environment(TrackPreferenceStore.self) private var preferenceStore
 
     let track: Track
     var font: Font = .body
@@ -10,7 +10,7 @@ struct TrackFavoriteButton: View {
     @State private var effectTrigger = 0
     @State private var showsBurst = false
 
-    private var isFavorite: Bool { historyStore.isFavorite(trackID: track.id) }
+    private var isFavorite: Bool { preferenceStore.isFavorite(trackID: track.id) }
 
     var body: some View {
         Group {
@@ -41,7 +41,7 @@ struct TrackFavoriteButton: View {
     }
 
     private func toggleFavorite() {
-        historyStore.toggleFavorite(trackID: track.id)
+        preferenceStore.toggleFavorite(trackID: track.id)
         effectTrigger += 1
         withAnimation(.spring(response: 0.2, dampingFraction: 0.48)) { showsBurst = true }
         Task { @MainActor in
