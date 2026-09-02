@@ -4,16 +4,9 @@ import XCTest
 
 @MainActor
 final class TrackFingerprintBuildTests: XCTestCase {
-    func testBatchBuildStopsAtDailyLimitAndPersistsEachResult() async throws {
-        let suite = "TrackFingerprintBuildTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+    func testBatchBuildProcessesEveryCandidateAndPersistsEachResult() async throws {
         let identity = FingerprintIdentityServiceStub()
-        let store = TrackFingerprintBuildStore(
-            identityService: identity,
-            defaults: defaults,
-            maximumPerDay: 2
-        )
+        let store = TrackFingerprintBuildStore(identityService: identity)
         let folderURL = URL(fileURLWithPath: "/tmp/music", isDirectory: true)
         let tracks = (0..<3).map { index in
             Track(
@@ -34,18 +27,13 @@ final class TrackFingerprintBuildTests: XCTestCase {
         }
 
         XCTAssertFalse(store.isRunning)
-        XCTAssertEqual(store.completedCount, 2)
-        XCTAssertEqual(store.processedToday, 2)
-        XCTAssertEqual(store.dailyRemaining, 0)
+        XCTAssertEqual(store.completedCount, 3)
         let buildCount = await identity.buildCount
-        XCTAssertEqual(buildCount, 2)
+        XCTAssertEqual(buildCount, 3)
 
-        let reloaded = TrackFingerprintBuildStore(
-            identityService: identity,
-            defaults: defaults,
-            maximumPerDay: 2
-        )
-        XCTAssertEqual(reloaded.processedToday, 2)
+        let reloaded = TrackFingerprintBuildStore(identityService: identity)
+        await reloaded.refresh(tracks: tracks)
+        XCTAssertEqual(reloaded.completedCount, 3)
     }
 }
 

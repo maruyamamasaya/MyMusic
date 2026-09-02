@@ -93,7 +93,7 @@
 「設定」→「データ管理」→「Fingerprintを作成」から、ファイル名や配置変更後のTrack識別を補助する音声Fingerprintを段階的に作成できます。
 
 - 自動実行や初回起動時の一括処理はせず、専用画面で開始した場合だけ動作
-- 1日最大100曲を1曲ずつ処理し、各曲の完了時にidentity registryへ保存
+- 未作成曲を件数上限なく1曲ずつ処理し、各曲の完了時にidentity registryへ保存
 - 画面を離れる、アプリが非activeになる、再生やLibrary scanが始まると安全に一時停止
 - 既定では端末上ですぐ読める曲だけを対象とし、iCloud上の曲を含める場合は明示的に選択
 - 作成済みFingerprintだけをLibrary JSONのoptional `audioFingerprint`へ含め、Export時に音声解析は行わない

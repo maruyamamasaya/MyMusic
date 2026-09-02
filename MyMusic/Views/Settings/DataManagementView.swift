@@ -35,6 +35,13 @@ struct DataManagementView: View {
 
     var body: some View {
         List {
+            Section {
+                NavigationLink {
+                    AnalyticsDataExportView()
+                } label: {
+                    Label("Analyticsと同期", systemImage: "arrow.up.doc")
+                }
+            }
             Section("Track識別") {
                 NavigationLink {
                     TrackFingerprintBuildView()

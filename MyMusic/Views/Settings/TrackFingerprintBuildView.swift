@@ -13,10 +13,6 @@ struct TrackFingerprintBuildView: View {
             Section {
                 LabeledContent("作成済み", value: "\(buildStore.completedCount)曲")
                 LabeledContent("未作成", value: "\(buildStore.missingCount)曲")
-                LabeledContent(
-                    "本日の作成",
-                    value: "\(buildStore.processedToday) / \(buildStore.dailyLimit)曲"
-                )
                 if buildStore.totalCount > 0 {
                     ProgressView(value: buildStore.progress)
                 }
@@ -96,7 +92,7 @@ struct TrackFingerprintBuildView: View {
     }
 
     private var cannotStart: Bool {
-        buildStore.isRunning || buildStore.dailyRemaining == 0 || buildStore.missingCount == 0
+        buildStore.isRunning || buildStore.missingCount == 0
             || playerStore.isPlaying || playerStore.isLoading || libraryStore.isLoading
             || libraryStore.libraryFolders.isEmpty
     }
