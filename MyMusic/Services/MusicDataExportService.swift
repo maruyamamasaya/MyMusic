@@ -69,6 +69,40 @@ struct MusicDataExportService {
         let playlists: [PlaylistDocument]
     }
 
+    private struct PlaybackPreferencesDocument: Codable {
+        let schemaVersion: Int
+        let exportedAt: Date
+        let tracks: [PlaybackPreferencesDocumentItem]
+    }
+
+    private struct PlaybackPreferencesDocumentItem: Codable {
+        let trackId: UUID
+        let playbackPreference: Int
+    }
+
+    private struct PlaybackEventsDocument: Codable {
+        let schemaVersion: Int
+        let exportedAt: Date
+        let events: [PlaybackEventsDocumentItem]
+    }
+
+    private struct PlaybackEventsDocumentItem: Codable {
+        let eventId: String
+        let trackId: UUID
+        let trackTitle: String
+        let artist: String
+        let album: String?
+        let playedAt: Date
+        let playDuration: TimeInterval
+        let trackDuration: TimeInterval
+        let completed: Bool
+        let skipped: Bool
+        let playSource: String
+        let selectionType: String
+        let platform: String
+        let schemaVersion: Int
+    }
+
     private struct TrackDocument: Codable {
         let trackID: UUID
         let title: String
@@ -126,6 +160,69 @@ struct MusicDataExportService {
         let items = entries.values.sorted { $0.trackID.uuidString < $1.trackID.uuidString }
             .map { Item(trackID: $0.trackID, favorite: $0.isFavorite, playCount: $0.playCount, lastPlayedAt: $0.lastPlayedAt) }
         return try jsonFile(Document(version: 1, history: items), filename: "MyMusic-Playback-History.json")
+    }
+
+    func playbackPreferencesJSON(
+        _ entries: [Track.ID: PlaybackHistory],
+        exportedAt: Date = Date()
+    ) throws -> MusicExportFile {
+        let items = entries.values
+            .sorted { $0.trackID.uuidString < $1.trackID.uuidString }
+            .map {
+                PlaybackPreferencesDocumentItem(
+                    trackId: $0.trackID,
+                    playbackPreference: $0.playbackPreference
+                )
+            }
+        return try jsonFile(
+            PlaybackPreferencesDocument(
+                schemaVersion: 1,
+                exportedAt: exportedAt,
+                tracks: items
+            ),
+            filename: "MyMusic-Playback-Preferences.json"
+        )
+    }
+
+    func playbackEventsJSON(
+        _ entries: [Track.ID: PlaybackHistory],
+        tracks: [Track],
+        exportedAt: Date = Date()
+    ) throws -> MusicExportFile {
+        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        let items = entries.values
+            .flatMap(\.playbackEvents)
+            .sorted {
+                if $0.startedAt != $1.startedAt { return $0.startedAt < $1.startedAt }
+                return $0.id < $1.id
+            }
+            .compactMap { event -> PlaybackEventsDocumentItem? in
+                guard let track = tracksByID[event.trackID] else { return nil }
+                return PlaybackEventsDocumentItem(
+                    eventId: event.id,
+                    trackId: event.trackID,
+                    trackTitle: track.title,
+                    artist: track.artistName,
+                    album: track.albumTitle,
+                    playedAt: event.startedAt,
+                    playDuration: event.listenedSeconds,
+                    trackDuration: track.duration,
+                    completed: event.wasFullPlayback,
+                    skipped: event.wasSkipped,
+                    playSource: event.startSource.rawValue,
+                    selectionType: event.startKind.rawValue,
+                    platform: "iOS",
+                    schemaVersion: 1
+                )
+            }
+        return try jsonFile(
+            PlaybackEventsDocument(
+                schemaVersion: 1,
+                exportedAt: exportedAt,
+                events: items
+            ),
+            filename: "MyMusic-Playback-Events.json"
+        )
     }
 
     func trackFeaturesJSON(_ features: [TrackFeature], tracks: [Track], exportedAt: Date = Date()) throws -> MusicExportFile {

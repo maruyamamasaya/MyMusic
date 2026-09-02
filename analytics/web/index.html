@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyMusic Analytics</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">♪</span><div><strong>MyMusic</strong><small>Analytics v0</small></div></div>
+    <nav>
+      <button class="nav-item active" data-page="dashboard">Overview</button>
+      <button class="nav-item" data-page="tracks">Tracks</button>
+      <button class="nav-item" data-page="import">Import</button>
+    </nav>
+    <p class="local-badge">● Local only</p>
+  </aside>
+  <main>
+    <section id="dashboard" class="page active">
+      <header><div><p class="eyebrow">LISTENING OVERVIEW</p><h1>あなたの音楽の時間</h1></div><div class="periods" data-target="dashboard"><button data-period="today">今日</button><button class="active" data-period="7d">7日</button><button data-period="30d">30日</button><button data-period="all">全期間</button></div></header>
+      <div id="metrics" class="metrics"></div>
+      <div class="grid two"><article class="panel wide"><h2>日別再生数</h2><div id="daily" class="bar-chart"></div></article><article class="panel"><h2>時間帯別</h2><div id="hourly" class="hour-grid"></div></article></div>
+      <div class="grid three"><article class="panel"><h2>よく聴く曲</h2><div id="top-tracks" class="rank-list"></div></article><article class="panel"><h2>Skipが多い曲</h2><div id="skipped-tracks" class="rank-list"></div></article><article class="panel"><h2>Artist別再生数</h2><div id="artists" class="rank-list"></div></article><article class="panel"><h2>Good / Bad分布</h2><div id="preferences" class="rank-list"></div></article></div>
+    </section>
+    <section id="tracks" class="page">
+      <header><div><p class="eyebrow">TRACK LIBRARY</p><h1>曲ごとの傾向</h1></div><div class="periods" data-target="tracks"><button data-period="7d">7日</button><button data-period="30d">30日</button><button class="active" data-period="all">全期間</button></div></header>
+      <div class="toolbar"><input id="track-search" type="search" placeholder="曲名・アーティスト・アルバムを検索"></div>
+      <article class="panel table-wrap"><table><thead><tr><th>曲</th><th>Good / Bad</th><th>お気に入り</th><th>再生</th><th>再生時間</th><th>完走率</th><th>Skip率</th><th>最終再生</th></tr></thead><tbody id="tracks-body"></tbody></table></article>
+    </section>
+    <section id="import" class="page">
+      <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">再生イベント、Library、再生傾向を自動判別し、ローカルのSQLiteへ安全に保存します。</p></div></header>
+      <label id="drop-zone" class="drop-zone"><input id="file-input" type="file" accept="application/json,.json"><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックしてファイルを選択</span><small>Playback Events / Library / Playback Preferences・最大20 MB</small></label>
+      <div id="import-result"></div>
+      <article class="panel table-wrap"><h2>Import履歴</h2><table><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table></article>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

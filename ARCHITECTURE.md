@@ -46,6 +46,19 @@ Homeの「作業用サイズ再生」は即時再生ではなく、作業用対�
 
 ## 主要データフロー
 
+### Local Web Analytics
+
+```text
+MyMusic / future data sources
+  → Playback Events / Library / Playback Preferences JSON
+  → analytics/importer (contract detection, validation, deduplication / upsert)
+  → analytics/data/analytics.sqlite3 (events + catalog + preferences + import history)
+  → analytics/app (FastAPI + on-demand aggregation)
+  → analytics/web (local browser dashboard)
+```
+
+`analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。Library、評価、再生事実はquery時にTrack IDで結合するため、未再生曲と現在のGood／Badも再生統計と同じ画面で扱える。完全なLibrary snapshotから外れたrowは非表示化するがRaw rowを削除しない。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
+
 ### Library import
 
 ```text
@@ -122,6 +135,8 @@ music root recursive scan
 - CSVインポート経路は現時点で未実装のため、上記CSVが現行正規フォーマットとする。
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
 - `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
+- `MusicDataExportService`は保存済みPlayback HistoryからTrack IDと`playbackPreference`だけを安定順で`MyMusic-Playback-Preferences.json`へ出力する。これは現在値のschema v1 snapshotであり、お気に入り、再生事実、派生Behavior score、Import経路は含まない。
+- 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 
 ## 永続化

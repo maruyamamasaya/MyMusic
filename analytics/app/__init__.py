@@ -1,0 +1,1 @@
+"""MyMusic Analytics application package."""

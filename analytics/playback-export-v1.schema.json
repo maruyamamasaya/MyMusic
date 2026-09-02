@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mymusic.local/schemas/playback-export-v1.schema.json",
+  "title": "MyMusic Playback Export v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "exportedAt", "events"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "exportedAt": {"type": "string", "format": "date-time"},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "trackId", "trackTitle", "artist", "playedAt", "playDuration", "trackDuration", "completed", "skipped", "playSource", "selectionType", "platform", "schemaVersion"],
+        "properties": {
+          "eventId": {"type": "string", "minLength": 1, "maxLength": 128},
+          "trackId": {"type": "string", "minLength": 1, "maxLength": 256},
+          "trackTitle": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "artist": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "album": {"type": ["string", "null"], "maxLength": 1000},
+          "playedAt": {"type": "string", "format": "date-time"},
+          "playDuration": {"type": "number", "minimum": 0},
+          "trackDuration": {"type": "number", "minimum": 0},
+          "completed": {"type": "boolean"},
+          "skipped": {"type": "boolean"},
+          "playSource": {"type": "string", "minLength": 1, "maxLength": 100},
+          "selectionType": {"type": "string", "minLength": 1, "maxLength": 100},
+          "sessionId": {"type": ["string", "null"], "maxLength": 128},
+          "platform": {"type": "string", "minLength": 1, "maxLength": 100},
+          "schemaVersion": {"const": 1}
+        }
+      }
+    }
+  }
+}

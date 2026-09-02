@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-02T12:00:00Z",
+  "events": [
+    {
+      "eventId": "87c27231-f86a-4a4c-9a6e-34c160dad897",
+      "trackId": "stable-track-id-001",
+      "trackTitle": "Night Drive",
+      "artist": "Example Artist",
+      "album": "City Lights",
+      "playedAt": "2026-09-02T11:42:00+09:00",
+      "playDuration": 232.5,
+      "trackDuration": 238.0,
+      "completed": true,
+      "skipped": false,
+      "playSource": "playlist",
+      "selectionType": "manual",
+      "sessionId": "session-20260902-001",
+      "platform": "iOS",
+      "schemaVersion": 1
+    }
+  ]
+}

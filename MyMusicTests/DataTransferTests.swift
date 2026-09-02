@@ -2,6 +2,109 @@ import XCTest
 @testable import MyMusic
 
 final class AnalysisDataExportTests: XCTestCase {
+    func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {
+        let track = makeTrack(title: "Night Drive")
+        let startedAt = Date(timeIntervalSince1970: 1_799_999_000)
+        let endedAt = startedAt.addingTimeInterval(42)
+        let exportedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let playbackEvent = PlaybackEvent(
+            id: "event-001",
+            trackID: track.id,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            listenedSeconds: 42,
+            completionRatio: 42 / track.duration,
+            wasSkipped: true,
+            wasFullPlayback: false,
+            startKind: .manual,
+            startSource: .playlist,
+            endKind: .userSkipped
+        )
+        let history = PlaybackHistory(
+            trackID: track.id,
+            isFavorite: false,
+            playCount: 1,
+            lastPlayedAt: endedAt,
+            playbackEvents: [playbackEvent]
+        )
+
+        let file = try MusicDataExportService().playbackEventsJSON(
+            [track.id: history],
+            tracks: [track],
+            exportedAt: exportedAt
+        )
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: file.data) as? [String: Any]
+        )
+        let events = try XCTUnwrap(root["events"] as? [[String: Any]])
+        let item = try XCTUnwrap(events.first)
+
+        XCTAssertEqual(file.filename, "MyMusic-Playback-Events.json")
+        XCTAssertEqual(root["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(root.keys.sorted(), ["events", "exportedAt", "schemaVersion"])
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(item["eventId"] as? String, "event-001")
+        XCTAssertEqual(item["trackId"] as? String, track.id.uuidString)
+        XCTAssertEqual(item["trackTitle"] as? String, "Night Drive")
+        XCTAssertEqual(item["artist"] as? String, "Artist")
+        XCTAssertNil(item["album"])
+        XCTAssertEqual(item["playDuration"] as? Double, 42)
+        XCTAssertEqual(item["trackDuration"] as? Double, track.duration)
+        XCTAssertEqual(item["completed"] as? Bool, false)
+        XCTAssertEqual(item["skipped"] as? Bool, true)
+        XCTAssertEqual(item["playSource"] as? String, "playlist")
+        XCTAssertEqual(item["selectionType"] as? String, "manual")
+        XCTAssertEqual(item["platform"] as? String, "iOS")
+        XCTAssertEqual(item["schemaVersion"] as? Int, 1)
+        XCTAssertNotNil(item["playedAt"] as? String)
+        XCTAssertEqual(
+            item.keys.sorted(),
+            ["completed", "eventId", "platform", "playDuration", "playSource", "playedAt",
+             "schemaVersion", "selectionType", "skipped", "trackDuration", "trackId", "trackTitle", "artist"].sorted()
+        )
+    }
+
+    func testPlaybackPreferencesExportContainsOnlyPreferenceContractFields() throws {
+        let firstTrackID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let secondTrackID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let exportedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let histories = [
+            secondTrackID: PlaybackHistory(
+                trackID: secondTrackID,
+                isFavorite: true,
+                playCount: 1,
+                lastPlayedAt: exportedAt,
+                playbackPreference: -2
+            ),
+            firstTrackID: PlaybackHistory(
+                trackID: firstTrackID,
+                isFavorite: false,
+                playCount: 0,
+                lastPlayedAt: nil,
+                playbackPreference: 0
+            )
+        ]
+
+        let file = try MusicDataExportService().playbackPreferencesJSON(
+            histories,
+            exportedAt: exportedAt
+        )
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: file.data) as? [String: Any]
+        )
+        let tracks = try XCTUnwrap(root["tracks"] as? [[String: Any]])
+
+        XCTAssertEqual(file.filename, "MyMusic-Playback-Preferences.json")
+        XCTAssertEqual(root["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(root.keys.sorted(), ["exportedAt", "schemaVersion", "tracks"])
+        XCTAssertEqual(tracks.count, 2)
+        XCTAssertEqual(tracks[0]["trackId"] as? String, firstTrackID.uuidString)
+        XCTAssertEqual(tracks[0]["playbackPreference"] as? Int, 0)
+        XCTAssertEqual(tracks[0].keys.sorted(), ["playbackPreference", "trackId"])
+        XCTAssertEqual(tracks[1]["trackId"] as? String, secondTrackID.uuidString)
+        XCTAssertEqual(tracks[1]["playbackPreference"] as? Int, -2)
+    }
+
     func testFeatureAndNormalizationExportsContainExpectedTracks() throws {
         let normalizedTrack = makeTrack(title: "Quiet")
         let featureOnlyTrack = makeTrack(title: "Feature")

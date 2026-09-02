@@ -51,6 +51,15 @@ struct DataManagementView: View {
                 throwingExportLink("再生履歴を書き出す", systemImage: "clock.arrow.circlepath") {
                     try exporter.playbackHistoryJSON(historyStore.entries)
                 }
+                throwingExportLink("Analytics用再生イベントを書き出す", systemImage: "chart.bar.doc.horizontal") {
+                    try exporter.playbackEventsJSON(
+                        historyStore.entries,
+                        tracks: libraryStore.unfilteredTracks
+                    )
+                }
+                throwingExportLink("再生傾向を書き出す", systemImage: "hand.thumbsup") {
+                    try exporter.playbackPreferencesJSON(historyStore.entries)
+                }
             }
             Section {
                 throwingExportLink("音量ノーマライズを書き出す", systemImage: "waveform.badge.magnifyingglass") {
