@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "roots": [
+    {"name": "main", "path": "/absolute/path/to/Music Root A"},
+    {"name": "archive", "path": "/absolute/path/to/Music Root B"}
+  ]
+}

@@ -28,7 +28,7 @@ updated: 2026-09-03
 - Insightsの音楽特徴と再生行動は最新analysisVersionのTrack FeaturesをTrack IDでPlayback Eventへ結合し、9特徴量を重複しない5スコア帯で比較する。欠損・非数値・0〜1範囲外を除外し、SQLite JSON関数で集計する。
 - Insightsは選択期間と直前の同日数を比較して曲・特徴・Artist／Album／Genreの最近の変化を説明可能な閾値で抽出し、JST時間帯別の特徴相性と5段階Listening Profileも表示する。これらを再利用したread-only推薦は特徴一致、Favorite／Good、完走実績を加点し、Skipと最近の聴きすぎを減点する。再発見・未再生／低再生候補と最大5件の自動Insightも理由付きで表示する。
 - 長いInsights画面は「おすすめ」「最近の変化」「時間帯・好み」「再生行動」の4タブに分割する。「再生行動」はさらに再生入口、選択種別、組み合わせ、音楽特徴の4サブタブに分け、各表を共通定義で列ソートできる。時間帯・属性・現在の好みにある行形式の一覧は初期30件とし、30件ずつ「続きを見る」で展開する。左ナビゲーションとInsightsタブをURL履歴へ反映し、ブラウザの戻る／進むと再読み込みで表示位置を復元する。
-- Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。Rankingsは今日／7日／30日／全期間／任意期間で、曲・Artist・Album・Genreの再生回数または再生時間上位50件を切り替えられる。
+- Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を4列で同時表示する。
 - Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
 - iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
@@ -77,6 +77,7 @@ updated: 2026-09-03
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
 - **音楽特徴量 Beta 1 / 3**: Mac Analyzer の schema v1 JSON を安全に照合・永続化し、audio 情報面で分類 badge と詳細を表示。
 - **Semantic v2 Analyzer**: 保存済みEmbeddingと学習済みheadからVocal / Instrumental、Mood、音色系特徴量を生成する。通常運用は音楽Rootを再帰走査し、relativePathとfileSize / mtimeNSで新規・更新・削除を差分反映する。library単位のcacheを維持したまま、完了済みJSONだけを`--export-all`でアプリ用の1ファイルへ統合できる。2026-08-29にインスト／OST中心3,837曲と従来3,552曲で分布を評価し、追加calibrationなしでraw headをFIXした。
+- **DSP Analyzer複数Root統合**: Root manifestとread-only棚卸し／master exportを追加した。現在のsize・mtimeNS・analysisVersion・設定が一致する成功cacheだけを統合し、relativePath衝突時はfail closedする。Unicode合成形違いの旧Root cacheも再解析せず再利用する。AnalyticsのTrack Features ImportはTrack ID単位mergeとなり、部分Importで別Root分を削除しない。
 
 Beta の操作と制約は [README.md](README.md)、特徴量の contract は [Documentation/TrackFeatureBeta1.md](Documentation/TrackFeatureBeta1.md) と [Documentation/TrackFeatureBeta3.md](Documentation/TrackFeatureBeta3.md) を参照してください。
 

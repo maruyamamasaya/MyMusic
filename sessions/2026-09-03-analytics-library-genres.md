@@ -6,11 +6,13 @@
 - 専用JSONや永続tableは追加せず、現在Libraryの`genre`から都度導出する。
 - iOSと同様に`;`とNULで分割し、trim、空要素除外、曲内重複除外を行う。
 - GenreランキングとInsightsのGenre変化集計にも同じ分割規則を適用した。
+- RankingsへArtist／Genreフィルターを追加し、曲・Artist・Album・Genreの全ランキングへ共通適用した。
+- フィルターは単独・併用でき、再生回数／再生時間の切替と期間指定を維持する。
 
 ## 検証
 
 - 複合ジャンル、重複、NUL区切り、未設定、GenreランキングをAnalytics unittestへ追加した。
-- Analytics unittest 31件成功。
+- Analytics unittest 32件成功。
 - `node --check analytics/web/app.js`成功。
 - `git diff --check`成功。
 

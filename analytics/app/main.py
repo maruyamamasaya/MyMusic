@@ -128,12 +128,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def rankings(
         period: str = Query("30d"), dimension: str = Query("tracks"),
         metric: str = Query("plays"), startDate: str | None = Query(None),
-        endDate: str | None = Query(None),
+        endDate: str | None = Query(None), artist: str = Query("", max_length=200),
+        genre: str = Query("", max_length=200),
     ):
         try:
-            return queries.rankings(period, dimension, metric, startDate, endDate)
+            return queries.rankings(
+                period, dimension, metric, startDate, endDate, artist.strip(), genre.strip()
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/ranking-filters")
+    def ranking_filters():
+        return queries.ranking_filters()
 
     @app.get("/api/imports")
     def imports():

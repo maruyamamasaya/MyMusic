@@ -285,3 +285,24 @@ python analyzer/analyze.py /tmp/MyMusicAnalyzerSample \
   --cache /tmp/MyMusicAnalyzerSample.sqlite3 \
   --output /tmp/music_features.json
 ```
+
+## 11. 複数Music Rootの標準運用
+
+`libraries.example.json`を`libraries.local.json`（Git対象外）へコピーし、Root名と絶対pathを記録します。各Rootは従来どおり個別に`--resume`で差分解析し、Root別の出力名を指定してください。
+
+```bash
+PYTHONPATH=analyzer .venv/bin/python analyzer/analyze.py \
+  "/absolute/path/to/Music Root A" --resume \
+  --output analyzer/output/music_features_root-a.json
+```
+
+全Rootの棚卸しとmaster再構築は音声をdecodeせず、file signatureとSQLite cacheだけを読みます。
+
+```bash
+PYTHONPATH=analyzer .venv/bin/python analyzer/manage.py audit --manifest analyzer/libraries.local.json
+PYTHONPATH=analyzer .venv/bin/python analyzer/manage.py export-master --manifest analyzer/libraries.local.json
+```
+
+後者は`output/music_features_master.json`と`output/music_features_master.sources.json`を新規生成します。現在のsize・mtimeNS・analysisVersion・解析設定が一致する成功cacheだけを採用し、Root間の`relativePath`衝突時は出力せず停止します。既存cache、Root別JSON、音源は変更しません。
+
+`cacheReusable`は再解析不要、`notAnalyzed`は新規、`changedNeedsAnalysis`は音源変更、`incompatibleCache`はversion／設定違い、`analysisFailed`は前回失敗です。通常の`--resume`は必要な曲だけを解析します。Analyzer JSONにはTrack IDがないため、iPhone Import時にrelativePath＋fileSize＋duration（fallbackはfileSize＋metadata）でStable Track IDへ照合します。Import結果の未照合／曖昧が「JSONにはあるがTrack ID未紐付け」です。照合後、iOSのデータ管理からTrack ID付き`MyMusic-Track-Features.json`を書き出し、AnalyticsへImportします。

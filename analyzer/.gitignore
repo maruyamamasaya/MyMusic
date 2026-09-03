@@ -5,5 +5,6 @@ output/*
 .venv/
 __pycache__/
 *.pyc
+libraries.local.json
 semantic_cache/
 semantic_workspaces/

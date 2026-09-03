@@ -99,6 +99,8 @@ Import画面ではドラッグ&ドロップまたはファイル選択ができ�
 
 Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、値が変わった項目は更新として記録します。`audioFingerprint`はoptionalの64文字lowercase SHA-256として検証し、Tracks画面で作成済み状態を確認できます。Fingerprintが同じ別Track IDの候補検出・alias統合は将来対応であり、現在は自動統合しません。完全に検証できた新しいLibrary snapshotに含まれない曲は現在Libraryから外れたものとして画面から除外しますが、SQLiteのRaw rowは削除せず保持します。Import順は問いません。
 
+Track FeaturesはTrack ID単位でmergeし、部分JSONにない既存特徴量を保持します。同じTrack IDを再Importした場合だけ更新するため、Root別・差分JSONのImportで別Root分は消えません。
+
 Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
@@ -108,9 +110,9 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 ## Dashboard / API
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間／任意期間の再生回数、時間、Skip率、完走率、Early Skip数・率、月日・曜日・件数付き日別グラフ、時間帯別・曲別・Artist別集計。Early Skipランキングは回数、総再生回数、率を表示する。日別グラフは土曜と日曜・日本の祝日を色分けし、棒の選択でその1日へ期間を絞り込む。ランキングは共通定義で初期30件から30件ずつ展開
-- Music History: JSTの月ごとの再生回数・再生時間・その月の代表曲・代表Artistを新しい月からタイムライン表示し、30か月ずつ展開
+- Music History: JSTの月ごとの再生回数・再生時間・その月の代表曲・代表Artistを新しい月からタイムライン表示し、30か月ずつ展開。月カードは1件だけインライン展開し、日別グラフと日付別再生曲、曲／Artist／Album／Genreランキング、月間指標と前月比の振り返りをタブで表示
 - Insights: 「おすすめ」「最近の変化」「時間帯・好み」「再生行動」のタブに分け、再生入口、選択種別、音楽特徴の5段階比較に加え、最近ハマった／飽きてきた／新しい好み／再発見、JST時間帯×特徴、Artist／Album／Genreの変化、Listening Profileを表示する。時間帯・好み内の行形式一覧は共通定義で初期30件、30件ずつ展開する。再生行動の各表は共通の列ソート定義により、見出しから昇順／降順を切り替えられる。現在の好み・評価・完走実績とOverplay減点によるおすすめ、再発見、好みに近い未再生・低再生曲、最大5件の自動Insightカードも提供する。「分析可能データのみ」（既定）と「すべて」の品質フィルターを期間指定と併用可能
-- Rankings: 曲／Artist／Album／Genreと再生回数／再生時間を切り替え、今日／7日／30日／全期間／任意期間の上位50件を初期30件から30件ずつ展開
+- Rankings: 今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲／Artist／Album／Genreの4ランキングを同時表示する。フィルターは単独・併用でき、各列は上位50件を初期30件から30件ずつ展開
 - Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・Early Skip回数・率・最終再生日時、項目別AND検索、全表示列の全件基準ソート、30件ページング、Import済みPreferenceの編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットに加え、Libraryから自動導出したジャンル一覧をタブ別に表示。ジャンルはiOSアプリと同様に`;`／NULで分割し、空白・空要素・曲内重複を除いて集計する。表示列ごとの全件基準ソートと30件ページングを行い、曲単位データはLibraryとのTrack ID照合状況も表示
 - Import履歴: 全列を昇順／降順でソートでき、初期30件から30件ずつ展開

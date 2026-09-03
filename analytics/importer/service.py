@@ -95,7 +95,7 @@ class ImportService:
                 connection.execute(
                     "UPDATE library_tracks SET is_present = 0 WHERE import_id <> ?", (import_id,)
                 )
-            if data_kind in {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"} and not errors:
+            if data_kind in {"volume_normalization", "playlists", "equalizer", "genre_presets"} and not errors:
                 connection.execute(
                     "DELETE FROM source_records WHERE data_kind = ? AND import_id <> ?",
                     (data_kind, import_id),

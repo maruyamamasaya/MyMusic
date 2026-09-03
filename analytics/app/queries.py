@@ -914,6 +914,7 @@ class AnalyticsQueries:
     def rankings(
         self, period: str, dimension: str, metric: str,
         start_date: str | None = None, end_date: str | None = None,
+        artist: str = "", genre: str = "",
     ) -> dict[str, Any]:
         if dimension not in RANKING_DIMENSIONS:
             raise ValueError("dimension must be tracks, artists, albums, or genres")
@@ -926,17 +927,30 @@ class AnalyticsQueries:
             f"'{LEGACY_PLAYBACK_CUTOFF}' THEN e.play_duration ELSE 0 END)"
         )
         qualified_where = where.replace("played_at", "e.played_at")
+        filter_conditions = []
+        if artist:
+            filter_conditions.append("lt.artist = ? COLLATE NOCASE")
+            params.append(artist)
+        if genre:
+            filter_conditions.append("tg.genre = ? COLLATE NOCASE")
+            params.append(genre)
+        if filter_conditions:
+            conjunction = " AND " if qualified_where else " WHERE "
+            qualified_where += conjunction + " AND ".join(filter_conditions)
         subtitle_select = f"MAX({subtitle})" if subtitle else "NULL"
         having = "HAVING value > 0" if metric == "duration" else ""
+        uses_genres = dimension == "genres" or bool(genre)
+        genre_cte = f"WITH RECURSIVE {GENRE_PARTS_CTE}" if uses_genres else ""
+        genre_join = "LEFT JOIN track_genres tg ON tg.track_id=lt.track_id" if uses_genres else ""
         with self.database.connect() as connection:
             if dimension == "genres":
                 rows = connection.execute(
-                    f"""WITH RECURSIVE {GENRE_PARTS_CTE}
+                    f"""{genre_cte}
                     SELECT COALESCE(tg.genre, '未分類') itemKey,
                         COALESCE(tg.genre, '未分類') label, NULL subtitle, {value} value
                     FROM playback_events e
                     LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
-                    LEFT JOIN track_genres tg ON tg.track_id=lt.track_id
+                    {genre_join}
                     {qualified_where}
                     GROUP BY COALESCE(tg.genre, '未分類')
                     {having}
@@ -947,10 +961,11 @@ class AnalyticsQueries:
                         "items": [dict(row) for row in rows],
                         "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
             rows = connection.execute(
-                f"""SELECT {key} itemKey, MAX({label}) label, {subtitle_select} subtitle,
+                f"""{genre_cte} SELECT {key} itemKey, MAX({label}) label, {subtitle_select} subtitle,
                     {value} value
                     FROM playback_events e
                     LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
+                    {genre_join}
                     {qualified_where}
                     GROUP BY {key}
                     {having}
@@ -960,6 +975,18 @@ class AnalyticsQueries:
         return {"period": period, "dimension": dimension, "metric": metric,
                 "items": [dict(row) for row in rows],
                 "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    def ranking_filters(self) -> dict[str, list[str]]:
+        with self.database.connect() as connection:
+            artists = [row[0] for row in connection.execute(
+                """SELECT DISTINCT artist FROM library_tracks
+                   WHERE is_present=1 AND trim(artist)<>'' ORDER BY artist COLLATE NOCASE"""
+            ).fetchall()]
+            genres = [row[0] for row in connection.execute(
+                f"""WITH RECURSIVE {GENRE_PARTS_CTE}
+                    SELECT DISTINCT genre FROM track_genres ORDER BY genre COLLATE NOCASE"""
+            ).fetchall()]
+        return {"artists": artists, "genres": genres}
 
     @staticmethod
     def _top(connection: Any, where: str, params: tuple[Any, ...], expression: str, alias: str,

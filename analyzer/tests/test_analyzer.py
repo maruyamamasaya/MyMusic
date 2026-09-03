@@ -8,6 +8,7 @@ import unicodedata
 from pathlib import Path
 
 from mymusic_analyzer.cache import AnalysisCache
+from mymusic_analyzer.catalog import LibraryRoot, inventory
 from mymusic_analyzer.discovery import discover_audio_files, relative_path
 from mymusic_analyzer.normalization import analyze_loudness, calculate_normalization_gain_db
 from mymusic_analyzer.schema import FEATURE_KEYS, TRACK_KEYS, make_document, validate_document
@@ -63,6 +64,48 @@ class CacheTests(unittest.TestCase):
                 cache.valid_loudness_result("/music", "Artist/song.wav", 100, 201, "loudness-v1")
             )
             cache.close()
+
+    def test_cache_reuses_root_that_differs_only_by_unicode_composition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cache = AnalysisCache(Path(directory) / "analysis.sqlite3")
+            decomposed = unicodedata.normalize("NFD", "/music/ライブラリ")
+            composed = unicodedata.normalize("NFC", decomposed)
+            cache.save_success(decomposed, "song.wav", 100, 200, 1, "config", _entry())
+
+            self.assertEqual(cache.valid_result(composed, "song.wav", 100, 200, 1, "config"), _entry())
+            cache.close()
+
+    def test_inventory_exports_only_current_successful_cache_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "music"
+            root.mkdir()
+            current = root / "current.wav"
+            changed = root / "changed.wav"
+            missing = root / "missing.wav"
+            current.write_bytes(b"current")
+            changed.write_bytes(b"changed")
+            missing.write_bytes(b"missing")
+            cache_path = Path(directory) / "analysis.sqlite3"
+            cache = AnalysisCache(cache_path)
+            config = "sr=22050;segment=30;count=3;model=dsp-beta1-r2"
+            for path in (current, changed, missing):
+                stat = path.stat()
+                entry = _entry()
+                entry["relativePath"] = path.name
+                entry["fileSize"] = stat.st_size
+                cache.save_success(str(root), path.name, stat.st_size, stat.st_mtime_ns, 1, config, entry)
+            changed.write_bytes(b"changed after cache")
+            missing.unlink()
+            cache.close()
+
+            report, entries = inventory(cache_path, [LibraryRoot("test", root)])
+
+            self.assertEqual(report["roots"][0]["cacheReusable"], 1)
+            self.assertEqual(report["roots"][0]["needsAnalysis"], 1)
+            self.assertEqual(report["roots"][0]["changedNeedsAnalysis"], 1)
+            self.assertEqual(report["roots"][0]["notAnalyzed"], 0)
+            self.assertEqual(report["roots"][0]["missingFromDisk"], 1)
+            self.assertEqual([entry["relativePath"] for entry in entries], ["current.wav"])
 
 
 class SchemaTests(unittest.TestCase):

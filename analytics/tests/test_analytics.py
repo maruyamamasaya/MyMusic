@@ -87,6 +87,7 @@ class AnalyticsAPITests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         html = response.text
+        javascript = self.client.get("/static/app.js").text
         self.assertIn('id="insights-tabs"', html)
         self.assertIn('data-insight-tab="recommendations"', html)
         self.assertIn('data-insight-tab="changes"', html)
@@ -96,8 +97,14 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertIn('data-insight-panel="changes"', html)
         self.assertIn('data-insight-panel="context"', html)
         self.assertIn('data-insight-panel="behavior"', html)
+        for dimension in ("tracks", "artists", "albums", "genres"):
+            self.assertIn(f'id="ranking-{dimension}"', html)
+        self.assertNotIn('id="ranking-dimensions"', html)
+        self.assertIn("function toggleHistoryMonth(month)", javascript)
+        self.assertIn("function renderHistoryDaily(body,month)", javascript)
+        self.assertIn("function renderHistoryRankings(body,month)", javascript)
+        self.assertIn("function renderHistoryReflection(body,month)", javascript)
         self.assertIn('data-kind="library_genres"', html)
-        javascript = self.client.get("/static/app.js").text
         self.assertIn("progressiveListPolicy=Object.freeze({initial:30,step:30})", javascript)
         self.assertIn("renderProgressiveList('#entity-changes'", javascript)
         self.assertEqual(html.count("data-sortable"), 5)
@@ -307,6 +314,49 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get(
             "/api/rankings?period=all&dimension=composers&metric=plays"
         ).status_code, 422)
+
+    def test_rankings_filter_by_artist_and_normalized_genre_for_both_metrics(self):
+        self.upload(library_document([
+            library_track("a-rock", title="Rock One", artist="Artist A",
+                          album="First", genre="Rock; Live"),
+            library_track("a-pop", title="Pop One", artist="Artist A",
+                          album="Second", genre="Pop"),
+            library_track("b-rock", title="Rock Two", artist="Artist B",
+                          album="Third", genre="Rock"),
+        ]), "MyMusic-Library.json")
+        self.upload(document([
+            event("a-rock-1", "a-rock", trackTitle="Rock One", artist="Artist A",
+                  album="First", playDuration=100),
+            event("a-rock-2", "a-rock", trackTitle="Rock One", artist="Artist A",
+                  album="First", playDuration=80),
+            event("a-pop-1", "a-pop", trackTitle="Pop One", artist="Artist A",
+                  album="Second", playDuration=60),
+            event("b-rock-1", "b-rock", trackTitle="Rock Two", artist="Artist B",
+                  album="Third", playDuration=40),
+        ]))
+
+        filters = self.client.get("/api/ranking-filters").json()
+        self.assertEqual(filters["artists"], ["Artist A", "Artist B"])
+        self.assertEqual(filters["genres"], ["Live", "Pop", "Rock"])
+
+        artist_plays = self.client.get(
+            "/api/rankings?period=all&dimension=tracks&metric=plays&artist=Artist%20A"
+        ).json()["items"]
+        self.assertEqual([(row["label"], row["value"]) for row in artist_plays],
+                         [("Rock One", 2), ("Pop One", 1)])
+
+        genre_duration = self.client.get(
+            "/api/rankings?period=all&dimension=tracks&metric=duration&genre=Rock"
+        ).json()["items"]
+        self.assertEqual([(row["label"], row["value"]) for row in genre_duration],
+                         [("Rock One", 180), ("Rock Two", 40)])
+
+        combined = self.client.get(
+            "/api/rankings?period=all&dimension=tracks&metric=plays"
+            "&artist=Artist%20A&genre=Rock"
+        ).json()["items"]
+        self.assertEqual([(row["label"], row["value"]) for row in combined],
+                         [("Rock One", 2)])
 
     def test_dashboard_custom_period_and_legacy_detail_metrics(self):
         self.upload(document([
@@ -627,6 +677,24 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(playlists_api["items"][0]["linkedTrackCount"], 1)
         self.assertEqual(self.client.get("/api/sources/equalizer").json()["count"], 2)
         self.assertEqual(self.client.get("/api/sources/genre_presets").json()["count"], 1)
+
+    def test_partial_track_feature_import_merges_without_deleting_other_tracks(self):
+        def payload(track_id, energy):
+            return {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "tracks": [{
+                "trackID": track_id, "title": track_id, "artist": "Artist",
+                "sourceIdentity": {"relativePath": f"{track_id}.m4a", "fileSize": 123,
+                    "duration": 210, "modificationDate": None, "contentHash": None,
+                    "title": track_id, "artist": "Artist", "album": "Album"},
+                "analysisVersion": 1, "analyzedAt": "2026-09-01T12:00:00Z",
+                "importedAt": "2026-09-02T12:00:00Z", "features": {"energy": energy}
+            }]}
+
+        self.upload(payload("track-a", 0.2), "features-a.json")
+        self.upload(payload("track-b", 0.8), "features-b.json")
+
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual(result["count"], 2)
+        self.assertEqual({item["data"]["trackID"] for item in result["items"]}, {"track-a", "track-b"})
 
     def test_library_genres_split_compound_values_and_drive_rankings(self):
         self.upload(library_document([
