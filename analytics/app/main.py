@@ -83,6 +83,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    @app.get("/api/insights/features")
+    def feature_insights(
+        feature: str = Query("dark"), period: str = Query("7d"),
+        startDate: str | None = Query(None), endDate: str | None = Query(None),
+        quality: str = Query("analyzable"),
+    ):
+        try:
+            return queries.feature_insights(period, feature, startDate, endDate, quality)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/rankings")
     def rankings(
         period: str = Query("30d"), dimension: str = Query("tracks"),

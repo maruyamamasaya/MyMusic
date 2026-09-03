@@ -604,6 +604,87 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/sources/equalizer").json()["count"], 2)
         self.assertEqual(self.client.get("/api/sources/genre_presets").json()["count"], 1)
 
+    def test_feature_insights_ranges_join_quality_version_and_invalid_values(self):
+        def feature_track(track_id, version, features):
+            return {
+                "trackID": track_id, "title": track_id, "artist": "Artist",
+                "sourceIdentity": {"relativePath": f"{track_id}.m4a", "fileSize": 1,
+                    "duration": 100, "modificationDate": None, "contentHash": None,
+                    "title": track_id, "artist": "Artist", "album": None},
+                "analysisVersion": version, "analyzedAt": "2026-09-02T00:00:00Z",
+                "importedAt": "2026-09-02T00:00:00Z", "features": features,
+            }
+
+        feature_names = ["dark", "calm", "aggressive", "piano", "electronic",
+                         "ambient", "drumAndBass", "vocal", "instrumental"]
+        tracks = []
+        for track_id, score in (("zero", 0.0), ("two", 0.2), ("four", 0.4),
+                                ("six", 0.6), ("eight", 0.8), ("one", 1.0)):
+            tracks.append(feature_track(track_id, 2, {name: score for name in feature_names}))
+        tracks.extend([
+            feature_track("missing", 2, {"calm": 0.5}),
+            feature_track("negative", 2, {"dark": -0.1}),
+            feature_track("too-high", 2, {"dark": 1.1}),
+            feature_track("not-number", 2, {"dark": "0.5"}),
+            feature_track("old-version", 1, {"dark": 0.9}),
+        ])
+        self.upload({"version": 1, "exportedAt": "2026-09-02T00:00:00Z",
+                     "tracks": tracks}, "MyMusic-Track-Features.json")
+        self.upload(document([
+            event("zero-current", "zero", playedAt="2026-09-01T10:00:00+09:00",
+                  completed=True, skipped=False, playDuration=80),
+            event("two-current", "two", playedAt="2026-09-01T11:00:00+09:00",
+                  completed=False, skipped=True, playDuration=10),
+            event("four-current", "four", playedAt="2026-09-01T12:00:00+09:00",
+                  completed=False, skipped=True, playDuration=31),
+            event("six-current", "six", playedAt="2026-09-02T10:00:00+09:00",
+                  completed=False, skipped=False, playDuration=50),
+            event("eight-current", "eight", playedAt="2026-09-02T11:00:00+09:00",
+                  completed=True, skipped=False, playDuration=90),
+            event("one-current", "one", playedAt="2026-09-02T12:00:00+09:00",
+                  completed=False, skipped=True, playDuration=30),
+            event("zero-legacy", "zero", playedAt="2026-08-31T10:00:00+09:00",
+                  completed=False, skipped=True, playDuration=5),
+            event("old-version-event", "old-version", playedAt="2026-09-02T13:00:00+09:00"),
+            event("unmatched", "no-features", playedAt="2026-09-02T14:00:00+09:00"),
+        ]))
+
+        result = self.client.get(
+            "/api/insights/features?period=all&quality=analyzable&feature=dark"
+        ).json()
+        self.assertEqual(result["analysisVersion"], 2)
+        self.assertEqual([row["trackCount"] for row in result["bins"]], [1, 1, 1, 1, 2])
+        self.assertEqual([row["playCount"] for row in result["bins"]], [1, 1, 1, 1, 2])
+        self.assertEqual(result["bins"][0]["completionRate"], 100)
+        self.assertEqual(result["bins"][1]["skipRate"], 100)
+        self.assertEqual(result["bins"][1]["earlySkipRate"], 100)
+        self.assertEqual(result["bins"][2]["earlySkipRate"], 0)
+        self.assertEqual(result["bins"][4]["earlySkipRate"], 50)
+
+        all_data = self.client.get(
+            "/api/insights/features?period=all&quality=all&feature=dark"
+        ).json()
+        self.assertEqual(all_data["bins"][0]["playCount"], 2)
+        self.assertEqual(all_data["bins"][0]["completionRate"], 100)
+        custom = self.client.get(
+            "/api/insights/features?period=custom&startDate=2026-09-02&endDate=2026-09-02"
+            "&quality=analyzable&feature=dark"
+        ).json()
+        self.assertEqual([row["playCount"] for row in custom["bins"]], [0, 0, 0, 1, 2])
+        self.assertIsNone(custom["bins"][0]["completionRate"])
+        self.assertIsNone(custom["bins"][0]["skipRate"])
+        self.assertIsNone(custom["bins"][0]["earlySkipRate"])
+        for feature in feature_names:
+            with self.subTest(feature=feature):
+                response = self.client.get(
+                    f"/api/insights/features?period=all&quality=analyzable&feature={feature}"
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(response.json()["bins"]), 5)
+        self.assertEqual(self.client.get(
+            "/api/insights/features?feature=bright"
+        ).status_code, 422)
+
     def test_extended_source_reimport_updates_without_duplicate_rows(self):
         base = {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
             "tracks": [{"trackID": "track-1", "title": "A", "artist": "B",

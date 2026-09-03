@@ -16,6 +16,11 @@ DETAIL_EVENT_PREDICATE = (
     f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'"
 )
 EARLY_SKIP_PREDICATE = f"{DETAIL_EVENT_PREDICATE} AND skipped = 1 AND play_duration <= 30"
+INSIGHT_FEATURES = {
+    "dark": "Dark", "calm": "Calm", "aggressive": "Aggressive", "piano": "Piano",
+    "electronic": "Electronic", "ambient": "Ambient", "drumAndBass": "Drum & Bass",
+    "vocal": "Vocal", "instrumental": "Instrumental",
+}
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
@@ -66,6 +71,19 @@ def _since(period: str) -> str | None:
     if days:
         start -= timedelta(days=days - 1)
     return start.isoformat()
+
+
+def _insights_event_where(
+    period: str, start_date: str | None, end_date: str | None, quality: str,
+) -> tuple[str, list[Any]]:
+    where, params = _period_where(period, start_date, end_date)
+    if quality not in {"analyzable", "all"}:
+        raise ValueError("quality must be analyzable or all")
+    if quality == "analyzable":
+        quality_clause = f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ?"
+        where = f"{where} AND {quality_clause}" if where else f"WHERE {quality_clause}"
+        params.append(LEGACY_PLAYBACK_CUTOFF)
+    return where, params
 
 
 class AnalyticsQueries:
@@ -199,13 +217,7 @@ class AnalyticsQueries:
         quality: str = "analyzable",
     ) -> dict[str, Any]:
         """Aggregate playback behavior without constraining source/type values."""
-        where, params = _period_where(period, start_date, end_date)
-        if quality not in {"analyzable", "all"}:
-            raise ValueError("quality must be analyzable or all")
-        if quality == "analyzable":
-            quality_clause = f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ?"
-            where = f"{where} AND {quality_clause}" if where else f"WHERE {quality_clause}"
-            params.append(LEGACY_PLAYBACK_CUTOFF)
+        where, params = _insights_event_where(period, start_date, end_date, quality)
         with self.database.connect() as connection:
             by_source = self._behavior_breakdown(connection, where, params, ["play_source"])
             by_selection = self._behavior_breakdown(
@@ -216,6 +228,65 @@ class AnalyticsQueries:
             )
         return {"period": period, "quality": quality, "byPlaySource": by_source,
                 "bySelectionType": by_selection, "combinations": combinations,
+                "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    def feature_insights(
+        self, period: str, feature: str, start_date: str | None = None,
+        end_date: str | None = None, quality: str = "analyzable",
+    ) -> dict[str, Any]:
+        if feature not in INSIGHT_FEATURES:
+            raise ValueError("unsupported insight feature")
+        event_where, event_params = _insights_event_where(
+            period, start_date, end_date, quality
+        )
+        event_condition = (
+            event_where.removeprefix("WHERE ").replace("played_at", "e.played_at") or "1=1"
+        )
+        feature_path = f"$.features.{feature}"
+        with self.database.connect() as connection:
+            analysis_version = connection.execute(
+                """SELECT MAX(CAST(json_extract(raw_json, '$.analysisVersion') AS INTEGER))
+                   FROM source_records WHERE data_kind='track_features'
+                   AND json_type(raw_json, '$.analysisVersion')='integer'"""
+            ).fetchone()[0]
+            rows = connection.execute(
+                f"""WITH feature_tracks AS (
+                    SELECT sr.track_id,
+                        CAST(json_extract(sr.raw_json, ?) AS REAL) feature_value
+                    FROM source_records sr
+                    WHERE sr.data_kind='track_features' AND sr.track_id IS NOT NULL
+                        AND json_type(sr.raw_json, '$.analysisVersion')='integer'
+                        AND CAST(json_extract(sr.raw_json, '$.analysisVersion') AS INTEGER)=?
+                        AND json_type(sr.raw_json, ?) IN ('integer', 'real')
+                        AND json_extract(sr.raw_json, ?) BETWEEN 0.0 AND 1.0
+                ), bins(binIndex, label, lowerBound, upperBound, upperInclusive) AS (
+                    VALUES (0, '0.0–0.2', 0.0, 0.2, 0),
+                           (1, '0.2–0.4', 0.2, 0.4, 0),
+                           (2, '0.4–0.6', 0.4, 0.6, 0),
+                           (3, '0.6–0.8', 0.6, 0.8, 0),
+                           (4, '0.8–1.0', 0.8, 1.0, 1)
+                )
+                SELECT b.binIndex, b.label, b.lowerBound, b.upperBound, b.upperInclusive,
+                    COUNT(DISTINCT ft.track_id) trackCount, COUNT(e.event_id) playCount,
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE.replace('played_at', 'e.played_at')}
+                        THEN e.completed END) * 100 completionRate,
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE.replace('played_at', 'e.played_at')}
+                        THEN e.skipped END) * 100 skipRate,
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE.replace('played_at', 'e.played_at')}
+                        THEN CASE WHEN {EARLY_SKIP_PREDICATE.replace('played_at', 'e.played_at').replace('skipped', 'e.skipped').replace('play_duration', 'e.play_duration')}
+                            THEN 1.0 ELSE 0.0 END END) * 100 earlySkipRate
+                FROM bins b
+                LEFT JOIN feature_tracks ft ON ft.feature_value >= b.lowerBound
+                    AND (ft.feature_value < b.upperBound
+                        OR (b.upperInclusive=1 AND ft.feature_value <= b.upperBound))
+                LEFT JOIN playback_events e ON e.track_id=ft.track_id
+                    AND ({event_condition})
+                GROUP BY b.binIndex ORDER BY b.binIndex""",
+                (feature_path, analysis_version, feature_path, feature_path, *event_params),
+            ).fetchall()
+        return {"period": period, "quality": quality, "feature": feature,
+                "featureLabel": INSIGHT_FEATURES[feature],
+                "analysisVersion": analysis_version, "bins": [dict(row) for row in rows],
                 "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
 
     @staticmethod
