@@ -94,6 +94,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    @app.get("/api/insights/recent-changes")
+    def recent_changes(
+        period: str = Query("7d"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None), quality: str = Query("analyzable"),
+    ):
+        try:
+            return queries.recent_changes(period, startDate, endDate, quality)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/insights/advanced")
+    def advanced_insights(
+        period: str = Query("7d"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None), quality: str = Query("analyzable"),
+    ):
+        try:
+            return queries.advanced_insights(period, startDate, endDate, quality)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/insights/recommendations")
+    def recommendations(
+        period: str = Query("7d"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None), quality: str = Query("analyzable"),
+    ):
+        try:
+            return queries.recommendations(period, startDate, endDate, quality)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/rankings")
     def rankings(
         period: str = Query("30d"), dimension: str = Query("tracks"),

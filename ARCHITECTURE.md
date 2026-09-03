@@ -59,7 +59,7 @@ MyMusic / future data sources
 
 `analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQとジャンルプリセットは曲非依存の設定スナップショットとして扱う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
 
-Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Music HistoryはPlayback EventをJSTの月単位で都度導出し、Insightsは固定enumを持たず`play_source`／`selection_type`とその組み合わせを動的に集計する。Insightsの品質フィルターは期間条件と独立して日時だけで判定し、既定では2026-09-01以降に限定、「すべて」では旧イベントの再生回数だけを残す。特徴量行動分析は`source_records`の最新analysisVersionだけを対象に、許可リスト化した特徴量をSQLite `json_extract`で検証・抽出してPlayback EventへTrack ID結合する。欠損・非数値・0〜1範囲外はSQL上で除外し、Raw JSONのPython全件展開や正規化コピーは行わない。Rankingsは許可リスト化した曲／Artist／Album／Genreの軸と再生回数／再生時間の指標をサーバー側で集計する。詳細イベントとEarly Skipの判定条件はQueries層の共通predicateへ集約する。いずれもRaw eventやLibraryを更新しないread-onlyの派生表示とする。
+Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Insightsの品質フィルターは期間条件と独立して日時だけで判定する。特徴量分析は`source_records`の最新analysisVersionだけを対象に、許可リスト化した特徴量をSQLite `json_extract`／`json_each`で検証・抽出してPlayback EventへTrack ID結合する。最近の変化は選択期間と直前の同日数（allは30日ずつ）を比較し、曲、特徴、Artist／Album／Genreを共通閾値で抽出する。時間帯分析はJSTの朝／昼／夜／深夜、Listening Profileは完走率−Skip率−Early Skip率×0.5の説明可能なscoreを使う。推薦はProfile・Preference・Favorite・完走実績を加点し、Skip・Early Skip・選択期間の再生過多を減点するread-only派生値で、未再生曲の行動値は推測しない。詳細イベントとEarly Skipの判定条件はQueries層の共通predicateへ集約し、Raw JSONやLibraryを更新しない。
 
 ### Library import
 

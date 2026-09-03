@@ -90,6 +90,22 @@ main { max-width: none; }
 .feature-rate.early i { background: #d84667; }
 .feature-rate b { grid-column: 2; grid-row: 1; text-align: right; font-size: 11px; }
 .feature-boundary-note { margin: 8px 2px 0; color: var(--muted); font-size: 11px; }
+.auto-insight-grid, .change-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 12px; margin-bottom: 24px; }
+.auto-insight { padding: 16px; border: 1px solid #39465a; border-radius: 13px; background: linear-gradient(145deg,#172131,#111720); }
+.auto-insight p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.change-grid .panel h3 { margin: 0 0 12px; font-size: 14px; }
+.insight-track { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); padding: 10px 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.insight-track:first-child { border-top: 0; }
+.insight-track strong, .insight-track small, .insight-text strong, .insight-text small { display: block; }
+.insight-track small, .insight-text small, .affinity-row small, .profile-row small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.insight-text, .affinity-row, .profile-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.insight-text:first-child, .affinity-row:first-child, .profile-row:first-child { border-top: 0; }
+.affinity-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; }
+.affinity-row small { grid-column: 1/-1; }
+.advanced-grid { grid-template-columns: repeat(auto-fit,minmax(290px,1fr)); }
+.profile-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; }
+.profile-row small { grid-column: 1/-1; }
+.profile-row.insufficient { opacity: .55; }
 @media(max-width:900px){.nav-item[data-page=history]:after{content:"⌛"}.nav-item[data-page=rankings]:after{content:"≡"}}
 @media(max-width:720px){.history-card{grid-template-columns:1fr}.history-stats{order:3}.history-highlights{grid-template-columns:1fr}.history-highlights>div{padding-left:0;border-left:0}.ranking-row{grid-template-columns:32px minmax(0,1fr) auto;gap:10px}.segmented{max-width:100%;overflow:auto}}
 .source-sort { display: flex; align-items: end; justify-content: flex-end; gap: 8px; margin: 0 0 14px; }

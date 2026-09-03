@@ -21,6 +21,27 @@ INSIGHT_FEATURES = {
     "electronic": "Electronic", "ambient": "Ambient", "drumAndBass": "Drum & Bass",
     "vocal": "Vocal", "instrumental": "Instrumental",
 }
+RECENT_CHANGE_ALL_DAYS = 30
+RECENT_TRACK_MIN_PLAYS = 3
+RECENT_TRACK_MIN_DETAILS = 3
+HOOKED_PLAY_GROWTH_RATIO = 2.0
+HOOKED_PLAY_GROWTH_MINIMUM = 2
+HOOKED_MAX_SKIP_RATE = 70.0
+BORED_RATE_WORSENING_POINTS = 20.0
+NEW_TASTE_MIN_DETAILS = 3
+NEW_TASTE_RATE_IMPROVEMENT_POINTS = 15.0
+NEW_TASTE_SCORE_MINIMUM = 0.6
+REDISCOVERY_MIN_DETAIL_PLAYS = 3
+REDISCOVERY_MIN_COMPLETION_RATE = 70.0
+ENTITY_GROWTH_RATIO = 1.5
+ENTITY_GROWTH_MINIMUM = 2
+ENTITY_GOOD_COMPLETION_RATE = 70.0
+TIME_FEATURE_MIN_DETAILS = 3
+LISTENING_PROFILE_MIN_DETAILS = 5
+PROFILE_STRONG_THRESHOLD = 50.0
+PROFILE_POSITIVE_THRESHOLD = 20.0
+RECOMMENDATION_FEATURE_MATCH_MINIMUM = 0.55
+DISCOVERY_MAX_PLAYS = 2
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
@@ -84,6 +105,47 @@ def _insights_event_where(
         where = f"{where} AND {quality_clause}" if where else f"WHERE {quality_clause}"
         params.append(LEGACY_PLAYBACK_CUTOFF)
     return where, params
+
+
+def _recent_change_windows(
+    period: str, start_date: str | None, end_date: str | None,
+) -> tuple[date, date, date, date]:
+    _period_where(period, start_date, end_date)
+    if period == "custom":
+        recent_start = date.fromisoformat(start_date or "")
+        recent_end = date.fromisoformat(end_date or "")
+    else:
+        recent_end = datetime.now(JAPAN_TIMEZONE).date()
+        days = 1 if period == "today" else PERIOD_DAYS[period]
+        days = RECENT_CHANGE_ALL_DAYS if days is None else days
+        recent_start = recent_end - timedelta(days=days - 1)
+    window_days = (recent_end - recent_start).days + 1
+    baseline_end = recent_start - timedelta(days=1)
+    baseline_start = baseline_end - timedelta(days=window_days - 1)
+    return recent_start, recent_end, baseline_start, baseline_end
+
+
+def _nullable_delta(current: float | None, baseline: float | None) -> float | None:
+    return None if current is None or baseline is None else current - baseline
+
+
+def _behavior_affinity(row: dict[str, Any]) -> float:
+    return (float(row["completionRate"]) - float(row["skipRate"])
+            - 0.5 * float(row["earlySkipRate"]))
+
+
+def _profile_level(score: float | None) -> str:
+    if score is None:
+        return "データ不足"
+    if score >= PROFILE_STRONG_THRESHOLD:
+        return "強いプラス傾向"
+    if score >= PROFILE_POSITIVE_THRESHOLD:
+        return "プラス傾向"
+    if score > -PROFILE_POSITIVE_THRESHOLD:
+        return "ほぼ中立"
+    if score > -PROFILE_STRONG_THRESHOLD:
+        return "マイナス傾向"
+    return "強いマイナス傾向"
 
 
 class AnalyticsQueries:
@@ -244,11 +306,7 @@ class AnalyticsQueries:
         )
         feature_path = f"$.features.{feature}"
         with self.database.connect() as connection:
-            analysis_version = connection.execute(
-                """SELECT MAX(CAST(json_extract(raw_json, '$.analysisVersion') AS INTEGER))
-                   FROM source_records WHERE data_kind='track_features'
-                   AND json_type(raw_json, '$.analysisVersion')='integer'"""
-            ).fetchone()[0]
+            analysis_version = self._latest_analysis_version(connection)
             rows = connection.execute(
                 f"""WITH feature_tracks AS (
                     SELECT sr.track_id,
@@ -288,6 +346,492 @@ class AnalyticsQueries:
                 "featureLabel": INSIGHT_FEATURES[feature],
                 "analysisVersion": analysis_version, "bins": [dict(row) for row in rows],
                 "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    @staticmethod
+    def _latest_analysis_version(connection: Any) -> int | None:
+        return connection.execute(
+            """SELECT MAX(CAST(json_extract(raw_json, '$.analysisVersion') AS INTEGER))
+               FROM source_records WHERE data_kind='track_features'
+               AND json_type(raw_json, '$.analysisVersion')='integer'"""
+        ).fetchone()[0]
+
+    def recent_changes(
+        self, period: str, start_date: str | None = None, end_date: str | None = None,
+        quality: str = "analyzable",
+    ) -> dict[str, Any]:
+        if quality not in {"analyzable", "all"}:
+            raise ValueError("quality must be analyzable or all")
+        recent_start, recent_end, baseline_start, baseline_end = _recent_change_windows(
+            period, start_date, end_date
+        )
+        event_date = f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}')"
+        recent_window = f"{event_date} BETWEEN '{recent_start}' AND '{recent_end}'"
+        baseline_window = f"{event_date} BETWEEN '{baseline_start}' AND '{baseline_end}'"
+        quality_count = DETAIL_EVENT_PREDICATE if quality == "analyzable" else "1=1"
+        recent_count = f"({recent_window}) AND ({quality_count})"
+        baseline_count = f"({baseline_window}) AND ({quality_count})"
+        recent_detail = f"({recent_window}) AND ({DETAIL_EVENT_PREDICATE})"
+        baseline_detail = f"({baseline_window}) AND ({DETAIL_EVENT_PREDICATE})"
+        historical_detail = (
+            f"{event_date} < '{recent_start}' AND ({DETAIL_EVENT_PREDICATE})"
+        )
+        with self.database.connect() as connection:
+            rows = [dict(row) for row in connection.execute(
+                f"""SELECT track_id trackId, MAX(track_title) title, MAX(artist) artist,
+                    SUM(CASE WHEN {recent_count} THEN 1 ELSE 0 END) recentPlayCount,
+                    SUM(CASE WHEN {baseline_count} THEN 1 ELSE 0 END) baselinePlayCount,
+                    COUNT(CASE WHEN {recent_detail} THEN 1 END) recentDetailCount,
+                    COUNT(CASE WHEN {baseline_detail} THEN 1 END) baselineDetailCount,
+                    AVG(CASE WHEN {recent_detail} THEN skipped END) * 100 recentSkipRate,
+                    AVG(CASE WHEN {baseline_detail} THEN skipped END) * 100 baselineSkipRate,
+                    AVG(CASE WHEN {recent_detail}
+                        THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
+                        * 100 recentEarlySkipRate,
+                    AVG(CASE WHEN {baseline_detail}
+                        THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
+                        * 100 baselineEarlySkipRate,
+                    COUNT(CASE WHEN {historical_detail} THEN 1 END) historicalDetailCount,
+                    AVG(CASE WHEN {historical_detail} THEN completed END) * 100 historicalCompletionRate,
+                    MAX(CASE WHEN {historical_detail} THEN played_at END) historicalLastPlayedAt
+                    FROM playback_events GROUP BY track_id"""
+            )]
+            analysis_version = self._latest_analysis_version(connection)
+            new_tastes = self._new_tastes(
+                connection, analysis_version, recent_detail, baseline_detail
+            )
+
+        hooked = []
+        bored = []
+        rediscovery = []
+        for row in rows:
+            recent_plays = row["recentPlayCount"]
+            baseline_plays = row["baselinePlayCount"]
+            if (recent_plays >= RECENT_TRACK_MIN_PLAYS
+                    and row["recentDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                    and recent_plays >= baseline_plays + HOOKED_PLAY_GROWTH_MINIMUM
+                    and (baseline_plays == 0
+                         or recent_plays >= baseline_plays * HOOKED_PLAY_GROWTH_RATIO)
+                    and row["recentSkipRate"] <= HOOKED_MAX_SKIP_RATE):
+                hooked.append(row)
+            skip_delta = _nullable_delta(row["recentSkipRate"], row["baselineSkipRate"])
+            early_delta = _nullable_delta(
+                row["recentEarlySkipRate"], row["baselineEarlySkipRate"]
+            )
+            if (recent_plays >= RECENT_TRACK_MIN_PLAYS
+                    and row["recentDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                    and row["baselineDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                    and ((skip_delta is not None and skip_delta >= BORED_RATE_WORSENING_POINTS)
+                         or (early_delta is not None
+                             and early_delta >= BORED_RATE_WORSENING_POINTS))):
+                row["skipRateDelta"] = skip_delta
+                row["earlySkipRateDelta"] = early_delta
+                bored.append(row)
+            if (recent_plays == 0
+                    and row["historicalDetailCount"] >= REDISCOVERY_MIN_DETAIL_PLAYS
+                    and row["historicalCompletionRate"] >= REDISCOVERY_MIN_COMPLETION_RATE):
+                rediscovery.append(row)
+        hooked.sort(key=lambda row: (-row["recentPlayCount"], row["title"].casefold()))
+        bored.sort(key=lambda row: (-max(row.get("skipRateDelta") or 0,
+                                         row.get("earlySkipRateDelta") or 0),
+                                    row["title"].casefold()))
+        rediscovery.sort(key=lambda row: (-row["historicalCompletionRate"],
+                                          -row["historicalDetailCount"],
+                                          row["title"].casefold()))
+        return {"period": period, "quality": quality,
+                "recentWindow": {"startDate": str(recent_start), "endDate": str(recent_end)},
+                "baselineWindow": {"startDate": str(baseline_start), "endDate": str(baseline_end)},
+                "analysisVersion": analysis_version, "hookedTracks": hooked[:20],
+                "boredTracks": bored[:20], "newTastes": new_tastes[:20],
+                "rediscoveryTracks": rediscovery[:20], "thresholds": {
+                    "recentTrackMinPlays": RECENT_TRACK_MIN_PLAYS,
+                    "recentTrackMinDetails": RECENT_TRACK_MIN_DETAILS,
+                    "hookedPlayGrowthRatio": HOOKED_PLAY_GROWTH_RATIO,
+                    "hookedPlayGrowthMinimum": HOOKED_PLAY_GROWTH_MINIMUM,
+                    "hookedMaxSkipRate": HOOKED_MAX_SKIP_RATE,
+                    "boredRateWorseningPoints": BORED_RATE_WORSENING_POINTS,
+                    "newTasteMinDetails": NEW_TASTE_MIN_DETAILS,
+                    "newTasteRateImprovementPoints": NEW_TASTE_RATE_IMPROVEMENT_POINTS,
+                    "newTasteScoreMinimum": NEW_TASTE_SCORE_MINIMUM,
+                    "rediscoveryMinDetailPlays": REDISCOVERY_MIN_DETAIL_PLAYS,
+                    "rediscoveryMinCompletionRate": REDISCOVERY_MIN_COMPLETION_RATE,
+                }, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    @staticmethod
+    def _new_tastes(
+        connection: Any, analysis_version: int | None,
+        recent_detail: str, baseline_detail: str,
+    ) -> list[dict[str, Any]]:
+        if analysis_version is None:
+            return []
+        placeholders = ",".join("?" for _ in INSIGHT_FEATURES)
+        rows = connection.execute(
+            f"""WITH feature_values AS (
+                SELECT sr.track_id, feature.key feature, CAST(feature.value AS REAL) score
+                FROM source_records sr, json_each(sr.raw_json, '$.features') feature
+                WHERE sr.data_kind='track_features' AND sr.track_id IS NOT NULL
+                    AND json_type(sr.raw_json, '$.analysisVersion')='integer'
+                    AND CAST(json_extract(sr.raw_json, '$.analysisVersion') AS INTEGER)=?
+                    AND feature.key IN ({placeholders})
+                    AND feature.type IN ('integer', 'real')
+                    AND CAST(feature.value AS REAL) BETWEEN ? AND 1.0
+            )
+            SELECT fv.feature, COUNT(CASE WHEN {recent_detail} THEN 1 END) recentDetailCount,
+                COUNT(CASE WHEN {baseline_detail} THEN 1 END) baselineDetailCount,
+                AVG(CASE WHEN {recent_detail} THEN e.completed END) * 100 recentCompletionRate,
+                AVG(CASE WHEN {baseline_detail} THEN e.completed END) * 100 baselineCompletionRate,
+                AVG(CASE WHEN {recent_detail} THEN e.skipped END) * 100 recentSkipRate,
+                AVG(CASE WHEN {baseline_detail} THEN e.skipped END) * 100 baselineSkipRate
+            FROM feature_values fv JOIN playback_events e ON e.track_id=fv.track_id
+            GROUP BY fv.feature""",
+            (analysis_version, *INSIGHT_FEATURES.keys(), NEW_TASTE_SCORE_MINIMUM),
+        ).fetchall()
+        result = []
+        for raw in rows:
+            row = dict(raw)
+            completion_delta = _nullable_delta(
+                row["recentCompletionRate"], row["baselineCompletionRate"]
+            )
+            skip_improvement = _nullable_delta(
+                row["baselineSkipRate"], row["recentSkipRate"]
+            )
+            if (row["recentDetailCount"] >= NEW_TASTE_MIN_DETAILS
+                    and row["baselineDetailCount"] >= NEW_TASTE_MIN_DETAILS
+                    and ((completion_delta is not None
+                          and completion_delta >= NEW_TASTE_RATE_IMPROVEMENT_POINTS)
+                         or (skip_improvement is not None
+                             and skip_improvement >= NEW_TASTE_RATE_IMPROVEMENT_POINTS))):
+                row["featureLabel"] = INSIGHT_FEATURES[row["feature"]]
+                row["completionRateDelta"] = completion_delta
+                row["skipRateImprovement"] = skip_improvement
+                result.append(row)
+        result.sort(key=lambda row: (-max(row["completionRateDelta"] or 0,
+                                          row["skipRateImprovement"] or 0),
+                                     row["featureLabel"]))
+        return result
+
+    def advanced_insights(
+        self, period: str, start_date: str | None = None, end_date: str | None = None,
+        quality: str = "analyzable",
+    ) -> dict[str, Any]:
+        event_where, event_params = _insights_event_where(
+            period, start_date, end_date, quality
+        )
+        event_condition = (
+            event_where.removeprefix("WHERE ").replace("played_at", "e.played_at") or "1=1"
+        )
+        recent_start, recent_end, baseline_start, baseline_end = _recent_change_windows(
+            period, start_date, end_date
+        )
+        with self.database.connect() as connection:
+            analysis_version = self._latest_analysis_version(connection)
+            time_features, profile = self._feature_behavior_profiles(
+                connection, analysis_version, event_condition, event_params
+            )
+            entity_changes = {
+                dimension: self._entity_changes(
+                    connection, dimension, recent_start, recent_end,
+                    baseline_start, baseline_end, quality
+                ) for dimension in ("artists", "albums", "genres")
+            }
+        return {"period": period, "quality": quality,
+                "recentWindow": {"startDate": str(recent_start), "endDate": str(recent_end)},
+                "baselineWindow": {"startDate": str(baseline_start), "endDate": str(baseline_end)},
+                "analysisVersion": analysis_version, "timeFeatureAffinity": time_features,
+                "entityChanges": entity_changes, "listeningProfile": profile,
+                "thresholds": {"entityGrowthRatio": ENTITY_GROWTH_RATIO,
+                    "entityGrowthMinimum": ENTITY_GROWTH_MINIMUM,
+                    "entityGoodCompletionRate": ENTITY_GOOD_COMPLETION_RATE,
+                    "timeFeatureMinDetails": TIME_FEATURE_MIN_DETAILS,
+                    "listeningProfileMinDetails": LISTENING_PROFILE_MIN_DETAILS,
+                    "profileStrongThreshold": PROFILE_STRONG_THRESHOLD,
+                    "profilePositiveThreshold": PROFILE_POSITIVE_THRESHOLD},
+                "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    def recommendations(
+        self, period: str, start_date: str | None = None, end_date: str | None = None,
+        quality: str = "analyzable",
+    ) -> dict[str, Any]:
+        changes = self.recent_changes(period, start_date, end_date, quality)
+        advanced = self.advanced_insights(period, start_date, end_date, quality)
+        positive_features = [row["feature"] for row in advanced["listeningProfile"]
+                             if row["score"] is not None
+                             and row["score"] >= PROFILE_POSITIVE_THRESHOLD]
+        recent_start = changes["recentWindow"]["startDate"]
+        recent_end = changes["recentWindow"]["endDate"]
+        detail = DETAIL_EVENT_PREDICATE
+        recent_window = (
+            f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') BETWEEN "
+            f"'{recent_start}' AND '{recent_end}'"
+        )
+        quality_count = detail if quality == "analyzable" else "1=1"
+        feature_columns = ",\n".join(
+            f"CASE WHEN json_type(sr.raw_json, '$.features.{feature}') IN ('integer','real') "
+            f"AND json_extract(sr.raw_json, '$.features.{feature}') BETWEEN 0.0 AND 1.0 "
+            f"THEN CAST(json_extract(sr.raw_json, '$.features.{feature}') AS REAL) END {feature}"
+            for feature in INSIGHT_FEATURES
+        )
+        with self.database.connect() as connection:
+            version = self._latest_analysis_version(connection)
+            rows = [dict(row) for row in connection.execute(
+                f"""WITH stats AS (
+                    SELECT track_id, COUNT(*) playCount,
+                        SUM(CASE WHEN ({recent_window}) AND ({quality_count}) THEN 1 ELSE 0 END) recentPlayCount,
+                        COUNT(CASE WHEN {detail} THEN 1 END) detailEventCount,
+                        AVG(CASE WHEN {detail} THEN completed END) * 100 completionRate,
+                        AVG(CASE WHEN {detail} THEN skipped END) * 100 skipRate,
+                        AVG(CASE WHEN {detail} THEN CASE WHEN {EARLY_SKIP_PREDICATE}
+                            THEN 1.0 ELSE 0.0 END END) * 100 earlySkipRate
+                    FROM playback_events GROUP BY track_id
+                ), feature_tracks AS (
+                    SELECT sr.track_id, {feature_columns}
+                    FROM source_records sr WHERE sr.data_kind='track_features'
+                        AND json_type(sr.raw_json, '$.analysisVersion')='integer'
+                        AND CAST(json_extract(sr.raw_json, '$.analysisVersion') AS INTEGER)=?
+                )
+                SELECT lt.track_id trackId, lt.title, lt.artist, lt.album, lt.genre,
+                    COALESCE(pp.favorite, lt.favorite, 0) favorite,
+                    COALESCE(pp.playback_preference, 0) playbackPreference,
+                    COALESCE(s.playCount, 0) playCount,
+                    COALESCE(s.recentPlayCount, 0) recentPlayCount,
+                    COALESCE(s.detailEventCount, 0) detailEventCount,
+                    s.completionRate, s.skipRate, s.earlySkipRate,
+                    {', '.join(f'ft.{feature}' for feature in INSIGHT_FEATURES)}
+                FROM library_tracks lt
+                JOIN feature_tracks ft ON ft.track_id=lt.track_id
+                LEFT JOIN stats s ON s.track_id=lt.track_id
+                LEFT JOIN playback_preferences pp ON pp.track_id=lt.track_id
+                WHERE lt.is_present=1""", (version,)
+            )] if version is not None else []
+        recommendations = []
+        discoveries = []
+        for row in rows:
+            values = [row[feature] for feature in positive_features
+                      if row.get(feature) is not None]
+            if not values:
+                continue
+            feature_match = sum(values) / len(values)
+            if feature_match < RECOMMENDATION_FEATURE_MATCH_MINIMUM:
+                continue
+            score = feature_match * 40
+            reasons = [f"現在の好みの特徴と{feature_match * 100:.0f}%一致"]
+            if row["favorite"]:
+                score += 15
+                reasons.append("お気に入り")
+            score += max(-15, min(15, row["playbackPreference"] * 1.5))
+            if row["playbackPreference"] > 0:
+                reasons.append(f"Good +{row['playbackPreference']}")
+            if row["detailEventCount"] >= RECENT_TRACK_MIN_DETAILS:
+                score += (row["completionRate"] - 50) * 0.2
+                score -= row["skipRate"] * 0.1 + row["earlySkipRate"] * 0.05
+                if row["completionRate"] >= REDISCOVERY_MIN_COMPLETION_RATE:
+                    reasons.append(f"完走率{row['completionRate']:.0f}%")
+            overplay_penalty = min(row["recentPlayCount"] * 4, 24)
+            score -= overplay_penalty
+            if overplay_penalty:
+                reasons.append(f"最近{row['recentPlayCount']}回分を減点")
+            item = {key: row[key] for key in ("trackId", "title", "artist", "playCount",
+                                               "recentPlayCount", "detailEventCount",
+                                               "completionRate", "skipRate", "earlySkipRate")}
+            item.update({"score": round(score, 2), "featureMatch": feature_match,
+                         "reasons": reasons})
+            recommendations.append(item)
+            if row["playCount"] <= DISCOVERY_MAX_PLAYS:
+                discovery = dict(item)
+                discovery["reasons"] = [f"最近の好みの特徴と{feature_match * 100:.0f}%一致",
+                                        ("未再生" if row["playCount"] == 0
+                                         else f"まだ{row['playCount']}回再生")]
+                if row["playCount"] == 0:
+                    discovery["completionRate"] = None
+                    discovery["skipRate"] = None
+                    discovery["earlySkipRate"] = None
+                discoveries.append(discovery)
+        recommendations.sort(key=lambda item: (-item["score"], item["title"].casefold()))
+        discoveries.sort(key=lambda item: (-item["featureMatch"], item["playCount"],
+                                            item["title"].casefold()))
+        rediscovery = []
+        for row in changes["rediscoveryTracks"]:
+            item = dict(row)
+            item["reason"] = (f"以前{row['historicalDetailCount']}回再生・完走率"
+                              f"{row['historicalCompletionRate']:.0f}%、最近の期間は再生なし")
+            rediscovery.append(item)
+        cards = self._automatic_insight_cards(changes, advanced)
+        return {"period": period, "quality": quality, "analysisVersion": version,
+                "recommendations": recommendations[:20],
+                "rediscoveryRecommendations": rediscovery[:20],
+                "lowPlayDiscoveries": discoveries[:20], "insightCards": cards[:5],
+                "thresholds": {"featureMatchMinimum": RECOMMENDATION_FEATURE_MATCH_MINIMUM,
+                    "discoveryMaxPlays": DISCOVERY_MAX_PLAYS,
+                    "overplayPenaltyPerRecentPlay": 4,
+                    "overplayPenaltyMaximum": 24}}
+
+    @staticmethod
+    def _automatic_insight_cards(
+        changes: dict[str, Any], advanced: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        cards = []
+        for row in changes["newTastes"]:
+            delta = max(row["completionRateDelta"] or 0, row["skipRateImprovement"] or 0)
+            cards.append({"kind": "newTaste", "title": f"{row['featureLabel']}との相性が上昇",
+                          "message": f"最近の行動指標が{delta:.0f}ポイント改善しました。",
+                          "priority": delta * row["recentDetailCount"]})
+        for dimension, rows in advanced["entityChanges"].items():
+            for row in rows:
+                if "最近急増" in row["signals"]:
+                    cards.append({"kind": dimension, "title": f"{row['label']}の再生が急増",
+                                  "message": f"過去{row['baselinePlayCount']}回から最近{row['recentPlayCount']}回へ増えました。",
+                                  "priority": row["playCountDelta"] * row["recentPlayCount"]})
+        for row in changes["boredTracks"]:
+            delta = max(row.get("skipRateDelta") or 0, row.get("earlySkipRateDelta") or 0)
+            cards.append({"kind": "bored", "trackId": row["trackId"],
+                          "title": f"{row['title']}のSkip傾向が上昇",
+                          "message": f"過去より{delta:.0f}ポイント悪化しています。",
+                          "priority": delta * row["recentDetailCount"]})
+        for row in changes["rediscoveryTracks"]:
+            cards.append({"kind": "rediscovery", "trackId": row["trackId"],
+                          "title": f"{row['title']}を再発見",
+                          "message": f"以前{row['historicalDetailCount']}回、完走率{row['historicalCompletionRate']:.0f}%でした。",
+                          "priority": row["historicalDetailCount"]
+                                      * row["historicalCompletionRate"] / 100})
+        cards.sort(key=lambda item: (-item["priority"], item["title"].casefold()))
+        return cards
+
+    @staticmethod
+    def _feature_behavior_profiles(
+        connection: Any, analysis_version: int | None,
+        event_condition: str, event_params: list[Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        if analysis_version is None:
+            return [], [{"feature": key, "featureLabel": label, "detailEventCount": 0,
+                         "completionRate": None, "skipRate": None,
+                         "earlySkipRate": None, "score": None, "level": "データ不足"}
+                        for key, label in INSIGHT_FEATURES.items()]
+        placeholders = ",".join("?" for _ in INSIGHT_FEATURES)
+        detail_e = DETAIL_EVENT_PREDICATE.replace("played_at", "e.played_at")
+        early_e = (EARLY_SKIP_PREDICATE.replace("played_at", "e.played_at")
+                   .replace("skipped", "e.skipped").replace("play_duration", "e.play_duration"))
+        base_cte = f"""WITH feature_values AS (
+            SELECT sr.track_id, feature.key feature, CAST(feature.value AS REAL) score
+            FROM source_records sr, json_each(sr.raw_json, '$.features') feature
+            WHERE sr.data_kind='track_features' AND sr.track_id IS NOT NULL
+                AND json_type(sr.raw_json, '$.analysisVersion')='integer'
+                AND CAST(json_extract(sr.raw_json, '$.analysisVersion') AS INTEGER)=?
+                AND feature.key IN ({placeholders})
+                AND feature.type IN ('integer', 'real')
+                AND CAST(feature.value AS REAL) BETWEEN ? AND 1.0
+        ), filtered_events AS (
+            SELECT e.*, CASE
+                WHEN CAST(strftime('%H', e.played_at, '{SQLITE_JAPAN_TIMEZONE}') AS INTEGER) BETWEEN 5 AND 11 THEN '朝'
+                WHEN CAST(strftime('%H', e.played_at, '{SQLITE_JAPAN_TIMEZONE}') AS INTEGER) BETWEEN 12 AND 16 THEN '昼'
+                WHEN CAST(strftime('%H', e.played_at, '{SQLITE_JAPAN_TIMEZONE}') AS INTEGER) BETWEEN 17 AND 21 THEN '夜'
+                ELSE '深夜' END timeBand
+            FROM playback_events e WHERE {event_condition}
+        )"""
+        base_params = (analysis_version, *INSIGHT_FEATURES.keys(),
+                       NEW_TASTE_SCORE_MINIMUM, *event_params)
+        time_rows = connection.execute(
+            base_cte + f""" SELECT e.timeBand, fv.feature,
+                COUNT(*) playCount, COUNT(CASE WHEN {detail_e} THEN 1 END) detailEventCount,
+                AVG(CASE WHEN {detail_e} THEN e.completed END) * 100 completionRate,
+                AVG(CASE WHEN {detail_e} THEN e.skipped END) * 100 skipRate,
+                AVG(CASE WHEN {detail_e} THEN CASE WHEN {early_e}
+                    THEN 1.0 ELSE 0.0 END END) * 100 earlySkipRate
+            FROM feature_values fv JOIN filtered_events e ON e.track_id=fv.track_id
+            GROUP BY e.timeBand, fv.feature""", base_params
+        ).fetchall()
+        time_features = []
+        for raw in time_rows:
+            row = dict(raw)
+            row["featureLabel"] = INSIGHT_FEATURES[row["feature"]]
+            row["affinityScore"] = _behavior_affinity(row) if (
+                row["detailEventCount"] >= TIME_FEATURE_MIN_DETAILS) else None
+            row["isReliable"] = row["affinityScore"] is not None
+            time_features.append(row)
+        time_order = {"朝": 0, "昼": 1, "夜": 2, "深夜": 3}
+        time_features.sort(key=lambda row: (time_order[row["timeBand"]],
+                                            -(row["affinityScore"] or -999),
+                                            row["featureLabel"]))
+
+        profile_rows = connection.execute(
+            base_cte + f""" SELECT fv.feature, COUNT(*) playCount,
+                COUNT(CASE WHEN {detail_e} THEN 1 END) detailEventCount,
+                AVG(CASE WHEN {detail_e} THEN e.completed END) * 100 completionRate,
+                AVG(CASE WHEN {detail_e} THEN e.skipped END) * 100 skipRate,
+                AVG(CASE WHEN {detail_e} THEN CASE WHEN {early_e}
+                    THEN 1.0 ELSE 0.0 END END) * 100 earlySkipRate
+            FROM feature_values fv JOIN filtered_events e ON e.track_id=fv.track_id
+            GROUP BY fv.feature""", base_params
+        ).fetchall()
+        by_feature = {row["feature"]: dict(row) for row in profile_rows}
+        profile = []
+        for feature, label in INSIGHT_FEATURES.items():
+            row = by_feature.get(feature, {"feature": feature, "playCount": 0,
+                                           "detailEventCount": 0, "completionRate": None,
+                                           "skipRate": None, "earlySkipRate": None})
+            score = (_behavior_affinity(row) if
+                     row["detailEventCount"] >= LISTENING_PROFILE_MIN_DETAILS else None)
+            row.update({"featureLabel": label, "score": score,
+                        "level": _profile_level(score)})
+            profile.append(row)
+        return time_features, profile
+
+    @staticmethod
+    def _entity_changes(
+        connection: Any, dimension: str, recent_start: date, recent_end: date,
+        baseline_start: date, baseline_end: date, quality: str,
+    ) -> list[dict[str, Any]]:
+        expressions = {
+            "artists": "e.artist",
+            "albums": "COALESCE(NULLIF(e.album, ''), 'アルバム不明')",
+            "genres": "COALESCE(NULLIF(lt.genre, ''), '未分類')",
+        }
+        label = expressions[dimension]
+        event_date = f"date(e.played_at, '{SQLITE_JAPAN_TIMEZONE}')"
+        detail = DETAIL_EVENT_PREDICATE.replace("played_at", "e.played_at")
+        recent = f"{event_date} BETWEEN '{recent_start}' AND '{recent_end}'"
+        baseline = f"{event_date} BETWEEN '{baseline_start}' AND '{baseline_end}'"
+        quality_count = detail if quality == "analyzable" else "1=1"
+        rows = connection.execute(
+            f"""SELECT {label} label,
+                SUM(CASE WHEN ({recent}) AND ({quality_count}) THEN 1 ELSE 0 END) recentPlayCount,
+                SUM(CASE WHEN ({baseline}) AND ({quality_count}) THEN 1 ELSE 0 END) baselinePlayCount,
+                COUNT(CASE WHEN ({recent}) AND ({detail}) THEN 1 END) recentDetailCount,
+                COUNT(CASE WHEN ({baseline}) AND ({detail}) THEN 1 END) baselineDetailCount,
+                AVG(CASE WHEN ({recent}) AND ({detail}) THEN e.completed END) * 100 recentCompletionRate,
+                AVG(CASE WHEN ({baseline}) AND ({detail}) THEN e.completed END) * 100 baselineCompletionRate,
+                AVG(CASE WHEN ({recent}) AND ({detail}) THEN e.skipped END) * 100 recentSkipRate,
+                AVG(CASE WHEN ({baseline}) AND ({detail}) THEN e.skipped END) * 100 baselineSkipRate
+            FROM playback_events e
+            LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
+            GROUP BY {label}"""
+        ).fetchall()
+        result = []
+        for raw in rows:
+            row = dict(raw)
+            row["playCountDelta"] = row["recentPlayCount"] - row["baselinePlayCount"]
+            row["completionRateDelta"] = _nullable_delta(
+                row["recentCompletionRate"], row["baselineCompletionRate"])
+            row["skipRateDelta"] = _nullable_delta(
+                row["recentSkipRate"], row["baselineSkipRate"])
+            growth = (row["recentPlayCount"] >= RECENT_TRACK_MIN_PLAYS
+                      and row["playCountDelta"] >= ENTITY_GROWTH_MINIMUM
+                      and (row["baselinePlayCount"] == 0 or row["recentPlayCount"]
+                           >= row["baselinePlayCount"] * ENTITY_GROWTH_RATIO))
+            good = (row["recentDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                    and row["recentCompletionRate"] >= ENTITY_GOOD_COMPLETION_RATE)
+            skip_worse = (row["recentDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                          and row["baselineDetailCount"] >= RECENT_TRACK_MIN_DETAILS
+                          and row["skipRateDelta"] is not None
+                          and row["skipRateDelta"] >= BORED_RATE_WORSENING_POINTS)
+            signals = []
+            if growth: signals.append("最近急増")
+            if good: signals.append("最近よく完走")
+            if skip_worse: signals.append("Skip増加")
+            if signals:
+                row["signals"] = signals
+                result.append(row)
+        result.sort(key=lambda row: (-len(row["signals"]), -row["playCountDelta"],
+                                     row["label"].casefold()))
+        return result[:20]
 
     @staticmethod
     def _behavior_breakdown(

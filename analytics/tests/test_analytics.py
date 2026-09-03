@@ -697,6 +697,96 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(result["updatedCount"], 1)
         self.assertEqual(self.client.get("/api/sources/volume_normalization").json()["count"], 1)
 
+    def test_recent_changes_advanced_insights_and_recommendations(self):
+        feature_names = ["dark", "calm", "aggressive", "piano", "electronic",
+                         "ambient", "drumAndBass", "vocal", "instrumental"]
+        track_ids = ["hook", "bored", "rediscover", "taste", "favorite", "unplayed",
+                     "overplayed", "insufficient"]
+        self.upload(library_document([
+            library_track(track_id, title=track_id.title(), artist=("Hook Artist" if track_id == "hook" else "Other Artist"),
+                          album=("Rise" if track_id == "hook" else "Other"), genre=("Rock" if track_id == "hook" else "Pop"), favorite=False)
+            for track_id in track_ids
+        ]), "MyMusic-Library.json")
+        self.upload(preferences_document([
+            {"trackId": "favorite", "playbackPreference": 5, "favorite": True},
+        ]), "MyMusic-Playback-Preferences.json")
+
+        feature_tracks = []
+        for track_id in track_ids:
+            scores = {name: 0.1 for name in feature_names}
+            if track_id in {"taste", "favorite", "unplayed", "overplayed"}:
+                scores["calm"] = {"taste": .9, "favorite": .8,
+                                  "unplayed": .9, "overplayed": 1.0}[track_id]
+            feature_tracks.append({
+                "trackID": track_id, "title": track_id, "artist": "Artist",
+                "sourceIdentity": {"relativePath": f"{track_id}.m4a", "fileSize": 1,
+                    "duration": 100, "modificationDate": None, "contentHash": None,
+                    "title": track_id, "artist": "Artist", "album": None},
+                "analysisVersion": 2, "analyzedAt": "2026-09-14T00:00:00Z",
+                "importedAt": "2026-09-14T00:00:00Z", "features": scores,
+            })
+        self.upload({"version": 1, "exportedAt": "2026-09-14T00:00:00Z",
+                     "tracks": feature_tracks}, "MyMusic-Track-Features.json")
+
+        events = []
+        def add_many(prefix, track_id, dates, completed, skipped, duration,
+                     artist="Other Artist", album="Other"):
+            for index, played_at in enumerate(dates):
+                events.append(event(f"{prefix}-{index}", track_id, trackTitle=track_id.title(),
+                                    artist=artist, album=album, playedAt=played_at,
+                                    completed=completed, skipped=skipped,
+                                    playDuration=duration))
+        baseline = [f"2026-09-0{day}T06:00:00+09:00" for day in (1, 2, 3)]
+        recent = [f"2026-09-{day:02}T06:00:00+09:00" for day in (8, 9, 10)]
+        add_many("taste-old", "taste", baseline, False, True, 10)
+        add_many("taste-new", "taste", recent, True, False, 90)
+        add_many("bored-old", "bored", baseline, True, False, 90)
+        add_many("bored-new", "bored", recent, False, True, 10)
+        add_many("rediscover", "rediscover", baseline, True, False, 90)
+        add_many("hook-new", "hook", recent + ["2026-09-11T06:00:00+09:00"],
+                 True, False, 90, "Hook Artist", "Rise")
+        add_many("hook-old", "hook", ["2026-09-01T07:00:00+09:00"],
+                 True, False, 90, "Hook Artist", "Rise")
+        add_many("overplayed", "overplayed",
+                 recent + [f"2026-09-{day:02}T07:00:00+09:00" for day in (11, 12, 13, 14)],
+                 True, False, 90)
+        add_many("insufficient", "insufficient", ["2026-09-10T06:00:00+09:00"],
+                 True, False, 90)
+        events.append(event("legacy-noise", "insufficient",
+                            playedAt="2026-08-20T06:00:00+09:00",
+                            completed=False, skipped=True, playDuration=5))
+        self.upload(document(events))
+
+        query = "period=custom&startDate=2026-09-08&endDate=2026-09-14&quality=analyzable"
+        changes = self.client.get(f"/api/insights/recent-changes?{query}").json()
+        self.assertIn("hook", {row["trackId"] for row in changes["hookedTracks"]})
+        self.assertIn("bored", {row["trackId"] for row in changes["boredTracks"]})
+        self.assertIn("rediscover", {row["trackId"] for row in changes["rediscoveryTracks"]})
+        self.assertIn("calm", {row["feature"] for row in changes["newTastes"]})
+        self.assertNotIn("insufficient", {row["trackId"] for row in changes["hookedTracks"]})
+
+        advanced = self.client.get(f"/api/insights/advanced?{query}").json()
+        morning_calm = next(row for row in advanced["timeFeatureAffinity"]
+                            if row["timeBand"] == "朝" and row["feature"] == "calm")
+        self.assertTrue(morning_calm["isReliable"])
+        profile = {row["feature"]: row for row in advanced["listeningProfile"]}
+        self.assertEqual(profile["calm"]["level"], "強いプラス傾向")
+        self.assertEqual(profile["dark"]["level"], "データ不足")
+        self.assertTrue(advanced["entityChanges"]["artists"])
+
+        recommendations = self.client.get(f"/api/insights/recommendations?{query}").json()
+        self.assertEqual(recommendations["recommendations"][0]["trackId"], "favorite")
+        overplayed_rank = next(index for index, row in enumerate(recommendations["recommendations"])
+                               if row["trackId"] == "overplayed")
+        self.assertGreater(overplayed_rank, 0)
+        unplayed = next(row for row in recommendations["lowPlayDiscoveries"]
+                        if row["trackId"] == "unplayed")
+        self.assertEqual(unplayed["playCount"], 0)
+        self.assertIsNone(unplayed["completionRate"])
+        self.assertLessEqual(len(recommendations["insightCards"]), 5)
+        self.assertFalse(any(card.get("trackId") == "insufficient"
+                             for card in recommendations["insightCards"]))
+
     def test_data_sources_are_paginated_at_two_hundred_rows(self):
         payload = {
             "version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
