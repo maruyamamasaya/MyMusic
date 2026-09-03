@@ -65,7 +65,7 @@ Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources�
 
 ```text
 Library View → LibraryStore → FileImportService
-                           → MusicLibraryService → MetadataService / ArtworkService
+                           → LibrarySyncService → MusicLibraryService → MetadataService / ArtworkService
                            → LibraryPersistenceService / TrackIdentityService
 ```
 
@@ -73,9 +73,11 @@ Library View → LibraryStore → FileImportService
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 
+`LibrarySyncService` actorはscanを1件ずつ直列化し、Track Identityのscan sessionとLibrary cache更新の競合を防ぐ。ファイル走査、差分判定、metadata／Identity照合、cache保存、複数folderの重複排除と`MusicLibrary`派生モデル構築はMainActor外で行う。`LibraryStore`は同期状態と完成snapshotの反映だけをMainActorで行い、曲単位ではObservable stateを更新しない。同期中は現在の表示libraryを保持するため、既存Track IDを参照する再生・履歴・Preference・Playlistは同期処理から独立して継続する。
+
 Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を件数上限なく逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。処理済みの正本はidentity registryとする。
 
-ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorが表示曲の抽出とAlbum / Artist / Genre / Composerの再構築をutility priorityで実行し、`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanは従来どおり同期的に一貫したlibrary snapshotを確定してから公開する。
+ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorが表示曲の抽出とAlbum / Artist / Genre / Composerの再構築をutility priorityで実行し、`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
 
 「作業用BGM」は通常曲と作業用再生を分離する分類マーカーでもあるため、ライブラリに存在する場合はジャンル表示フィルターの固定ON項目とする。`LibraryStore`が保存済み設定、個別変更、全解除、プリセット適用の各入口で無効化を拒否し、UIは存在を示したまま解除操作を無効にする。
 

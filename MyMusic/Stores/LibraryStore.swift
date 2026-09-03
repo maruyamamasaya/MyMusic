@@ -43,10 +43,10 @@ final class LibraryStore {
     private var allGenres: [Genre] = []
     private var disabledGenreNames: Set<String>
     private var hasRestoredFolder = false
-    private let service: MusicLibraryServicing
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
     private let identityService: TrackIdentityServicing
+    private let syncService: LibrarySyncService
     private let genreFilterService = GenreLibraryFilterService()
     private let userDefaults: UserDefaults
     private var genreFilterTask: Task<Void, Never>?
@@ -60,11 +60,13 @@ final class LibraryStore {
          userDefaults: UserDefaults = .standard) {
         let importer = fileImportService ?? FileImportService()
         let identities = identityService ?? TrackIdentityService.shared
+        let libraryService = service ?? MusicLibraryService(fileImportService: importer,
+            metadataService: MetadataService(identityService: identities), identityService: identities)
+        let libraryPersistence = persistence ?? LibraryPersistenceService()
         self.fileImportService = importer
         self.identityService = identities
-        self.service = service ?? MusicLibraryService(fileImportService: importer,
-            metadataService: MetadataService(identityService: identities), identityService: identities)
-        self.persistence = persistence ?? LibraryPersistenceService()
+        self.persistence = libraryPersistence
+        self.syncService = LibrarySyncService(service: libraryService, persistence: libraryPersistence)
         self.userDefaults = userDefaults
         self.disabledGenreNames = Set(userDefaults.stringArray(forKey: Self.disabledGenresKey) ?? [])
             .subtracting([Track.workPlaybackGenre])
@@ -81,12 +83,12 @@ final class LibraryStore {
             for folder in libraryFolders {
                 if let cached = try? await persistence.load(for: folder.url) {
                     librariesByFolderID[folder.id] = cached
-                    Task { [identityService] in await identityService.registerExistingTracks(cached.tracks, in: folder.url) }
+                    await identityService.registerExistingTracks(cached.tracks, in: folder.url)
                 } else {
                     await scan(folder)
                 }
             }
-            rebuildCombinedLibrary()
+            await rebuildCombinedLibrary()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -102,7 +104,7 @@ final class LibraryStore {
             libraryFolders = newFolders
             librariesByFolderID = librariesByFolderID.filter { newFolders.map(\.id).contains($0.key) }
             for folder in newFolders where !oldIDs.contains(folder.id) { await scan(folder) }
-            rebuildCombinedLibrary()
+            await rebuildCombinedLibrary()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -113,14 +115,14 @@ final class LibraryStore {
             libraryFolders = remaining
             librariesByFolderID.removeValue(forKey: folder.id)
             errorMessage = nil
-            rebuildCombinedLibrary()
+            await rebuildCombinedLibrary()
         } catch { errorMessage = error.localizedDescription }
     }
 
     func rescan() async {
         guard !libraryFolders.isEmpty else { errorMessage = "先に音楽フォルダを選択してください。"; return }
         for folder in libraryFolders { await scan(folder) }
-        rebuildCombinedLibrary()
+        await rebuildCombinedLibrary()
     }
 
     func dismissError() { errorMessage = nil }
@@ -272,13 +274,14 @@ final class LibraryStore {
         isLoading = true; defer { isLoading = false }
         do {
             let previous = librariesByFolderID[folder.id]?.tracks ?? []
-            let library = try await service.loadLibrary(from: folder.url, previousTracks: previous)
+            let library = try await syncService.scan(folderURL: folder.url, previousTracks: previous)
             // The user may unregister this folder while its asynchronous scan is running.
             // Do not restore scan results for a folder that is no longer registered.
             guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
+            try await syncService.save(library, for: folder.url)
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
             librariesByFolderID[folder.id] = library
-            try await persistence.save(library, for: folder.url)
-            rebuildCombinedLibrary()
+            await rebuildCombinedLibrary()
         } catch is CancellationError { return }
         catch {
             // Likewise, a late access error from an unregistered folder should not be
@@ -288,16 +291,18 @@ final class LibraryStore {
         }
     }
 
-    private func rebuildCombinedLibrary() {
+    private func rebuildCombinedLibrary() async {
         cancelPendingGenreFilter()
-        var seenPaths: Set<String> = []
-        let combined = libraryFolders.flatMap { librariesByFolderID[$0.id]?.tracks ?? [] }.filter {
-            seenPaths.insert($0.fileURL.resolvingSymlinksInPath().standardizedFileURL.path).inserted
-        }
-        let completeLibrary = MusicLibrary.build(from: combined)
+        let folderIDs = libraryFolders.map(\.id)
+        let libraries = librariesByFolderID
+        let completeLibrary = await syncService.combinedLibrary(
+            folderIDs: folderIDs,
+            librariesByFolderID: libraries
+        )
+        guard folderIDs == libraryFolders.map(\.id) else { return }
         allTracks = completeLibrary.tracks
         allGenres = completeLibrary.genres
-        applyGenreFilterSynchronously()
+        applyGenreFilter()
     }
     private func applyGenreFilter() {
         genreFilterTask?.cancel()
@@ -309,28 +314,20 @@ final class LibraryStore {
 
         genreFilterTask = Task(priority: .utility) { [weak self] in
             do {
-                let library = try await genreFilterService.filteredLibrary(
+                let snapshot = try await genreFilterService.filteredLibrary(
                     from: tracks,
                     disabledGenreNames: disabledGenreNames,
                     unassignedGenreKey: Self.unassignedGenreKey
                 )
                 try Task.checkCancellation()
                 guard let self, self.genreFilterRequestID == requestID else { return }
-                self.apply(library)
+                self.apply(snapshot)
             } catch is CancellationError {
                 return
             } catch {
                 return
             }
         }
-    }
-    private func applyGenreFilterSynchronously() {
-        let visibleTracks = allTracks.filter { track in
-            let genreNames = Self.genreNames(in: track.genre)
-            let filterKeys = genreNames.isEmpty ? Set([Self.unassignedGenreKey]) : genreNames
-            return disabledGenreNames.isDisjoint(with: filterKeys)
-        }
-        apply(MusicLibrary.build(from: visibleTracks))
     }
     private func cancelPendingGenreFilter() {
         genreFilterTask?.cancel()
@@ -354,10 +351,11 @@ final class LibraryStore {
     private var alwaysEnabledAvailableGenreNames: Set<String> {
         Set(availableGenreOptions.lazy.map(\.id).filter(isGenreAlwaysEnabled))
     }
-    private func apply(_ library: MusicLibrary) {
+    private func apply(_ snapshot: LibraryPresentationSnapshot) {
+        let library = snapshot.library
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
-        workLibraryCatalog = WorkLibraryCatalogService.build(from: library)
+        workLibraryCatalog = snapshot.workLibraryCatalog
     }
     private func resolvedTracks(for ids: [Track.ID]) -> [Track] {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); var seen: Set<Track.ID> = []

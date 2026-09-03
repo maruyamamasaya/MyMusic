@@ -12,12 +12,17 @@ protocol MusicLibraryServicing: Sendable {
     func loadLibrary(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibrary
 }
 
+nonisolated struct LibraryPresentationSnapshot: Sendable {
+    let library: MusicLibrary
+    let workLibraryCatalog: WorkLibraryCatalog
+}
+
 actor GenreLibraryFilterService {
     func filteredLibrary(
         from tracks: [Track],
         disabledGenreNames: Set<String>,
         unassignedGenreKey: String
-    ) throws -> MusicLibrary {
+    ) throws -> LibraryPresentationSnapshot {
         var visibleTracks: [Track] = []
         visibleTracks.reserveCapacity(tracks.count)
 
@@ -31,7 +36,11 @@ actor GenreLibraryFilterService {
         }
 
         try Task.checkCancellation()
-        return MusicLibrary.build(from: visibleTracks)
+        let library = MusicLibrary.build(from: visibleTracks)
+        return LibraryPresentationSnapshot(
+            library: library,
+            workLibraryCatalog: WorkLibraryCatalogService.build(from: library)
+        )
     }
 
     private static func genreNames(in value: String?) -> Set<String> {

@@ -37,6 +37,7 @@ updated: 2026-09-03
 ### 基準版
 
 - Files / iCloud Drive の複数フォルダ登録、security-scoped bookmark の復元、音源 scan と library cache。
+- ライブラリ同期の走査、metadata／Track Identity照合、cache保存、結合・派生モデル構築は専用actorでMainActor外かつ直列に実行する。UIへはフォルダ単位の完成結果だけを反映し、同期中も既存libraryと再生を維持する。
 - 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。ジャンル設定適用時の全ライブラリ再構築は専用actorで実行し、最新の結果だけをMainActorへ反映する。
 - ジャンル表示設定では、ライブラリに「作業用BGM」が存在する場合は常に表示対象とし、選択画面に固定項目として表示する。個別設定、全解除、保存済み／旧プリセットからOFFにはできない。
 - iTunes / ID3のAlbum Artistと年を保持し、アルバムの統合・表示・検索に使用。検索画面では曲名、アルバム名、アーティスト名、アルバムアーティスト、年代を個別に選べ、225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
