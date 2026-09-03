@@ -196,9 +196,16 @@ class AnalyticsQueries:
 
     def insights(
         self, period: str, start_date: str | None = None, end_date: str | None = None,
+        quality: str = "analyzable",
     ) -> dict[str, Any]:
         """Aggregate playback behavior without constraining source/type values."""
         where, params = _period_where(period, start_date, end_date)
+        if quality not in {"analyzable", "all"}:
+            raise ValueError("quality must be analyzable or all")
+        if quality == "analyzable":
+            quality_clause = f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ?"
+            where = f"{where} AND {quality_clause}" if where else f"WHERE {quality_clause}"
+            params.append(LEGACY_PLAYBACK_CUTOFF)
         with self.database.connect() as connection:
             by_source = self._behavior_breakdown(connection, where, params, ["play_source"])
             by_selection = self._behavior_breakdown(
@@ -207,7 +214,7 @@ class AnalyticsQueries:
             combinations = self._behavior_breakdown(
                 connection, where, params, ["play_source", "selection_type"]
             )
-        return {"period": period, "byPlaySource": by_source,
+        return {"period": period, "quality": quality, "byPlaySource": by_source,
                 "bySelectionType": by_selection, "combinations": combinations,
                 "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
 
@@ -225,7 +232,9 @@ class AnalyticsQueries:
                 SUM(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN play_duration END) totalPlayTime,
                 AVG(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN completed END) * 100 completionRate,
                 AVG(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN skipped END) * 100 skipRate,
-                SUM(CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1 ELSE 0 END) earlySkipCount,
+                CASE WHEN COUNT(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN 1 END) = 0 THEN NULL
+                    ELSE SUM(CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1 ELSE 0 END)
+                    END earlySkipCount,
                 AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
                     THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
                     * 100 earlySkipRate,

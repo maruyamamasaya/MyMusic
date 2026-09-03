@@ -72,6 +72,7 @@ main { max-width: none; }
 .ranking-name i { position: absolute; left: 0; bottom: 9px; width: var(--width); height: 3px; border-radius: 3px; background: linear-gradient(90deg,var(--accent),var(--accent2)); }
 .ranking-row b { font-size: 13px; font-variant-numeric: tabular-nums; }
 .insight-sections { display: grid; gap: 24px; }
+.insights-quality { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--muted); font-size: 12px; }
 .insight-section { min-width: 0; }
 .insight-heading { margin-bottom: 10px; }
 .insight-heading .eyebrow { margin-bottom: 4px; }

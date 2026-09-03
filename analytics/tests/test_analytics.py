@@ -508,17 +508,31 @@ class AnalyticsAPITests(unittest.TestCase):
             event("complete", playedAt="2026-09-02T11:00:00+09:00", playDuration=100,
                   completed=True, skipped=False, playSource="playlist",
                   selectionType="automatic_v2"),
+            event("unknown-current", playedAt="2026-09-02T12:00:00+09:00", playDuration=80,
+                  completed=True, skipped=False, playSource="unknown",
+                  selectionType="unknown"),
+            event("legacy-only", playedAt="2026-08-30T10:00:00+09:00", playDuration=5,
+                  completed=False, skipped=True, playSource="legacy_source",
+                  selectionType="legacy_type"),
         ]))
 
         payload = self.client.get(
-            "/api/insights?period=custom&startDate=2026-08-01&endDate=2026-09-30"
+            "/api/insights?period=custom&startDate=2026-08-01&endDate=2026-09-30&quality=all"
         ).json()
+        self.assertEqual(payload["quality"], "all")
         sources = {row["playSource"]: row for row in payload["byPlaySource"]}
         radio = sources["surprise_radio"]
         self.assertEqual(radio["playCount"], 3)
         self.assertEqual(radio["totalPlayTime"], 41)
         self.assertEqual((radio["completionRate"], radio["skipRate"]), (0, 100))
         self.assertEqual((radio["earlySkipCount"], radio["earlySkipRate"]), (1, 50))
+        self.assertIn("unknown", sources)
+        self.assertEqual(sources["legacy_source"]["playCount"], 1)
+        self.assertIsNone(sources["legacy_source"]["totalPlayTime"])
+        self.assertIsNone(sources["legacy_source"]["completionRate"])
+        self.assertIsNone(sources["legacy_source"]["skipRate"])
+        self.assertIsNone(sources["legacy_source"]["earlySkipCount"])
+        self.assertIsNone(sources["legacy_source"]["earlySkipRate"])
         selections = {row["selectionType"]: row for row in payload["bySelectionType"]}
         self.assertEqual(selections["contextual"]["playCount"], 2)
         self.assertEqual(selections["contextual"]["detailEventCount"], 1)
@@ -530,8 +544,16 @@ class AnalyticsAPITests(unittest.TestCase):
         one_day = self.client.get(
             "/api/insights?period=custom&startDate=2026-09-02&endDate=2026-09-02"
         ).json()
-        self.assertEqual(sum(row["playCount"] for row in one_day["byPlaySource"]), 2)
+        self.assertEqual(one_day["quality"], "analyzable")
+        self.assertEqual(sum(row["playCount"] for row in one_day["byPlaySource"]), 3)
+        self.assertIn("unknown", {row["playSource"] for row in one_day["byPlaySource"]})
+        analyzable = self.client.get(
+            "/api/insights?period=custom&startDate=2026-08-01&endDate=2026-09-30"
+        ).json()
+        self.assertEqual(sum(row["playCount"] for row in analyzable["byPlaySource"]), 4)
+        self.assertNotIn("legacy_source", {row["playSource"] for row in analyzable["byPlaySource"]})
         self.assertEqual(self.client.get("/api/insights?period=year").status_code, 422)
+        self.assertEqual(self.client.get("/api/insights?quality=trustedish").status_code, 422)
 
     def test_extended_source_jsons_are_imported_and_exposed(self):
         self.upload(library_document([library_track()]), "MyMusic-Library.json")

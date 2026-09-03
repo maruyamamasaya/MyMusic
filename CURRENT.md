@@ -24,7 +24,7 @@ updated: 2026-09-02
 - Dashboard／Tracksの期間フィルターと日別・時間帯別集計は日本標準時（JST、UTC+09:00）を基準とし、「今日」と同じ当日の期間指定が一致する。再生イベントの保存日時はUTCのまま維持する。
 - Overviewの日別再生数は月日と曜日を2段で表示し、土曜、日曜・日本の祝日を色分けする。各日の棒を選ぶとOverviewの期間指定をその1日へ切り替える。
 - OverviewとTracksは2026-09-01以降の詳細イベントからEarly Skip（skipかつ30秒以下）を集計する。Overviewは総数・率・曲ランキング、Tracksは曲別回数・率とソートを提供し、対象詳細イベントがなければ率をデータなしとして扱う。
-- Insightsは期間別に再生入口と選択種別、および両者の組み合わせを動的に集計し、再生回数・詳細再生時間・完走率・Skip率・Early Skipを比較表示する。未知の入口・選択種別も固定enumなしで扱う。
+- Insightsは期間別に再生入口と選択種別、および両者の組み合わせを動的に集計し、再生回数・詳細再生時間・完走率・Skip率・Early Skipを比較表示する。日時に基づくデータ品質フィルターは分析可能データのみを既定とし、全イベント表示とも切り替えられる。未知の入口・選択種別も固定enumなしで扱う。
 - Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。Rankingsは今日／7日／30日／全期間／任意期間で、曲・Artist・Album・Genreの再生回数または再生時間上位50件を切り替えられる。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、曲単位データはLibraryとのTrack ID照合状況を表示する。
 - iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。

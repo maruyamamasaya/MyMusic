@@ -40,6 +40,7 @@
     <section id="insights" class="page">
       <header><div><p class="eyebrow">LISTENING INSIGHTS</p><h1>再生行動を知る</h1><p class="subtitle">どの入口と選び方が、実際の聴き方につながっているかを比較します。</p></div><div class="periods" data-target="insights"><button data-period="today">今日</button><button class="active" data-period="7d">7日</button><button data-period="30d">30日</button><button data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
       <div id="insights-custom-period" class="custom-period" hidden><label>開始日<input id="insights-start-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><span>〜</span><label>終了日<input id="insights-end-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><p id="insights-period-error" class="form-error" role="alert"></p></div>
+      <div class="insights-quality"><span>データ品質</span><div id="insights-quality" class="segmented"><button class="active" data-quality="analyzable">分析可能データのみ</button><button data-quality="all">すべて</button></div></div>
       <p id="insights-legacy-note" class="legacy-note" hidden></p>
       <div class="insight-sections">
         <section class="insight-section"><div class="insight-heading"><p class="eyebrow">PLAY SOURCE</p><h2>再生入口別</h2></div><article class="panel table-wrap"><table class="compact-table insights-table"><thead><tr><th>再生入口</th><th>再生回数</th><th>総再生時間</th><th>完走率</th><th>Skip率</th><th>Early Skip</th><th>Early Skip率</th></tr></thead><tbody id="insights-source-body"></tbody></table></article></section>

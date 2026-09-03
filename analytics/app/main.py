@@ -76,10 +76,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/insights")
     def insights(
         period: str = Query("7d"), startDate: str | None = Query(None),
-        endDate: str | None = Query(None),
+        endDate: str | None = Query(None), quality: str = Query("analyzable"),
     ):
         try:
-            return queries.insights(period, startDate, endDate)
+            return queries.insights(period, startDate, endDate, quality)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
