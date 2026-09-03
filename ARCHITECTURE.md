@@ -59,6 +59,8 @@ MyMusic / future data sources
 
 `analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQとジャンルプリセットは曲非依存の設定スナップショットとして扱う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
 
+Web UIはOverview、Music History、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Music HistoryはPlayback EventをJSTの月単位で都度導出し、Rankingsは許可リスト化した曲／Artist／Album／Genreの軸と再生回数／再生時間の指標をサーバー側で集計する。Early SkipはQueries層で2026-09-01以降の詳細イベントに限定して導出し、OverviewとTracksへ返す。いずれもRaw eventやLibraryを更新しないread-onlyの派生表示とする。
+
 ### Library import
 
 ```text

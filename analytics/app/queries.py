@@ -9,17 +9,28 @@ from app.database import Database
 
 
 PERIOD_DAYS = {"today": 0, "7d": 7, "30d": 30, "all": None}
+JAPAN_TIMEZONE = timezone(timedelta(hours=9))
+SQLITE_JAPAN_TIMEZONE = "+09:00"
 LEGACY_PLAYBACK_CUTOFF = "2026-09-01"
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
     "playCount": "playCount", "totalPlayTime": "totalPlayTime",
     "completionRate": "completionRate", "skipRate": "skipRate",
+    "earlySkipCount": "earlySkipCount", "earlySkipRate": "earlySkipRate",
     "lastPlayedAt": "lastPlayedAt",
 }
 SOURCE_SORT_COLUMNS = {
     "title": "sr.title COLLATE NOCASE", "subtitle": "sr.subtitle COLLATE NOCASE",
     "linked": "linked", "importedAt": "sr.imported_at",
+}
+RANKING_DIMENSIONS = {
+    "tracks": ("e.track_id", "e.track_title", "e.artist"),
+    "artists": ("e.artist", "e.artist", ""),
+    "albums": ("COALESCE(NULLIF(e.album, ''), 'アルバム不明')",
+               "COALESCE(NULLIF(e.album, ''), 'アルバム不明')", "e.artist"),
+    "genres": ("COALESCE(NULLIF(lt.genre, ''), '未分類')",
+               "COALESCE(NULLIF(lt.genre, ''), '未分類')", ""),
 }
 
 
@@ -34,10 +45,11 @@ def _period_where(
             raise ValueError("期間指定には開始日と終了日をYYYY-MM-DD形式で指定してください") from exc
         if start > end:
             raise ValueError("開始日は終了日以前にしてください")
-        return ("WHERE date(played_at, 'localtime') >= ? "
-                "AND date(played_at, 'localtime') <= ?", [start.isoformat(), end.isoformat()])
+        return (f"WHERE date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ? "
+                f"AND date(played_at, '{SQLITE_JAPAN_TIMEZONE}') <= ?",
+                [start.isoformat(), end.isoformat()])
     since = _since(period)
-    return ("WHERE played_at >= ?", [since]) if since else ("", [])
+    return (f"WHERE date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ?", [since]) if since else ("", [])
 
 
 def _since(period: str) -> str | None:
@@ -46,15 +58,10 @@ def _since(period: str) -> str | None:
     days = PERIOD_DAYS[period]
     if days is None:
         return None
-    now = datetime.now().astimezone()
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = datetime.now(JAPAN_TIMEZONE).date()
     if days:
         start -= timedelta(days=days - 1)
     return start.isoformat()
-
-
-def _where(since: str | None) -> tuple[str, tuple[Any, ...]]:
-    return ("WHERE played_at >= ?", (since,)) if since else ("", ())
 
 
 class AnalyticsQueries:
@@ -68,14 +75,19 @@ class AnalyticsQueries:
         with self.database.connect() as connection:
             metrics = dict(connection.execute(
                 f"""SELECT COUNT(*) play_count,
-                    COUNT(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    COUNT(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                         THEN 1 END) detail_event_count,
-                    SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                         THEN play_duration END) total_play_time,
-                    AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                         THEN skipped END) * 100 skip_rate,
-                    AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                        THEN completed END) * 100 completion_rate
+                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN completed END) * 100 completion_rate,
+                    COALESCE(SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END), 0) early_skip_count,
+                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                        * 100 early_skip_rate
                     FROM playback_events {where}""", params).fetchone())
             library_metrics = dict(connection.execute(
                 """SELECT COUNT(*) library_count,
@@ -97,17 +109,29 @@ class AnalyticsQueries:
                    WHERE lt.is_present=1 AND COALESCE(pp.favorite, lt.favorite)=1"""
             ).fetchone()[0]
             daily = [dict(row) for row in connection.execute(
-                f"""SELECT date(played_at, 'localtime') label, COUNT(*) value
+                f"""SELECT date(played_at, '{SQLITE_JAPAN_TIMEZONE}') label, COUNT(*) value
                     FROM playback_events {where} GROUP BY label ORDER BY label""", params)]
             hourly = [dict(row) for row in connection.execute(
-                f"""SELECT CAST(strftime('%H', played_at, 'localtime') AS INTEGER) label, COUNT(*) value
+                f"""SELECT CAST(strftime('%H', played_at, '{SQLITE_JAPAN_TIMEZONE}') AS INTEGER) label, COUNT(*) value
                     FROM playback_events {where} GROUP BY label ORDER BY label""", params)]
             top_tracks = self._top(connection, where, params, "COUNT(*)", "plays")
             skipped_tracks = self._top(
                 connection, where, params,
-                f"SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}' THEN skipped END)",
+                f"SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}' THEN skipped END)",
                 "skips", "HAVING value > 0",
             )
+            early_skipped_tracks = [dict(row) for row in connection.execute(
+                f"""SELECT track_id trackId, MAX(track_title) title, MAX(artist) artist,
+                    COUNT(*) totalPlayCount,
+                    SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END) earlySkipCount,
+                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                        THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                        * 100 earlySkipRate
+                    FROM playback_events {where} GROUP BY track_id
+                    HAVING earlySkipCount > 0
+                    ORDER BY earlySkipCount DESC, earlySkipRate DESC, title COLLATE NOCASE
+                    LIMIT 50""", params)]
             artists = [dict(row) for row in connection.execute(
                 f"""SELECT artist label, COUNT(*) value FROM playback_events {where}
                     GROUP BY artist ORDER BY value DESC, artist COLLATE NOCASE LIMIT 50""", params)]
@@ -126,8 +150,79 @@ class AnalyticsQueries:
                     CASE bucket WHEN 'Good' THEN 1 WHEN 'Neutral' THEN 2
                         WHEN 'Bad' THEN 3 ELSE 4 END""")]
         return {"period": period, "metrics": metrics, "daily": daily, "hourly": hourly,
-                "topTracks": top_tracks, "skippedTracks": skipped_tracks, "artists": artists,
+                "topTracks": top_tracks, "skippedTracks": skipped_tracks,
+                "earlySkippedTracks": early_skipped_tracks, "artists": artists,
                 "preferenceDistribution": preference_distribution}
+
+    def music_history(self) -> dict[str, Any]:
+        """Return a compact, read-only monthly timeline in JST."""
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                f"""SELECT strftime('%Y-%m', played_at, '{SQLITE_JAPAN_TIMEZONE}') month,
+                    track_id, track_title, artist,
+                    CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= ?
+                        THEN play_duration END detailed_duration
+                    FROM playback_events ORDER BY played_at""", (LEGACY_PLAYBACK_CUTOFF,)
+            ).fetchall()
+        months: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            month = months.setdefault(row["month"], {
+                "month": row["month"], "playCount": 0, "totalPlayTime": 0,
+                "detailEventCount": 0, "tracks": {}, "artists": {},
+            })
+            month["playCount"] += 1
+            if row["detailed_duration"] is not None:
+                month["detailEventCount"] += 1
+                month["totalPlayTime"] += row["detailed_duration"]
+            track = month["tracks"].setdefault(
+                row["track_id"], {"title": row["track_title"], "artist": row["artist"], "value": 0}
+            )
+            track["value"] += 1
+            month["artists"][row["artist"]] = month["artists"].get(row["artist"], 0) + 1
+        result = []
+        for month in reversed(months.values()):
+            top_track = sorted(month.pop("tracks").values(),
+                               key=lambda item: (-item["value"], item["title"].casefold()))[0]
+            top_artist, artist_count = sorted(
+                month.pop("artists").items(), key=lambda item: (-item[1], item[0].casefold())
+            )[0]
+            month["topTrack"] = top_track
+            month["topArtist"] = {"name": top_artist, "value": artist_count}
+            result.append(month)
+        return {"months": result, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    def rankings(
+        self, period: str, dimension: str, metric: str,
+        start_date: str | None = None, end_date: str | None = None,
+    ) -> dict[str, Any]:
+        if dimension not in RANKING_DIMENSIONS:
+            raise ValueError("dimension must be tracks, artists, albums, or genres")
+        if metric not in {"plays", "duration"}:
+            raise ValueError("metric must be plays or duration")
+        where, params = _period_where(period, start_date, end_date)
+        key, label, subtitle = RANKING_DIMENSIONS[dimension]
+        value = "COUNT(*)" if metric == "plays" else (
+            f"SUM(CASE WHEN date(e.played_at, '{SQLITE_JAPAN_TIMEZONE}') >= "
+            f"'{LEGACY_PLAYBACK_CUTOFF}' THEN e.play_duration ELSE 0 END)"
+        )
+        qualified_where = where.replace("played_at", "e.played_at")
+        subtitle_select = f"MAX({subtitle})" if subtitle else "NULL"
+        having = "HAVING value > 0" if metric == "duration" else ""
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                f"""SELECT {key} itemKey, MAX({label}) label, {subtitle_select} subtitle,
+                    {value} value
+                    FROM playback_events e
+                    LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
+                    {qualified_where}
+                    GROUP BY {key}
+                    {having}
+                    ORDER BY value DESC, label COLLATE NOCASE
+                    LIMIT 50""", params
+            ).fetchall()
+        return {"period": period, "dimension": dimension, "metric": metric,
+                "items": [dict(row) for row in rows],
+                "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
 
     @staticmethod
     def _top(connection: Any, where: str, params: tuple[Any, ...], expression: str, alias: str,
@@ -170,16 +265,21 @@ class AnalyticsQueries:
                         SELECT * FROM playback_events {event_where}
                     ), event_stats AS (
                         SELECT track_id, COUNT(*) play_count,
-                            SUM(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                            SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                                 THEN play_duration END) total_play_time,
-                            AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                            AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                                 THEN completed END) * 100 completion_rate,
-                            AVG(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                            AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                                 THEN skipped END) * 100 skip_rate,
-                            MAX(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                            MAX(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                                 THEN played_at END) last_played_at,
-                            COUNT(CASE WHEN date(played_at, 'localtime') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                                THEN 1 END) detail_event_count
+                            COUNT(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN 1 END) detail_event_count,
+                            SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END) early_skip_count,
+                            AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                                THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                                * 100 early_skip_rate
                         FROM filtered_events GROUP BY track_id
                     ), event_catalog AS (
                         SELECT track_id, MAX(track_title) title, MAX(artist) artist, MAX(album) album,
@@ -206,6 +306,8 @@ class AnalyticsQueries:
                         COALESCE(es.play_count, 0) playCount,
                         es.total_play_time totalPlayTime,
                         es.completion_rate completionRate, es.skip_rate skipRate,
+                        COALESCE(es.early_skip_count, 0) earlySkipCount,
+                        es.early_skip_rate earlySkipRate,
                         es.last_played_at lastPlayedAt,
                         COALESCE(es.detail_event_count, 0) detailEventCount,
                         COUNT(*) OVER() totalCount

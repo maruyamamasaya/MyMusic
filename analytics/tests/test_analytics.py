@@ -4,7 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -248,6 +248,44 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(len(tracks), 1)
         self.assertEqual(tracks[0]["playCount"], 2)
 
+    def test_music_history_and_period_rankings(self):
+        self.upload(library_document([
+            library_track("track-1", title="Night", artist="First", album="Moon", genre="Rock"),
+            library_track("track-2", title="Day", artist="Second", album="Sun", genre="Pop"),
+        ]), "MyMusic-Library.json")
+        self.upload(document([
+            event("aug-1", trackTitle="Night", artist="First", album="Moon",
+                  playedAt="2026-08-31T12:00:00+09:00", playDuration=40),
+            event("sep-1", trackTitle="Night", artist="First", album="Moon",
+                  playedAt="2026-09-01T12:00:00+09:00", playDuration=100),
+            event("sep-2", trackTitle="Night", artist="First", album="Moon",
+                  playedAt="2026-09-02T12:00:00+09:00", playDuration=120),
+            event("sep-3", "track-2", trackTitle="Day", artist="Second", album="Sun",
+                  playedAt="2026-09-02T13:00:00+09:00", playDuration=60),
+        ]))
+
+        history = self.client.get("/api/music-history").json()["months"]
+        self.assertEqual([item["month"] for item in history], ["2026-09", "2026-08"])
+        self.assertEqual(history[0]["playCount"], 3)
+        self.assertEqual(history[0]["totalPlayTime"], 280)
+        self.assertEqual(history[0]["topTrack"]["title"], "Night")
+        self.assertEqual(history[1]["detailEventCount"], 0)
+
+        tracks = self.client.get(
+            "/api/rankings?period=custom&startDate=2026-09-01&endDate=2026-09-02"
+            "&dimension=tracks&metric=plays"
+        ).json()["items"]
+        self.assertEqual([(item["label"], item["value"]) for item in tracks],
+                         [("Night", 2), ("Day", 1)])
+        genres = self.client.get(
+            "/api/rankings?period=all&dimension=genres&metric=duration"
+        ).json()["items"]
+        self.assertEqual([(item["label"], item["value"]) for item in genres],
+                         [("Rock", 220), ("Pop", 60)])
+        self.assertEqual(self.client.get(
+            "/api/rankings?period=all&dimension=composers&metric=plays"
+        ).status_code, 422)
+
     def test_dashboard_custom_period_and_legacy_detail_metrics(self):
         self.upload(document([
             event("legacy", playedAt="2026-08-31T10:00:00+09:00", playDuration=0,
@@ -272,8 +310,28 @@ class AnalyticsAPITests(unittest.TestCase):
             "/api/dashboard?period=custom&startDate=2026-09-02&endDate=2026-09-01"
         ).status_code, 422)
 
+    def test_today_and_dashboard_buckets_use_japan_time(self):
+        japan = timezone(timedelta(hours=9))
+        today = datetime.now(japan).date()
+        today_at_midnight = datetime.combine(today, datetime.min.time(), japan)
+        self.upload(document([
+            event("today-early", playedAt=(today_at_midnight + timedelta(minutes=30))
+                  .astimezone(timezone.utc).isoformat()),
+            event("yesterday-late", playedAt=(today_at_midnight - timedelta(minutes=1))
+                  .astimezone(timezone.utc).isoformat()),
+        ]))
+
+        dashboard = self.client.get("/api/dashboard?period=today").json()
+        self.assertEqual(dashboard["metrics"]["play_count"], 1)
+        self.assertEqual(dashboard["daily"], [{"label": today.isoformat(), "value": 1}])
+        self.assertEqual(dashboard["hourly"], [{"label": 0, "value": 1}])
+        custom = self.client.get(
+            f"/api/dashboard?period=custom&startDate={today}&endDate={today}"
+        ).json()
+        self.assertEqual(custom["metrics"]["play_count"], 1)
+
     def test_tracks_periods_custom_dates_and_unplayed_library_tracks(self):
-        now = datetime.now().astimezone()
+        now = datetime.now(timezone(timedelta(hours=9)))
         dates = [now, now - timedelta(days=10), now - timedelta(days=40)]
         self.upload(library_document([
             library_track("track-1"),
@@ -405,6 +463,36 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(current_only["playCount"], 2)
         self.assertEqual(current_only["detailEventCount"], 2)
         self.assertEqual(current_only["totalPlayTime"], 150)
+
+    def test_early_skip_boundaries_cutoff_periods_and_track_sorts(self):
+        self.upload(document([
+            event("ten", "one", trackTitle="Alpha", playedAt="2026-09-01T10:00:00+09:00", playDuration=10, completed=False, skipped=True),
+            event("thirty", "one", trackTitle="Alpha", playedAt="2026-09-02T10:00:00+09:00", playDuration=30, completed=False, skipped=True),
+            event("thirty-one", "one", trackTitle="Alpha", playedAt="2026-09-02T11:00:00+09:00", playDuration=31, completed=False, skipped=True),
+            event("completed", "one", trackTitle="Alpha", playedAt="2026-09-02T12:00:00+09:00", playDuration=20, completed=True, skipped=False),
+            event("legacy", "one", trackTitle="Alpha", playedAt="2026-08-31T12:00:00+09:00", playDuration=10, completed=False, skipped=True),
+            event("other-early", "two", trackTitle="Beta", playedAt="2026-09-02T13:00:00+09:00", playDuration=15, completed=False, skipped=True),
+            event("other-full", "two", trackTitle="Beta", playedAt="2026-09-02T14:00:00+09:00", playDuration=100, completed=True, skipped=False),
+            event("legacy-only", "legacy-only", trackTitle="Legacy", playedAt="2026-08-30T12:00:00+09:00", playDuration=5, completed=False, skipped=True),
+        ]))
+        dashboard = self.client.get("/api/dashboard?period=custom&startDate=2026-08-01&endDate=2026-09-30").json()
+        self.assertEqual((dashboard["metrics"]["early_skip_count"], dashboard["metrics"]["early_skip_rate"]), (3, 50))
+        ranking = dashboard["earlySkippedTracks"]
+        self.assertEqual((ranking[0]["trackId"], ranking[0]["earlySkipCount"], ranking[0]["totalPlayCount"], ranking[0]["earlySkipRate"]), ("one", 2, 5, 50))
+        september = self.client.get("/api/tracks?period=custom&startDate=2026-09-01&endDate=2026-09-30").json()["tracks"]
+        by_id = {item["trackId"]: item for item in september}
+        self.assertEqual((by_id["one"]["playCount"], by_id["one"]["earlySkipCount"], by_id["one"]["earlySkipRate"]), (4, 2, 50))
+        legacy = self.client.get("/api/tracks?period=custom&startDate=2026-08-01&endDate=2026-08-31").json()["tracks"]
+        legacy_by_id = {item["trackId"]: item for item in legacy}
+        self.assertEqual(legacy_by_id["legacy-only"]["earlySkipCount"], 0)
+        self.assertIsNone(legacy_by_id["legacy-only"]["earlySkipRate"])
+        for sort in ("earlySkipCount", "earlySkipRate"):
+            asc = self.client.get(f"/api/tracks?period=all&sort={sort}&order=asc").json()["tracks"]
+            desc = self.client.get(f"/api/tracks?period=all&sort={sort}&order=desc").json()["tracks"]
+            with self.subTest(sort=sort):
+                self.assertNotEqual(asc[0]["trackId"], desc[0]["trackId"])
+        one_day = self.client.get("/api/dashboard?period=custom&startDate=2026-09-01&endDate=2026-09-01").json()["metrics"]
+        self.assertEqual((one_day["early_skip_count"], one_day["early_skip_rate"]), (1, 100))
 
     def test_extended_source_jsons_are_imported_and_exposed(self):
         self.upload(library_document([library_track()]), "MyMusic-Library.json")

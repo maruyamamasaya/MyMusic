@@ -69,6 +69,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    @app.get("/api/music-history")
+    def music_history():
+        return queries.music_history()
+
+    @app.get("/api/rankings")
+    def rankings(
+        period: str = Query("30d"), dimension: str = Query("tracks"),
+        metric: str = Query("plays"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None),
+    ):
+        try:
+            return queries.rankings(period, dimension, metric, startDate, endDate)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/imports")
     def imports():
         return {"imports": queries.imports()}
