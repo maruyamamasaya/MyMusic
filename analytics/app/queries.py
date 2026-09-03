@@ -45,15 +45,62 @@ DISCOVERY_MAX_PLAYS = 2
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
+    "favorite": "COALESCE(pp.favorite, c.favorite)",
+    "fingerprint": "hasFingerprint",
     "playCount": "playCount", "totalPlayTime": "totalPlayTime",
     "completionRate": "completionRate", "skipRate": "skipRate",
     "earlySkipCount": "earlySkipCount", "earlySkipRate": "earlySkipRate",
     "lastPlayedAt": "lastPlayedAt",
 }
-SOURCE_SORT_COLUMNS = {
+SOURCE_COMMON_SORT_COLUMNS = {
     "title": "sr.title COLLATE NOCASE", "subtitle": "sr.subtitle COLLATE NOCASE",
     "linked": "linked", "importedAt": "sr.imported_at",
 }
+SOURCE_KIND_SORT_COLUMNS = {
+    "track_features": {
+        "tempo": "CAST(json_extract(sr.raw_json, '$.features.tempo') AS REAL)",
+        "energy": "CAST(json_extract(sr.raw_json, '$.features.energy') AS REAL)",
+        "vocal": "CAST(json_extract(sr.raw_json, '$.features.vocal') AS REAL)",
+        "analysisVersion": "CAST(json_extract(sr.raw_json, '$.analysisVersion') AS INTEGER)",
+    },
+    "volume_normalization": {
+        "integratedLUFS": "CAST(json_extract(sr.raw_json, '$.integratedLUFS') AS REAL)",
+        "truePeakDBTP": "CAST(json_extract(sr.raw_json, '$.truePeakDBTP') AS REAL)",
+        "normalizationGainDB": "CAST(json_extract(sr.raw_json, '$.normalizationGainDB') AS REAL)",
+        "relativePath": "json_extract(sr.raw_json, '$.relativePath') COLLATE NOCASE",
+    },
+    "playlists": {
+        "kind": "json_extract(sr.raw_json, '$.kind') COLLATE NOCASE",
+        "tags": "json_extract(sr.raw_json, '$.tags') COLLATE NOCASE",
+        "trackCount": "json_array_length(json_extract(sr.raw_json, '$.tracks'))",
+        "linkedTrackCount": "(SELECT COUNT(*) FROM json_each(sr.raw_json, '$.tracks') jt "
+                            "JOIN library_tracks linked_lt "
+                            "ON linked_lt.track_id=json_extract(jt.value, '$.trackID') "
+                            "AND linked_lt.is_present=1)",
+        "updatedAt": "json_extract(sr.raw_json, '$.updatedAt')",
+    },
+    "equalizer": {
+        "recordType": "json_extract(sr.raw_json, '$.recordType') COLLATE NOCASE",
+        "enabled": "CAST(json_extract(sr.raw_json, '$.isEnabled') AS INTEGER)",
+        "preamp": "CAST(json_extract(sr.raw_json, '$.preamp') AS REAL)",
+        "gains": "COALESCE(json_extract(sr.raw_json, '$.gains'), json_extract(sr.raw_json, '$.bands'))",
+    },
+    "genre_presets": {
+        "genreCount": "json_array_length(json_extract(sr.raw_json, '$.enabledGenreNames'))",
+        "genres": "json_extract(sr.raw_json, '$.enabledGenreNames') COLLATE NOCASE",
+        "unassigned": "CAST(json_extract(sr.raw_json, '$.includesUnassignedGenreSetting') AS INTEGER)",
+    },
+}
+GENRE_PARTS_CTE = """genre_parts(track_id, rest, genre) AS (
+    SELECT track_id, normalize_genre_delimiters(genre) || ';', ''
+    FROM library_tracks WHERE is_present = 1
+    UNION ALL
+    SELECT track_id, substr(rest, instr(rest, ';') + 1),
+        trim(substr(rest, 1, instr(rest, ';') - 1))
+    FROM genre_parts WHERE rest <> ''
+), track_genres AS (
+    SELECT DISTINCT track_id, genre FROM genre_parts WHERE genre <> ''
+)"""
 RANKING_DIMENSIONS = {
     "tracks": ("e.track_id", "e.track_title", "e.artist"),
     "artists": ("e.artist", "e.artist", ""),
@@ -782,16 +829,19 @@ class AnalyticsQueries:
         expressions = {
             "artists": "e.artist",
             "albums": "COALESCE(NULLIF(e.album, ''), 'アルバム不明')",
-            "genres": "COALESCE(NULLIF(lt.genre, ''), '未分類')",
+            "genres": "COALESCE(tg.genre, '未分類')",
         }
         label = expressions[dimension]
+        genre_cte = f"WITH RECURSIVE {GENRE_PARTS_CTE}" if dimension == "genres" else ""
+        genre_join = ("LEFT JOIN track_genres tg ON tg.track_id=lt.track_id"
+                      if dimension == "genres" else "")
         event_date = f"date(e.played_at, '{SQLITE_JAPAN_TIMEZONE}')"
         detail = DETAIL_EVENT_PREDICATE.replace("played_at", "e.played_at")
         recent = f"{event_date} BETWEEN '{recent_start}' AND '{recent_end}'"
         baseline = f"{event_date} BETWEEN '{baseline_start}' AND '{baseline_end}'"
         quality_count = detail if quality == "analyzable" else "1=1"
         rows = connection.execute(
-            f"""SELECT {label} label,
+            f"""{genre_cte} SELECT {label} label,
                 SUM(CASE WHEN ({recent}) AND ({quality_count}) THEN 1 ELSE 0 END) recentPlayCount,
                 SUM(CASE WHEN ({baseline}) AND ({quality_count}) THEN 1 ELSE 0 END) baselinePlayCount,
                 COUNT(CASE WHEN ({recent}) AND ({detail}) THEN 1 END) recentDetailCount,
@@ -802,6 +852,7 @@ class AnalyticsQueries:
                 AVG(CASE WHEN ({baseline}) AND ({detail}) THEN e.skipped END) * 100 baselineSkipRate
             FROM playback_events e
             LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
+            {genre_join}
             GROUP BY {label}"""
         ).fetchall()
         result = []
@@ -878,6 +929,23 @@ class AnalyticsQueries:
         subtitle_select = f"MAX({subtitle})" if subtitle else "NULL"
         having = "HAVING value > 0" if metric == "duration" else ""
         with self.database.connect() as connection:
+            if dimension == "genres":
+                rows = connection.execute(
+                    f"""WITH RECURSIVE {GENRE_PARTS_CTE}
+                    SELECT COALESCE(tg.genre, '未分類') itemKey,
+                        COALESCE(tg.genre, '未分類') label, NULL subtitle, {value} value
+                    FROM playback_events e
+                    LEFT JOIN library_tracks lt ON lt.track_id=e.track_id AND lt.is_present=1
+                    LEFT JOIN track_genres tg ON tg.track_id=lt.track_id
+                    {qualified_where}
+                    GROUP BY COALESCE(tg.genre, '未分類')
+                    {having}
+                    ORDER BY value DESC, label COLLATE NOCASE
+                    LIMIT 50""", params
+                ).fetchall()
+                return {"period": period, "dimension": dimension, "metric": metric,
+                        "items": [dict(row) for row in rows],
+                        "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
             rows = connection.execute(
                 f"""SELECT {key} itemKey, MAX({label}) label, {subtitle_select} subtitle,
                     {value} value
@@ -906,7 +974,7 @@ class AnalyticsQueries:
         self, period: str, search: str = "", start_date: str | None = None,
         end_date: str | None = None, title: str = "", artist: str = "",
         album: str = "", genre: str = "", sort: str = "playCount",
-        order: str = "desc", page: int = 1, page_size: int = 200,
+        order: str = "desc", page: int = 1, page_size: int = 30,
     ) -> dict[str, Any]:
         event_where, params = _period_where(period, start_date, end_date)
         if sort not in TRACK_SORT_COLUMNS:
@@ -1048,17 +1116,45 @@ class AnalyticsQueries:
                 "tracks": tracks}
 
     def sources(
-        self, data_kind: str, page: int = 1, page_size: int = 200,
+        self, data_kind: str, page: int = 1, page_size: int = 30,
         sort: str = "title", order: str = "asc",
     ) -> dict[str, Any]:
-        allowed = {"track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
+        allowed = {"library_genres", "track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
         if data_kind not in allowed:
             raise ValueError("unsupported source kind")
-        if sort not in SOURCE_SORT_COLUMNS:
+        if data_kind == "library_genres":
+            sort_columns = {"title": "title COLLATE NOCASE", "trackCount": "trackCount",
+                            "artistCount": "artistCount", "importedAt": "importedAt"}
+            if sort not in sort_columns:
+                raise ValueError("unsupported source sort")
+            if order not in {"asc", "desc"}:
+                raise ValueError("order must be asc or desc")
+            offset = (page - 1) * page_size
+            with self.database.connect() as connection:
+                base = f"""WITH RECURSIVE {GENRE_PARTS_CTE}, genre_catalog AS (
+                    SELECT COALESCE(tg.genre, 'ジャンル未設定') title,
+                        COUNT(DISTINCT lt.track_id) trackCount,
+                        COUNT(DISTINCT lt.artist) artistCount,
+                        MAX(lt.imported_at) importedAt
+                    FROM library_tracks lt
+                    LEFT JOIN track_genres tg ON tg.track_id=lt.track_id
+                    WHERE lt.is_present=1
+                    GROUP BY COALESCE(tg.genre, 'ジャンル未設定')
+                )"""
+                count = connection.execute(base + " SELECT COUNT(*) FROM genre_catalog").fetchone()[0]
+                rows = connection.execute(
+                    base + f""" SELECT title, trackCount, artistCount, importedAt
+                    FROM genre_catalog ORDER BY {sort_columns[sort]} {order.upper()}, title COLLATE NOCASE
+                    LIMIT ? OFFSET ?""", (page_size, offset)
+                ).fetchall()
+            return {"count": count, "items": [dict(row) for row in rows],
+                    "page": page, "pageSize": page_size, "derivedFrom": "library"}
+        sort_columns = SOURCE_COMMON_SORT_COLUMNS | SOURCE_KIND_SORT_COLUMNS[data_kind]
+        if sort not in sort_columns:
             raise ValueError("unsupported source sort")
         if order not in {"asc", "desc"}:
             raise ValueError("order must be asc or desc")
-        sort_column = SOURCE_SORT_COLUMNS[sort]
+        sort_column = sort_columns[sort]
         with self.database.connect() as connection:
             rows = connection.execute(
                 f"""SELECT sr.item_key, sr.track_id, sr.title, sr.subtitle, sr.imported_at,

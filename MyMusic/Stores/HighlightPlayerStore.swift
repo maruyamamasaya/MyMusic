@@ -243,7 +243,8 @@ final class HighlightPlayerStore {
                 startContext: PlaybackStartContext(
                     kind: reason == .highlightAutomatic ? .automatic : .manual,
                     source: .highlight
-                )
+                ),
+                outgoingEndKind: reason == .highlightUserInitiated ? .userSkipped : .other
             )
             restartAutoAdvance(for: track, candidate: candidate)
             prefetchHighlights()

@@ -65,7 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 album.strip(), genre.strip(), sort, order, page,
             )
             return {"tracks": result["items"], "total": result["total"], "page": page,
-                    "pageSize": 200, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+                    "pageSize": 30, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -161,7 +161,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ):
         try:
             result = queries.sources(data_kind, page, sort=sort, order=order)
-            return result | {"page": page, "pageSize": 200}
+            return result | {"page": page, "pageSize": 30}
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

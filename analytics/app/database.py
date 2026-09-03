@@ -132,6 +132,11 @@ class Database:
     def connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=10)
         connection.row_factory = sqlite3.Row
+        connection.create_function(
+            "normalize_genre_delimiters", 1,
+            lambda value: (value or "").replace("\0", ";"),
+            deterministic=True,
+        )
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA busy_timeout = 5000")

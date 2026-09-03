@@ -158,6 +158,59 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertFalse(fullPlayback.wasSkipped)
     }
 
+    func testHighlightPlaybackOnlyCountsAsSkipBeforeFiveSeconds() async throws {
+        let store = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        await store.loadIfNeeded()
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let highlightContext = PlaybackStartContext(kind: .manual, source: .highlight)
+
+        let shortHighlightID = UUID()
+        store.recordPlaybackFinished(
+            trackID: shortHighlightID,
+            startedAt: startedAt,
+            listenedSeconds: 4.999,
+            duration: 120,
+            context: highlightContext,
+            isFullPlayback: false,
+            isSkipped: true,
+            endKind: .userSkipped
+        )
+        let shortHighlight = try XCTUnwrap(store.entries[shortHighlightID]?.playbackEvents.single)
+        XCTAssertTrue(shortHighlight.wasSkipped)
+        XCTAssertEqual(shortHighlight.endKind, .userSkipped)
+        XCTAssertEqual(store.entries[shortHighlightID]?.skipCount, 1)
+
+        let fiveSecondHighlightID = UUID()
+        store.recordPlaybackFinished(
+            trackID: fiveSecondHighlightID,
+            startedAt: startedAt,
+            listenedSeconds: 5,
+            duration: 120,
+            context: highlightContext,
+            isFullPlayback: false,
+            isSkipped: true,
+            endKind: .userSkipped
+        )
+        let fiveSecondHighlight = try XCTUnwrap(store.entries[fiveSecondHighlightID]?.playbackEvents.single)
+        XCTAssertFalse(fiveSecondHighlight.wasSkipped)
+        XCTAssertEqual(fiveSecondHighlight.endKind, .userSkipped)
+        XCTAssertEqual(store.entries[fiveSecondHighlightID]?.skipCount, 0)
+        XCTAssertEqual(store.entries[fiveSecondHighlightID]?.dailySummaries.values.first?.earlySkipCount, 0)
+
+        let regularPlaybackID = UUID()
+        store.recordPlaybackFinished(
+            trackID: regularPlaybackID,
+            startedAt: startedAt,
+            listenedSeconds: 5,
+            duration: 120,
+            context: PlaybackStartContext(kind: .manual, source: .library),
+            isFullPlayback: false,
+            isSkipped: true,
+            endKind: .userSkipped
+        )
+        XCTAssertTrue(try XCTUnwrap(store.entries[regularPlaybackID]?.playbackEvents.single).wasSkipped)
+    }
+
     func testPlayerFinalizesOnlyOneEventForDuplicateEndedSignal() async throws {
         let track = makeTrack("Only")
         let historyStore = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())

@@ -27,9 +27,10 @@ updated: 2026-09-03
 - Insightsは期間別に再生入口と選択種別、および両者の組み合わせを動的に集計し、再生回数・詳細再生時間・完走率・Skip率・Early Skipを比較表示する。日時に基づくデータ品質フィルターは分析可能データのみを既定とし、全イベント表示とも切り替えられる。未知の入口・選択種別も固定enumなしで扱う。
 - Insightsの音楽特徴と再生行動は最新analysisVersionのTrack FeaturesをTrack IDでPlayback Eventへ結合し、9特徴量を重複しない5スコア帯で比較する。欠損・非数値・0〜1範囲外を除外し、SQLite JSON関数で集計する。
 - Insightsは選択期間と直前の同日数を比較して曲・特徴・Artist／Album／Genreの最近の変化を説明可能な閾値で抽出し、JST時間帯別の特徴相性と5段階Listening Profileも表示する。これらを再利用したread-only推薦は特徴一致、Favorite／Good、完走実績を加点し、Skipと最近の聴きすぎを減点する。再発見・未再生／低再生候補と最大5件の自動Insightも理由付きで表示する。
-- 長いInsights画面は「おすすめ」「最近の変化」「再生行動」の3タブに分割する。左ナビゲーションとInsightsタブをURL履歴へ反映し、ブラウザの戻る／進むと再読み込みで表示位置を復元する。
+- 長いInsights画面は「おすすめ」「最近の変化」「時間帯・好み」「再生行動」の4タブに分割する。「再生行動」はさらに再生入口、選択種別、組み合わせ、音楽特徴の4サブタブに分け、各表を共通定義で列ソートできる。時間帯・属性・現在の好みにある行形式の一覧は初期30件とし、30件ずつ「続きを見る」で展開する。左ナビゲーションとInsightsタブをURL履歴へ反映し、ブラウザの戻る／進むと再読み込みで表示位置を復元する。
 - Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。Rankingsは今日／7日／30日／全期間／任意期間で、曲・Artist・Album・Genreの再生回数または再生時間上位50件を切り替えられる。
-- Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、曲単位データはLibraryとのTrack ID照合状況を表示する。
+- Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
+- Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
 - iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
 - macOSは`analytics/start.sh`、Windowsは`analytics/start.ps1`から`127.0.0.1:8766`で起動する。データ契約とセットアップは`analytics/README.md`を正とする。
 
@@ -60,6 +61,7 @@ updated: 2026-09-03
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **Playback History 拡張**: 再生履歴は初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保持する。再生中はPlayerStore内で軽量に集計し、曲変更・停止・一定間隔・background移行でまとめて保存する。日別集計は再生された日のみ保持し、直近7日／30日は保存値ではなく集計から算出する。
+  - ハイライト入口の再生は、実聴5秒未満でユーザーが離脱した場合だけ分析上のSkipとする。5秒以上では`endKind = user_skipped`を操作事実として保持しつつ、Skip／Early Skip集計から除外する。
   - Playback Event Foundationは開始／終了日時、実聴秒数、完走率、skip／完走、開始種別／入口、終了理由をセッション終了時に1件へ確定する。early skipの基礎定義は`wasSkipped && listenedSeconds <= 30`。日別集計は完走、skip、early skip件数も保持し、候補判定、Overplay、Preference Drift、選曲補正は後続M2〜M4で利用する。
   - 通常運用の正本は `Application Support/MyMusic/playback-history.sqlite3`。旧JSONは変更せず永久migration backupへatomic copyし、transaction importと全項目read-back検証後だけ`verified`へ切り替える。通常更新は対象曲と正規化した子レコードだけをtransaction更新する。
   - 起動時に前回から24時間以上ならSQLite snapshotを`Backups/Daily`へatomic JSON出力し、直近7世代を保持する。`Backups/Migration`はrotation対象外。Restore UIは未実装。

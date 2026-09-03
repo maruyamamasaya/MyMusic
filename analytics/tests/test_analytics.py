@@ -90,10 +90,20 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertIn('id="insights-tabs"', html)
         self.assertIn('data-insight-tab="recommendations"', html)
         self.assertIn('data-insight-tab="changes"', html)
+        self.assertIn('data-insight-tab="context"', html)
         self.assertIn('data-insight-tab="behavior"', html)
         self.assertIn('data-insight-panel="recommendations"', html)
         self.assertIn('data-insight-panel="changes"', html)
+        self.assertIn('data-insight-panel="context"', html)
         self.assertIn('data-insight-panel="behavior"', html)
+        self.assertIn('data-kind="library_genres"', html)
+        javascript = self.client.get("/static/app.js").text
+        self.assertIn("progressiveListPolicy=Object.freeze({initial:30,step:30})", javascript)
+        self.assertIn("renderProgressiveList('#entity-changes'", javascript)
+        self.assertEqual(html.count("data-sortable"), 5)
+        self.assertEqual(html.count("data-behavior-tab="), 4)
+        self.assertEqual(html.count("data-behavior-panel="), 4)
+        self.assertIn("function initializeSortableTables()", javascript)
 
     def test_json_import_and_sqlite_storage(self):
         response = self.upload(document([event()]))
@@ -388,25 +398,26 @@ class AnalyticsAPITests(unittest.TestCase):
                 rows = self.client.get(f"/api/tracks?period=all&{query}").json()["tracks"]
                 self.assertEqual(sorted(row["trackId"] for row in rows), expected)
 
-    def test_tracks_are_paginated_at_two_hundred_rows(self):
+    def test_tracks_are_paginated_at_thirty_rows(self):
         self.upload(library_document([
             library_track(f"track-{index:03}", title=f"Track {index:03}")
             for index in range(201)
         ]), "MyMusic-Library.json")
         first = self.client.get("/api/tracks?period=all&sort=title&order=asc").json()
-        second = self.client.get("/api/tracks?period=all&sort=title&order=asc&page=2").json()
-        self.assertEqual((first["total"], first["pageSize"], len(first["tracks"])), (201, 200, 200))
-        self.assertEqual((second["page"], len(second["tracks"])), (2, 1))
-        self.assertEqual(second["tracks"][0]["trackId"], "track-200")
+        seventh = self.client.get("/api/tracks?period=all&sort=title&order=asc&page=7").json()
+        self.assertEqual((first["total"], first["pageSize"], len(first["tracks"])), (201, 30, 30))
+        self.assertEqual((seventh["page"], len(seventh["tracks"])), (7, 21))
+        self.assertEqual(seventh["tracks"][0]["trackId"], "track-180")
 
     def test_tracks_all_allowed_sorts_and_orders(self):
         self.upload(library_document([
-            library_track("one", title="Alpha", artist="Zulu", album="Beta"),
-            library_track("two", title="Beta", artist="Alpha", album="Alpha"),
+            library_track("one", title="Alpha", artist="Zulu", album="Beta", favorite=True,
+                          audioFingerprint="a" * 64),
+            library_track("two", title="Beta", artist="Alpha", album="Alpha", favorite=False),
         ]), "MyMusic-Library.json")
         self.upload(preferences_document([
-            {"trackId": "one", "playbackPreference": 5},
-            {"trackId": "two", "playbackPreference": -2},
+            {"trackId": "one", "playbackPreference": 5, "favorite": True},
+            {"trackId": "two", "playbackPreference": -2, "favorite": False},
         ]), "MyMusic-Playback-Preferences.json")
         self.upload(document([
             event("one-a", "one", trackTitle="Alpha", artist="Zulu", album="Beta",
@@ -419,7 +430,8 @@ class AnalyticsAPITests(unittest.TestCase):
                   playedAt="2026-09-03T10:00:00+09:00", playDuration=25,
                   completed=False, skipped=False),
         ]))
-        sorts = ["title", "artist", "album", "preference", "playCount", "totalPlayTime",
+        sorts = ["title", "artist", "album", "preference", "favorite", "fingerprint",
+                 "playCount", "totalPlayTime",
                  "completionRate", "skipRate", "lastPlayedAt"]
         for sort in sorts:
             asc = self.client.get(f"/api/tracks?period=all&sort={sort}&order=asc")
@@ -616,6 +628,37 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/sources/equalizer").json()["count"], 2)
         self.assertEqual(self.client.get("/api/sources/genre_presets").json()["count"], 1)
 
+    def test_library_genres_split_compound_values_and_drive_rankings(self):
+        self.upload(library_document([
+            library_track("one", artist="Artist A", genre=" Rock; Alternative ;Rock "),
+            library_track("two", artist="Artist B", genre="Rock\0Electronic"),
+            library_track("three", artist="Artist A", genre=" ; "),
+        ]), "MyMusic-Library.json")
+        self.upload(document([
+            event("one-play", "one"), event("two-play", "two"),
+            event("three-play", "three"),
+        ]))
+
+        result = self.client.get(
+            "/api/sources/library_genres?sort=trackCount&order=desc"
+        ).json()
+        self.assertEqual(result["derivedFrom"], "library")
+        self.assertEqual(result["count"], 4)
+        genres = {item["title"]: item for item in result["items"]}
+        self.assertEqual(genres["Rock"]["trackCount"], 2)
+        self.assertEqual(genres["Rock"]["artistCount"], 2)
+        self.assertEqual(genres["Alternative"]["trackCount"], 1)
+        self.assertEqual(genres["Electronic"]["trackCount"], 1)
+        self.assertEqual(genres["ジャンル未設定"]["trackCount"], 1)
+
+        ranking = self.client.get(
+            "/api/rankings?period=all&dimension=genres&metric=plays"
+        ).json()["items"]
+        self.assertEqual(
+            {item["label"]: item["value"] for item in ranking},
+            {"Rock": 2, "Alternative": 1, "Electronic": 1, "未分類": 1},
+        )
+
     def test_feature_insights_ranges_join_quality_version_and_invalid_values(self):
         def feature_track(track_id, version, features):
             return {
@@ -799,7 +842,7 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertFalse(any(card.get("trackId") == "insufficient"
                              for card in recommendations["insightCards"]))
 
-    def test_data_sources_are_paginated_at_two_hundred_rows(self):
+    def test_data_sources_are_paginated_at_thirty_rows(self):
         payload = {
             "version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
             "tracks": [{
@@ -810,13 +853,19 @@ class AnalyticsAPITests(unittest.TestCase):
         }
         self.upload(payload, "MyMusic-Volume-Normalization.json")
         first = self.client.get("/api/sources/volume_normalization").json()
-        second = self.client.get("/api/sources/volume_normalization?page=2").json()
-        self.assertEqual((first["count"], first["pageSize"], len(first["items"])), (201, 200, 200))
-        self.assertEqual((second["page"], len(second["items"])), (2, 1))
+        seventh = self.client.get("/api/sources/volume_normalization?page=7").json()
+        self.assertEqual((first["count"], first["pageSize"], len(first["items"])), (201, 30, 30))
+        self.assertEqual((seventh["page"], len(seventh["items"])), (7, 21))
         descending = self.client.get(
             "/api/sources/volume_normalization?sort=title&order=desc"
         ).json()["items"]
         self.assertEqual(descending[0]["title"], "Track 200")
+        for sort in ("title", "linked", "integratedLUFS", "truePeakDBTP",
+                     "normalizationGainDB", "relativePath"):
+            with self.subTest(sort=sort):
+                self.assertEqual(self.client.get(
+                    f"/api/sources/volume_normalization?sort={sort}&order=asc"
+                ).status_code, 200)
         self.assertEqual(self.client.get(
             "/api/sources/volume_normalization?sort=unknown"
         ).status_code, 404)

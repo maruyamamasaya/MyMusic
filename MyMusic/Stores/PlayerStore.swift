@@ -174,7 +174,8 @@ final class PlayerStore {
         playbackEndTime: TimeInterval? = nil,
         transitionReason: PlaybackTransitionReason = .manualTrackChange,
         presentationMode: PlayerPresentationMode = .standard,
-        startContext: PlaybackStartContext = .manualUnknown
+        startContext: PlaybackStartContext = .manualUnknown,
+        outgoingEndKind: PlaybackEndKind = .other
     ) {
         guard tracks.indices.contains(index) else {
             if tracks.isEmpty { stop() }
@@ -189,7 +190,8 @@ final class PlayerStore {
             playbackStartTime: playbackStartTime,
             playbackEndTime: playbackEndTime,
             transitionReason: transitionReason,
-            startContext: startContext
+            startContext: startContext,
+            outgoingEndKind: outgoingEndKind
         )
     }
 

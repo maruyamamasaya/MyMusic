@@ -6,6 +6,7 @@ import Observation
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
     private static let dailySummaryRetentionDays = 400
+    private static let highlightNonSkipMinimumListeningTime: TimeInterval = 5
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
@@ -114,13 +115,17 @@ final class PlaybackHistoryStore {
         endKind: PlaybackEndKind? = nil
     ) {
         var entry = entry(for: trackID)
+        let countsAsSkip = isSkipped && !(
+            context.source == .highlight &&
+            listenedSeconds >= Self.highlightNonSkipMinimumListeningTime
+        )
         let event = PlaybackEvent(
             trackID: trackID,
             startedAt: startedAt,
             endedAt: endedAt,
             listenedSeconds: listenedSeconds,
             completionRatio: duration > 0 ? listenedSeconds / duration : 0,
-            wasSkipped: isSkipped,
+            wasSkipped: countsAsSkip,
             wasFullPlayback: isFullPlayback,
             startKind: context.kind,
             startSource: context.source,
