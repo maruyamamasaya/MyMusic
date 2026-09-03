@@ -109,11 +109,13 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間／任意期間の再生回数、時間、Skip率、完走率、Early Skip数・率、月日・曜日・件数付き日別グラフ、時間帯別・曲別・Artist別集計。Early Skipランキングは回数、総再生回数、率を表示する。日別グラフは土曜と日曜・日本の祝日を色分けし、棒の選択でその1日へ期間を絞り込む。ランキングは初期10件から10件ずつ最大50件まで展開
 - Music History: JSTの月ごとの再生回数・再生時間・その月の代表曲・代表Artistを新しい月からタイムライン表示
-- Insights: 再生入口、選択種別、音楽特徴の5段階比較に加え、最近ハマった／飽きてきた／新しい好み／再発見、JST時間帯×特徴、Artist／Album／Genreの変化、Listening Profileを表示する。現在の好み・評価・完走実績とOverplay減点によるおすすめ、再発見、好みに近い未再生・低再生曲、最大5件の自動Insightカードも提供する。「分析可能データのみ」（既定）と「すべて」の品質フィルターを期間指定と併用可能
+- Insights: 「おすすめ」「最近の変化」「再生行動」のタブに分け、再生入口、選択種別、音楽特徴の5段階比較に加え、最近ハマった／飽きてきた／新しい好み／再発見、JST時間帯×特徴、Artist／Album／Genreの変化、Listening Profileを表示する。現在の好み・評価・完走実績とOverplay減点によるおすすめ、再発見、好みに近い未再生・低再生曲、最大5件の自動Insightカードも提供する。「分析可能データのみ」（既定）と「すべて」の品質フィルターを期間指定と併用可能
 - Rankings: 曲／Artist／Album／Genreと再生回数／再生時間を切り替え、今日／7日／30日／全期間／任意期間の上位50件を表示
 - Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・Early Skip回数・率・最終再生日時、項目別AND検索、列ソート、Import済みPreferenceの編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットをタブ別に表示。曲単位データはLibraryとのTrack ID照合状況も表示
 - Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
+
+左ナビゲーションとInsights内タブはURL履歴に反映されます。ブラウザの戻る／進むで直前の画面へ移動でき、再読み込み後も選択中の画面とInsightsタブを復元します。
 
 主なAPIは`GET /api/dashboard`、`GET /api/music-history`、`GET /api/insights`、`GET /api/insights/features`、`GET /api/insights/recent-changes`、`GET /api/insights/advanced`、`GET /api/insights/recommendations`、`GET /api/rankings`、`GET /api/tracks`です。Insights系は共通して期間と`quality=analyzable|all`を受け取ります。比較系の`all`は直近30日対その前30日、その他は選択期間対直前の同日数です。特徴量APIは最新の数値`analysisVersion`だけを使用し、レスポンスにもVersionと閾値を明示します。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
 

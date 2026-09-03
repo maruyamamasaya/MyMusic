@@ -72,6 +72,14 @@ main { max-width: none; }
 .ranking-name i { position: absolute; left: 0; bottom: 9px; width: var(--width); height: 3px; border-radius: 3px; background: linear-gradient(90deg,var(--accent),var(--accent2)); }
 .ranking-row b { font-size: 13px; font-variant-numeric: tabular-nums; }
 .insight-sections { display: grid; gap: 24px; }
+.content-tabs { display: flex; gap: 7px; margin: 4px 0 24px; padding-bottom: 1px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.content-tabs button { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 10px 14px; font: inherit; cursor: pointer; }
+.content-tabs button:hover { color: var(--text); }
+.content-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.insight-tab-panel { display: none; }
+.insight-tab-panel.active { display: block; }
+.periods { max-width: 100%; overflow-x: auto; }
+.periods button { flex: 0 0 auto; white-space: nowrap; }
 .insights-quality { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--muted); font-size: 12px; }
 .insight-section { min-width: 0; }
 .insight-heading { margin-bottom: 10px; }
@@ -106,7 +114,7 @@ main { max-width: none; }
 .profile-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; }
 .profile-row small { grid-column: 1/-1; }
 .profile-row.insufficient { opacity: .55; }
-@media(max-width:900px){.nav-item[data-page=history]:after{content:"⌛"}.nav-item[data-page=rankings]:after{content:"≡"}}
+@media(max-width:900px){header{align-items:start;flex-direction:column}.nav-item[data-page=history]:after{content:"⌛"}.nav-item[data-page=insights]:after{content:"✦"}.nav-item[data-page=rankings]:after{content:"≡"}.nav-item[data-page=sources]:after{content:"◇"}}
 @media(max-width:720px){.history-card{grid-template-columns:1fr}.history-stats{order:3}.history-highlights{grid-template-columns:1fr}.history-highlights>div{padding-left:0;border-left:0}.ranking-row{grid-template-columns:32px minmax(0,1fr) auto;gap:10px}.segmented{max-width:100%;overflow:auto}}
 .source-sort { display: flex; align-items: end; justify-content: flex-end; gap: 8px; margin: 0 0 14px; }
 .source-sort label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }

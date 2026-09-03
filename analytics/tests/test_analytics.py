@@ -83,6 +83,18 @@ class AnalyticsAPITests(unittest.TestCase):
         content = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
         return self.client.post("/api/import", files={"file": (name, content, "application/json")})
 
+    def test_index_exposes_history_aware_insights_tabs(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        html = response.text
+        self.assertIn('id="insights-tabs"', html)
+        self.assertIn('data-insight-tab="recommendations"', html)
+        self.assertIn('data-insight-tab="changes"', html)
+        self.assertIn('data-insight-tab="behavior"', html)
+        self.assertIn('data-insight-panel="recommendations"', html)
+        self.assertIn('data-insight-panel="changes"', html)
+        self.assertIn('data-insight-panel="behavior"', html)
+
     def test_json_import_and_sqlite_storage(self):
         response = self.upload(document([event()]))
         self.assertEqual(response.status_code, 200)
