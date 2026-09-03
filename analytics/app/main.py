@@ -73,6 +73,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def music_history():
         return queries.music_history()
 
+    @app.get("/api/insights")
+    def insights(
+        period: str = Query("7d"), startDate: str | None = Query(None),
+        endDate: str | None = Query(None),
+    ):
+        try:
+            return queries.insights(period, startDate, endDate)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/rankings")
     def rankings(
         period: str = Query("30d"), dimension: str = Query("tracks"),

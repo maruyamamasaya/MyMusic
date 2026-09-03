@@ -12,6 +12,10 @@ PERIOD_DAYS = {"today": 0, "7d": 7, "30d": 30, "all": None}
 JAPAN_TIMEZONE = timezone(timedelta(hours=9))
 SQLITE_JAPAN_TIMEZONE = "+09:00"
 LEGACY_PLAYBACK_CUTOFF = "2026-09-01"
+DETAIL_EVENT_PREDICATE = (
+    f"date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'"
+)
+EARLY_SKIP_PREDICATE = f"{DETAIL_EVENT_PREDICATE} AND skipped = 1 AND play_duration <= 30"
 TRACK_SORT_COLUMNS = {
     "title": "c.title COLLATE NOCASE", "artist": "c.artist COLLATE NOCASE",
     "album": "c.album COLLATE NOCASE", "preference": "pp.playback_preference",
@@ -75,18 +79,18 @@ class AnalyticsQueries:
         with self.database.connect() as connection:
             metrics = dict(connection.execute(
                 f"""SELECT COUNT(*) play_count,
-                    COUNT(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    COUNT(CASE WHEN {DETAIL_EVENT_PREDICATE}
                         THEN 1 END) detail_event_count,
-                    SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    SUM(CASE WHEN {DETAIL_EVENT_PREDICATE}
                         THEN play_duration END) total_play_time,
-                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
                         THEN skipped END) * 100 skip_rate,
-                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
                         THEN completed END) * 100 completion_rate,
-                    COALESCE(SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                        AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END), 0) early_skip_count,
-                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                        THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                    COALESCE(SUM(CASE WHEN {EARLY_SKIP_PREDICATE}
+                        THEN 1 ELSE 0 END), 0) early_skip_count,
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
+                        THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
                         * 100 early_skip_rate
                     FROM playback_events {where}""", params).fetchone())
             library_metrics = dict(connection.execute(
@@ -123,10 +127,9 @@ class AnalyticsQueries:
             early_skipped_tracks = [dict(row) for row in connection.execute(
                 f"""SELECT track_id trackId, MAX(track_title) title, MAX(artist) artist,
                     COUNT(*) totalPlayCount,
-                    SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                        AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END) earlySkipCount,
-                    AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                        THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                    SUM(CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1 ELSE 0 END) earlySkipCount,
+                    AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
+                        THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
                         * 100 earlySkipRate
                     FROM playback_events {where} GROUP BY track_id
                     HAVING earlySkipCount > 0
@@ -190,6 +193,48 @@ class AnalyticsQueries:
             month["topArtist"] = {"name": top_artist, "value": artist_count}
             result.append(month)
         return {"months": result, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    def insights(
+        self, period: str, start_date: str | None = None, end_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate playback behavior without constraining source/type values."""
+        where, params = _period_where(period, start_date, end_date)
+        with self.database.connect() as connection:
+            by_source = self._behavior_breakdown(connection, where, params, ["play_source"])
+            by_selection = self._behavior_breakdown(
+                connection, where, params, ["selection_type"]
+            )
+            combinations = self._behavior_breakdown(
+                connection, where, params, ["play_source", "selection_type"]
+            )
+        return {"period": period, "byPlaySource": by_source,
+                "bySelectionType": by_selection, "combinations": combinations,
+                "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+
+    @staticmethod
+    def _behavior_breakdown(
+        connection: Any, where: str, params: list[Any], dimensions: list[str],
+    ) -> list[dict[str, Any]]:
+        aliases = {"play_source": "playSource", "selection_type": "selectionType"}
+        dimension_sql = ", ".join(
+            f"{column} {aliases[column]}" for column in dimensions
+        )
+        group_sql = ", ".join(dimensions)
+        rows = connection.execute(
+            f"""SELECT {dimension_sql}, COUNT(*) playCount,
+                SUM(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN play_duration END) totalPlayTime,
+                AVG(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN completed END) * 100 completionRate,
+                AVG(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN skipped END) * 100 skipRate,
+                SUM(CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1 ELSE 0 END) earlySkipCount,
+                AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
+                    THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
+                    * 100 earlySkipRate,
+                COUNT(CASE WHEN {DETAIL_EVENT_PREDICATE} THEN 1 END) detailEventCount
+                FROM playback_events {where}
+                GROUP BY {group_sql}
+                ORDER BY playCount DESC, {group_sql} COLLATE NOCASE""", params
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def rankings(
         self, period: str, dimension: str, metric: str,
@@ -275,10 +320,9 @@ class AnalyticsQueries:
                                 THEN played_at END) last_played_at,
                             COUNT(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
                                 THEN 1 END) detail_event_count,
-                            SUM(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                                AND skipped = 1 AND play_duration <= 30 THEN 1 ELSE 0 END) early_skip_count,
-                            AVG(CASE WHEN date(played_at, '{SQLITE_JAPAN_TIMEZONE}') >= '{LEGACY_PLAYBACK_CUTOFF}'
-                                THEN CASE WHEN skipped = 1 AND play_duration <= 30 THEN 1.0 ELSE 0.0 END END)
+                            SUM(CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1 ELSE 0 END) early_skip_count,
+                            AVG(CASE WHEN {DETAIL_EVENT_PREDICATE}
+                                THEN CASE WHEN {EARLY_SKIP_PREDICATE} THEN 1.0 ELSE 0.0 END END)
                                 * 100 early_skip_rate
                         FROM filtered_events GROUP BY track_id
                     ), event_catalog AS (

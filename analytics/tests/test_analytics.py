@@ -494,6 +494,45 @@ class AnalyticsAPITests(unittest.TestCase):
         one_day = self.client.get("/api/dashboard?period=custom&startDate=2026-09-01&endDate=2026-09-01").json()["metrics"]
         self.assertEqual((one_day["early_skip_count"], one_day["early_skip_rate"]), (1, 100))
 
+    def test_insights_group_unknown_sources_types_cutoff_and_period(self):
+        self.upload(document([
+            event("legacy", playedAt="2026-08-31T10:00:00+09:00", playDuration=10,
+                  completed=False, skipped=True, playSource="surprise_radio",
+                  selectionType="contextual"),
+            event("early", playedAt="2026-09-01T10:00:00+09:00", playDuration=10,
+                  completed=False, skipped=True, playSource="surprise_radio",
+                  selectionType="contextual"),
+            event("long-skip", playedAt="2026-09-02T10:00:00+09:00", playDuration=31,
+                  completed=False, skipped=True, playSource="surprise_radio",
+                  selectionType="automatic_v2"),
+            event("complete", playedAt="2026-09-02T11:00:00+09:00", playDuration=100,
+                  completed=True, skipped=False, playSource="playlist",
+                  selectionType="automatic_v2"),
+        ]))
+
+        payload = self.client.get(
+            "/api/insights?period=custom&startDate=2026-08-01&endDate=2026-09-30"
+        ).json()
+        sources = {row["playSource"]: row for row in payload["byPlaySource"]}
+        radio = sources["surprise_radio"]
+        self.assertEqual(radio["playCount"], 3)
+        self.assertEqual(radio["totalPlayTime"], 41)
+        self.assertEqual((radio["completionRate"], radio["skipRate"]), (0, 100))
+        self.assertEqual((radio["earlySkipCount"], radio["earlySkipRate"]), (1, 50))
+        selections = {row["selectionType"]: row for row in payload["bySelectionType"]}
+        self.assertEqual(selections["contextual"]["playCount"], 2)
+        self.assertEqual(selections["contextual"]["detailEventCount"], 1)
+        combinations = {(row["playSource"], row["selectionType"]): row
+                        for row in payload["combinations"]}
+        self.assertEqual(combinations[("playlist", "automatic_v2")]["completionRate"], 100)
+        self.assertEqual(combinations[("surprise_radio", "automatic_v2")]["earlySkipCount"], 0)
+
+        one_day = self.client.get(
+            "/api/insights?period=custom&startDate=2026-09-02&endDate=2026-09-02"
+        ).json()
+        self.assertEqual(sum(row["playCount"] for row in one_day["byPlaySource"]), 2)
+        self.assertEqual(self.client.get("/api/insights?period=year").status_code, 422)
+
     def test_extended_source_jsons_are_imported_and_exposed(self):
         self.upload(library_document([library_track()]), "MyMusic-Library.json")
         feature = {
