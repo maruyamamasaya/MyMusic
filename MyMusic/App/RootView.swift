@@ -17,7 +17,13 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("ホーム", systemImage: "house", value: .home) { HomeView() }
+            Tab("ホーム", systemImage: "house", value: .home) {
+                HomeView(
+                    isActive: selectedTab == .home
+                        && !isNowPlayingPresented
+                        && scenePhase == .active
+                )
+            }
             Tab("ライブラリ", systemImage: "music.note.list", value: .library) { LibraryView() }
             Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
             Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
