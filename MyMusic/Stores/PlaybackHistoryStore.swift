@@ -8,6 +8,7 @@ final class PlaybackHistoryStore {
     private static let dailySummaryRetentionDays = 400
     private static let highlightNonSkipMinimumListeningTime: TimeInterval = 5
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
+    private(set) var homePresentationRevision = 0
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
@@ -39,6 +40,7 @@ final class PlaybackHistoryStore {
                 merged[trackID] = currentEntry
             }
             entries = merged
+            homePresentationRevision &+= 1
         } catch {
             errorMessage = "再生履歴を読み込めませんでした: \(error.localizedDescription)"
         }
@@ -85,6 +87,7 @@ final class PlaybackHistoryStore {
         entry.consecutivePlayCount = isConsecutivePlay ? entry.consecutivePlayCount + 1 : 1
         if isRepeatModeActive { entry.repeatPlaybackCount += 1 }
         entries[trackID] = entry
+        homePresentationRevision &+= 1
         persist(entry)
     }
 
@@ -92,6 +95,7 @@ final class PlaybackHistoryStore {
         var entry = entry(for: trackID)
         entry.playCount += 1
         entries[trackID] = entry
+        homePresentationRevision &+= 1
         persist(entry)
     }
 
@@ -169,6 +173,7 @@ final class PlaybackHistoryStore {
         entry.consecutivePlayCount = 0
         entry.repeatPlaybackCount = 0
         entries[trackID] = entry
+        homePresentationRevision &+= 1
         persist(entry)
     }
 
@@ -263,6 +268,7 @@ final class PlaybackHistoryStore {
         entry.boredomHiddenUntil = Calendar.current.date(byAdding: .day, value: days, to: now)
         entry.isPermanentlyHiddenFromShuffle = false
         entries[trackID] = entry
+        homePresentationRevision &+= 1
         persist(entry)
     }
 
@@ -272,6 +278,7 @@ final class PlaybackHistoryStore {
         entry.boredomHiddenUntil = nil
         entry.isPermanentlyHiddenFromShuffle = true
         entries[trackID] = entry
+        homePresentationRevision &+= 1
         persist(entry)
     }
 

@@ -14,6 +14,7 @@ struct LibraryFolder: Identifiable, Hashable {
 @Observable
 final class LibraryStore {
     private(set) var tracks: [Track] = []
+    private(set) var homePresentationRevision = 0
     private(set) var albums: [Album] = []
     private(set) var artists: [Artist] = []
     private(set) var genres: [Genre] = []
@@ -356,6 +357,7 @@ final class LibraryStore {
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
         workLibraryCatalog = snapshot.workLibraryCatalog
+        homePresentationRevision &+= 1
     }
     private func resolvedTracks(for ids: [Track.ID]) -> [Track] {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); var seen: Set<Track.ID> = []

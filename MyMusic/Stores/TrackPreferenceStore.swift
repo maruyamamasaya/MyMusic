@@ -7,6 +7,7 @@ final class TrackPreferenceStore {
     static let maximumPreference = PlaybackPreferenceWeightPolicy.maximumPreference
 
     private(set) var entries: [Track.ID: TrackPreference] = [:]
+    private(set) var homePresentationRevision = 0
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
@@ -55,6 +56,7 @@ final class TrackPreferenceStore {
             }
             for (trackID, current) in entries { merged[trackID] = current }
             entries = merged
+            homePresentationRevision &+= 1
             isLoaded = true
             if hadPendingChanges { try await persistence.save(Array(merged.values)) }
         } catch {
@@ -109,6 +111,7 @@ final class TrackPreferenceStore {
         if updated > 0 {
             try await persistence.save(Array(merged.values))
             entries = merged
+            homePresentationRevision &+= 1
         }
         return TrackPreferenceImportResult(
             total: imported.count,
@@ -131,6 +134,7 @@ final class TrackPreferenceStore {
 
     private func update(_ preference: TrackPreference) {
         entries[preference.trackID] = preference
+        homePresentationRevision &+= 1
         guard isLoaded else { return }
         let snapshot = Array(entries.values)
         let preceding = saveTask

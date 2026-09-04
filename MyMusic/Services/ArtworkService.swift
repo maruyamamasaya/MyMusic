@@ -1,20 +1,25 @@
 import Foundation
+import UIKit
 
-protocol ArtworkServicing: Sendable {
+nonisolated protocol ArtworkServicing: Sendable {
     func storeArtwork(_ data: Data, identifier: String) async throws -> String
     func artworkData(for identifier: String) async -> Data?
 }
 
 actor ArtworkService: ArtworkServicing {
-    @MainActor static let shared = ArtworkService()
+    nonisolated static let shared = ArtworkService()
 
     private let directoryURL: URL
     private let memoryCache: NSCache<NSString, NSData>
+    private let imageCache: NSCache<NSString, UIImage>
 
     init(directoryURL: URL? = nil) {
         let memoryCache = NSCache<NSString, NSData>()
         memoryCache.countLimit = 200
         self.memoryCache = memoryCache
+        let imageCache = NSCache<NSString, UIImage>()
+        imageCache.countLimit = 80
+        self.imageCache = imageCache
         if let directoryURL {
             self.directoryURL = directoryURL
         } else {
@@ -44,5 +49,18 @@ actor ArtworkService: ArtworkServicing {
         ) else { return nil }
         memoryCache.setObject(data as NSData, forKey: identifier as NSString)
         return data
+    }
+
+    func artworkImage(for identifier: String) async -> UIImage? {
+        if let cached = imageCache.object(forKey: identifier as NSString) {
+            return cached
+        }
+        guard let data = await artworkData(for: identifier) else { return nil }
+        let image = await Task.detached(priority: .utility) {
+            UIImage(data: data)?.preparingForDisplay()
+        }.value
+        guard let image else { return nil }
+        imageCache.setObject(image, forKey: identifier as NSString)
+        return image
     }
 }

@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class FavoriteStore {
     private(set) var favorites = LibraryFavorites()
+    private(set) var homePresentationRevision = 0
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
@@ -24,6 +25,7 @@ final class FavoriteStore {
             let loaded = try await persistence.load()
             favorites.albumIDs.formUnion(loaded.albumIDs)
             favorites.artistIDs.formUnion(loaded.artistIDs)
+            homePresentationRevision &+= 1
         } catch {
             errorMessage = "お気に入りを読み込めませんでした: \(error.localizedDescription)"
         }
@@ -37,6 +39,7 @@ final class FavoriteStore {
 
     func toggleFavorite(albumID: Album.ID) {
         if favorites.albumIDs.remove(albumID) == nil { favorites.albumIDs.insert(albumID) }
+        homePresentationRevision &+= 1
         persist()
     }
 
@@ -47,11 +50,13 @@ final class FavoriteStore {
         } else {
             favorites.albumIDs.subtract(compatibleIDs)
         }
+        homePresentationRevision &+= 1
         persist()
     }
 
     func toggleFavorite(artistID: Artist.ID) {
         if favorites.artistIDs.remove(artistID) == nil { favorites.artistIDs.insert(artistID) }
+        homePresentationRevision &+= 1
         persist()
     }
 

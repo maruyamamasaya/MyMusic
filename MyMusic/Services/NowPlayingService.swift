@@ -34,7 +34,6 @@ final class NowPlayingService: NowPlayingServicing {
             info[MPMediaItemPropertyAlbumTitle] = albumTitle
         }
         infoCenter.nowPlayingInfo = info
-        infoCenter.playbackState = isPlaying ? .playing : .paused
         loadArtwork(identifier: track.artworkIdentifier)
     }
 
@@ -44,7 +43,6 @@ final class NowPlayingService: NowPlayingServicing {
             $0[MPNowPlayingInfoPropertyElapsedPlaybackTime] = valid(elapsedTime)
             $0[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         }
-        infoCenter.playbackState = isPlaying ? .playing : .paused
     }
 
     func updatePlayback(elapsedTime: TimeInterval, isPlaying: Bool) {
@@ -52,7 +50,6 @@ final class NowPlayingService: NowPlayingServicing {
             $0[MPNowPlayingInfoPropertyElapsedPlaybackTime] = valid(elapsedTime)
             $0[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         }
-        infoCenter.playbackState = isPlaying ? .playing : .paused
     }
 
     func clear() {
@@ -60,7 +57,6 @@ final class NowPlayingService: NowPlayingServicing {
         artworkTask = nil
         currentArtworkIdentifier = nil
         infoCenter.nowPlayingInfo = nil
-        infoCenter.playbackState = .stopped
     }
 
     private func update(_ change: (inout [String: Any]) -> Void) {
@@ -76,9 +72,8 @@ final class NowPlayingService: NowPlayingServicing {
     private func loadArtwork(identifier: String?) {
         guard let identifier else { return }
         artworkTask = Task { [weak self] in
-            guard let data = await ArtworkService.shared.artworkData(for: identifier),
-                  !Task.isCancelled,
-                  let image = UIImage(data: data) else { return }
+            guard let image = await ArtworkService.shared.artworkImage(for: identifier),
+                  !Task.isCancelled else { return }
             guard let self, currentArtworkIdentifier == identifier else { return }
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { requestedSize in
                 image.squareCropped(to: requestedSize)

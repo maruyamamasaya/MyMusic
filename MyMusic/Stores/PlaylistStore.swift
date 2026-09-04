@@ -5,6 +5,8 @@ import Observation
 @Observable
 final class PlaylistStore {
     private(set) var playlists: [Playlist] = []
+    private(set) var homeOrderingRevision = 0
+    private(set) var homeContentRevision = 0
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
@@ -20,6 +22,8 @@ final class PlaylistStore {
         isLoaded = true
         do {
             playlists = try await persistence.load().sorted { $0.updatedAt > $1.updatedAt }
+            homeOrderingRevision &+= 1
+            homeContentRevision &+= 1
         } catch {
             errorMessage = "Playlists could not be loaded: \(error.localizedDescription)"
         }
@@ -39,18 +43,24 @@ final class PlaylistStore {
             kind: kind
         )
         playlists.insert(playlist, at: 0)
+        homeOrderingRevision &+= 1
+        homeContentRevision &+= 1
         persist()
         return playlist.id
     }
 
     func deletePlaylist(id: Playlist.ID) {
         playlists.removeAll { $0.id == id }
+        homeOrderingRevision &+= 1
+        homeContentRevision &+= 1
         persist()
     }
 
     func deletePlaylists(ids: Set<Playlist.ID>) {
         guard !ids.isEmpty else { return }
         playlists.removeAll { ids.contains($0.id) }
+        homeOrderingRevision &+= 1
+        homeContentRevision &+= 1
         persist()
     }
 
@@ -214,6 +224,7 @@ final class PlaylistStore {
         change(&playlists[index])
         guard playlists[index] != previous else { return }
         playlists[index].updatedAt = Date()
+        homeContentRevision &+= 1
         persist()
     }
 

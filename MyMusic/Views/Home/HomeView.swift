@@ -19,7 +19,10 @@ struct HomeView: View {
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var randomizedPlaylistIDs: [Playlist.ID] = []
-    @State private var selectedRepresentativeTracks: [HomeDestination: Track] = [:]
+    @State private var destinationPresentations: [HomeDestination: HomeDestinationPresentation] = [:]
+    @State private var regularPlaylists: [Playlist] = []
+    @State private var workPlaylists: [Playlist] = []
+    @State private var playlistTracks: [Playlist.ID: [Track]] = [:]
 
     var isActive = true
 
@@ -49,11 +52,8 @@ struct HomeView: View {
                                 HomePlaylistSection(
                                     playlists: Array(homePlaylists.prefix(12)),
                                     showsMore: homePlaylists.count > 12,
-                                    tracksForPlaylist: { playlistStore.tracks(for: $0.id, in: libraryStore.tracks) },
-                                    canPlay: { playlist in
-                                        playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
-                                            .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
-                                    },
+                                    tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
+                                    canPlayTracks: { $0.contains(where: playbackHistoryStore.isEligibleForRegularShuffle) },
                                     onPlay: playPlaylist
                                 )
                             }
@@ -73,17 +73,8 @@ struct HomeView: View {
                                         for: homeWorkPlaylists.count
                                     ),
                                     artworkIdentifiers: artworkIdentifiers,
-                                    tracksForPlaylist: {
-                                        playlistStore.tracks(for: $0.id, in: libraryStore.tracks)
-                                    },
-                                    canPlay: { playlist in
-                                        !playbackHistoryStore.workPlaybackTracks(
-                                            from: playlistStore.tracks(
-                                                for: playlist.id,
-                                                in: libraryStore.tracks
-                                            )
-                                        ).isEmpty
-                                    },
+                                    tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
+                                    canPlayTracks: { !playbackHistoryStore.workPlaybackTracks(from: $0).isEmpty },
                                     onPlayPlaylist: playPlaylist
                                 )
                             }
@@ -96,21 +87,29 @@ struct HomeView: View {
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
             }
-            .task(id: playlistStore.playlists.map(\.id)) {
+            .task(id: playlistStore.homeOrderingRevision) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
+            }
+            .task {
+                refreshPlaylistPresentations()
             }
             .task(id: isActive) {
                 guard isActive else { return }
-                selectRepresentativeTracks()
+                refreshDestinationPresentations(rotatingRepresentatives: destinationPresentations.isEmpty)
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }
-                    selectRepresentativeTracks()
+                    refreshDestinationPresentations(rotatingRepresentatives: true)
                 }
             }
-            .onChange(of: representativeCandidateIDs) {
-                replaceInvalidRepresentativeTracks()
+            .onChange(of: libraryStore.homePresentationRevision) {
+                refreshDestinationPresentations()
+                refreshPlaylistPresentations()
             }
+            .onChange(of: playbackHistoryStore.homePresentationRevision) { refreshDestinationPresentations() }
+            .onChange(of: trackPreferenceStore.homePresentationRevision) { refreshDestinationPresentations() }
+            .onChange(of: favoriteStore.homePresentationRevision) { refreshDestinationPresentations() }
+            .onChange(of: playlistStore.homeContentRevision) { refreshPlaylistPresentations() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -124,20 +123,13 @@ struct HomeView: View {
     }
 
     private var homePlaylists: [Playlist] {
-        let visibleTrackIDs = Set(libraryStore.tracks.map(\.id))
-        let playablePlaylists = playlistStore.playlists(of: .regular).filter { playlist in
-            playlist.trackIDs.contains { visibleTrackIDs.contains($0) }
-                && !playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).isEmpty
-        }
+        guard !randomizedPlaylistIDs.isEmpty else { return regularPlaylists }
 
-        guard !randomizedPlaylistIDs.isEmpty else { return playablePlaylists }
-
-        let playlistsByID = Dictionary(uniqueKeysWithValues: playablePlaylists.map { ($0.id, $0) })
+        let playlistsByID = Dictionary(uniqueKeysWithValues: regularPlaylists.map { ($0.id, $0) })
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
     }
 
     private var homeWorkPlaylists: [Playlist] {
-        let workPlaylists = playlistStore.playlists(of: .work)
         let playlistsByID = Dictionary(uniqueKeysWithValues: workPlaylists.map { ($0.id, $0) })
         guard !randomizedPlaylistIDs.isEmpty else { return workPlaylists }
         return randomizedPlaylistIDs.compactMap { playlistsByID[$0] }
@@ -159,59 +151,11 @@ struct HomeView: View {
     }
 
     private func artworkIdentifiers(for destination: HomeDestination) -> [String] {
-        if let artworkIdentifier = representativeTrack(for: destination)?.artworkIdentifier {
-            return [artworkIdentifier]
-        }
-        if myMusicDestinations.contains(destination) {
-            return representativeCandidates(for: destination).compactMap(\.artworkIdentifier)
-        }
-        let tracks: [Track]
-        switch destination {
-        case .quickPlay:
-            tracks = libraryStore.tracks
-        case .discoveryPlay:
-            tracks = libraryStore.tracks.filter { playbackHistoryStore.playCount(for: $0.id) == 0 }
-        case .repeatPlay:
-            tracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
-        case .selectiveRandomPlay:
-            tracks = libraryStore.tracks
-        case .workSizePlay:
-            tracks = libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
-        case .favorites:
-            tracks = trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
-        case .favoriteAlbums:
-            tracks = favoriteAlbumTracks
-        case .favoriteArtists:
-            tracks = favoriteArtistTracks
-        case .recentTracks:
-            tracks = playbackHistoryStore.recentTracks(from: libraryStore.tracks)
-        default:
-            return []
-        }
-        return Array(Set(tracks.compactMap(\.artworkIdentifier)))
+        destinationPresentations[destination]?.artworkIdentifiers ?? []
     }
 
     private func instantPlaybackIsAvailable(_ destination: HomeDestination) -> Bool {
-        switch destination {
-        case .quickPlay:
-            libraryStore.tracks.contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
-        case .discoveryPlay:
-            libraryStore.tracks.contains {
-                playbackHistoryStore.playCount(for: $0.id) == 0
-                    && playbackHistoryStore.isEligibleForRegularShuffle($0)
-            }
-        case .repeatPlay:
-            !playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks, limit: 1).isEmpty
-        case .favorites:
-            trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
-                .contains(where: playbackHistoryStore.isEligibleForRegularShuffle)
-        case .favoriteAlbums:
-            !favoriteAlbumTracks.isEmpty
-        case .favoriteArtists:
-            !favoriteArtistTracks.isEmpty
-        default:
-            true
-        }
+        destinationPresentations[destination]?.instantPlaybackIsAvailable ?? false
     }
 
     private func playImmediately(_ destination: HomeDestination) {
@@ -280,71 +224,92 @@ struct HomeView: View {
         HomeCategory.all.first(where: { $0.id == .myMusic })?.items.map(\.destination) ?? []
     }
 
-    private var representativeCandidateIDs: [HomeDestination: [Track.ID]] {
-        Dictionary(uniqueKeysWithValues: myMusicDestinations.map { destination in
-            (destination, representativeCandidates(for: destination).map(\.id))
-        })
-    }
-
     private func representativeTrack(for destination: HomeDestination) -> Track? {
-        guard let selectedTrackID = selectedRepresentativeTracks[destination]?.id else { return nil }
-        return representativeCandidates(for: destination).first { $0.id == selectedTrackID }
+        destinationPresentations[destination]?.representativeTrack
     }
 
-    private func representativeCandidates(for destination: HomeDestination) -> [Track] {
-        let tracks: [Track]
+    private func representativeSourceTracks(for destination: HomeDestination) -> [Track] {
         switch destination {
         case .quickPlay, .selectiveRandomPlay:
-            tracks = libraryStore.tracks.filter(playbackHistoryStore.isEligibleForRegularShuffle)
+            libraryStore.tracks.filter(playbackHistoryStore.isEligibleForRegularShuffle)
         case .discoveryPlay:
-            tracks = libraryStore.tracks.filter {
+            libraryStore.tracks.filter {
                 playbackHistoryStore.playCount(for: $0.id) == 0
                     && playbackHistoryStore.isEligibleForRegularShuffle($0)
             }
         case .repeatPlay:
-            tracks = libraryStore.tracks.filter {
+            libraryStore.tracks.filter {
                 playbackHistoryStore.playCount(for: $0.id) >= 2
                     && playbackHistoryStore.isEligibleForRegularShuffle($0)
             }
         case .favorites:
-            tracks = trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
+            trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
                 .filter(playbackHistoryStore.isEligibleForRegularShuffle)
         case .favoriteAlbums:
-            tracks = favoriteAlbumTracks
+            favoriteAlbumTracks
         case .favoriteArtists:
-            tracks = favoriteArtistTracks
+            favoriteArtistTracks
         case .recentTracks:
-            tracks = playbackHistoryStore.recentTracks(from: libraryStore.tracks)
+            playbackHistoryStore.recentTracks(from: libraryStore.tracks)
+        case .workSizePlay:
+            libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
         default:
-            tracks = []
-        }
-        return HomeRepresentativeTrackPolicy.eligibleArtworkTracks(from: tracks)
-    }
-
-    private func selectRepresentativeTracks() {
-        for destination in myMusicDestinations {
-            let previousTrackID = selectedRepresentativeTracks[destination]?.id
-            selectedRepresentativeTracks[destination] = HomeRepresentativeTrackPolicy.select(
-                from: representativeCandidates(for: destination),
-                excluding: previousTrackID
-            )
+            []
         }
     }
 
-    private func replaceInvalidRepresentativeTracks() {
+    private func refreshDestinationPresentations(rotatingRepresentatives: Bool = false) {
         guard isActive else { return }
-        for destination in myMusicDestinations {
-            let candidates = representativeCandidates(for: destination)
-            let currentTrackID = selectedRepresentativeTracks[destination]?.id
-            guard currentTrackID == nil || !candidates.contains(where: { $0.id == currentTrackID }) else {
-                continue
+        var refreshed: [HomeDestination: HomeDestinationPresentation] = [:]
+        let myMusicDestinationSet = Set(myMusicDestinations)
+        let destinations = Set(HomeCategory.all.flatMap { $0.items.map(\.destination) })
+        for destination in destinations {
+            let sourceTracks = representativeSourceTracks(for: destination)
+            let candidates = HomeRepresentativeTrackPolicy.eligibleArtworkTracks(from: sourceTracks)
+            let previous = destinationPresentations[destination]?.representativeTrack
+            let representative: Track?
+            if !myMusicDestinationSet.contains(destination) {
+                representative = nil
+            } else if !rotatingRepresentatives,
+               let previous,
+               candidates.contains(where: { $0.id == previous.id }) {
+                representative = previous
+            } else {
+                representative = HomeRepresentativeTrackPolicy.select(
+                    from: candidates,
+                    excluding: previous?.id
+                )
             }
-            selectedRepresentativeTracks[destination] = HomeRepresentativeTrackPolicy.select(
-                from: candidates,
-                excluding: currentTrackID
+            refreshed[destination] = HomeDestinationPresentation(
+                representativeTrack: representative,
+                artworkIdentifiers: representative?.artworkIdentifier.map { [$0] }
+                    ?? Array(Set(sourceTracks.compactMap(\.artworkIdentifier))),
+                instantPlaybackIsAvailable: !sourceTracks.isEmpty
             )
         }
+        destinationPresentations = refreshed
     }
+
+    private func refreshPlaylistPresentations() {
+        let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
+        var resolvedTracks: [Playlist.ID: [Track]] = [:]
+        for playlist in playlistStore.playlists {
+            resolvedTracks[playlist.id] = playlist.trackIDs
+                .compactMap { tracksByID[$0] }
+                .filter(playlist.kind.accepts)
+        }
+        playlistTracks = resolvedTracks
+        regularPlaylists = playlistStore.playlists(of: .regular).filter {
+            !(resolvedTracks[$0.id] ?? []).isEmpty
+        }
+        workPlaylists = playlistStore.playlists(of: .work)
+    }
+}
+
+private struct HomeDestinationPresentation {
+    let representativeTrack: Track?
+    let artworkIdentifiers: [String]
+    let instantPlaybackIsAvailable: Bool
 }
 
 private struct HomeTuningSection: View {
@@ -505,7 +470,7 @@ private struct HomeWorkSection: View {
     let showsMore: Bool
     let artworkIdentifiers: (HomeDestination) -> [String]
     let tracksForPlaylist: (Playlist) -> [Track]
-    let canPlay: (Playlist) -> Bool
+    let canPlayTracks: ([Track]) -> Bool
     let onPlayPlaylist: (Playlist) -> Void
 
     private let spacing: CGFloat = 12
@@ -554,7 +519,7 @@ private struct HomeWorkSection: View {
                         } else {
                             ForEach(playlists) { playlist in
                                 let tracks = tracksForPlaylist(playlist)
-                                let isPlayable = canPlay(playlist)
+                                let isPlayable = canPlayTracks(tracks)
                                 Button { onPlayPlaylist(playlist) } label: {
                                     HomePlaylistTile(
                                         playlist: playlist,
@@ -618,7 +583,7 @@ private struct HomePlaylistSection: View {
     let playlists: [Playlist]
     let showsMore: Bool
     let tracksForPlaylist: (Playlist) -> [Track]
-    let canPlay: (Playlist) -> Bool
+    let canPlayTracks: ([Track]) -> Bool
     let onPlay: (Playlist) -> Void
 
     private let spacing: CGFloat = 12
@@ -650,7 +615,7 @@ private struct HomePlaylistSection: View {
                         } else {
                             ForEach(playlists) { playlist in
                                 let tracks = tracksForPlaylist(playlist)
-                                let isPlayable = canPlay(playlist)
+                                let isPlayable = canPlayTracks(tracks)
                                 Button { onPlay(playlist) } label: {
                                     HomePlaylistTile(
                                         playlist: playlist,
@@ -861,6 +826,7 @@ private struct HomeCarouselSection: View {
     @ViewBuilder
     private func tile(for item: HomeCategoryItem, width: CGFloat) -> some View {
         if isInstantPlaybackDestination(item.destination) {
+            let isAvailable = instantPlaybackIsAvailable(item.destination)
             Button {
                 onInstantPlay(item.destination)
             } label: {
@@ -873,8 +839,8 @@ private struct HomeCarouselSection: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(!instantPlaybackIsAvailable(item.destination))
-            .opacity(instantPlaybackIsAvailable(item.destination) ? 1 : 0.55)
+            .disabled(!isAvailable)
+            .opacity(isAvailable ? 1 : 0.55)
         } else {
             NavigationLink(value: item.destination) {
                 HomeItemTile(
@@ -1191,8 +1157,7 @@ private struct HomeTileArtworkBackground: View {
         }
         .task(id: artworkIdentifier) {
             image = nil
-            guard let data = await ArtworkService.shared.artworkData(for: artworkIdentifier) else { return }
-            image = UIImage(data: data)
+            image = await ArtworkService.shared.artworkImage(for: artworkIdentifier)
         }
     }
 }

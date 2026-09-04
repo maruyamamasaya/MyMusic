@@ -50,9 +50,8 @@ struct AlbumArtworkView: View {
         .aspectRatio(1, contentMode: .fit)
         .task(id: artworkIdentifier) {
             image = nil
-            guard let artworkIdentifier,
-                  let data = await ArtworkService.shared.artworkData(for: artworkIdentifier) else { return }
-            image = UIImage(data: data)
+            guard let artworkIdentifier else { return }
+            image = await ArtworkService.shared.artworkImage(for: artworkIdentifier)
         }
     }
 }
