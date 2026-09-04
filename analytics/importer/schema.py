@@ -75,6 +75,8 @@ class LibraryTrackV1(BaseModel):
         default=None, alias="audioFingerprint", min_length=64, max_length=64,
         pattern=r"^[0-9a-f]{64}$"
     )
+    relative_path: str | None = Field(default=None, alias="relativePath", min_length=1, max_length=4000)
+    file_size: int | None = Field(default=None, alias="fileSize", ge=1)
 
     @field_validator("last_played_at")
     @classmethod

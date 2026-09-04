@@ -20,6 +20,7 @@ from importer.schema import (
     TrackFeaturesExportV1, VolumeExportV1, PlaylistsExportV1,
     EqualizerExportV1, GenrePresetsExportV1,
 )
+from importer.track_feature_resolver import TrackFeatureResolver
 
 
 def _now() -> str:
@@ -46,6 +47,7 @@ class ImportService:
     def __init__(self, database: Database, imports_dir: Path):
         self.database = database
         self.imports_dir = Path(imports_dir)
+        self.track_feature_resolver = TrackFeatureResolver()
 
     def import_bytes(self, content: bytes, source_filename: str) -> dict[str, Any]:
         imported_at = _now()
@@ -95,6 +97,8 @@ class ImportService:
                 connection.execute(
                     "UPDATE library_tracks SET is_present = 0 WHERE import_id <> ?", (import_id,)
                 )
+            if data_kind in {"library", "track_features"} and not errors:
+                self.track_feature_resolver.resolve_all(connection)
             if data_kind in {"volume_normalization", "playlists", "equalizer", "genre_presets"} and not errors:
                 connection.execute(
                     "DELETE FROM source_records WHERE data_kind = ? AND import_id <> ?",
@@ -204,9 +208,9 @@ class ImportService:
         connection.execute(
             """INSERT INTO library_tracks (
                 track_id, title, artist, album, genre, year, duration, format, favorite,
-                source_play_count, source_last_played_at, audio_fingerprint,
+                source_play_count, source_last_played_at, audio_fingerprint, relative_path, file_size,
                 is_present, imported_at, import_id, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             ON CONFLICT(track_id) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, album=excluded.album,
                 genre=excluded.genre, year=excluded.year, duration=excluded.duration,
@@ -214,12 +218,14 @@ class ImportService:
                 source_play_count=excluded.source_play_count,
                 source_last_played_at=excluded.source_last_played_at,
                 audio_fingerprint=excluded.audio_fingerprint,
+                relative_path=excluded.relative_path, file_size=excluded.file_size,
                 is_present=1,
                 imported_at=excluded.imported_at, import_id=excluded.import_id,
                 raw_json=excluded.raw_json""",
             (track.track_id, track.title, track.artist, track.album, track.genre, track.year,
              track.duration, track.format, None if track.favorite is None else int(track.favorite),
              track.play_count, _utc(track.last_played_at), track.audio_fingerprint,
+             TrackFeatureResolver.normalized_relative_path(track.relative_path), track.file_size,
              imported_at, import_id, raw_json),
         )
         return "new" if existing is None else "updated"

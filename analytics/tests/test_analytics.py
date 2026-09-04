@@ -67,6 +67,22 @@ def preferences_document(tracks):
     return {"schemaVersion": 1, "exportedAt": "2026-09-02T12:00:00Z", "tracks": tracks}
 
 
+def feature_document(track_id: str, *, relative_path: str = "Music/night.m4a",
+                     file_size: int = 123, duration: float = 210,
+                     title: str = "Night Drive", artist: str = "Example Artist",
+                     album: str | None = "City Lights"):
+    return {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "tracks": [{
+        "trackID": track_id, "title": title, "artist": artist,
+        "sourceIdentity": {
+            "relativePath": relative_path, "fileSize": file_size, "duration": duration,
+            "modificationDate": None, "contentHash": None, "title": title,
+            "artist": artist, "album": album,
+        },
+        "analysisVersion": 1, "analyzedAt": "2026-09-01T12:00:00Z",
+        "importedAt": "2026-09-02T12:00:00Z", "features": {"energy": .7},
+    }]}
+
+
 class AnalyticsAPITests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -696,6 +712,60 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual({item["data"]["trackID"] for item in result["items"]}, {"track-a", "track-b"})
 
+    def test_track_features_keep_exact_track_id_match_as_highest_priority(self):
+        self.upload(library_document([
+            library_track("original", relativePath="Music/night.m4a", fileSize=123),
+            library_track("same-path", relativePath="Music/night.m4a", fileSize=123),
+        ]), "MyMusic-Library.json")
+        self.upload(feature_document("original"), "MyMusic-Track-Features.json")
+
+        item = self.client.get("/api/sources/track_features").json()["items"][0]
+        self.assertEqual(item["trackId"], "original")
+        self.assertTrue(item["linked"])
+
+    def test_track_features_resolve_unique_path_with_file_properties(self):
+        self.upload(library_document([
+            library_track("current", relativePath="Music\\night.m4a", fileSize=123),
+        ]), "MyMusic-Library.json")
+        self.upload(feature_document("old-id", duration=210.49), "MyMusic-Track-Features.json")
+
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual((result["linkedCount"], result["items"][0]["trackId"]), (1, "current"))
+
+    def test_track_features_resolve_unique_size_duration_and_metadata(self):
+        self.upload(library_document([
+            library_track("current", relativePath="Moved/night.m4a", fileSize=123,
+                          title="NÍGHT DRIVE", artist="Ｅｘａｍｐｌｅ Artist"),
+        ]), "MyMusic-Library.json")
+        self.upload(feature_document("old-id", relative_path="Music/night.m4a"),
+                    "MyMusic-Track-Features.json")
+
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual((result["linkedCount"], result["items"][0]["trackId"]), (1, "current"))
+
+    def test_track_features_do_not_resolve_ambiguous_or_identity_missing_library(self):
+        self.upload(library_document([
+            library_track("one", relativePath="Moved/one.m4a", fileSize=123),
+            library_track("two", relativePath="Moved/two.m4a", fileSize=123),
+            library_track("legacy-without-identity"),
+        ]), "MyMusic-Library.json")
+        self.upload(feature_document("old-id", relative_path="Elsewhere/night.m4a"),
+                    "MyMusic-Track-Features.json")
+
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual(result["linkedCount"], 0)
+        self.assertFalse(result["items"][0]["linked"])
+
+    def test_library_reimport_re_resolves_existing_track_features(self):
+        self.upload(feature_document("old-id"), "MyMusic-Track-Features.json")
+        self.assertEqual(self.client.get("/api/sources/track_features").json()["linkedCount"], 0)
+
+        self.upload(library_document([
+            library_track("current", relativePath="Music/night.m4a", fileSize=123),
+        ]), "MyMusic-Library.json")
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual((result["linkedCount"], result["items"][0]["trackId"]), (1, "current"))
+
     def test_library_genres_split_compound_values_and_drive_rankings(self):
         self.upload(library_document([
             library_track("one", artist="Artist A", genre=" Rock; Alternative ;Rock "),
@@ -1042,6 +1112,8 @@ class DatabaseMigrationTests(unittest.TestCase):
                 connection.close()
             self.assertIn("is_present", library_columns)
             self.assertIn("audio_fingerprint", library_columns)
+            self.assertIn("relative_path", library_columns)
+            self.assertIn("file_size", library_columns)
             connection = sqlite3.connect(path)
             try:
                 preference_columns = {

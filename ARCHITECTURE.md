@@ -145,6 +145,7 @@ music root recursive scan
 - `MusicDataExportService`はTrack ID、`playbackPreference`、`favorite`を安定順でschema v2の`MyMusic-Playback-Preferences.json`へ出力する。Library／History JSONのFavorite fieldは互換目的で新Preference値をミラーするが正本ではない。
 - Preference Importは外部JSONを直接永続化せず、`TrackPreferenceImportService`が未知fieldを含む構造、schema、日時、UUID、重複、値範囲、BoolをStore変更前に全件検証する。`TrackPreferenceStore`は現在LibraryのTrack IDだけを既存snapshotへmergeし、`TrackPreferencePersistenceService`のatomic保存成功後にのみmemory stateへ反映する。未収録Trackは作成せず、JSONにない既存Preferenceは維持する。
 - Library JSONはidentity registryに保存済みのFingerprintだけをoptional `audioFingerprint`として出力し、Export操作自体では音声を読まない。Analyticsは64文字のlowercase SHA-256として検証・保存するが、v0では別Track IDの自動統合は行わない。
+- AnalyticsのLibrary tableは後方互換なoptional列として`relative_path`／`file_size`を持つ。Track Featuresの`sourceIdentity`は既存どおり`source_records.raw_json`を正とし、Analytics内の`TrackFeatureResolver`がLibrary／Features Import後にTrack ID完全一致を優先して再解決する。救済は本体と同じpath優先、file size完全一致、duration差0.5秒以内、fallback metadata一致かつ一意候補に限定し、fingerprintは必須にしない。
 - 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 

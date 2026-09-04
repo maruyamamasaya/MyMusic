@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     source_play_count INTEGER,
     source_last_played_at TEXT,
     audio_fingerprint TEXT,
+    relative_path TEXT,
+    file_size INTEGER,
     is_present INTEGER NOT NULL DEFAULT 1 CHECK (is_present IN (0, 1)),
     imported_at TEXT NOT NULL,
     import_id INTEGER NOT NULL,
@@ -66,6 +68,8 @@ CREATE TABLE IF NOT EXISTS library_tracks (
 );
 CREATE INDEX IF NOT EXISTS idx_library_artist ON library_tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_library_album ON library_tracks(album);
+CREATE INDEX IF NOT EXISTS idx_library_relative_path ON library_tracks(relative_path);
+CREATE INDEX IF NOT EXISTS idx_library_file_size ON library_tracks(file_size);
 
 CREATE TABLE IF NOT EXISTS playback_preferences (
     track_id TEXT PRIMARY KEY,
@@ -121,11 +125,21 @@ class Database:
                 connection.execute(
                     "ALTER TABLE library_tracks ADD COLUMN audio_fingerprint TEXT"
                 )
+            if "relative_path" not in library_columns:
+                connection.execute("ALTER TABLE library_tracks ADD COLUMN relative_path TEXT")
+            if "file_size" not in library_columns:
+                connection.execute("ALTER TABLE library_tracks ADD COLUMN file_size INTEGER")
             preference_columns = {row[1] for row in connection.execute("PRAGMA table_info(playback_preferences)")}
             if "favorite" not in preference_columns:
                 connection.execute("ALTER TABLE playback_preferences ADD COLUMN favorite INTEGER")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_library_fingerprint ON library_tracks(audio_fingerprint)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_library_relative_path ON library_tracks(relative_path)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_library_file_size ON library_tracks(file_size)"
             )
 
     @contextmanager

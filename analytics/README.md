@@ -84,6 +84,8 @@ cd analytics
 
 ## Importとデータ保持
 
+Library曲は従来fieldに加え、`relativePath`と`fileSize`をoptionalで受け付けます。両方が保存されている場合、Track Featuresの元`trackID`が現在のLibraryに無くても、iOSの`TrackFeatureImportService`と同じ保守的な順序（正規化path + file size + duration 0.5秒以内、またはfile size + duration + title + artist + optional album）で一意候補だけを救済します。元`trackID`の完全一致を常に優先し、identity不足や複数候補は未紐付けのままにします。既存のLibrary JSONは変更なしでImportできます。
+
 Import画面ではドラッグ&ドロップまたはファイル選択ができます。20 MBまでのJSONをroot fieldから自動判別し、項目単位で検証して新規・更新・重複・エラー件数を返します。
 
 | ファイル | 判別契約 | 保存内容 |
