@@ -1065,6 +1065,42 @@ class AnalyticsAPITests(unittest.TestCase):
             json={"playbackPreference": 11, "favorite": False},
         ).status_code, 422)
 
+    def test_clear_imported_data_keeps_schema_archives_and_allows_reimport(self):
+        self.upload(library_document([library_track()]), "MyMusic-Library.json")
+        self.upload(document([event()]), "MyMusic-Playback-Events.json")
+        self.upload(preferences_document([
+            {"trackId": "track-1", "playbackPreference": 2, "favorite": True},
+        ]), "MyMusic-Playback-Preferences.json")
+        self.upload(feature_document("track-1"), "MyMusic-Track-Features.json")
+        archived_before = sorted(path.name for path in self.settings.imports_dir.iterdir())
+
+        response = self.client.delete("/api/imports")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["cleared"], {
+            "playbackEvents": 1, "playbackPreferences": 1, "sourceRecords": 1,
+            "libraryTracks": 1, "importRuns": 4,
+        })
+        for table in (
+            "playback_events", "playback_preferences", "source_records", "library_tracks",
+            "import_runs",
+        ):
+            self.assertEqual(self._table_rows(table), [], table)
+        self.assertEqual(
+            sorted(path.name for path in self.settings.imports_dir.iterdir()), archived_before
+        )
+
+        reimported = self.upload(
+            library_document([library_track()]), "MyMusic-Library.json"
+        ).json()
+        self.assertEqual((reimported["id"], reimported["newCount"]), (1, 1))
+
+    def test_import_page_requires_confirmation_before_clear_request(self):
+        html = self.client.get("/").text
+        javascript = self.client.get("/static/app.js").text
+        self.assertIn('id="clear-imported-data"', html)
+        self.assertIn("if(!confirm(", javascript)
+        self.assertIn("method:'DELETE'", javascript)
+
     def _table_rows(self, table):
         connection = sqlite3.connect(self.settings.database_path)
         try:
@@ -1074,6 +1110,54 @@ class AnalyticsAPITests(unittest.TestCase):
 
 
 class DatabaseMigrationTests(unittest.TestCase):
+    def test_existing_library_gains_feature_matching_columns_before_indexes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "analytics.sqlite3"
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute(
+                    """CREATE TABLE library_tracks (
+                        track_id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT NOT NULL,
+                        album TEXT, genre TEXT, year INTEGER, duration REAL NOT NULL,
+                        format TEXT, favorite INTEGER, source_play_count INTEGER,
+                        source_last_played_at TEXT, audio_fingerprint TEXT,
+                        is_present INTEGER NOT NULL DEFAULT 1, imported_at TEXT NOT NULL,
+                        import_id INTEGER NOT NULL, raw_json TEXT NOT NULL
+                    )"""
+                )
+                connection.execute(
+                    """INSERT INTO library_tracks(
+                        track_id, title, artist, duration, imported_at, import_id, raw_json
+                    ) VALUES ('existing', 'Existing Track', 'Artist', 120, '2026-09-01', 1, '{}')"""
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            database = Database(path)
+            database.initialize()
+            database.initialize()
+
+            connection = sqlite3.connect(path)
+            try:
+                columns = {row[1] for row in connection.execute(
+                    "PRAGMA table_info(library_tracks)"
+                )}
+                indexes = {row[1] for row in connection.execute(
+                    "PRAGMA index_list(library_tracks)"
+                )}
+                existing = connection.execute(
+                    "SELECT track_id, title FROM library_tracks WHERE track_id='existing'"
+                ).fetchone()
+            finally:
+                connection.close()
+
+            self.assertTrue({"relative_path", "file_size"}.issubset(columns))
+            self.assertTrue({
+                "idx_library_relative_path", "idx_library_file_size"
+            }.issubset(indexes))
+            self.assertEqual(existing, ("existing", "Existing Track"))
+
     def test_existing_v0_import_history_gains_new_columns(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "analytics.sqlite3"

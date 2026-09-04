@@ -10,8 +10,9 @@
 
 ## 検証
 
-- `analytics`のunittest全38件成功。
+- `analytics`のunittest全39件成功。
 - 完全一致優先、path救済、metadata fallback、曖昧拒否、identity不足拒否、Library後Importでの再解決を追加テストで確認した。
+- 旧Library schemaへ照合用列を追加してからINDEXを作成するmigrationを2回実行し、冪等性と既存行の保持を確認した。
 - `git diff --check`成功（既存ファイルのCRLF警告のみ）。
 
 ## 制約

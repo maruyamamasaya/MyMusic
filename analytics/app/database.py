@@ -68,8 +68,6 @@ CREATE TABLE IF NOT EXISTS library_tracks (
 );
 CREATE INDEX IF NOT EXISTS idx_library_artist ON library_tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_library_album ON library_tracks(album);
-CREATE INDEX IF NOT EXISTS idx_library_relative_path ON library_tracks(relative_path);
-CREATE INDEX IF NOT EXISTS idx_library_file_size ON library_tracks(file_size);
 
 CREATE TABLE IF NOT EXISTS playback_preferences (
     track_id TEXT PRIMARY KEY,

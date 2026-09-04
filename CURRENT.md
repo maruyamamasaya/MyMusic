@@ -31,6 +31,7 @@ updated: 2026-09-03
 - Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を4列で同時表示する。
 - Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
+- AnalyticsのImport画面から、確認ダイアログを経てSQLite内の全取込データとImport履歴を一括クリアできる。schemaと保存済み原本JSONは保持し、直後から再Importできる。
 - AnalyticsのTrack FeaturesはTrack ID完全一致を優先し、Library入力にoptionalの`relativePath`／`fileSize`がある場合だけ、本体と同じpath・file size・duration（0.5秒許容）・metadata条件で一意候補を救済する。identity不足・曖昧候補は未紐付けを維持し、Library／Featuresの再Import時に再解決する。
 - iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
 - macOSは`analytics/start.sh`、Windowsは`analytics/start.ps1`から`127.0.0.1:8766`で起動する。データ契約とセットアップは`analytics/README.md`を正とする。

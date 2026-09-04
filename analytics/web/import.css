@@ -1,0 +1,48 @@
+.import-history-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.import-history-header h2 {
+  margin-bottom: 4px;
+}
+
+.import-history-header .subtitle {
+  font-size: 12px;
+}
+
+.danger-button {
+  background: #ff526e14;
+  border: 1px solid #ff526e80;
+  border-radius: 9px;
+  color: #ff8a9d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 9px 13px;
+  white-space: nowrap;
+}
+
+.danger-button:hover {
+  background: #ff526e25;
+  border-color: var(--accent);
+}
+
+.danger-button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+@media (max-width: 600px) {
+  .import-history-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .danger-button {
+    align-self: flex-start;
+  }
+}

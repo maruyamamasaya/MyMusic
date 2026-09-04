@@ -1097,6 +1097,28 @@ class AnalyticsQueries:
                     error_details errorDetails FROM import_runs ORDER BY id DESC LIMIT 100""")
             return [dict(row) for row in rows]
 
+    def clear_imported_data(self) -> dict[str, int]:
+        tables = (
+            "playback_events", "playback_preferences", "source_records", "library_tracks",
+            "import_runs",
+        )
+        with self.database.connect() as connection:
+            counts = {
+                table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table in tables
+            }
+            for table in tables[:-1]:
+                connection.execute(f"DELETE FROM {table}")
+            connection.execute("DELETE FROM import_runs")
+            connection.execute("DELETE FROM sqlite_sequence WHERE name='import_runs'")
+        return {
+            "playbackEvents": counts["playback_events"],
+            "playbackPreferences": counts["playback_preferences"],
+            "sourceRecords": counts["source_records"],
+            "libraryTracks": counts["library_tracks"],
+            "importRuns": counts["import_runs"],
+        }
+
     def update_preference(
         self, track_id: str, playback_preference: int, favorite: bool
     ) -> dict[str, Any]:

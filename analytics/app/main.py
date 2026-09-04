@@ -146,6 +146,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def imports():
         return {"imports": queries.imports()}
 
+    @app.delete("/api/imports")
+    def clear_imported_data():
+        return {"cleared": queries.clear_imported_data()}
+
     @app.get("/api/preferences/export")
     def export_preferences() -> JSONResponse:
         return JSONResponse(

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyMusic Analytics</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/import.css">
   <link rel="stylesheet" href="/static/preferences.css">
   <link rel="stylesheet" href="/static/tracks.css?v=20260904">
   <style>.source-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.source-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer}.source-tabs button.active{background:#2a3140;color:#fff;border-color:#4a5568}</style>
@@ -86,7 +87,7 @@
       <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">MyMusicのLibrary、再生、解析、プレイリスト、設定JSONを自動判別して保存します。</p></div></header>
       <label id="drop-zone" class="drop-zone"><input id="file-input" type="file" accept="application/json,.json"><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックしてファイルを選択</span><small>MyMusic JSON 8形式・最大20 MB</small></label>
       <div id="import-result"></div>
-      <article class="panel table-wrap"><h2>Import履歴</h2><table data-sortable><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table><div id="imports-more"></div></article>
+      <article class="panel table-wrap"><div class="import-history-header"><div><h2>Import履歴</h2><p class="subtitle">原本JSONを残したまま、Analyticsの取込データをクリアできます。</p></div><button id="clear-imported-data" class="danger-button" type="button">取込データをクリア</button></div><table data-sortable><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table><div id="imports-more"></div></article>
     </section>
   </main>
   <script src="/static/app.js" defer></script>

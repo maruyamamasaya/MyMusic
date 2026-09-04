@@ -88,6 +88,8 @@ Library曲は従来fieldに加え、`relativePath`と`fileSize`をoptionalで受
 
 Import画面ではドラッグ&ドロップまたはファイル選択ができます。20 MBまでのJSONをroot fieldから自動判別し、項目単位で検証して新規・更新・重複・エラー件数を返します。
 
+Import履歴の「取込データをクリア」は、確認後にSQLite内の再生イベント、Library、Preference、Data Source、Import履歴を1 transactionで削除します。DB schemaと`imports/`内の原本JSONは保持するため、必要なら同じJSONを再Importできます。
+
 | ファイル | 判別契約 | 保存内容 |
 | --- | --- | --- |
 | `MyMusic-Playback-Events.json` | `schemaVersion: 1` + `events` | 追記型のRaw再生イベント。`eventId`で重複排除 |
