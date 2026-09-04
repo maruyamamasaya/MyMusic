@@ -92,7 +92,7 @@ PlaybackControlsView / playable Views
 
 `PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。再生セッション中の総再生時間、開始日時、開始文脈はPlayerStore内の軽量な一時状態として保持し、曲変更・停止・自然終了時に実聴秒数、完走率、skip／完走を単一の`PlaybackEvent`へ確定します。同じセッションの終了通知は一度だけ確定し、lifecycle境界は途中時間をflushするだけです。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
 
-`HomeView` はホーム代表表示に必要な候補、選択済みTrack、artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。`ArtworkService`は原Dataに加えてdecode済み`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。
+`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
 
 通常再生開始前にPlayerStoreはStable Track IDで`TrackPlaybackAdjustmentStore`を遅延loadし、有効な`customStartPosition`を開始時刻へ反映する。`AudioPlayerService`から0.5秒間隔で届く再生時刻eventを利用し、7秒間隔とpause／曲変更／backgroundで前回位置を保存する。有効な`customEndPosition`到達時は音声を停止して既存の曲終了・repeat・次曲経路へ合流する。Highlight区間には曲別の開始／終了位置を適用しない。
 

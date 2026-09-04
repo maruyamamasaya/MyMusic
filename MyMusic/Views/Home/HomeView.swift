@@ -23,6 +23,7 @@ struct HomeView: View {
     @State private var regularPlaylists: [Playlist] = []
     @State private var workPlaylists: [Playlist] = []
     @State private var playlistTracks: [Playlist.ID: [Track]] = [:]
+    @State private var playlistArtworkIdentifiers: [Playlist.ID: String] = [:]
 
     var isActive = true
 
@@ -42,8 +43,7 @@ struct HomeView: View {
                         }
                         HomeCarouselSection(
                             category: category,
-                            artworkIdentifiers: artworkIdentifiers,
-                            representativeTrack: representativeTrack,
+                            artworkIdentifier: artworkIdentifier,
                             instantPlaybackIsAvailable: instantPlaybackIsAvailable,
                             onInstantPlay: playImmediately
                         )
@@ -53,6 +53,7 @@ struct HomeView: View {
                                     playlists: Array(homePlaylists.prefix(12)),
                                     showsMore: homePlaylists.count > 12,
                                     tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
+                                    artworkForPlaylist: { playlistArtworkIdentifiers[$0.id] },
                                     canPlayTracks: { $0.contains(where: playbackHistoryStore.isEligibleForRegularShuffle) },
                                     onPlay: playPlaylist
                                 )
@@ -72,8 +73,9 @@ struct HomeView: View {
                                     showsMore: HomeWorkTileLayout.showsContinuationTile(
                                         for: homeWorkPlaylists.count
                                     ),
-                                    artworkIdentifiers: artworkIdentifiers,
+                                    artworkIdentifier: artworkIdentifier,
                                     tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
+                                    artworkForPlaylist: { playlistArtworkIdentifiers[$0.id] },
                                     canPlayTracks: { !playbackHistoryStore.workPlaybackTracks(from: $0).isEmpty },
                                     onPlayPlaylist: playPlaylist
                                 )
@@ -150,8 +152,8 @@ struct HomeView: View {
         )
     }
 
-    private func artworkIdentifiers(for destination: HomeDestination) -> [String] {
-        destinationPresentations[destination]?.artworkIdentifiers ?? []
+    private func artworkIdentifier(for destination: HomeDestination) -> String? {
+        destinationPresentations[destination]?.artworkIdentifier
     }
 
     private func instantPlaybackIsAvailable(_ destination: HomeDestination) -> Bool {
@@ -280,35 +282,56 @@ struct HomeView: View {
                     excluding: previous?.id
                 )
             }
+            let artworkCandidates = sourceTracks.compactMap(\.artworkIdentifier)
+            let previousArtworkIdentifier = destinationPresentations[destination]?.artworkIdentifier
+            let selectedArtworkIdentifier = representative?.artworkIdentifier
+                ?? previousArtworkIdentifier.flatMap { artworkCandidates.contains($0) ? $0 : nil }
+                ?? artworkCandidates.randomElement()
             refreshed[destination] = HomeDestinationPresentation(
                 representativeTrack: representative,
-                artworkIdentifiers: representative?.artworkIdentifier.map { [$0] }
-                    ?? Array(Set(sourceTracks.compactMap(\.artworkIdentifier))),
+                artworkIdentifier: selectedArtworkIdentifier,
                 instantPlaybackIsAvailable: !sourceTracks.isEmpty
             )
         }
-        destinationPresentations = refreshed
+        if destinationPresentations != refreshed {
+            destinationPresentations = refreshed
+        }
     }
 
     private func refreshPlaylistPresentations() {
         let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
         var resolvedTracks: [Playlist.ID: [Track]] = [:]
+        var resolvedArtworkIdentifiers: [Playlist.ID: String] = [:]
         for playlist in playlistStore.playlists {
-            resolvedTracks[playlist.id] = playlist.trackIDs
+            let tracks = playlist.trackIDs
                 .compactMap { tracksByID[$0] }
                 .filter(playlist.kind.accepts)
+            resolvedTracks[playlist.id] = tracks
+            var artworkIdentifiers = tracks.compactMap(\.artworkIdentifier)
+            if let artworkIdentifier = playlist.artworkIdentifier {
+                artworkIdentifiers.append(artworkIdentifier)
+            }
+            let previousArtworkIdentifier = playlistArtworkIdentifiers[playlist.id]
+            resolvedArtworkIdentifiers[playlist.id] = previousArtworkIdentifier.flatMap {
+                artworkIdentifiers.contains($0) ? $0 : nil
+            } ?? artworkIdentifiers.randomElement()
         }
-        playlistTracks = resolvedTracks
-        regularPlaylists = playlistStore.playlists(of: .regular).filter {
+        let refreshedRegularPlaylists = playlistStore.playlists(of: .regular).filter {
             !(resolvedTracks[$0.id] ?? []).isEmpty
         }
-        workPlaylists = playlistStore.playlists(of: .work)
+        let refreshedWorkPlaylists = playlistStore.playlists(of: .work)
+        if playlistTracks != resolvedTracks { playlistTracks = resolvedTracks }
+        if playlistArtworkIdentifiers != resolvedArtworkIdentifiers {
+            playlistArtworkIdentifiers = resolvedArtworkIdentifiers
+        }
+        if regularPlaylists != refreshedRegularPlaylists { regularPlaylists = refreshedRegularPlaylists }
+        if workPlaylists != refreshedWorkPlaylists { workPlaylists = refreshedWorkPlaylists }
     }
 }
 
-private struct HomeDestinationPresentation {
+private struct HomeDestinationPresentation: Equatable {
     let representativeTrack: Track?
-    let artworkIdentifiers: [String]
+    let artworkIdentifier: String?
     let instantPlaybackIsAvailable: Bool
 }
 
@@ -468,8 +491,9 @@ private struct HomeWorkSection: View {
     let category: HomeCategory
     let playlists: [Playlist]
     let showsMore: Bool
-    let artworkIdentifiers: (HomeDestination) -> [String]
+    let artworkIdentifier: (HomeDestination) -> String?
     let tracksForPlaylist: (Playlist) -> [Track]
+    let artworkForPlaylist: (Playlist) -> String?
     let canPlayTracks: ([Track]) -> Bool
     let onPlayPlaylist: (Playlist) -> Void
 
@@ -499,7 +523,7 @@ private struct HomeWorkSection: View {
                                 HomeItemTile(
                                     item: item,
                                     categoryID: category.id,
-                                    artworkIdentifiers: artworkIdentifiers(item.destination),
+                                    artworkIdentifier: artworkIdentifier(item.destination),
                                     width: width
                                 )
                             }
@@ -523,10 +547,7 @@ private struct HomeWorkSection: View {
                                 Button { onPlayPlaylist(playlist) } label: {
                                     HomePlaylistTile(
                                         playlist: playlist,
-                                        artworkIdentifiers: playlistArtworkIdentifiers(
-                                            playlist: playlist,
-                                            tracks: tracks
-                                        ),
+                                        artworkIdentifier: artworkForPlaylist(playlist),
                                         trackCount: tracks.count,
                                         width: width
                                     )
@@ -558,14 +579,6 @@ private struct HomeWorkSection: View {
         }
     }
 
-    private func playlistArtworkIdentifiers(playlist: Playlist, tracks: [Track]) -> [String] {
-        var identifiers = tracks.compactMap(\.artworkIdentifier)
-        if let artworkIdentifier = playlist.artworkIdentifier {
-            identifiers.insert(artworkIdentifier, at: 0)
-        }
-        return Array(Set(identifiers))
-    }
-
     private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
         let visibleTileCount: CGFloat
         switch availableWidth {
@@ -583,6 +596,7 @@ private struct HomePlaylistSection: View {
     let playlists: [Playlist]
     let showsMore: Bool
     let tracksForPlaylist: (Playlist) -> [Track]
+    let artworkForPlaylist: (Playlist) -> String?
     let canPlayTracks: ([Track]) -> Bool
     let onPlay: (Playlist) -> Void
 
@@ -619,7 +633,7 @@ private struct HomePlaylistSection: View {
                                 Button { onPlay(playlist) } label: {
                                     HomePlaylistTile(
                                         playlist: playlist,
-                                        artworkIdentifiers: playlistArtworkIdentifiers(playlist: playlist, tracks: tracks),
+                                        artworkIdentifier: artworkForPlaylist(playlist),
                                         trackCount: tracks.count,
                                         width: tileWidth
                                     )
@@ -647,14 +661,6 @@ private struct HomePlaylistSection: View {
         }
     }
 
-    private func playlistArtworkIdentifiers(playlist: Playlist, tracks: [Track]) -> [String] {
-        var identifiers = tracks.compactMap(\.artworkIdentifier)
-        if let artworkIdentifier = playlist.artworkIdentifier {
-            identifiers.insert(artworkIdentifier, at: 0)
-        }
-        return Array(Set(identifiers))
-    }
-
     private func tileWidth(for availableWidth: CGFloat) -> CGFloat {
         let visibleTileCount: CGFloat
         switch availableWidth {
@@ -670,15 +676,14 @@ private struct HomePlaylistSection: View {
 
 private struct HomePlaylistTile: View {
     let playlist: Playlist
-    let artworkIdentifiers: [String]
+    let artworkIdentifier: String?
     let trackCount: Int
     let width: CGFloat
-    @State private var selectedArtworkIdentifier: String?
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if let selectedArtworkIdentifier {
-                HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
+            if let artworkIdentifier {
+                HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
             } else {
                 LinearGradient(
                     colors: [Color(red: 0.25, green: 0.29, blue: 0.40), Color(red: 0.08, green: 0.09, blue: 0.14)],
@@ -720,9 +725,6 @@ private struct HomePlaylistTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
         .accessibilityHint("プレイリストをランダム再生")
-        .task(id: artworkIdentifiers) {
-            selectedArtworkIdentifier = artworkIdentifiers.randomElement()
-        }
     }
 }
 
@@ -783,8 +785,7 @@ private struct HomePlaylistEmptyTile: View {
 
 private struct HomeCarouselSection: View {
     let category: HomeCategory
-    let artworkIdentifiers: (HomeDestination) -> [String]
-    let representativeTrack: (HomeDestination) -> Track?
+    let artworkIdentifier: (HomeDestination) -> String?
     let instantPlaybackIsAvailable: (HomeDestination) -> Bool
     let onInstantPlay: (HomeDestination) -> Void
 
@@ -833,8 +834,7 @@ private struct HomeCarouselSection: View {
                 HomeItemTile(
                     item: item,
                     categoryID: category.id,
-                    artworkIdentifiers: artworkIdentifiers(item.destination),
-                    representativeTrack: representativeTrack(item.destination),
+                    artworkIdentifier: artworkIdentifier(item.destination),
                     width: width
                 )
             }
@@ -846,8 +846,7 @@ private struct HomeCarouselSection: View {
                 HomeItemTile(
                     item: item,
                     categoryID: category.id,
-                    artworkIdentifiers: artworkIdentifiers(item.destination),
-                    representativeTrack: representativeTrack(item.destination),
+                    artworkIdentifier: artworkIdentifier(item.destination),
                     width: width
                 )
             }
@@ -890,10 +889,8 @@ private struct HomeItemTile: View {
 
     let item: HomeCategoryItem
     let categoryID: HomeCategory.ID
-    let artworkIdentifiers: [String]
-    var representativeTrack: Track? = nil
+    let artworkIdentifier: String?
     let width: CGFloat
-    @State private var selectedArtworkIdentifier: String?
     @State private var localBackgroundImage: UIImage?
 
     var body: some View {
@@ -936,11 +933,7 @@ private struct HomeItemTile: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
-        .task(id: artworkIdentifiers) {
-            guard representativeTrack == nil else { return }
-            selectRandomArtwork()
-        }
-        .task(id: item.localBackgroundImageName) { loadLocalBackgroundImage() }
+        .task { loadLocalBackgroundImage() }
     }
 
     @ViewBuilder
@@ -954,14 +947,14 @@ private struct HomeItemTile: View {
                     .clipped()
             }
             .overlay(localImageReadabilityMask)
-        } else if categoryID == .myMusic, let displayedArtworkIdentifier {
-            HomeTileArtworkBackground(artworkIdentifier: displayedArtworkIdentifier)
+        } else if categoryID == .myMusic, let artworkIdentifier {
+            HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
                 .overlay(playlistStyleReadabilityMask)
         } else if categoryID == .myMusic {
             playlistStyleFallbackBackground
                 .overlay(playlistStyleReadabilityMask)
-        } else if let selectedArtworkIdentifier {
-            HomeTileArtworkBackground(artworkIdentifier: selectedArtworkIdentifier)
+        } else if let artworkIdentifier {
+            HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
                 .opacity(colorScheme == .dark ? 0.68 : 0.58)
                 .overlay(readabilityMask)
         } else if categoryID == .library || categoryID == .activity {
@@ -1109,23 +1102,11 @@ private struct HomeItemTile: View {
     private var contentColor: Color {
         if localBackgroundImage != nil { return .white }
         if categoryID == .myMusic { return .white }
-        if displayedArtworkIdentifier != nil {
+        if artworkIdentifier != nil {
             return colorScheme == .dark ? .white : .black
         }
         if categoryID == .library || categoryID == .activity { return .white }
         return .primary
-    }
-
-    private func selectRandomArtwork() {
-        guard !artworkIdentifiers.isEmpty else {
-            selectedArtworkIdentifier = nil
-            return
-        }
-        selectedArtworkIdentifier = artworkIdentifiers.randomElement()
-    }
-
-    private var displayedArtworkIdentifier: String? {
-        representativeTrack?.artworkIdentifier ?? selectedArtworkIdentifier
     }
 
     private func loadLocalBackgroundImage() {
@@ -1139,7 +1120,9 @@ private struct HomeItemTile: View {
 
 private struct HomeTileArtworkBackground: View {
     let artworkIdentifier: String
-    @State private var image: UIImage?
+    @State private var loadedArtwork: HomeLoadedArtwork?
+
+    private var image: UIImage? { loadedArtwork?.image }
 
     var body: some View {
         GeometryReader { proxy in
@@ -1156,8 +1139,15 @@ private struct HomeTileArtworkBackground: View {
             .clipped()
         }
         .task(id: artworkIdentifier) {
-            image = nil
-            image = await ArtworkService.shared.artworkImage(for: artworkIdentifier)
+            guard loadedArtwork?.identifier != artworkIdentifier else { return }
+            let loadedImage = await ArtworkService.shared.artworkImage(for: artworkIdentifier)
+            guard !Task.isCancelled else { return }
+            loadedArtwork = HomeLoadedArtwork(identifier: artworkIdentifier, image: loadedImage)
         }
     }
+}
+
+private struct HomeLoadedArtwork {
+    let identifier: String
+    let image: UIImage?
 }

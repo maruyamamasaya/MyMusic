@@ -8,7 +8,9 @@ enum AlbumArtworkDisplayMode {
 struct AlbumArtworkView: View {
     let artworkIdentifier: String?
     var displayMode: AlbumArtworkDisplayMode = .fill
-    @State private var image: UIImage?
+    @State private var loadedArtwork: LoadedArtworkImage?
+
+    private var image: UIImage? { loadedArtwork?.image }
 
     var body: some View {
         GeometryReader { proxy in
@@ -49,9 +51,19 @@ struct AlbumArtworkView: View {
         .accessibilityLabel(image == nil ? "アートワークなし" : "アルバムアートワーク")
         .aspectRatio(1, contentMode: .fit)
         .task(id: artworkIdentifier) {
-            image = nil
-            guard let artworkIdentifier else { return }
-            image = await ArtworkService.shared.artworkImage(for: artworkIdentifier)
+            guard loadedArtwork?.identifier != artworkIdentifier else { return }
+            let loadedImage: UIImage? = if let artworkIdentifier {
+                await ArtworkService.shared.artworkImage(for: artworkIdentifier)
+            } else {
+                nil
+            }
+            guard !Task.isCancelled else { return }
+            loadedArtwork = LoadedArtworkImage(identifier: artworkIdentifier, image: loadedImage)
         }
     }
+}
+
+private struct LoadedArtworkImage {
+    let identifier: String?
+    let image: UIImage?
 }

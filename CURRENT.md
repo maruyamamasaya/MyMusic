@@ -33,6 +33,7 @@ updated: 2026-09-03
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
 - AnalyticsのImport画面から、確認ダイアログを経てSQLite内の全取込データとImport履歴を一括クリアできる。schemaと保存済み原本JSONは保持し、直後から再Importできる。
 - AnalyticsのTrack FeaturesはTrack ID完全一致を優先し、Library入力にoptionalの`relativePath`／`fileSize`がある場合だけ、本体と同じpath・file size・duration（0.5秒許容）・metadata条件で一意候補を救済する。identity不足・曖昧候補は未紐付けを維持し、Library／Featuresの再Import時に再解決する。
+- Analyticsの音楽特徴量tableはImport済み全Track Featuresの実在keyから列を構成する。既知keyは音響・Semantic・音量の順と単位付き表示を使い、曲ごとの欠損は0ではなくデータなし、未知keyは末尾の列として保持する。
 - iOSアプリ、iOS内部DB、`analyzer/`とは実装・永続化とも分離する。Analyticsからの書き戻しは、現在Libraryと照合できる有効なUUIDのPreferenceだけをschema v2 JSONへ手動Exportし、アプリの明示Importを経る。受理したeventは`eventId`で重複排除し、Raw JSONとImport原本をローカルに保持する。
 - macOSは`analytics/start.sh`、Windowsは`analytics/start.ps1`から`127.0.0.1:8766`で起動する。データ契約とセットアップは`analytics/README.md`を正とする。
 
@@ -77,6 +78,7 @@ updated: 2026-09-03
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
 - **ホーム代表アートワーク**: 「マイミュージック」の各タイルは通常再生対象の代表Trackをホーム表示時と約1分ごとに選び、単なる再描画では変更しない。即時ランダム再生では表示中の代表Trackを先頭へ置き、後続は既存の選曲順を重複なしで維持する。
   - 代表候補・代表Track・artwork identifier・即時再生可否はDestination単位のsnapshotとして保持し、Library／履歴／お気に入りの変更時と約1分ごとだけ再構築する。SwiftUIの再描画やスクロールでは全Libraryを再走査しない。ArtworkはDataとdecode済みUIImageをactor内でcacheし、decodeをMainActor外で行う。
+  - Home Tileへは配列ではなくsnapshotで確定した単一artwork identifierを渡し、配列を`task(id:)`で監視しない。画像はImageIOで最大1024pxへdownsample／decodeし、破損または未読込identifierは失敗cacheへ記録して同一セッション中の再decodeを防ぐ。
 - **気分ステーションの年代指定**: 気分・音の特徴に加え、通常再生対象かつ特徴量のある曲の年metadataから10年単位の候補を構成し、任意の年代へ絞って一時queueを生成できる。年がないlibraryでは年代質問を省略し、「すべての年代」では従来の選曲を維持する。
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
 - **音楽特徴量 Beta 1 / 3**: Mac Analyzer の schema v1 JSON を安全に照合・永続化し、audio 情報面で分類 badge と詳細を表示。

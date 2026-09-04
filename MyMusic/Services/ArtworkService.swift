@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UIKit
 
 nonisolated protocol ArtworkServicing: Sendable {
@@ -12,6 +13,7 @@ actor ArtworkService: ArtworkServicing {
     private let directoryURL: URL
     private let memoryCache: NSCache<NSString, NSData>
     private let imageCache: NSCache<NSString, UIImage>
+    private var failedImageIdentifiers: Set<String> = []
 
     init(directoryURL: URL? = nil) {
         let memoryCache = NSCache<NSString, NSData>()
@@ -36,6 +38,8 @@ actor ArtworkService: ArtworkServicing {
             try data.write(to: fileURL, options: .atomic)
         }
         memoryCache.setObject(data as NSData, forKey: identifier as NSString)
+        failedImageIdentifiers.remove(identifier)
+        imageCache.removeObject(forKey: identifier as NSString)
         return identifier
     }
 
@@ -52,15 +56,39 @@ actor ArtworkService: ArtworkServicing {
     }
 
     func artworkImage(for identifier: String) async -> UIImage? {
+        guard !failedImageIdentifiers.contains(identifier) else { return nil }
         if let cached = imageCache.object(forKey: identifier as NSString) {
             return cached
         }
-        guard let data = await artworkData(for: identifier) else { return nil }
-        let image = await Task.detached(priority: .utility) {
-            UIImage(data: data)?.preparingForDisplay()
+        guard let data = await artworkData(for: identifier) else {
+            failedImageIdentifiers.insert(identifier)
+            return nil
+        }
+        let decodedImage = await Task.detached(priority: .utility) {
+            Self.decodeImage(data)
         }.value
-        guard let image else { return nil }
+        guard let image = decodedImage else {
+            failedImageIdentifiers.insert(identifier)
+            memoryCache.removeObject(forKey: identifier as NSString)
+            return nil
+        }
         imageCache.setObject(image, forKey: identifier as NSString)
         return image
+    }
+
+    private nonisolated static func decodeImage(_ data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(
+            data as CFData,
+            [kCGImageSourceShouldCache: false] as CFDictionary
+        ), CGImageSourceGetCount(source) > 0,
+           CGImageSourceCopyPropertiesAtIndex(source, 0, nil) != nil else { return nil }
+        let options: CFDictionary = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1_024
+        ] as CFDictionary
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+        return UIImage(cgImage: image)
     }
 }

@@ -105,6 +105,8 @@ Libraryと再生傾向はTrack ID単位でupsertし、同じ内容は重複、�
 
 Track FeaturesはTrack ID単位でmergeし、部分JSONにない既存特徴量を保持します。同じTrack IDを再Importした場合だけ更新するため、Root別・差分JSONのImportで別Root分は消えません。
 
+Data Sourcesの音楽特徴量tableは、Import済みTrack Features全件の`features`に実在するkeyを列として表示します。既知keyはTEMPO／ENERGY、Semantic特徴、音量特徴の順に並べ、BPM・LUFS・dBTP・dBの単位を付けます。曲ごとに存在しないkeyは`—`とし、未知keyも既知列の後ろへ表示するため、Analyzerが追加した値を捨てません。
+
 Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。

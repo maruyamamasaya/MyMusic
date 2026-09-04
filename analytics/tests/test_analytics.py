@@ -694,6 +694,42 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/sources/equalizer").json()["count"], 2)
         self.assertEqual(self.client.get("/api/sources/genre_presets").json()["count"], 1)
 
+    def test_track_feature_columns_follow_imported_keys_in_known_order(self):
+        payload = feature_document("dsp")
+        payload["tracks"][0]["features"] = {
+            "futureScore": 7.5, "normalizationGainDB": 1.4, "tempo": 143.6,
+            "energy": 0.72, "integratedLUFS": -14.3, "truePeakDBTP": -1.2,
+            "bright": 0.61,
+        }
+        semantic = feature_document("semantic", relative_path="Music/semantic.m4a")
+        semantic["tracks"][0]["analysisVersion"] = 2
+        semantic["tracks"][0]["features"] = {"vocal": 0.88, "dark": 0.27}
+        payload["tracks"].extend(semantic["tracks"])
+        self.upload(payload, "MyMusic-Track-Features.json")
+
+        result = self.client.get("/api/sources/track_features").json()
+        self.assertEqual(result["featureKeys"], [
+            "tempo", "energy", "vocal", "bright", "dark", "integratedLUFS",
+            "truePeakDBTP", "normalizationGainDB", "futureScore",
+        ])
+        rows = {item["data"]["trackID"]: item for item in result["items"]}
+        self.assertNotIn("tempo", rows["semantic"]["data"]["features"])
+        self.assertEqual(rows["dsp"]["data"]["features"]["tempo"], 143.6)
+
+        sorted_items = self.client.get(
+            "/api/sources/track_features?sort=futureScore&order=desc"
+        ).json()["items"]
+        self.assertEqual(sorted_items[0]["data"]["trackID"], "dsp")
+
+    def test_track_feature_table_formats_known_values_and_missing_values(self):
+        javascript = self.client.get("/static/app.js").text
+        self.assertIn("`${Number(v).toFixed(1)} BPM`", javascript)
+        self.assertIn("`${Number(v).toFixed(1)} LUFS`", javascript)
+        self.assertIn("`${Number(v).toFixed(1)} dBTP`", javascript)
+        self.assertIn("`${Number(v)>=0?'+':''}${Number(v).toFixed(1)} dB`", javascript)
+        self.assertIn("if(featureValue==null)return '—'", javascript)
+        self.assertIn("...(d.featureKeys||[]).map(trackFeatureColumn)", javascript)
+
     def test_partial_track_feature_import_merges_without_deleting_other_tracks(self):
         def payload(track_id, energy):
             return {"version": 1, "exportedAt": "2026-09-02T12:00:00Z", "tracks": [{

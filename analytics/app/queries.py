@@ -56,6 +56,12 @@ SOURCE_COMMON_SORT_COLUMNS = {
     "title": "sr.title COLLATE NOCASE", "subtitle": "sr.subtitle COLLATE NOCASE",
     "linked": "linked", "importedAt": "sr.imported_at",
 }
+TRACK_FEATURE_KEY_ORDER = (
+    "tempo", "energy",
+    "vocal", "instrumental", "piano", "electronic", "ambient", "drumAndBass",
+    "aggressive", "calm", "bright", "dark",
+    "integratedLUFS", "truePeakDBTP", "normalizationGainDB",
+)
 SOURCE_KIND_SORT_COLUMNS = {
     "track_features": {
         "tempo": "CAST(json_extract(sr.raw_json, '$.features.tempo') AS REAL)",
@@ -1198,20 +1204,42 @@ class AnalyticsQueries:
                 ).fetchall()
             return {"count": count, "items": [dict(row) for row in rows],
                     "page": page, "pageSize": page_size, "derivedFrom": "library"}
+        feature_keys: list[str] = []
+        if data_kind == "track_features":
+            with self.database.connect() as connection:
+                discovered_keys = {
+                    row[0] for row in connection.execute(
+                        """SELECT DISTINCT feature.key
+                           FROM source_records sr, json_each(sr.raw_json, '$.features') feature
+                           WHERE sr.data_kind='track_features'"""
+                    )
+                    if isinstance(row[0], str)
+                }
+            feature_keys = [key for key in TRACK_FEATURE_KEY_ORDER if key in discovered_keys]
+            feature_keys.extend(sorted(discovered_keys - set(TRACK_FEATURE_KEY_ORDER), key=str.casefold))
         sort_columns = SOURCE_COMMON_SORT_COLUMNS | SOURCE_KIND_SORT_COLUMNS[data_kind]
+        dynamic_feature_sort = data_kind == "track_features" and sort in feature_keys
+        if dynamic_feature_sort:
+            sort_columns = sort_columns | {sort: "dynamic_track_feature"}
         if sort not in sort_columns:
             raise ValueError("unsupported source sort")
         if order not in {"asc", "desc"}:
             raise ValueError("order must be asc or desc")
         sort_column = sort_columns[sort]
+        if dynamic_feature_sort:
+            sort_column = "CAST(json_extract(sr.raw_json, '$.features.' || json_quote(?)) AS REAL)"
         with self.database.connect() as connection:
+            query_parameters: list[Any] = [data_kind]
+            if dynamic_feature_sort:
+                query_parameters.append(sort)
+            query_parameters.extend((page_size, (page - 1) * page_size))
             rows = connection.execute(
                 f"""SELECT sr.item_key, sr.track_id, sr.title, sr.subtitle, sr.imported_at,
                     sr.raw_json, CASE WHEN lt.track_id IS NULL THEN 0 ELSE 1 END linked
                     FROM source_records sr
                     LEFT JOIN library_tracks lt ON lt.track_id=sr.track_id AND lt.is_present=1
                     WHERE sr.data_kind=? ORDER BY {sort_column} {order.upper()}, sr.item_key
-                    LIMIT ? OFFSET ?""", (data_kind, page_size, (page - 1) * page_size)
+                    LIMIT ? OFFSET ?""", query_parameters
             ).fetchall()
             total = connection.execute(
                 "SELECT COUNT(*) FROM source_records WHERE data_kind=?", (data_kind,)
@@ -1235,5 +1263,8 @@ class AnalyticsQueries:
                 item["trackCount"] = len(tracks)
                 item["linkedTrackCount"] = sum(1 for track in tracks if track.get("trackID") in library_ids)
             items.append(item)
-        return {"dataKind": data_kind, "count": total, "pageCount": len(items),
-                "linkedCount": linked_total, "items": items}
+        result = {"dataKind": data_kind, "count": total, "pageCount": len(items),
+                  "linkedCount": linked_total, "items": items}
+        if data_kind == "track_features":
+            result["featureKeys"] = feature_keys
+        return result
