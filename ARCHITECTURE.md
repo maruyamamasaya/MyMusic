@@ -187,6 +187,8 @@ server / database migration はありません。端末内の file と UserDefau
 
 TrackのAlbum Artistはoptionalで、旧cacheのdecodeを維持する。metadata revisionがない旧Trackは次回の手動再スキャン時に一度だけAVFoundation metadataを再抽出する。アルバムは`albumTitle + (albumArtistName ?? artistName)`で導出し、Artist一覧自体はTrack Artistから導出する。
 
+Trackの`firstSeenAt`はMyMusicが論理Trackを初めてscanで確認した絶対時刻である。1 scanで共通の基準時刻を新規Trackへ設定し、再scanやmetadata更新では維持する。旧cache／旧identity Recordは推測せず`nil`（不明）のままとする。Track IDを移動照合で復元した場合はidentity registryから同値も復元し、失敗・cancelしたscanのregistry変更はrollbackする。詳細は[Track firstSeenAt](Documentation/TrackFirstSeenAt.md)を参照する。
+
 曲別調整は解析JSONへ書き戻さず、端末ユーザー固有データとしてStable Track ID単位のsharded JSONへ保存する。全曲DictionaryをUserDefaultsへ載せず、アクセスした曲だけを遅延loadし、頻繁な位置更新でも他曲の設定ファイルを書き直さない。field欠落は`TrackPlaybackAdjustment`の安全な初期値でdecodeする。
 
 ## Build, tests, delivery

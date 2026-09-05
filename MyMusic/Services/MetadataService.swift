@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 protocol MetadataServicing: Sendable {
-    func metadata(for fileURL: URL, relativeTo libraryFolder: URL) async throws -> Track
+    func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track
 }
 
 final class MetadataService: MetadataServicing, Sendable {
@@ -19,7 +19,7 @@ final class MetadataService: MetadataServicing, Sendable {
         self.identityService = identityService
     }
 
-    func metadata(for fileURL: URL, relativeTo libraryFolder: URL) async throws -> Track {
+    func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track {
         let asset = AVURLAsset(url: fileURL)
         let duration = try await asset.load(.duration).seconds
         let commonMetadata = try await asset.load(.commonMetadata)
@@ -52,16 +52,17 @@ final class MetadataService: MetadataServicing, Sendable {
         let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         let fileSize = resourceValues?.fileSize.map(Int64.init)
         let modificationDate = resourceValues?.contentModificationDate
-        let trackID = await identityService.resolveID(
+        let identity = await identityService.resolveIdentity(
             for: fileURL,
             relativePath: libraryFolder.standardizedFileURL.path.precomposedStringWithCanonicalMapping + "/" + relativePath,
             fileSize: fileSize,
             modificationDate: modificationDate,
-            duration: duration.isFinite ? duration : 0
+            duration: duration.isFinite ? duration : 0,
+            discoveredAt: discoveredAt
         )
-        let artworkIdentifier = await cacheArtwork(in: metadata, trackID: trackID)
+        let artworkIdentifier = await cacheArtwork(in: metadata, trackID: identity.id)
         return Track(
-            id: trackID,
+            id: identity.id,
             title: title ?? fileURL.deletingPathExtension().lastPathComponent,
             artistName: artist ?? pathFallback.artist ?? "Unknown Artist",
             albumArtistName: albumArtist,
@@ -71,6 +72,7 @@ final class MetadataService: MetadataServicing, Sendable {
             relativePath: relativePath,
             fileSize: fileSize,
             modificationDate: modificationDate,
+            firstSeenAt: identity.firstSeenAt,
             artworkIdentifier: artworkIdentifier,
             trackNumber: await integerValue(for: .iTunesMetadataTrackNumber, in: metadata),
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),

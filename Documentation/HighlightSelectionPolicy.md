@@ -15,7 +15,7 @@
 
 ## 選曲の優先順位
 
-キューは先頭から1曲ずつ決める。同じ曲は候補から取り除くため、1キュー内で重複しない。
+起動・mode切替・reshuffleでは全Libraryの完全な曲順を作らない。全候補を1回評価してmode band別bucketへ入れ、bounded min-heapで上位candidate poolを作り、そのpoolだけを先頭からGreedyに多様化する。同じ曲はpoolから取り除くため、1キュー内で重複しない。
 
 1. アガる／穏やか／発掘では、モード適合度を0.05幅のbandへ分け、最も高いbandだけを比較する。多様性で低いbandが追い越すことはない。シャッフルはmode bandを使わない。
 2. 直前または短い選択済み履歴と同じArtist／Albumの候補へ反復penaltyを付け、penaltyが小さい候補を優先する。これは除外ではなく、他候補を置いた後には再び選択できる。
@@ -25,10 +25,32 @@
 
 モード切替時は現在曲までを維持し、その曲列を直近文脈として後続キューだけを同じ手順で再構築する。
 
+## Bounded選曲と非同期化
+
+- candidate poolは最大150曲、生成queueは最大40曲とする。候補が少ない場合は存在する全候補を返し、Artist／Albumがすべて同じでも絶対除外せず安全にqueueを作る。
+- アガる／穏やか／発掘は高いmode bandからpool容量を満たす。高bandだけで150曲に達した場合は低bandをpoolへ入れないため、Preferenceや多様性でbandが逆転しない。
+- シャッフルは全候補を同一bandとし、特徴量similarityを適用しない。Artist／Album多様性は他modeと同じくbounded pool内で維持する。
+- Artist、Album、Album Artistのtrim／case／diacritic／width正規化は全体評価時にTrackごと1回だけ行い、Greedy比較で再計算しない。
+- `HighlightPlayerStore`はMainActor上でimmutableなTrack・履歴・特徴量・base weight snapshotを取得し、ranking、pool作成、Greedy選曲を`Task.detached`で実行する。結果はgenerationとmodeが一致する場合だけMainActorへ反映し、連続mode切替やLibrary更新の古いTaskはcancelして結果を破棄する。
+- mode切替は現在曲までを保持し、その直近TrackをArtist／Album／特徴量の文脈として後続最大40曲だけを再構築する。再生中の曲は切り替えない。
+- queue末尾へ達した場合は新しいbounded queueを作る。直前曲が新queue先頭になった場合は、候補が複数あれば先頭2曲を交換して即時反復を避ける。
+
+旧実装は全n曲について残候補のfilter／reduce／removeを繰り返すためO(n²)相当だった。現実装はn曲の評価とband bucket化がO(n)、bounded min-heapがO(n log k)、多様化がO(k × q)（上限上はO(k²)）である。nはeligible Track数、k=150、q=40で、nが増えてもGreedy比較対象は増えない。
+
+Debug buildでは選曲完了時に次の集約ログを1回出す。Track単位ログは出さない。
+
+```text
+[HighlightSelection] mode=upbeat tracks=4820 pool=150 queue=40 comparisons=5180 elapsed=23ms
+```
+
+性能fixtureでは5,000曲・10,000曲の完了、pool／queue上限、重複なし、Greedy比較上限を検証する。パラメータを変える場合はコード、correctness／performanceテスト、この文書を同時に更新する。
+
 ## パラメータ
 
 | 名前 | 値 | 理由と強さ |
 | --- | ---: | --- |
+| `candidatePoolLimit` | 150曲 | 全体評価後にGreedy多様化へ渡すbounded上限。 |
+| `generatedQueueLimit` | 40曲 | 起動・mode切替時に実際に生成するqueue上限。 |
 | `modeBandWidth` | 0.05 | 近い適合度だけを同群とみなし、異なるbandは他の全補正より強くする。 |
 | `artistImmediatePenalty` | 4 | 直前と同一Artistを強く後退させる。 |
 | `artistRecentWindow` | 3曲 | 短い連続感だけを見る。 |

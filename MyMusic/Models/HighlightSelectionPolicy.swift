@@ -19,7 +19,9 @@ enum HighlightSelectionMode: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// Highlight-only adjustments layered on top of regular shuffle's Preference and Overplay weight.
-enum HighlightSelectionPolicy {
+nonisolated enum HighlightSelectionPolicy {
+    static let candidatePoolLimit = 150
+    static let generatedQueueLimit = 40
     static let modeBandWidth = 0.05
     static let randomJitterRange = 0.01
     static let artistImmediatePenalty = 4
@@ -36,9 +38,25 @@ enum HighlightSelectionPolicy {
         \.energy, \.calm, \.aggressive, \.bright, \.dark, \.ambient, \.piano, \.drumAndBass
     ]
 
-    struct Ranking: Equatable {
+    struct Ranking: Equatable, Sendable {
         let modeBand: Int
         let adjustedWeight: Double
+    }
+
+    struct SelectionResult: Sendable {
+        let tracks: [Track]
+        let rankingCount: Int
+        let candidatePoolCount: Int
+        let greedyComparisonCount: Int
+    }
+
+    private struct EvaluatedTrack: Sendable {
+        let track: Track
+        let ranking: Ranking
+        let randomValue: Double
+        let normalizedArtist: String
+        let normalizedAlbum: String?
+        let normalizedAlbumArtist: String
     }
 
     static func recentHighlightRanks(
@@ -156,31 +174,97 @@ enum HighlightSelectionPolicy {
         features: [Track.ID: TrackFeatureValues],
         now: Date = Date(),
         randomValues: [Track.ID: Double] = [:],
-        precedingTracks: [Track] = []
+        precedingTracks: [Track] = [],
+        candidatePoolLimit: Int = candidatePoolLimit,
+        queueLimit: Int = generatedQueueLimit
     ) -> [Track] {
+        selection(
+            tracks, mode: mode, baseWeights: baseWeights, histories: histories,
+            features: features, now: now, randomValues: randomValues,
+            precedingTracks: precedingTracks, candidatePoolLimit: candidatePoolLimit,
+            queueLimit: queueLimit
+        ).tracks
+    }
+
+    static func selection(
+        _ tracks: [Track],
+        mode: HighlightSelectionMode,
+        baseWeights: [Track.ID: Double],
+        histories: [Track.ID: PlaybackHistory],
+        features: [Track.ID: TrackFeatureValues],
+        now: Date = Date(),
+        randomValues: [Track.ID: Double] = [:],
+        precedingTracks: [Track] = [],
+        candidatePoolLimit: Int = candidatePoolLimit,
+        queueLimit: Int = generatedQueueLimit
+    ) -> SelectionResult {
+        guard candidatePoolLimit > 0, queueLimit > 0, !tracks.isEmpty else {
+            return SelectionResult(
+                tracks: [], rankingCount: tracks.count,
+                candidatePoolCount: 0, greedyComparisonCount: 0
+            )
+        }
         let rankings = rankings(
             tracks: tracks, mode: mode, baseWeights: baseWeights,
             histories: histories, features: features, now: now
         )
-        let resolvedRandomValues = Dictionary(tracks.map { track in
-            (track.id, min(max(randomValues[track.id] ?? Double.random(in: 0...1), 0), 1))
-        }, uniquingKeysWith: { first, _ in first })
-        var remaining = tracks
+        let evaluated = tracks.compactMap { track -> EvaluatedTrack? in
+            guard let ranking = rankings[track.id] else { return nil }
+            return EvaluatedTrack(
+                track: track,
+                ranking: ranking,
+                randomValue: min(max(randomValues[track.id] ?? Double.random(in: 0...1), 0), 1),
+                normalizedArtist: normalized(track.artistName),
+                normalizedAlbum: track.albumTitle.map(normalized).flatMap { $0.isEmpty ? nil : $0 },
+                normalizedAlbumArtist: normalized(track.albumArtistName ?? track.artistName)
+            )
+        }
+        var buckets: [Int: [EvaluatedTrack]] = [:]
+        for (index, item) in evaluated.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return SelectionResult(
+                    tracks: [], rankingCount: evaluated.count,
+                    candidatePoolCount: 0, greedyComparisonCount: 0
+                )
+            }
+            buckets[item.ranking.modeBand, default: []].append(item)
+        }
+
+        var pool: [EvaluatedTrack] = []
+        pool.reserveCapacity(min(candidatePoolLimit, evaluated.count))
+        for band in buckets.keys.sorted(by: >) where pool.count < candidatePoolLimit {
+            let capacity = candidatePoolLimit - pool.count
+            pool.append(contentsOf: boundedTopCandidates(buckets[band] ?? [], limit: capacity))
+        }
+
+        let preceding = precedingTracks.map(evaluatedContext)
+        var remaining = pool
         var selected: [Track] = []
-        while let highestBand = remaining.compactMap({ rankings[$0.id]?.modeBand }).max() {
-            let candidates = remaining.filter { rankings[$0.id]?.modeBand == highestBand }
-            let recentTracks = Array((precedingTracks + selected).suffix(albumRecentWindow))
+        var selectedEvaluated: [EvaluatedTrack] = []
+        var comparisonCount = 0
+        while selected.count < queueLimit,
+              let highestBand = remaining.map(\.ranking.modeBand).max() {
+            if Task.isCancelled { break }
+            let candidates = remaining.filter { $0.ranking.modeBand == highestBand }
+            let recentTracks = Array((preceding + selectedEvaluated).suffix(albumRecentWindow))
             guard let first = candidates.first else { break }
             let next = candidates.dropFirst().reduce(first) { best, candidate in
-                isPreferred(
-                    candidate, over: best, mode: mode, rankings: rankings, features: features,
-                    recentTracks: recentTracks, randomValues: resolvedRandomValues
+                comparisonCount += 1
+                return isPreferred(
+                    candidate, over: best, mode: mode, features: features,
+                    recentTracks: recentTracks
                 ) ? candidate : best
             }
-            selected.append(next)
-            remaining.removeAll { $0.id == next.id }
+            selected.append(next.track)
+            selectedEvaluated.append(next)
+            remaining.removeAll { $0.track.id == next.track.id }
         }
-        return selected
+        return SelectionResult(
+            tracks: selected,
+            rankingCount: evaluated.count,
+            candidatePoolCount: pool.count,
+            greedyComparisonCount: comparisonCount
+        )
     }
 
     static func diversityPenalty(for candidate: Track, recentTracks: [Track]) -> Int {
@@ -208,31 +292,121 @@ enum HighlightSelectionPolicy {
     }
 
     private static func isPreferred(
-        _ candidate: Track,
-        over other: Track,
+        _ candidate: EvaluatedTrack,
+        over other: EvaluatedTrack,
         mode: HighlightSelectionMode,
-        rankings: [Track.ID: Ranking],
         features: [Track.ID: TrackFeatureValues],
-        recentTracks: [Track],
-        randomValues: [Track.ID: Double]
+        recentTracks: [EvaluatedTrack]
     ) -> Bool {
         let candidateDiversity = diversityPenalty(for: candidate, recentTracks: recentTracks)
         let otherDiversity = diversityPenalty(for: other, recentTracks: recentTracks)
         if candidateDiversity != otherDiversity { return candidateDiversity < otherDiversity }
 
-        let previousFeature = recentTracks.last.flatMap { features[$0.id] }
-        func score(_ track: Track) -> Double {
-            let base = rankings[track.id]?.adjustedWeight ?? 1
+        let previousFeature = recentTracks.last.flatMap { features[$0.track.id] }
+        func score(_ item: EvaluatedTrack) -> Double {
+            let base = item.ranking.adjustedWeight
             let similarity = mode == .shuffle ? 1 : featureSimilarityMultiplier(
-                distance: featureDistance(previousFeature, features[track.id])
+                distance: featureDistance(previousFeature, features[item.track.id])
             )
-            let random = randomValues[track.id] ?? 0.5
+            let random = item.randomValue
             return base * similarity * (1 - randomJitterRange / 2 + randomJitterRange * random)
         }
         let candidateScore = score(candidate)
         let otherScore = score(other)
         if candidateScore != otherScore { return candidateScore > otherScore }
-        return candidate.id.uuidString < other.id.uuidString
+        return candidate.track.id.uuidString < other.track.id.uuidString
+    }
+
+    private static func boundedTopCandidates(
+        _ candidates: [EvaluatedTrack], limit: Int
+    ) -> [EvaluatedTrack] {
+        guard limit > 0 else { return [] }
+        var heap: [EvaluatedTrack] = []
+        heap.reserveCapacity(min(limit, candidates.count))
+        for (candidateIndex, candidate) in candidates.enumerated() {
+            if candidateIndex.isMultiple(of: 64), Task.isCancelled { break }
+            if heap.count < limit {
+                heap.append(candidate)
+                siftUpMinHeap(&heap, from: heap.count - 1)
+            } else if let weakest = heap.first, poolOrder(candidate, weakest) {
+                heap[0] = candidate
+                siftDownMinHeap(&heap, from: 0)
+            }
+        }
+        return heap
+    }
+
+    private static func poolPriority(_ item: EvaluatedTrack) -> Double {
+        item.ranking.adjustedWeight
+            * (1 - randomJitterRange / 2 + randomJitterRange * item.randomValue)
+    }
+
+    private static func poolOrder(_ lhs: EvaluatedTrack, _ rhs: EvaluatedTrack) -> Bool {
+        let lhsPriority = poolPriority(lhs)
+        let rhsPriority = poolPriority(rhs)
+        if lhsPriority != rhsPriority { return lhsPriority > rhsPriority }
+        return lhs.track.id.uuidString < rhs.track.id.uuidString
+    }
+
+    private static func isWeaker(_ lhs: EvaluatedTrack, than rhs: EvaluatedTrack) -> Bool {
+        poolOrder(rhs, lhs)
+    }
+
+    private static func siftUpMinHeap(_ heap: inout [EvaluatedTrack], from start: Int) {
+        var child = start
+        while child > 0 {
+            let parent = (child - 1) / 2
+            guard isWeaker(heap[child], than: heap[parent]) else { return }
+            heap.swapAt(child, parent)
+            child = parent
+        }
+    }
+
+    private static func siftDownMinHeap(_ heap: inout [EvaluatedTrack], from start: Int) {
+        var parent = start
+        while true {
+            let left = parent * 2 + 1
+            guard left < heap.count else { return }
+            let right = left + 1
+            let child = right < heap.count && isWeaker(heap[right], than: heap[left]) ? right : left
+            guard isWeaker(heap[child], than: heap[parent]) else { return }
+            heap.swapAt(parent, child)
+            parent = child
+        }
+    }
+
+    private static func evaluatedContext(_ track: Track) -> EvaluatedTrack {
+        EvaluatedTrack(
+            track: track, ranking: Ranking(modeBand: 0, adjustedWeight: 1), randomValue: 0.5,
+            normalizedArtist: normalized(track.artistName),
+            normalizedAlbum: track.albumTitle.map(normalized).flatMap { $0.isEmpty ? nil : $0 },
+            normalizedAlbumArtist: normalized(track.albumArtistName ?? track.artistName)
+        )
+    }
+
+    private static func diversityPenalty(
+        for candidate: EvaluatedTrack, recentTracks: [EvaluatedTrack]
+    ) -> Int {
+        var penalty = 0
+        if candidate.normalizedArtist == recentTracks.last?.normalizedArtist {
+            penalty += artistImmediatePenalty
+        } else if recentTracks.suffix(artistRecentWindow).contains(where: {
+            $0.normalizedArtist == candidate.normalizedArtist
+        }) {
+            penalty += artistRecentPenalty
+        }
+        if sameAlbum(candidate, recentTracks.last) { penalty += albumImmediatePenalty }
+        if recentTracks.suffix(albumRecentWindow).count(where: { sameAlbum(candidate, $0) })
+            >= albumRecentCountThreshold {
+            penalty += albumRecentPenalty
+        }
+        return penalty
+    }
+
+    private static func sameAlbum(_ lhs: EvaluatedTrack, _ rhs: EvaluatedTrack?) -> Bool {
+        guard let rhs, let album = lhs.normalizedAlbum else { return false }
+        return album == rhs.normalizedAlbum
+            && lhs.normalizedAlbumArtist == rhs.normalizedAlbumArtist
     }
 
     private static func featureSimilarityMultiplier(distance: Double?) -> Double {

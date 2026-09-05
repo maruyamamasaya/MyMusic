@@ -14,6 +14,9 @@ struct Track: Identifiable, Codable, Hashable, Sendable {
     var relativePath: String? = nil
     var fileSize: Int64? = nil
     var modificationDate: Date? = nil
+    /// The absolute time MyMusic first observed this logical track during a library scan.
+    /// `nil` is a supported legacy state meaning that the time is unknown.
+    var firstSeenAt: Date? = nil
     var artworkIdentifier: String? = nil
     var trackNumber: Int? = nil
     var discNumber: Int? = nil

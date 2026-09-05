@@ -209,8 +209,8 @@ class ImportService:
             """INSERT INTO library_tracks (
                 track_id, title, artist, album, genre, year, duration, format, favorite,
                 source_play_count, source_last_played_at, audio_fingerprint, relative_path, file_size,
-                is_present, imported_at, import_id, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                first_seen_at, is_present, imported_at, import_id, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             ON CONFLICT(track_id) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, album=excluded.album,
                 genre=excluded.genre, year=excluded.year, duration=excluded.duration,
@@ -219,6 +219,7 @@ class ImportService:
                 source_last_played_at=excluded.source_last_played_at,
                 audio_fingerprint=excluded.audio_fingerprint,
                 relative_path=excluded.relative_path, file_size=excluded.file_size,
+                first_seen_at=excluded.first_seen_at,
                 is_present=1,
                 imported_at=excluded.imported_at, import_id=excluded.import_id,
                 raw_json=excluded.raw_json""",
@@ -226,6 +227,7 @@ class ImportService:
              track.duration, track.format, None if track.favorite is None else int(track.favorite),
              track.play_count, _utc(track.last_played_at), track.audio_fingerprint,
              TrackFeatureResolver.normalized_relative_path(track.relative_path), track.file_size,
+             _utc(track.first_seen_at),
              imported_at, import_id, raw_json),
         )
         return "new" if existing is None else "updated"

@@ -35,6 +35,9 @@ final class HighlightPlayerStore {
     private var startPlaybackTask: Task<Void, Never>?
     private var analysisTask: Task<Void, Never>?
     private var autoAdvanceTask: Task<Void, Never>?
+    private var selectionTask: Task<Void, Never>?
+    private var selectionGeneration = 0
+    private var isSelectionPending = false
     private var playbackGeneration = UUID()
     private var hasPreparedRandomSelection = false
     private var preventsAutomaticAdvance = false
@@ -59,14 +62,20 @@ final class HighlightPlayerStore {
         sourceTracks = playableTracks
         let eligibleTracks = eligibleTracks(from: playableTracks)
         let currentIDs = Set(eligibleTracks.map(\.id))
-        guard queue.isEmpty || previousIDs != Set(playableTracks.map(\.id))
-                || Set(queue.map(\.id)) != currentIDs else { return }
+        guard queue.isEmpty || previousIDs != Set(playableTracks.map(\.id)) else { return }
 
         if let currentTrack, currentIDs.contains(currentTrack.id) {
             queue = queue.filter { currentIDs.contains($0.id) }
-            let queuedIDs = Set(queue.map(\.id))
-            queue.append(contentsOf: selectedTracks(from: eligibleTracks.filter { !queuedIDs.contains($0.id) }))
             currentIndex = queue.firstIndex(where: { $0.id == currentTrack.id })
+            let retained = currentIndex.map { Array(queue.prefix(through: $0)) } ?? []
+            requestSelection(
+                from: eligibleTracks, excluding: Set(retained.map(\.id)), precedingTracks: retained
+            ) { [weak self] tracks in
+                guard let self else { return }
+                queue = retained + tracks
+                currentIndex = queue.firstIndex(where: { $0.id == currentTrack.id })
+                prefetchHighlights()
+            }
         } else {
             rebuildQueueAndPlay(reason: .highlightAutomatic)
         }
@@ -79,6 +88,7 @@ final class HighlightPlayerStore {
             return
         }
         guard currentTrack == nil else { return }
+        guard !isSelectionPending else { return }
         rebuildQueueAndPlay(reason: .highlightAutomatic)
     }
 
@@ -89,14 +99,20 @@ final class HighlightPlayerStore {
         startPlaybackTask?.cancel()
         analysisTask?.cancel()
         autoAdvanceTask?.cancel()
+        selectionTask?.cancel()
+        selectionGeneration &+= 1
+        isSelectionPending = false
         playbackGeneration = UUID()
         isAnalyzingCurrentTrack = false
         isHighlightPlaybackActive = false
         preventsAutomaticAdvance = false
         currentCandidate = nil
-        reshuffleQueue(avoidingFirstTrackID: previousTrackID)
-        currentIndex = queue.isEmpty ? nil : 0
-        hasPreparedRandomSelection = !queue.isEmpty
+        requestSelection(from: sourceTracks) { [weak self] tracks in
+            guard let self else { return }
+            queue = avoidingFirst(previousTrackID, in: tracks)
+            currentIndex = queue.isEmpty ? nil : 0
+            hasPreparedRandomSelection = !queue.isEmpty
+        }
     }
 
     func reshuffle() {
@@ -107,18 +123,24 @@ final class HighlightPlayerStore {
         guard mode != selectionMode else { return }
         selectionMode = mode
         guard let currentIndex, queue.indices.contains(currentIndex) else {
-            queue = selectedTracks(from: sourceTracks)
-            self.currentIndex = queue.isEmpty ? nil : 0
+            requestSelection(from: sourceTracks) { [weak self] tracks in
+                guard let self else { return }
+                queue = tracks
+                currentIndex = queue.isEmpty ? nil : 0
+            }
             return
         }
         let retained = Array(queue.prefix(through: currentIndex))
         let retainedIDs = Set(retained.map(\.id))
-        queue = retained + selectedTracks(
-            from: sourceTracks.filter { !retainedIDs.contains($0.id) },
-            precedingTracks: retained
-        )
-        analysisTask?.cancel()
-        prefetchHighlights()
+        requestSelection(
+            from: sourceTracks, excluding: retainedIDs, precedingTracks: retained
+        ) { [weak self] tracks in
+            guard let self else { return }
+            queue = retained + tracks
+            self.currentIndex = retained.indices.last
+            analysisTask?.cancel()
+            prefetchHighlights()
+        }
     }
 
     func move(to trackID: Track.ID) {
@@ -132,8 +154,8 @@ final class HighlightPlayerStore {
         if let currentIndex, queue.indices.contains(currentIndex + 1) {
             self.currentIndex = currentIndex + 1
         } else {
-            reshuffleQueue(avoidingFirstTrackID: currentTrack?.id)
-            currentIndex = queue.isEmpty ? nil : 0
+            rebuildQueueAndPlay(reason: userInitiated ? .highlightUserInitiated : .highlightAutomatic)
+            return
         }
         playCurrentTrack(reason: userInitiated ? .highlightUserInitiated : .highlightAutomatic)
     }
@@ -179,6 +201,9 @@ final class HighlightPlayerStore {
         startPlaybackTask?.cancel()
         analysisTask?.cancel()
         autoAdvanceTask?.cancel()
+        selectionTask?.cancel()
+        selectionGeneration &+= 1
+        isSelectionPending = false
         playbackGeneration = UUID()
         isAnalyzingCurrentTrack = false
         isHighlightPlaybackActive = false
@@ -217,22 +242,19 @@ final class HighlightPlayerStore {
         autoAdvanceTask?.cancel()
         startPlaybackTask?.cancel()
         analysisTask?.cancel()
-        queue = selectedTracks(from: sourceTracks)
-        currentIndex = queue.isEmpty ? nil : 0
         currentCandidate = nil
         hasPreparedRandomSelection = false
         preventsAutomaticAdvance = false
-        guard !queue.isEmpty else {
-            isHighlightPlaybackActive = false
-            return
-        }
-        playCurrentTrack(reason: reason)
-    }
-
-    private func reshuffleQueue(avoidingFirstTrackID trackID: Track.ID?) {
-        queue = selectedTracks(from: sourceTracks)
-        if let trackID, queue.count > 1, queue.first?.id == trackID {
-            queue.swapAt(0, 1)
+        let previousTrackID = currentTrack?.id
+        requestSelection(from: sourceTracks) { [weak self] tracks in
+            guard let self else { return }
+            queue = avoidingFirst(previousTrackID, in: tracks)
+            currentIndex = queue.isEmpty ? nil : 0
+            guard !queue.isEmpty else {
+                isHighlightPlaybackActive = false
+                return
+            }
+            playCurrentTrack(reason: reason)
         }
     }
 
@@ -333,21 +355,59 @@ final class HighlightPlayerStore {
         }
     }
 
-    private func selectedTracks(
+    private func requestSelection(
         from tracks: [Track],
         now: Date = Date(),
-        precedingTracks: [Track] = []
-    ) -> [Track] {
-        let eligible = tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
+        excluding excludedIDs: Set<Track.ID> = [],
+        precedingTracks: [Track] = [],
+        apply: @escaping @MainActor ([Track]) -> Void
+    ) {
+        selectionTask?.cancel()
+        selectionGeneration &+= 1
+        isSelectionPending = true
+        let generation = selectionGeneration
+        let mode = selectionMode
+        let eligible = tracks.filter {
+            !excludedIDs.contains($0.id)
+                && playbackHistoryStore.isEligibleForRegularShuffle($0, now: now)
+        }
         let baseWeights = playbackHistoryStore.automaticSelectionWeights(for: eligible, now: now)
         let features = Dictionary(eligible.compactMap { track in
             trackFeatureStore.feature(for: track.id).map { (track.id, $0.values) }
         }, uniquingKeysWith: { first, _ in first })
-        return HighlightSelectionPolicy.orderedTracks(
-            eligible, mode: selectionMode, baseWeights: baseWeights,
-            histories: playbackHistoryStore.entries, features: features, now: now,
-            precedingTracks: precedingTracks
-        )
+        let histories = playbackHistoryStore.entries
+        selectionTask = Task { [weak self] in
+            let startedAt = ProcessInfo.processInfo.systemUptime
+            let result = await Task.detached(priority: .userInitiated) {
+                HighlightSelectionPolicy.selection(
+                    eligible, mode: mode, baseWeights: baseWeights,
+                    histories: histories, features: features, now: now,
+                    precedingTracks: precedingTracks
+                )
+            }.value
+            guard !Task.isCancelled, let self,
+                  generation == selectionGeneration, mode == selectionMode else { return }
+            isSelectionPending = false
+#if DEBUG
+            let elapsedMilliseconds = Int(
+                ((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000).rounded()
+            )
+            print(
+                "[HighlightSelection] mode=\(mode.rawValue) tracks=\(result.rankingCount) "
+                    + "pool=\(result.candidatePoolCount) queue=\(result.tracks.count) "
+                    + "comparisons=\(result.greedyComparisonCount) elapsed=\(elapsedMilliseconds)ms"
+            )
+#endif
+            apply(result.tracks)
+        }
+    }
+
+    private func avoidingFirst(_ trackID: Track.ID?, in tracks: [Track]) -> [Track] {
+        var tracks = tracks
+        if let trackID, tracks.count > 1, tracks.first?.id == trackID {
+            tracks.swapAt(0, 1)
+        }
+        return tracks
     }
 
 }

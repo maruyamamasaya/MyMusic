@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class PlaybackHistoryStore {
     private static let repeatPlayMinimumCount = 2
+    nonisolated static let recentlyAddedInterval: TimeInterval = 14 * 24 * 60 * 60
     private static let dailySummaryRetentionDays = 400
     private static let highlightNonSkipMinimumListeningTime: TimeInterval = 5
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
@@ -354,6 +355,17 @@ final class PlaybackHistoryStore {
         Array(preferenceOnlyWeightedShuffle(
             tracks.filter { playCount(for: $0.id) == 0 && isEligibleForRegularShuffle($0) }
         ).prefix(limit))
+    }
+
+    func recentlyAddedTracks(from tracks: [Track], now: Date = Date()) -> [Track] {
+        let cutoff = now.addingTimeInterval(-Self.recentlyAddedInterval)
+        let candidates = tracks.filter { track in
+            guard let firstSeenAt = track.firstSeenAt else { return false }
+            return firstSeenAt >= cutoff
+                && firstSeenAt <= now
+                && isEligibleForRegularShuffle(track)
+        }
+        return preferenceWeightedShuffle(candidates, now: now)
     }
 
     /// Offers seed tracks for a user-selected, genre-based random queue.

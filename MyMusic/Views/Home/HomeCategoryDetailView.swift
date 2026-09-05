@@ -86,6 +86,14 @@ struct HomeDestinationView: View {
                 systemImage: "sparkles",
                 tracks: playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
             )
+        case .recentlyAddedPlay:
+            GeneratedQueueView(
+                title: "最近追加した曲",
+                emptyTitle: "最近追加した曲はありません",
+                emptyDescription: "追加から2週間以内の曲がここに表示されます。",
+                systemImage: "clock.badge.plus",
+                tracks: playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
+            )
         case .selectiveRandomPlay:
             SelectiveRandomPlayView()
         case .repeatPlay:

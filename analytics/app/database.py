@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     audio_fingerprint TEXT,
     relative_path TEXT,
     file_size INTEGER,
+    first_seen_at TEXT,
     is_present INTEGER NOT NULL DEFAULT 1 CHECK (is_present IN (0, 1)),
     imported_at TEXT NOT NULL,
     import_id INTEGER NOT NULL,
@@ -127,6 +128,8 @@ class Database:
                 connection.execute("ALTER TABLE library_tracks ADD COLUMN relative_path TEXT")
             if "file_size" not in library_columns:
                 connection.execute("ALTER TABLE library_tracks ADD COLUMN file_size INTEGER")
+            if "first_seen_at" not in library_columns:
+                connection.execute("ALTER TABLE library_tracks ADD COLUMN first_seen_at TEXT")
             preference_columns = {row[1] for row in connection.execute("PRAGMA table_info(playback_preferences)")}
             if "favorite" not in preference_columns:
                 connection.execute("ALTER TABLE playback_preferences ADD COLUMN favorite INTEGER")

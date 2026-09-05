@@ -56,6 +56,10 @@ updated: 2026-09-05
 
 ### Beta
 
+- **Highlight bounded選曲**: 起動・アガる／穏やか／発掘／シャッフル切替・reshuffleで全LibraryをO(n²) Greedy整列せず、O(n log k)の全体評価＋最大150曲pool＋最大40曲queueへ変更した。多様性・mode band・Preference・Overplay・Recent Highlightを維持し、pureなrankingはMainActor外で実行する。generation照合で古い非同期結果を破棄し、Debugでは件数と時間を集約ログへ出す。
+
+- **Track firstSeenAt／最近追加した曲**: TrackへMyMusicが論理Trackを初めてscanで確認したnullable絶対時刻を追加した。新規Trackは1 scan共通時刻、旧保存データは推測せず不明、再scan・metadata更新・Identity移動照合では維持する。Library JSON／MarkdownとAnalytics nullable列へ連携し、Homeの「未発見再生」の右から追加後14日以内の通常曲をシャッフル再生できる。Highlight／Discoveryへの補正は行わない。
+
 - **Track Preference責務分離**: 曲Favoriteと`playbackPreference`の正本を`TrackPreferenceStore`／`Application Support/MyMusic/track-preferences.json`（schema v2）へ移した。初回は旧Playback Historyの値をatomic保存・read-back検証して移行し、以後UI、検索、選曲、分析、ExportはPreferenceを参照する。旧History field／SQLite列は後方互換migration用に残す。Preference Exportは`trackId`、`playbackPreference`、`favorite`を含むschema v2とする。
 - **Track Preference手動双方向連携**: アプリは同じschema v2 Preference JSONを厳格に全体検証し、現在LibraryにあるTrackだけをmerge保存してからStoreへ反映する。未知field、UUID不正、重複、範囲外、不正構造は全件拒否し、未収録Trackは既存値を変えずskipする。AnalyticsはImport済みPreferenceだけを編集し、現在Libraryと照合できる有効UUIDだけを同契約でExportする。
 

@@ -3,7 +3,8 @@ import XCTest
 
 final class AnalysisDataExportTests: XCTestCase {
     func testLibraryExportIncludesOnlyAvailableAudioFingerprints() throws {
-        let identified = makeTrack(title: "Identified")
+        var identified = makeTrack(title: "Identified")
+        identified.firstSeenAt = Date(timeIntervalSince1970: 1_800_000_000)
         let pending = makeTrack(title: "Pending")
         let fingerprint = String(repeating: "a", count: 64)
 
@@ -26,8 +27,17 @@ final class AnalysisDataExportTests: XCTestCase {
 
         XCTAssertEqual(byID[identified.id.uuidString]?["audioFingerprint"] as? String, fingerprint)
         XCTAssertEqual(byID[identified.id.uuidString]?["favorite"] as? Bool, true)
+        XCTAssertEqual(byID[identified.id.uuidString]?["firstSeenAt"] as? String, "2027-01-15T08:00:00Z")
         XCTAssertNil(byID[pending.id.uuidString]?["audioFingerprint"])
         XCTAssertNil(byID[pending.id.uuidString]?["favorite"])
+        XCTAssertNil(byID[pending.id.uuidString]?["firstSeenAt"])
+
+        let markdown = MusicDataExportService().libraryMarkdown(
+            tracks: [identified, pending], history: [:]
+        )
+        let text = try XCTUnwrap(String(data: markdown.data, encoding: .utf8))
+        XCTAssertTrue(text.contains("- FirstSeenAt: 2027-01-15T08:00:00Z"))
+        XCTAssertTrue(text.contains("- FirstSeenAt: \n"))
     }
 
     func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {

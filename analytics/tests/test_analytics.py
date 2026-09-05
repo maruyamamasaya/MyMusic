@@ -198,6 +198,45 @@ class AnalyticsAPITests(unittest.TestCase):
             connection.close()
         self.assertEqual(stored, ("Night Drive Remastered", 0, "Electronic", fingerprint))
 
+    def test_library_first_seen_at_import_null_reimport_and_cutoff_semantics(self):
+        known = "2026-09-01T03:00:00+09:00"
+        first = self.upload(library_document([
+            library_track("known", firstSeenAt=known),
+            library_track("unknown", firstSeenAt=None),
+        ]), "MyMusic-Library.json").json()
+        self.assertEqual(first["errorCount"], 0)
+        connection = sqlite3.connect(self.settings.database_path)
+        try:
+            rows = dict(connection.execute(
+                "SELECT track_id, first_seen_at FROM library_tracks"
+            ).fetchall())
+            recent = connection.execute(
+                "SELECT COUNT(*) FROM library_tracks WHERE first_seen_at IS NOT NULL AND first_seen_at >= ?",
+                ("2026-01-01T00:00:00Z",),
+            ).fetchone()[0]
+            old = connection.execute(
+                "SELECT COUNT(*) FROM library_tracks WHERE first_seen_at IS NOT NULL AND first_seen_at < ?",
+                ("2026-01-01T00:00:00Z",),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(rows, {"known": "2026-08-31T18:00:00Z", "unknown": None})
+        self.assertEqual((recent, old), (1, 0))
+
+        second = self.upload(library_document([
+            library_track("known", firstSeenAt=known),
+            library_track("unknown"),
+        ]), "MyMusic-Library.json").json()
+        self.assertEqual(second["errorCount"], 0)
+        connection = sqlite3.connect(self.settings.database_path)
+        try:
+            values = dict(connection.execute(
+                "SELECT track_id, first_seen_at FROM library_tracks"
+            ).fetchall())
+        finally:
+            connection.close()
+        self.assertEqual(values, {"known": "2026-08-31T18:00:00Z", "unknown": None})
+
     def test_library_rejects_invalid_audio_fingerprint(self):
         result = self.upload(
             library_document([library_track(audioFingerprint="not-a-sha256")]),
@@ -1222,7 +1261,7 @@ class DatabaseMigrationTests(unittest.TestCase):
             finally:
                 connection.close()
 
-            self.assertTrue({"relative_path", "file_size"}.issubset(columns))
+            self.assertTrue({"relative_path", "file_size", "first_seen_at"}.issubset(columns))
             self.assertTrue({
                 "idx_library_relative_path", "idx_library_file_size"
             }.issubset(indexes))
@@ -1268,6 +1307,7 @@ class DatabaseMigrationTests(unittest.TestCase):
             self.assertIn("audio_fingerprint", library_columns)
             self.assertIn("relative_path", library_columns)
             self.assertIn("file_size", library_columns)
+            self.assertIn("first_seen_at", library_columns)
             connection = sqlite3.connect(path)
             try:
                 preference_columns = {

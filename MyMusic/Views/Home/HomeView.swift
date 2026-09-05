@@ -167,6 +167,8 @@ struct HomeView: View {
             shuffledTracks = playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
         case .discoveryPlay:
             shuffledTracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
+        case .recentlyAddedPlay:
+            shuffledTracks = playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
         case .repeatPlay:
             shuffledTracks = playbackHistoryStore.repeatPlayTracks(from: libraryStore.tracks)
         case .favorites:
@@ -239,6 +241,8 @@ struct HomeView: View {
                 playbackHistoryStore.playCount(for: $0.id) == 0
                     && playbackHistoryStore.isEligibleForRegularShuffle($0)
             }
+        case .recentlyAddedPlay:
+            playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
         case .repeatPlay:
             libraryStore.tracks.filter {
                 playbackHistoryStore.playCount(for: $0.id) >= 2
@@ -876,7 +880,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .repeatPlay, .favorites:
+        case .quickPlay, .discoveryPlay, .recentlyAddedPlay, .repeatPlay, .favorites:
             true
         default:
             false

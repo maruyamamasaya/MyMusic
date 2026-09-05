@@ -77,12 +77,13 @@ class LibraryTrackV1(BaseModel):
     )
     relative_path: str | None = Field(default=None, alias="relativePath", min_length=1, max_length=4000)
     file_size: int | None = Field(default=None, alias="fileSize", ge=1)
+    first_seen_at: datetime | None = Field(default=None, alias="firstSeenAt")
 
-    @field_validator("last_played_at")
+    @field_validator("last_played_at", "first_seen_at")
     @classmethod
     def optional_datetime_has_timezone(cls, value: datetime | None) -> datetime | None:
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
-            raise ValueError("lastPlayedAt must include a timezone")
+            raise ValueError("date must include a timezone")
         return value
 
 

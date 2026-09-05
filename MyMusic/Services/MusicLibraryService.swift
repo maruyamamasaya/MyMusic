@@ -56,15 +56,18 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
     private let fileImportService: FileImportServicing
     private let metadataService: MetadataServicing
     private let identityService: TrackIdentityServicing
+    private let now: @Sendable () -> Date
 
     init(
         fileImportService: FileImportServicing = FileImportService(),
         metadataService: MetadataServicing = MetadataService(),
-        identityService: TrackIdentityServicing = TrackIdentityService.shared
+        identityService: TrackIdentityServicing = TrackIdentityService.shared,
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.fileImportService = fileImportService
         self.metadataService = metadataService
         self.identityService = identityService
+        self.now = now
     }
 
     func loadLibrary(from folderURL: URL, previousTracks: [Track] = []) async throws -> MusicLibrary {
@@ -74,17 +77,21 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
             throw FileImportServiceError.accessDenied
         }
         let files = try await fileImportService.audioFiles(in: folderURL)
+        let scanStartedAt = now()
         let filesByPath = files.map { fileURL in
             (fileURL, StableTrackIdentifier.relativePath(for: fileURL, relativeTo: folderURL))
         }
         let identityPrefix = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping
         await identityService.prepareForScan(relativePaths: Set(filesByPath.map { identityPrefix + "/" + $0.1 }))
         do {
-            let library = try await scanFiles(filesByPath, previousTracks: previousTracks, folderURL: folderURL, identityPrefix: identityPrefix)
+            let library = try await scanFiles(
+                filesByPath, previousTracks: previousTracks, folderURL: folderURL,
+                identityPrefix: identityPrefix, scanStartedAt: scanStartedAt
+            )
             await identityService.finishScan()
             return library
         } catch {
-            await identityService.finishScan()
+            await identityService.abortScan()
             throw error
         }
     }
@@ -93,11 +100,13 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
         _ filesByPath: [(URL, String)],
         previousTracks: [Track],
         folderURL: URL,
-        identityPrefix: String
+        identityPrefix: String,
+        scanStartedAt: Date
     ) async throws -> MusicLibrary {
         let previousByPath = Dictionary(uniqueKeysWithValues: previousTracks.compactMap { track in
             track.relativePath.map { ($0, track) }
         })
+        let previousByID = Dictionary(uniqueKeysWithValues: previousTracks.map { ($0.id, $0) })
         var tracks: [Track] = []
         tracks.reserveCapacity(filesByPath.count)
 
@@ -115,7 +124,12 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
                 tracks.append(existing)
                 continue
             }
-            if let track = try? await metadataService.metadata(for: file, relativeTo: folderURL) {
+            if var track = try? await metadataService.metadata(
+                for: file, relativeTo: folderURL, discoveredAt: scanStartedAt
+            ) {
+                if let previous = previousByID[track.id] {
+                    track.firstSeenAt = previous.firstSeenAt
+                }
                 tracks.append(track)
             }
         }

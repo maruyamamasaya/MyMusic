@@ -5,6 +5,7 @@ import Foundation
 protocol TrackIdentityServicing: Sendable {
     func prepareForScan(relativePaths: Set<String>) async
     func finishScan() async
+    func abortScan() async
     func resolveID(
         for fileURL: URL,
         relativePath: String,
@@ -12,6 +13,14 @@ protocol TrackIdentityServicing: Sendable {
         modificationDate: Date?,
         duration: TimeInterval
     ) async -> Track.ID
+    func resolveIdentity(
+        for fileURL: URL,
+        relativePath: String,
+        fileSize: Int64?,
+        modificationDate: Date?,
+        duration: TimeInterval,
+        discoveredAt: Date
+    ) async -> TrackIdentityResolution
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async
     func fingerprints(for trackIDs: [Track.ID]) async -> [Track.ID: String]
     func buildFingerprint(
@@ -19,6 +28,32 @@ protocol TrackIdentityServicing: Sendable {
         in folderURL: URL,
         allowDownloading: Bool
     ) async -> TrackFingerprintBuildResult
+}
+
+nonisolated struct TrackIdentityResolution: Sendable, Equatable {
+    let id: Track.ID
+    let firstSeenAt: Date?
+}
+
+extension TrackIdentityServicing {
+    func abortScan() async { await finishScan() }
+
+    func resolveIdentity(
+        for fileURL: URL,
+        relativePath: String,
+        fileSize: Int64?,
+        modificationDate: Date?,
+        duration: TimeInterval,
+        discoveredAt: Date
+    ) async -> TrackIdentityResolution {
+        TrackIdentityResolution(
+            id: await resolveID(
+                for: fileURL, relativePath: relativePath, fileSize: fileSize,
+                modificationDate: modificationDate, duration: duration
+            ),
+            firstSeenAt: nil
+        )
+    }
 }
 
 enum TrackFingerprintBuildResult: Sendable, Equatable {
@@ -40,6 +75,7 @@ actor TrackIdentityService: TrackIdentityServicing {
         var fileSize: Int64?
         var modificationDate: Date?
         var duration: TimeInterval?
+        var firstSeenAt: Date?
     }
 
     private let registryURL: URL
@@ -50,6 +86,7 @@ actor TrackIdentityService: TrackIdentityServicing {
     private var missingRecordIndices: Set<Int> = []
     private var isScanActive = false
     private var isDirty = false
+    private var recordsBeforeScan: [Record]?
 
     init(registryURL: URL? = nil) {
         if let registryURL {
@@ -62,6 +99,7 @@ actor TrackIdentityService: TrackIdentityServicing {
 
     func prepareForScan(relativePaths: Set<String>) async {
         await loadIfNeeded()
+        recordsBeforeScan = records
         missingRecordIndices = Set((records ?? []).indices.filter { !relativePaths.contains(records?[$0].relativePath ?? "") })
         isScanActive = true
     }
@@ -69,6 +107,18 @@ actor TrackIdentityService: TrackIdentityServicing {
     func finishScan() async {
         isScanActive = false
         if isDirty { persistNow() }
+        recordsBeforeScan = nil
+    }
+
+    func abortScan() async {
+        if let recordsBeforeScan {
+            records = recordsBeforeScan
+            rebuildIndexes()
+        }
+        self.recordsBeforeScan = nil
+        missingRecordIndices.removeAll()
+        isScanActive = false
+        isDirty = false
     }
 
     func resolveID(
@@ -78,6 +128,20 @@ actor TrackIdentityService: TrackIdentityServicing {
         modificationDate: Date?,
         duration: TimeInterval
     ) async -> Track.ID {
+        await resolveIdentity(
+            for: fileURL, relativePath: relativePath, fileSize: fileSize,
+            modificationDate: modificationDate, duration: duration, discoveredAt: Date()
+        ).id
+    }
+
+    func resolveIdentity(
+        for fileURL: URL,
+        relativePath: String,
+        fileSize: Int64?,
+        modificationDate: Date?,
+        duration: TimeInterval,
+        discoveredAt: Date
+    ) async -> TrackIdentityResolution {
         await loadIfNeeded()
         let resourceIdentifier = Self.resourceIdentifier(for: fileURL)
 
@@ -87,7 +151,7 @@ actor TrackIdentityService: TrackIdentityServicing {
             records?[index].modificationDate = modificationDate
             records?[index].duration = duration
             markDirty()
-            return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+            return resolution(at: index, fallbackPath: relativePath)
         }
 
         if let resourceIdentifier,
@@ -98,7 +162,7 @@ actor TrackIdentityService: TrackIdentityServicing {
             records?[index].duration = duration
             missingRecordIndices.remove(index)
             markDirty()
-            return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+            return resolution(at: index, fallbackPath: relativePath)
         }
 
         let moveCandidates = missingRecordIndices.filter { index in
@@ -115,7 +179,7 @@ actor TrackIdentityService: TrackIdentityServicing {
             records?[index].duration = duration
             missingRecordIndices.remove(index)
             markDirty()
-            return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+            return resolution(at: index, fallbackPath: relativePath)
         }
 
         var fingerprint: String?
@@ -130,7 +194,7 @@ actor TrackIdentityService: TrackIdentityServicing {
                 records?[index].duration = duration
                 missingRecordIndices.remove(index)
                 markDirty()
-                return records?[index].id ?? StableTrackIdentifier.id(for: relativePath)
+                return resolution(at: index, fallbackPath: relativePath)
             }
         }
 
@@ -143,10 +207,11 @@ actor TrackIdentityService: TrackIdentityServicing {
             audioFingerprint: fingerprint,
             fileSize: fileSize,
             modificationDate: modificationDate,
-            duration: duration
+            duration: duration,
+            firstSeenAt: discoveredAt
         ))
         markDirty()
-        return id
+        return TrackIdentityResolution(id: id, firstSeenAt: discoveredAt)
     }
 
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async {
@@ -169,6 +234,9 @@ actor TrackIdentityService: TrackIdentityServicing {
                 records?[index].fileSize = fileSize
                 records?[index].modificationDate = modificationDate
                 records?[index].duration = track.duration
+                if records?[index].firstSeenAt == nil {
+                    records?[index].firstSeenAt = track.firstSeenAt
+                }
             } else {
                 append(Record(
                     id: track.id,
@@ -177,7 +245,8 @@ actor TrackIdentityService: TrackIdentityServicing {
                     audioFingerprint: nil,
                     fileSize: fileSize,
                     modificationDate: modificationDate,
-                    duration: track.duration
+                    duration: track.duration,
+                    firstSeenAt: track.firstSeenAt
                 ))
             }
         }
@@ -245,7 +314,8 @@ actor TrackIdentityService: TrackIdentityServicing {
                 audioFingerprint: nil,
                 fileSize: track.fileSize,
                 modificationDate: track.modificationDate,
-                duration: track.duration
+                duration: track.duration,
+                firstSeenAt: track.firstSeenAt
             ))
             guard let appendedIndex = idIndex[track.id] else { return .failed }
             index = appendedIndex
@@ -322,6 +392,13 @@ actor TrackIdentityService: TrackIdentityServicing {
         if let resourceIdentifier = record.resourceIdentifier {
             resourceIndex[resourceIdentifier] = index
         }
+    }
+
+    private func resolution(at index: Int, fallbackPath: String) -> TrackIdentityResolution {
+        TrackIdentityResolution(
+            id: records?[index].id ?? StableTrackIdentifier.id(for: fallbackPath),
+            firstSeenAt: records?[index].firstSeenAt
+        )
     }
 
     private nonisolated static func resourceIdentifier(for url: URL) -> String? {

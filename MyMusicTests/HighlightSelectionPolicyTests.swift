@@ -252,6 +252,25 @@ final class HighlightSelectionPolicyTests: XCTestCase {
         XCTAssertEqual(queue.first?.id, preferred.id)
     }
 
+    func testBoundedSelectionHandlesFiveThousandTracksWithoutFullGreedyOrdering() {
+        verifyBoundedSelectionPerformance(trackCount: 5_000)
+    }
+
+    func testBoundedSelectionHandlesTenThousandTracksWithoutFullGreedyOrdering() {
+        verifyBoundedSelectionPerformance(trackCount: 10_000)
+    }
+
+    func testSmallPoolSafelyReturnsEveryUniqueTrack() {
+        let tracks = (0..<12).map { track("Track \($0)", artist: "Same", album: "Same") }
+        let result = HighlightSelectionPolicy.selection(
+            tracks, mode: .shuffle, baseWeights: [:], histories: [:], features: [:],
+            candidatePoolLimit: 150, queueLimit: 40
+        )
+
+        XCTAssertEqual(result.tracks.count, tracks.count)
+        XCTAssertEqual(Set(result.tracks.map(\.id)), Set(tracks.map(\.id)))
+    }
+
     @MainActor
     func testRecentHighlightHistoryDoesNotChangeRegularShuffleBaseWeight() async {
         let track = track("Recent")
@@ -277,6 +296,43 @@ final class HighlightSelectionPolicyTests: XCTestCase {
         Track(id: UUID(), title: title, artistName: artist, albumArtistName: albumArtist,
               albumTitle: album, duration: 180,
               fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"))
+    }
+
+    private func verifyBoundedSelectionPerformance(trackCount: Int) {
+        let tracks = (0..<trackCount).map { index in
+            track(
+                "Track \(index)",
+                artist: "Artist \(index % 300)",
+                album: "Album \(index % 700)"
+            )
+        }
+        let features = Dictionary(uniqueKeysWithValues: tracks.enumerated().map { index, track in
+            (track.id, values(
+                energy: Double(index % 101) / 100,
+                aggressive: Double((index * 3) % 101) / 100,
+                bright: Double((index * 7) % 101) / 100
+            ))
+        })
+        let randomValues = Dictionary(uniqueKeysWithValues: tracks.enumerated().map {
+            ($0.element.id, Double($0.offset % 997) / 996)
+        })
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let result = HighlightSelectionPolicy.selection(
+            tracks, mode: .upbeat, baseWeights: [:], histories: [:], features: features,
+            randomValues: randomValues
+        )
+        let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+
+        XCTAssertEqual(result.rankingCount, trackCount)
+        XCTAssertLessThanOrEqual(result.candidatePoolCount, HighlightSelectionPolicy.candidatePoolLimit)
+        XCTAssertEqual(result.tracks.count, HighlightSelectionPolicy.generatedQueueLimit)
+        XCTAssertEqual(Set(result.tracks.map(\.id)).count, result.tracks.count)
+        XCTAssertLessThanOrEqual(
+            result.greedyComparisonCount,
+            HighlightSelectionPolicy.candidatePoolLimit * HighlightSelectionPolicy.generatedQueueLimit
+        )
+        XCTAssertLessThan(elapsed, 2, "\(trackCount) tracks took \(elapsed)s")
+        print("[HighlightSelectionTest] tracks=\(trackCount) elapsed=\(elapsed)s")
     }
 
     private func history(
