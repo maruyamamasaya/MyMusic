@@ -61,7 +61,7 @@ MyMusic / future data sources
 
 Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Insightsの品質フィルターは期間条件と独立して日時だけで判定する。特徴量分析は`source_records`の最新analysisVersionだけを対象に、許可リスト化した特徴量をSQLite `json_extract`／`json_each`で検証・抽出してPlayback EventへTrack ID結合する。最近の変化は選択期間と直前の同日数（allは30日ずつ）を比較し、曲、特徴、Artist／Album／Genreを共通閾値で抽出する。時間帯分析はJSTの朝／昼／夜／深夜、Listening Profileは完走率−Skip率−Early Skip率×0.5の説明可能なscoreを使う。推薦はProfile・Preference・Favorite・完走実績を加点し、Skip・Early Skip・選択期間の再生過多を減点するread-only派生値で、未再生曲の行動値は推測しない。詳細イベントとEarly Skipの判定条件はQueries層の共通predicateへ集約し、Raw JSONやLibraryを更新しない。
 
-Webの大量候補検索は`analytics/web/controls.js`の`SearchPicker`に分離し、候補文字列の正規化検索と最大30件のDOM表示を担当する。`app.js`は画面ごとのAbortControllerで古い読込を中断し、表示中の条件と結果の一致、読み込み状態、エラー時の再試行を管理する。`experience.css`は共通操作部品とレスポンシブ表示を担当する。Data Sourcesの`search`はQueries層で名称／補足情報（Artist等）を検索し、検索後の件数・紐付け件数と同じ条件でSQLページングする。検索文字はバインドし、LIKEの特殊文字はエスケープする。永続化境界やschemaは変更しない。
+Webの大量候補検索は`analytics/web/controls.js`の`SearchPicker`に分離し、候補文字列の正規化検索と最大30件のDOM表示を担当する。`app.js`は画面ごとのAbortControllerで古い読込を中断し、表示中の条件と結果の一致、読み込み状態、エラー時の再試行を管理する。`experience.css`は共通操作部品とレスポンシブ表示を担当する。Tracks／Data Sourcesはページ本体だけを縦スクロール境界とし、表のoverflowは横方向の列閲覧だけに使う。Data Sourcesの`search`はQueries層で名称／補足情報（Artist等）を検索し、検索後の件数・紐付け件数と同じ条件でSQLページングする。検索文字はバインドし、LIKEの特殊文字はエスケープする。永続化境界やschemaは変更しない。
 
 ### Library import
 

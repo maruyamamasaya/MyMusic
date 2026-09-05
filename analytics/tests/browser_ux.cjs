@@ -88,6 +88,17 @@ const base = process.env.ANALYTICS_TEST_URL || 'http://127.0.0.1:8877';
     }
     await page.locator('[data-page=tracks]').click();
     await waitView('tracks');
+    const tracksTableScroll = await page.locator('#tracks .table-wrap').evaluate(element => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      headerPosition: getComputedStyle(element.querySelector('thead th')).position,
+      firstColumnPosition: getComputedStyle(element.querySelector('tbody td')).position,
+    }));
+    assert.equal(tracksTableScroll.scrollHeight, tracksTableScroll.clientHeight);
+    assert.notEqual(tracksTableScroll.overflowY, 'scroll');
+    assert.equal(tracksTableScroll.headerPosition, 'static');
+    assert.equal(tracksTableScroll.firstColumnPosition, 'static');
     assert.equal(await page.locator('.tracks-table th').nth(8).isVisible(),false);
     await page.locator('#track-details').check();
     assert.equal(await page.locator('.tracks-table th').nth(8).isVisible(),true);
@@ -97,6 +108,15 @@ const base = process.env.ANALYTICS_TEST_URL || 'http://127.0.0.1:8877';
     assert.match(await page.locator('#tracks-pagination').textContent(), /0件中 0–0件/);
     await page.locator('[data-page=sources]').click();
     await waitView('sources');
+    const sourcesTableScroll = await page.locator('#sources .table-wrap').evaluate(element => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      headerPosition: getComputedStyle(element.querySelector('thead th')).position,
+      firstColumnPosition: getComputedStyle(element.querySelector('tbody td')).position,
+    }));
+    assert.equal(sourcesTableScroll.scrollHeight, sourcesTableScroll.clientHeight);
+    assert.equal(sourcesTableScroll.headerPosition, 'static');
+    assert.equal(sourcesTableScroll.firstColumnPosition, 'static');
     await page.locator('#source-search').fill('UNMATCHABLE-UX-TEST');
     await page.waitForTimeout(350);
     await waitView('sources');

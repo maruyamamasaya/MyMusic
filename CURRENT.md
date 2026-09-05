@@ -19,7 +19,7 @@ updated: 2026-09-05
 
 ### ローカルWeb Analytics v0
 
-- Web UI/UX Betaを更新。Artist／Genreは全文字列候補から部分一致検索する選択UI（全角・半角／英字大小を正規化、完全一致・前方一致優先、候補表示は最大30件）へ変更。全画面の読み込み・再試行、期間／検索条件表示、日付入力、スマホ幅ナビゲーション、表の固定見出し・固定曲名・件数／ページ移動を共通化した。Tracksは基本／詳細指標切替、Rankingsは種類別表示切替、Data Sourcesは全件対象の名称／Artist検索を提供する。iOS・既存JSON契約・SQLite schemaの変更はない。
+- Web UI/UX Betaを更新。Artist／Genreは全文字列候補から部分一致検索する選択UI（全角・半角／英字大小を正規化、完全一致・前方一致優先、候補表示は最大30件）へ変更。全画面の読み込み・再試行、期間／検索条件表示、日付入力、スマホ幅ナビゲーション、件数／ページ移動を共通化した。Tracks／Data Sourcesの表はページと一緒に縦スクロールし、必要な場合だけ表内を横スクロールする。Tracksは基本／詳細指標切替、Rankingsは種類別表示切替、Data Sourcesは全件対象の名称／Artist検索を提供する。iOS・既存JSON契約・SQLite schemaの変更はない。
 
 - リポジトリ直下の`analytics/`に、再生履歴JSON v1を独自SQLiteへ取り込み、Dashboard／Tracks／Import履歴をPCブラウザで確認するFastAPI製ローカルツールを追加した。
 - `MyMusic-Library.json`と`MyMusic-Playback-Preferences.json`も自動判別して専用tableへupsertし、Track IDで再生イベントと結合する。DashboardはLibrary／お気に入り／Good・Bad分布、Tracksは未再生曲を含むmetadataと現在評価を表示し、Import済みPreferenceのFavorite／Good・Badを編集できる。
