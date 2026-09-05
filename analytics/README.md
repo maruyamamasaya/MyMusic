@@ -113,6 +113,20 @@ Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを�
 
 SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Artistに索引を持ちます。`data/`と`imports/`の内容はGit対象外です。バックアップ時はサーバーを停止して両ディレクトリをまとめてコピーしてください。
 
+## UI/UX Beta（2026-09-05）
+
+- ナビゲーションを日本語化し、スマホ幅では名前付きの横スクロールナビゲーションを表示します。
+- 期間選択はJSTの条件要約とカレンダー入力に対応します。日付の逆転や未入力を画面内で案内します。
+- RankingsのArtist／Genreは文字で検索して候補を選択します。全角・半角／英字大小を正規化し、スペースで区切った複数語をAND検索します。完全一致・前方一致を優先し、候補は最大30件を表示します。↑↓・Enterで選択、Escapeで入力を取り消し、×で個別解除できます。条件は候補選択時に適用され、実際の集計条件は従来の完全一致です。
+- Rankingsは「すべて／曲／Artist／Album／Genre」で表示を切り替えられます。通常2列、十分に広い画面では4列、スマホ幅では1列です。上位50件という集計上限は維持します。
+- Tracksは基本項目を既定表示にし、「詳細指標を表示」でFingerprint・完走率・Skip・Early Skipも表示します。条件は部分一致のAND検索です。
+- Tracks／Data Sourcesの表は曲名列と見出しを固定し、横スクロール中も曲を見失わないようにします。検索結果件数・表示範囲を常に表示し、ページ番号入力で直接移動できます。
+- Data Sourcesの名称／Artist検索は、表示中のページだけでなく選択した種類の全件を対象にします。結果件数とLibrary紐付け件数も検索条件に一致した件数です。Libraryジャンルではジャンル名を検索します。
+- 読み込み中は状態を表示し、古い結果の操作を無効にします。各画面の新しい読込は古いリクエストを中断します。失敗時は古い集計を隠し、再試行できます。
+- Overviewは期間内の再生指標とLibrary全体の値を区別します。Music Historyで詳細データのない月を0%として表示せず、Artist再生数の単位を「回」とします。
+
+既にサーバーが起動中の場合は、Python側の検索API更新を反映するためAnalyticsを再起動し、ブラウザを再読み込みしてください。
+
 ## Dashboard / API
 
 - Overview: Library曲数、お気に入り数、Good／Bad登録数と分布、今日／7日／30日／全期間／任意期間の再生回数、時間、Skip率、完走率、Early Skip数・率、月日・曜日・件数付き日別グラフ、時間帯別・曲別・Artist別集計。Early Skipランキングは回数、総再生回数、率を表示する。日別グラフは土曜と日曜・日本の祝日を色分けし、棒の選択でその1日へ期間を絞り込む。ランキングは共通定義で初期30件から30件ずつ展開
@@ -128,7 +142,7 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 
 主なAPIは`GET /api/dashboard`、`GET /api/music-history`、`GET /api/insights`、`GET /api/insights/features`、`GET /api/insights/recent-changes`、`GET /api/insights/advanced`、`GET /api/insights/recommendations`、`GET /api/rankings`、`GET /api/tracks`です。Insights系は共通して期間と`quality=analyzable|all`を受け取ります。比較系の`all`は直近30日対その前30日、その他は選択期間対直前の同日数です。特徴量APIは最新の数値`analysisVersion`だけを使用し、レスポンスにもVersionと閾値を明示します。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
 
-Dashboard APIとTracks APIは`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`に対応します。Tracks APIは従来の`period=today|7d|30d|all`と`search=`を維持し、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`、`page`も受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`earlySkipCount`、`earlySkipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。TracksとData Sourcesは1ページ200件で、APIも`LIMIT`／`OFFSET`によるサーバー側ページングを行います。Data Sourcesは許可リスト方式で名称、補足情報、Library紐付け、取込日時を昇順／降順に並べ替えられます。
+Dashboard APIとTracks APIは`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`に対応します。Tracks APIは従来の`period=today|7d|30d|all`と`search=`を維持し、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`、`page`も受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`earlySkipCount`、`earlySkipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。TracksとData Sourcesは1ページ30件で、APIも`LIMIT`／`OFFSET`によるサーバー側ページングを行います。Data Sourcesは許可リスト方式で名称、補足情報、Library紐付け、取込日時を昇順／降順に並べ替えられます。
 
 期間フィルターと日別・時間帯別集計の基準タイムゾーンは日本標準時（JST、UTC+09:00）です。サーバーを日本以外のタイムゾーンで起動した場合も、「今日」と日付指定はJSTの日付境界で一致します。保存済み日時はUTCのまま保持します。
 
@@ -145,3 +159,11 @@ python -m unittest discover -s tests -v
 ```
 
 Windowsではactivate後の最後の2行は同じです。テストは一時ディレクトリだけを使い、通常の`data/`と`imports/`を変更しません。
+
+### UI回帰テスト
+
+```bash
+node --test tests/controls.test.cjs
+```
+
+ブラウザ回帰テストはPlaywrightとインストール済みChromeを利用します。テスト用のコピーまたは一時DBでサーバーを起動し、`ANALYTICS_TEST_URL=http://127.0.0.1:8877 node tests/browser_ux.cjs`を実行してください。Playwrightを共通runtimeに配置している場合は`NODE_PATH`で指定できます。テストは取込・編集・削除APIを呼ばず、検索・競合・エラーの一部をブラウザ内で模擬します。

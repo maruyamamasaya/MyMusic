@@ -9,25 +9,27 @@
   <link rel="stylesheet" href="/static/preferences.css">
   <link rel="stylesheet" href="/static/tracks.css?v=20260904">
   <style>.source-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.source-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer}.source-tabs button.active{background:#2a3140;color:#fff;border-color:#4a5568}</style>
+  <link rel="stylesheet" href="/static/experience.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">メインコンテンツへ</a>
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark">♪</span><div><strong>MyMusic</strong><small>Analytics v0</small></div></div>
-    <nav>
-      <button class="nav-item active" data-page="dashboard">Overview</button>
-      <button class="nav-item" data-page="history">Music History</button>
-      <button class="nav-item" data-page="insights">Insights</button>
-      <button class="nav-item" data-page="rankings">Rankings</button>
-      <button class="nav-item" data-page="tracks">Tracks</button>
-      <button class="nav-item" data-page="sources">Data Sources</button>
-      <button class="nav-item" data-page="import">Import</button>
+    <nav aria-label="メインナビゲーション">
+      <button class="nav-item active" data-page="dashboard">概要</button>
+      <button class="nav-item" data-page="history">音楽史</button>
+      <button class="nav-item" data-page="insights">インサイト</button>
+      <button class="nav-item" data-page="rankings">ランキング</button>
+      <button class="nav-item" data-page="tracks">曲ライブラリ</button>
+      <button class="nav-item" data-page="sources">データソース</button>
+      <button class="nav-item" data-page="import">インポート</button>
     </nav>
     <p class="local-badge">● Local only</p>
   </aside>
-  <main>
+  <main id="main-content" tabindex="-1">
     <section id="dashboard" class="page active">
       <header><div><p class="eyebrow">LISTENING OVERVIEW</p><h1>あなたの音楽の時間</h1></div><div class="periods" data-target="dashboard"><button data-period="today">今日</button><button class="active" data-period="7d">7日</button><button data-period="30d">30日</button><button data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
-      <div id="dashboard-custom-period" class="custom-period" hidden><label>開始日<input id="dashboard-start-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><span>〜</span><label>終了日<input id="dashboard-end-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><p id="dashboard-period-error" class="form-error" role="alert"></p></div>
+      <div id="dashboard-custom-period" class="custom-period" hidden><label>開始日<input id="dashboard-start-date" type="date"></label><span>〜</span><label>終了日<input id="dashboard-end-date" type="date"></label><p id="dashboard-period-error" class="form-error" role="alert"></p></div>
       <div id="metrics" class="metrics"></div>
       <p id="dashboard-legacy-note" class="legacy-note" hidden></p>
       <div class="grid two"><article class="panel wide"><h2>日別再生数</h2><div id="daily" class="bar-chart"></div></article><article class="panel"><h2>時間帯別</h2><div id="hourly" class="hour-grid"></div></article></div>
@@ -40,7 +42,7 @@
     </section>
     <section id="insights" class="page">
       <header><div><p class="eyebrow">LISTENING INSIGHTS</p><h1>再生行動を知る</h1><p class="subtitle">どの入口と選び方が、実際の聴き方につながっているかを比較します。</p></div><div class="periods" data-target="insights"><button data-period="today">今日</button><button class="active" data-period="7d">7日</button><button data-period="30d">30日</button><button data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
-      <div id="insights-custom-period" class="custom-period" hidden><label>開始日<input id="insights-start-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><span>〜</span><label>終了日<input id="insights-end-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><p id="insights-period-error" class="form-error" role="alert"></p></div>
+      <div id="insights-custom-period" class="custom-period" hidden><label>開始日<input id="insights-start-date" type="date"></label><span>〜</span><label>終了日<input id="insights-end-date" type="date"></label><p id="insights-period-error" class="form-error" role="alert"></p></div>
       <div class="insights-quality"><span>データ品質</span><div id="insights-quality" class="segmented"><button class="active" data-quality="analyzable">分析可能データのみ</button><button data-quality="all">すべて</button></div></div>
       <p id="insights-legacy-note" class="legacy-note" hidden></p>
       <div id="insights-tabs" class="content-tabs" role="tablist" aria-label="Insightsの表示内容"><button class="active" type="button" role="tab" aria-selected="true" data-insight-tab="recommendations">おすすめ</button><button type="button" role="tab" aria-selected="false" data-insight-tab="changes">最近の変化</button><button type="button" role="tab" aria-selected="false" data-insight-tab="context">時間帯・好み</button><button type="button" role="tab" aria-selected="false" data-insight-tab="behavior">再生行動</button></div>
@@ -64,21 +66,24 @@
     </section>
     <section id="rankings" class="page">
       <header><div><p class="eyebrow">LISTENING RANKINGS</p><h1>期間ごとのランキング</h1></div><div class="periods" data-target="rankings"><button data-period="today">今日</button><button data-period="7d">7日</button><button class="active" data-period="30d">30日</button><button data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
-      <div id="rankings-custom-period" class="custom-period" hidden><label>開始日<input id="rankings-start-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><span>〜</span><label>終了日<input id="rankings-end-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><p id="rankings-period-error" class="form-error" role="alert"></p></div>
-      <div class="ranking-controls"><div class="ranking-filters" aria-label="ランキングの絞り込み"><label class="ranking-filter"><span>Artist</span><select id="ranking-artist"><option value="">すべてのArtist</option></select></label><label class="ranking-filter"><span>Genre</span><select id="ranking-genre"><option value="">すべてのGenre</option></select></label><button id="clear-ranking-filters" class="ranking-filter-clear" type="button">すべてクリア</button></div><div id="ranking-metrics" class="segmented"><button class="active" data-metric="plays">再生回数</button><button data-metric="duration">再生時間</button></div></div>
+      <div id="rankings-custom-period" class="custom-period" hidden><label>開始日<input id="rankings-start-date" type="date"></label><span>〜</span><label>終了日<input id="rankings-end-date" type="date"></label><p id="rankings-period-error" class="form-error" role="alert"></p></div>
+      <div class="ranking-controls"><div class="ranking-filters" aria-label="ランキングの絞り込み"><div id="ranking-artist" class="search-picker"></div><div id="ranking-genre" class="search-picker"></div><button id="clear-ranking-filters" class="ranking-filter-clear" type="button">すべてクリア</button></div><div id="ranking-metrics" class="segmented"><button class="active" data-metric="plays">再生回数</button><button data-metric="duration">再生時間</button></div></div>
+      <p class="filter-help">名前の一部で候補を探し、選択すると適用されます。ArtistとGenreは組み合わせて絞り込めます。各ランキングは上位50件。</p>
       <p id="rankings-legacy-note" class="legacy-note" hidden></p>
+      <div id="ranking-views" class="content-tabs" role="group" aria-label="表示するランキング"><button data-ranking-view="all" class="active" aria-pressed="true">すべて</button><button data-ranking-view="tracks" aria-pressed="false">曲</button><button data-ranking-view="artists" aria-pressed="false">Artist</button><button data-ranking-view="albums" aria-pressed="false">Album</button><button data-ranking-view="genres" aria-pressed="false">Genre</button></div>
       <div class="ranking-columns"><article class="panel ranking-panel"><h2>曲</h2><div id="ranking-tracks" class="ranking-list"></div></article><article class="panel ranking-panel"><h2>Artist</h2><div id="ranking-artists" class="ranking-list"></div></article><article class="panel ranking-panel"><h2>Album</h2><div id="ranking-albums" class="ranking-list"></div></article><article class="panel ranking-panel"><h2>Genre</h2><div id="ranking-genres" class="ranking-list"></div></article></div>
     </section>
     <section id="tracks" class="page">
       <header><div><p class="eyebrow">TRACK LIBRARY</p><h1>曲ごとの傾向</h1></div><div class="periods" data-target="tracks"><button data-period="today">今日</button><button data-period="7d">7日</button><button data-period="30d">30日</button><button class="active" data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
-      <div id="custom-period" class="custom-period" hidden><label>開始日<input id="track-start-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><span>〜</span><label>終了日<input id="track-end-date" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10"></label><p id="period-error" class="form-error" role="alert"></p></div>
-      <div class="track-filters"><label>曲名<input id="track-title" type="search"></label><label>Artist<input id="track-artist" type="search"></label><label>Album<input id="track-album" type="search"></label><label>Genre<input id="track-genre" type="search"></label><button id="clear-track-filters" type="button">すべてクリア</button><a class="export-button" href="/api/preferences/export" download="MyMusic-Playback-Preferences.json">再生傾向を書き出す</a></div>
-      <article class="panel table-wrap"><table class="compact-table tracks-table"><thead><tr><th><button class="sort-button" data-sort="title">曲</button></th><th><button class="sort-button" data-sort="artist">Artist</button></th><th><button class="sort-button" data-sort="album">Album</button></th><th><button class="sort-button" data-sort="preference">Good / Bad</button></th><th><button class="sort-button" data-sort="favorite">お気に入り</button></th><th><button class="sort-button" data-sort="fingerprint">Fingerprint</button></th><th><button class="sort-button" data-sort="playCount">再生</button></th><th><button class="sort-button" data-sort="totalPlayTime">再生時間</button></th><th><button class="sort-button" data-sort="completionRate">完走率</button></th><th><button class="sort-button" data-sort="skipRate">Skip率</button></th><th><button class="sort-button" data-sort="earlySkipCount">Early Skip</button></th><th><button class="sort-button" data-sort="earlySkipRate">Early Skip率</button></th><th><button class="sort-button" data-sort="lastPlayedAt">最終再生</button></th></tr></thead><tbody id="tracks-body"></tbody></table></article>
+      <div id="custom-period" class="custom-period" hidden><label>開始日<input id="track-start-date" type="date"></label><span>〜</span><label>終了日<input id="track-end-date" type="date"></label><p id="period-error" class="form-error" role="alert"></p></div>
+      <div class="track-filters"><label>曲名<input id="track-title" type="search" placeholder="名前の一部を入力"></label><label>Artist<input id="track-artist" type="search" placeholder="名前の一部を入力"></label><label>Album<input id="track-album" type="search" placeholder="名前の一部を入力"></label><label>Genre<input id="track-genre" type="search" placeholder="名前の一部を入力"></label><button id="clear-track-filters" type="button">すべてクリア</button><a class="export-button" href="/api/preferences/export" download="MyMusic-Playback-Preferences.json">再生傾向を書き出す</a></div>
+      <div class="table-toolbar"><p>曲名・Artist・Album・Genreの部分一致（すべての条件に一致）</p><label class="detail-toggle"><input id="track-details" type="checkbox"> 詳細指標を表示</label></div><article class="panel table-wrap"><table class="compact-table tracks-table"><thead><tr><th><button class="sort-button" data-sort="title">曲</button></th><th><button class="sort-button" data-sort="artist">Artist</button></th><th><button class="sort-button" data-sort="album">Album</button></th><th><button class="sort-button" data-sort="preference">Good / Bad</button></th><th><button class="sort-button" data-sort="favorite">お気に入り</button></th><th><button class="sort-button" data-sort="fingerprint">Fingerprint</button></th><th><button class="sort-button" data-sort="playCount">再生</button></th><th><button class="sort-button" data-sort="totalPlayTime">再生時間</button></th><th><button class="sort-button" data-sort="completionRate">完走率</button></th><th><button class="sort-button" data-sort="skipRate">Skip率</button></th><th><button class="sort-button" data-sort="earlySkipCount">Early Skip</button></th><th><button class="sort-button" data-sort="earlySkipRate">Early Skip率</button></th><th><button class="sort-button" data-sort="lastPlayedAt">最終再生</button></th></tr></thead><tbody id="tracks-body"></tbody></table></article>
       <div id="tracks-pagination" class="pagination"></div>
     </section>
     <section id="sources" class="page">
       <header><div><p class="eyebrow">LIBRARY &amp; SETTINGS</p><h1>データソース管理</h1><p class="subtitle">特徴量・音量・プレイリストはTrack IDでLibraryとの紐付け状況も確認できます。</p></div></header>
       <div id="source-tabs" class="source-tabs"><button class="active" data-kind="track_features">音楽特徴量</button><button data-kind="volume_normalization">音量ノーマライズ</button><button data-kind="playlists">プレイリスト</button><button data-kind="equalizer">イコライザー</button><button data-kind="library_genres">ジャンル（Library集計）</button><button data-kind="genre_presets">ジャンルプリセット</button></div>
+      <div class="source-search toolbar"><label for="source-search">名称・Artistで検索</label><input id="source-search" type="search" maxlength="200" placeholder="データ全件から部分一致で検索"><button id="clear-source-search" type="button">クリア</button></div>
       <div id="source-summary" class="metrics"></div>
       <article class="panel table-wrap"><table class="compact-table sources-table"><thead id="sources-head"></thead><tbody id="sources-body"></tbody></table></article>
       <div id="sources-pagination" class="pagination"></div>
@@ -86,10 +91,11 @@
     <section id="import" class="page">
       <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">MyMusicのLibrary、再生、解析、プレイリスト、設定JSONを自動判別して保存します。</p></div></header>
       <label id="drop-zone" class="drop-zone"><input id="file-input" type="file" accept="application/json,.json"><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックしてファイルを選択</span><small>MyMusic JSON 8形式・最大20 MB</small></label>
-      <div id="import-result"></div>
+      <div id="import-result" role="status" aria-live="polite"></div>
       <article class="panel table-wrap"><div class="import-history-header"><div><h2>Import履歴</h2><p class="subtitle">原本JSONを残したまま、Analyticsの取込データをクリアできます。</p></div><button id="clear-imported-data" class="danger-button" type="button">取込データをクリア</button></div><table data-sortable><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table><div id="imports-more"></div></article>
     </section>
   </main>
+  <script src="/static/controls.js" defer></script>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

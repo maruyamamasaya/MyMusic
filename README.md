@@ -77,6 +77,8 @@
 
 「設定」→「データ管理」から、端末内の解析結果と設定を用途別のJSONとして保存できます。
 
+「Analyticsと同期」では各JSONを個別に書き出せるほか、「すべてまとめて書き出す」から対応する8種類を日付付きZIPとしてFiles等へ保存できます。音源ファイルは含みません。
+
 - 音量ノーマライズは、解析済み曲のIntegrated LUFS、True Peak、固定ゲインと現在のON/OFFを出力
 - 音楽特徴量は、保存済みの全特徴量、解析version、照合元情報を出力
 - Analytics用再生イベントは、再生日時、実聴秒数、完走／Skip、再生入口、選択種別と曲metadataを`MyMusic-Playback-Events.json`へ出力

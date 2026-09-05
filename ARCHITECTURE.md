@@ -61,6 +61,8 @@ MyMusic / future data sources
 
 Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Insightsの品質フィルターは期間条件と独立して日時だけで判定する。特徴量分析は`source_records`の最新analysisVersionだけを対象に、許可リスト化した特徴量をSQLite `json_extract`／`json_each`で検証・抽出してPlayback EventへTrack ID結合する。最近の変化は選択期間と直前の同日数（allは30日ずつ）を比較し、曲、特徴、Artist／Album／Genreを共通閾値で抽出する。時間帯分析はJSTの朝／昼／夜／深夜、Listening Profileは完走率−Skip率−Early Skip率×0.5の説明可能なscoreを使う。推薦はProfile・Preference・Favorite・完走実績を加点し、Skip・Early Skip・選択期間の再生過多を減点するread-only派生値で、未再生曲の行動値は推測しない。詳細イベントとEarly Skipの判定条件はQueries層の共通predicateへ集約し、Raw JSONやLibraryを更新しない。
 
+Webの大量候補検索は`analytics/web/controls.js`の`SearchPicker`に分離し、候補文字列の正規化検索と最大30件のDOM表示を担当する。`app.js`は画面ごとのAbortControllerで古い読込を中断し、表示中の条件と結果の一致、読み込み状態、エラー時の再試行を管理する。`experience.css`は共通操作部品とレスポンシブ表示を担当する。Data Sourcesの`search`はQueries層で名称／補足情報（Artist等）を検索し、検索後の件数・紐付け件数と同じ条件でSQLページングする。検索文字はバインドし、LIKEの特殊文字はエスケープする。永続化境界やschemaは変更しない。
+
 ### Library import
 
 ```text
@@ -142,6 +144,7 @@ music root recursive scan
 - `楽曲別再生行動` は `manual:<数>, automatic:<数>, 7日:<数>, 30日:<数>, 初回:<日時>, 最終:<日時>` を `詳細` 列へ格納し、`楽曲別再生入口` は `入口:回数` をスペース区切りで `詳細` 列へ格納する。
 - CSVインポート経路は現時点で未実装のため、上記CSVが現行正規フォーマットとする。
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Preference Importは専用`TrackPreferenceImportService`で外部schema v2を厳格検証してから`TrackPreferenceStore`へ渡す。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
+- `AnalyticsArchiveExportService`は`MusicDataExportService`が生成したAnalytics対応8種類のJSONを一時directoryへ書き、ZIPFoundation 0.9.20のdeflateで日付付きZIPへまとめる。圧縮はMainActor外で実行し、生成元JSON契約と既存の個別共有経路は変更しない。
 - `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
 - `TrackPreferencePersistenceService`は`Application Support/MyMusic/track-preferences.json`を曲Preferenceの正本とする。schema v2 fileがない初回だけ旧Playback HistoryのFavorite／評価を移し、atomic write後のread-back一致を確認する。History読込失敗時は空migrationを確定しない。
 - `MusicDataExportService`はTrack ID、`playbackPreference`、`favorite`を安定順でschema v2の`MyMusic-Playback-Preferences.json`へ出力する。Library／History JSONのFavorite fieldは互換目的で新Preference値をミラーするが正本ではない。

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-03
+updated: 2026-09-05
 ---
 
 # MyMusic の現在状態
@@ -19,6 +19,8 @@ updated: 2026-09-03
 
 ### ローカルWeb Analytics v0
 
+- Web UI/UX Betaを更新。Artist／Genreは全文字列候補から部分一致検索する選択UI（全角・半角／英字大小を正規化、完全一致・前方一致優先、候補表示は最大30件）へ変更。全画面の読み込み・再試行、期間／検索条件表示、日付入力、スマホ幅ナビゲーション、表の固定見出し・固定曲名・件数／ページ移動を共通化した。Tracksは基本／詳細指標切替、Rankingsは種類別表示切替、Data Sourcesは全件対象の名称／Artist検索を提供する。iOS・既存JSON契約・SQLite schemaの変更はない。
+
 - リポジトリ直下の`analytics/`に、再生履歴JSON v1を独自SQLiteへ取り込み、Dashboard／Tracks／Import履歴をPCブラウザで確認するFastAPI製ローカルツールを追加した。
 - `MyMusic-Library.json`と`MyMusic-Playback-Preferences.json`も自動判別して専用tableへupsertし、Track IDで再生イベントと結合する。DashboardはLibrary／お気に入り／Good・Bad分布、Tracksは未再生曲を含むmetadataと現在評価を表示し、Import済みPreferenceのFavorite／Good・Badを編集できる。
 - Dashboard／Tracksの期間フィルターと日別・時間帯別集計は日本標準時（JST、UTC+09:00）を基準とし、「今日」と同じ当日の期間指定が一致する。再生イベントの保存日時はUTCのまま維持する。
@@ -28,7 +30,7 @@ updated: 2026-09-03
 - Insightsの音楽特徴と再生行動は最新analysisVersionのTrack FeaturesをTrack IDでPlayback Eventへ結合し、9特徴量を重複しない5スコア帯で比較する。欠損・非数値・0〜1範囲外を除外し、SQLite JSON関数で集計する。
 - Insightsは選択期間と直前の同日数を比較して曲・特徴・Artist／Album／Genreの最近の変化を説明可能な閾値で抽出し、JST時間帯別の特徴相性と5段階Listening Profileも表示する。これらを再利用したread-only推薦は特徴一致、Favorite／Good、完走実績を加点し、Skipと最近の聴きすぎを減点する。再発見・未再生／低再生候補と最大5件の自動Insightも理由付きで表示する。
 - 長いInsights画面は「おすすめ」「最近の変化」「時間帯・好み」「再生行動」の4タブに分割する。「再生行動」はさらに再生入口、選択種別、組み合わせ、音楽特徴の4サブタブに分け、各表を共通定義で列ソートできる。時間帯・属性・現在の好みにある行形式の一覧は初期30件とし、30件ずつ「続きを見る」で展開する。左ナビゲーションとInsightsタブをURL履歴へ反映し、ブラウザの戻る／進むと再読み込みで表示位置を復元する。
-- Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を4列で同時表示する。
+- Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を通常2列・広い画面4列・狭い画面1列で表示し、種類別にも切り替えられる。
 - Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
 - AnalyticsのImport画面から、確認ダイアログを経てSQLite内の全取込データとImport履歴を一括クリアできる。schemaと保存済み原本JSONは保持し、直後から再Importできる。
@@ -58,7 +60,7 @@ updated: 2026-09-03
 - **Track Preference手動双方向連携**: アプリは同じschema v2 Preference JSONを厳格に全体検証し、現在LibraryにあるTrackだけをmerge保存してからStoreへ反映する。未知field、UUID不正、重複、範囲外、不正構造は全件拒否し、未収録Trackは既存値を変えずskipする。AnalyticsはImport済みPreferenceだけを編集し、現在Libraryと照合できる有効UUIDだけを同契約でExportする。
 
 - **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、Preferenceだけは厳格検証付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。解析データのiOS再Importは対象外。
-- **Analytics用JSON書き出し導線**: 設定の「データ管理」から、PC版Analyticsが対応する8種類の既存JSON書き出しを1画面で個別に共有できる。オンライン同期や自動送信は行わない。
+- **Analytics用JSON書き出し導線**: 設定の「データ管理」から、PC版Analyticsが対応する8種類の既存JSONを個別共有できるほか、8ファイルを日付付きZIPへまとめて共有・Files保存できる。オンライン同期や自動送信は行わない。
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を件数上限なく逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
 - **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。開始／終了位置に共通の1秒戻る操作と、登録成功時のインラインフィードバックを持つ。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。
@@ -113,7 +115,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-01 にBehavior Scoring M3を追加。CloudではSwift parse、独立Scoring typecheck、diff静的検査のみ実施し、Xcode build、Simulator XCTest、実機はローカルMacで未検証。Overplayの選曲適用はM4へ保留。
 - 2026-09-02 にTrack Preference責務分離後のMood Station描画testへ不足していた`TrackPreferenceStore`のtest fixture注入を追加し、Xcode 26.6、iPhone 17 / iOS 26.5 Simulatorで全XCTest 129件が成功した。
 - 2026-09-02 にTrack Fingerprint作成の1日100曲上限を撤廃。件数無制限の処理testは成功し、Debug test buildも成功した。全XCTestでは無関係なTrack Preference永続化testが一度失敗したが、同testの単独再実行は成功した。
-- 専用 lint 設定、Swift Package Manager 依存、CI/CD workflow はリポジトリ内で確認できない。
+- 専用 lint 設定、CI/CD workflow はリポジトリ内で確認できない。Swift Package Manager依存はZIP書き出し専用のZIPFoundation 0.9.20だけを固定している。
 
 ## 既知の制約・未検証
 

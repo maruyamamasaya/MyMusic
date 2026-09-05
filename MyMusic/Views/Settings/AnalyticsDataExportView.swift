@@ -10,11 +10,34 @@ struct AnalyticsDataExportView: View {
     @State private var shareItem: ActivityShareItem?
     @State private var errorMessage: String?
     @State private var libraryFingerprints: [Track.ID: String] = [:]
+    @State private var isExportingArchive = false
 
     private let exporter = MusicDataExportService()
+    private let archiveExporter = AnalyticsArchiveExportService()
 
     var body: some View {
         List {
+            Section {
+                Button {
+                    exportArchive()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isExportingArchive ? "書き出し中…" : "すべてまとめて書き出す")
+                            Text("8種類のJSONをZIPにまとめます")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        if isExportingArchive {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "archivebox")
+                        }
+                    }
+                }
+                .disabled(isExportingArchive)
+            }
             Section {
                 exportButton("ライブラリ", filename: "MyMusic-Library.json", systemImage: "books.vertical") {
                     try exporter.libraryJSON(
@@ -78,6 +101,64 @@ struct AnalyticsDataExportView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+
+    private func exportArchive() {
+        isExportingArchive = true
+        Task { @MainActor in
+            defer { isExportingArchive = false }
+            do {
+                let exportedAt = Date()
+                let files = try analyticsFiles(exportedAt: exportedAt)
+                let archive = try await archiveExporter.archive(
+                    files: files,
+                    exportedAt: exportedAt
+                )
+                shareItem = try ActivityShareItem(file: archive)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func analyticsFiles(exportedAt: Date) throws -> [MusicExportFile] {
+        [
+            try exporter.libraryJSON(
+                tracks: libraryStore.unfilteredTracks,
+                history: historyStore.entries,
+                preferences: preferenceStore.entries,
+                fingerprints: libraryFingerprints
+            ),
+            try exporter.playbackEventsJSON(
+                historyStore.entries,
+                tracks: libraryStore.unfilteredTracks,
+                exportedAt: exportedAt
+            ),
+            try exporter.playbackPreferencesJSON(
+                preferenceStore.entries,
+                exportedAt: exportedAt
+            ),
+            try exporter.trackFeaturesJSON(
+                featureStore.exportedFeatures,
+                tracks: libraryStore.unfilteredTracks,
+                exportedAt: exportedAt
+            ),
+            try exporter.volumeNormalizationJSON(
+                featureStore.exportedFeatures,
+                tracks: libraryStore.unfilteredTracks,
+                isEnabled: settingsStore.volumeNormalizationEnabled,
+                exportedAt: exportedAt
+            ),
+            try exporter.allPlaylistsJSON(
+                playlistStore.playlists,
+                tracks: libraryStore.tracks
+            ),
+            try exporter.equalizerJSON(
+                settings: settingsStore.equalizer,
+                customPresets: settingsStore.customEqualizerPresets
+            ),
+            try exporter.genreDisplayPresetsJSON(libraryStore.genreDisplayPresets)
+        ]
     }
 
     private func exportButton(

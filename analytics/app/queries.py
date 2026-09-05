@@ -1172,11 +1172,13 @@ class AnalyticsQueries:
 
     def sources(
         self, data_kind: str, page: int = 1, page_size: int = 30,
-        sort: str = "title", order: str = "asc",
+        sort: str = "title", order: str = "asc", search: str = "",
     ) -> dict[str, Any]:
         allowed = {"library_genres", "track_features", "volume_normalization", "playlists", "equalizer", "genre_presets"}
         if data_kind not in allowed:
             raise ValueError("unsupported source kind")
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         if data_kind == "library_genres":
             sort_columns = {"title": "title COLLATE NOCASE", "trackCount": "trackCount",
                             "artistCount": "artistCount", "importedAt": "importedAt"}
@@ -1196,11 +1198,11 @@ class AnalyticsQueries:
                     WHERE lt.is_present=1
                     GROUP BY COALESCE(tg.genre, 'ジャンル未設定')
                 )"""
-                count = connection.execute(base + " SELECT COUNT(*) FROM genre_catalog").fetchone()[0]
+                count = connection.execute(base + " SELECT COUNT(*) FROM genre_catalog WHERE title LIKE ? ESCAPE '\\'", (pattern,)).fetchone()[0]
                 rows = connection.execute(
                     base + f""" SELECT title, trackCount, artistCount, importedAt
-                    FROM genre_catalog ORDER BY {sort_columns[sort]} {order.upper()}, title COLLATE NOCASE
-                    LIMIT ? OFFSET ?""", (page_size, offset)
+                    FROM genre_catalog WHERE title LIKE ? ESCAPE '\\' ORDER BY {sort_columns[sort]} {order.upper()}, title COLLATE NOCASE
+                    LIMIT ? OFFSET ?""", (pattern, page_size, offset)
                 ).fetchall()
             return {"count": count, "items": [dict(row) for row in rows],
                     "page": page, "pageSize": page_size, "derivedFrom": "library"}
@@ -1229,7 +1231,9 @@ class AnalyticsQueries:
         if dynamic_feature_sort:
             sort_column = "CAST(json_extract(sr.raw_json, '$.features.' || json_quote(?)) AS REAL)"
         with self.database.connect() as connection:
-            query_parameters: list[Any] = [data_kind]
+            search_where = "sr.data_kind=? AND (sr.title LIKE ? ESCAPE '\\' OR sr.subtitle LIKE ? ESCAPE '\\')"
+            filter_parameters = [data_kind, pattern, pattern]
+            query_parameters: list[Any] = list(filter_parameters)
             if dynamic_feature_sort:
                 query_parameters.append(sort)
             query_parameters.extend((page_size, (page - 1) * page_size))
@@ -1238,16 +1242,16 @@ class AnalyticsQueries:
                     sr.raw_json, CASE WHEN lt.track_id IS NULL THEN 0 ELSE 1 END linked
                     FROM source_records sr
                     LEFT JOIN library_tracks lt ON lt.track_id=sr.track_id AND lt.is_present=1
-                    WHERE sr.data_kind=? ORDER BY {sort_column} {order.upper()}, sr.item_key
+                    WHERE {search_where} ORDER BY {sort_column} {order.upper()}, sr.item_key
                     LIMIT ? OFFSET ?""", query_parameters
             ).fetchall()
             total = connection.execute(
-                "SELECT COUNT(*) FROM source_records WHERE data_kind=?", (data_kind,)
+                f"SELECT COUNT(*) FROM source_records sr WHERE {search_where}", filter_parameters
             ).fetchone()[0]
             linked_total = connection.execute(
-                """SELECT COUNT(*) FROM source_records sr JOIN library_tracks lt
-                   ON lt.track_id=sr.track_id AND lt.is_present=1 WHERE sr.data_kind=?""",
-                (data_kind,),
+                f"""SELECT COUNT(*) FROM source_records sr JOIN library_tracks lt
+                   ON lt.track_id=sr.track_id AND lt.is_present=1 WHERE {search_where}""",
+                filter_parameters,
             ).fetchone()[0]
             library_ids = {row[0] for row in connection.execute(
                 "SELECT track_id FROM library_tracks WHERE is_present=1"

@@ -2,7 +2,7 @@ import CoreTransferable
 import Foundation
 import UniformTypeIdentifiers
 
-struct MusicExportFile: Transferable {
+struct MusicExportFile: Transferable, Sendable {
     let data: Data
     let filename: String
     let contentType: UTType

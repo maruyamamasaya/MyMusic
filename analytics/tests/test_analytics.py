@@ -1044,6 +1044,40 @@ class AnalyticsAPITests(unittest.TestCase):
             "/api/sources/volume_normalization?sort=unknown"
         ).status_code, 404)
 
+    def test_source_search_filters_before_pagination_and_counts_links(self):
+        self.upload(library_document([library_track("track-039")]), "MyMusic-Library.json")
+        payload = {
+            "version": 1, "exportedAt": "2026-09-02T12:00:00Z", "isEnabled": True,
+            "tracks": [{
+                "trackID": f"track-{index:03}", "title": f"Track {index:03}",
+                "artist": "Artist 100%_literal" if index == 39 else "Artist",
+                "relativePath": f"music/{index}.m4a", "integratedLUFS": -14,
+                "truePeakDBTP": -1, "normalizationGainDB": 0,
+            } for index in range(40)],
+        }
+        self.upload(payload, "MyMusic-Volume-Normalization.json")
+        result = self.client.get("/api/sources/volume_normalization", params={"search": "039"}).json()
+        self.assertEqual((result["count"], result["linkedCount"]), (1, 1))
+        self.assertEqual(result["items"][0]["title"], "Track 039")
+        literal = self.client.get("/api/sources/volume_normalization", params={"search": "%_"}).json()
+        self.assertEqual(literal["count"], 1)
+        missing = self.client.get("/api/sources/volume_normalization", params={"search": "' OR 1=1 --"}).json()
+        self.assertEqual((missing["count"], missing["linkedCount"], missing["items"]), (0, 0, []))
+        page = self.client.get("/api/sources/volume_normalization", params={"search": "track", "page": 2, "order": "desc"}).json()
+        self.assertEqual((page["count"], len(page["items"]), page["items"][0]["title"]), (40, 10, "Track 009"))
+
+    def test_library_genre_search_is_literal_and_preserves_aggregation(self):
+        self.upload(library_document([
+            library_track("one", genre="Rock;100%_music"),
+            library_track("two", genre="Rock"),
+        ]), "MyMusic-Library.json")
+        result = self.client.get("/api/sources/library_genres", params={"search": "rock"}).json()
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["items"][0]["trackCount"], 2)
+        literal = self.client.get("/api/sources/library_genres", params={"search": "%_"}).json()
+        self.assertEqual(literal["count"], 1)
+        self.assertEqual(literal["items"][0]["title"], "100%_music")
+
     def test_api_rejects_bad_period_and_non_json_file(self):
         self.assertEqual(self.client.get("/api/dashboard?period=year").status_code, 422)
         response = self.client.post("/api/import", files={"file": ("history.txt", b"{}", "text/plain")})

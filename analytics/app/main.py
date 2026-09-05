@@ -168,10 +168,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sources/{data_kind}")
     def sources(
         data_kind: str, page: int = Query(1, ge=1), sort: str = Query("title"),
-        order: str = Query("asc"),
+        order: str = Query("asc"), search: str = Query("", max_length=200),
     ):
         try:
-            result = queries.sources(data_kind, page, sort=sort, order=order)
+            result = queries.sources(data_kind, page, sort=sort, order=order, search=search.strip())
             return result | {"page": page, "pageSize": 30}
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

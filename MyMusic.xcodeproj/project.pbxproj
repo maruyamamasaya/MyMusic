@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0DE00000000000000000001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE00000000000000000004 /* ZIPFoundation */; };
+		C0DE00000000000000000002 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE00000000000000000005 /* ZIPFoundation */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		AB1000000000000000000007 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000002 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000001 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +111,7 @@
 			);
 			name = MyMusicTests;
 			packageProductDependencies = (
+				C0DE00000000000000000005 /* ZIPFoundation */,
 			);
 			productName = MyMusicTests;
 			productReference = AB1000000000000000000001 /* MyMusicTests.xctest */;
@@ -126,6 +134,7 @@
 			);
 			name = MyMusic;
 			packageProductDependencies = (
+				C0DE00000000000000000004 /* ZIPFoundation */,
 			);
 			productName = MyMusic;
 			productReference = FCC1BB1A302B265200C78471 /* MyMusic.app */;
@@ -161,6 +170,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FCC1BB1B302B265200C78471 /* Products */;
+			packageReferences = (
+				C0DE00000000000000000003 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -211,6 +223,30 @@
 			targetProxy = AB1000000000000000000007 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C0DE00000000000000000003 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.20;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0DE00000000000000000004 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE00000000000000000003 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		C0DE00000000000000000005 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE00000000000000000003 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AB1000000000000000000009 /* Debug */ = {
