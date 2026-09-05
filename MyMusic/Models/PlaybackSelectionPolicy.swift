@@ -3,12 +3,19 @@ import Foundation
 /// Centralizes derived behavior adjustments used only by automatic selection.
 /// Eligibility remains the responsibility of the caller (including boredom and permanent hiding).
 enum PlaybackSelectionPolicy {
+    /// Keeps mild recent repetition close to neutral, then increasingly suppresses
+    /// genuinely overplayed tracks without ever excluding them.
+    static func overplayFactor(overplayScore: Double) -> Double {
+        let score = bounded(overplayScore)
+        return 1 - 0.875 * score * score
+    }
+
     static func shuffleOverplayFactor(overplayScore: Double) -> Double {
-        1 - 0.50 * bounded(overplayScore)
+        overplayFactor(overplayScore: overplayScore)
     }
 
     static func stationOverplayFactor(overplayScore: Double) -> Double {
-        1 - 0.20 * bounded(overplayScore)
+        overplayFactor(overplayScore: overplayScore)
     }
 
     static func shuffleWeight(playbackPreference: Int, overplayScore: Double) -> Double {

@@ -22,15 +22,12 @@ struct PlaybackBehaviorView: View {
                     Text("現在、強い聴きすぎ傾向はありません。")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(analysis.overplayCandidates) { result in
-                        BehaviorTrackHeader(track: result.track) {
-                            LabeledContent("直近7日", value: "\(result.score.recentPlayCount)回")
-                            LabeledContent(
-                                "通常週平均",
-                                value: result.score.weeklyBaseline.formatted(.number.precision(.fractionLength(1))) + "回"
-                            )
-                            Label("聴きすぎ傾向", systemImage: "repeat.circle.fill")
-                                .foregroundStyle(.orange)
+                    ForEach(analysis.overplayCandidates.prefix(5)) { result in
+                        OverplayTrackRow(result: result)
+                    }
+                    if analysis.overplayCandidates.count > 5 {
+                        NavigationLink("続きを見る") {
+                            OverplayCandidatesView(results: analysis.overplayCandidates)
                         }
                     }
                 }
@@ -65,6 +62,38 @@ struct PlaybackBehaviorView: View {
 
     private func percent(_ value: Double) -> String {
         value.formatted(.percent.precision(.fractionLength(0)))
+    }
+}
+
+private struct OverplayCandidatesView: View {
+    let results: [OverplayAnalysisResult]
+
+    var body: some View {
+        List(results) { result in
+            OverplayTrackRow(result: result)
+        }
+        .navigationTitle("聴きすぎている曲")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct OverplayTrackRow: View {
+    let result: OverplayAnalysisResult
+
+    var body: some View {
+        BehaviorTrackHeader(track: result.track) {
+            LabeledContent("直近7日", value: "\(result.score.recentPlayCount)回")
+            LabeledContent(
+                "通常週平均",
+                value: result.score.weeklyBaseline.formatted(.number.precision(.fractionLength(1))) + "回"
+            )
+            LabeledContent(
+                "聴きすぎ度",
+                value: result.score.score.formatted(.percent.precision(.fractionLength(0)))
+            )
+            Label("聴きすぎ傾向", systemImage: "repeat.circle.fill")
+                .foregroundStyle(.orange)
+        }
     }
 }
 

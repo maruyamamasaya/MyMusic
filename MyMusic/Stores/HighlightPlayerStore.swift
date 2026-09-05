@@ -10,6 +10,7 @@ final class HighlightPlayerStore {
     private(set) var analyzedTrackIDs: Set<Track.ID> = []
     private(set) var isAnalyzingCurrentTrack = false
     private(set) var isHighlightPlaybackActive = false
+    private(set) var selectionMode: HighlightSelectionMode = .shuffle
 
     var currentTrack: Track? {
         guard let currentIndex, queue.indices.contains(currentIndex) else { return nil }
@@ -26,6 +27,8 @@ final class HighlightPlayerStore {
     }
 
     private let playerStore: PlayerStore
+    private let playbackHistoryStore: PlaybackHistoryStore
+    private let trackFeatureStore: TrackFeatureStore
     private let analysisService: HighlightAnalysisServicing
     private var sourceTracks: [Track] = []
     private var candidatesByTrackID: [Track.ID: [HighlightCandidate]] = [:]
@@ -38,9 +41,13 @@ final class HighlightPlayerStore {
 
     init(
         playerStore: PlayerStore,
+        playbackHistoryStore: PlaybackHistoryStore,
+        trackFeatureStore: TrackFeatureStore,
         analysisService: HighlightAnalysisServicing = HighlightAnalysisService()
     ) {
         self.playerStore = playerStore
+        self.playbackHistoryStore = playbackHistoryStore
+        self.trackFeatureStore = trackFeatureStore
         self.analysisService = analysisService
     }
 
@@ -50,13 +57,15 @@ final class HighlightPlayerStore {
         }
         let previousIDs = Set(sourceTracks.map(\.id))
         sourceTracks = playableTracks
-        let currentIDs = Set(playableTracks.map(\.id))
-        guard queue.isEmpty || previousIDs != currentIDs else { return }
+        let eligibleTracks = eligibleTracks(from: playableTracks)
+        let currentIDs = Set(eligibleTracks.map(\.id))
+        guard queue.isEmpty || previousIDs != Set(playableTracks.map(\.id))
+                || Set(queue.map(\.id)) != currentIDs else { return }
 
         if let currentTrack, currentIDs.contains(currentTrack.id) {
             queue = queue.filter { currentIDs.contains($0.id) }
             let queuedIDs = Set(queue.map(\.id))
-            queue.append(contentsOf: playableTracks.filter { !queuedIDs.contains($0.id) }.shuffled())
+            queue.append(contentsOf: selectedTracks(from: eligibleTracks.filter { !queuedIDs.contains($0.id) }))
             currentIndex = queue.firstIndex(where: { $0.id == currentTrack.id })
         } else {
             rebuildQueueAndPlay(reason: .highlightAutomatic)
@@ -92,6 +101,21 @@ final class HighlightPlayerStore {
 
     func reshuffle() {
         rebuildQueueAndPlay(reason: .highlightUserInitiated)
+    }
+
+    func selectMode(_ mode: HighlightSelectionMode) {
+        guard mode != selectionMode else { return }
+        selectionMode = mode
+        guard let currentIndex, queue.indices.contains(currentIndex) else {
+            queue = selectedTracks(from: sourceTracks)
+            self.currentIndex = queue.isEmpty ? nil : 0
+            return
+        }
+        let retained = Array(queue.prefix(through: currentIndex))
+        let retainedIDs = Set(retained.map(\.id))
+        queue = retained + selectedTracks(from: sourceTracks.filter { !retainedIDs.contains($0.id) })
+        analysisTask?.cancel()
+        prefetchHighlights()
     }
 
     func move(to trackID: Track.ID) {
@@ -190,7 +214,7 @@ final class HighlightPlayerStore {
         autoAdvanceTask?.cancel()
         startPlaybackTask?.cancel()
         analysisTask?.cancel()
-        queue = sourceTracks.shuffled()
+        queue = selectedTracks(from: sourceTracks)
         currentIndex = queue.isEmpty ? nil : 0
         currentCandidate = nil
         hasPreparedRandomSelection = false
@@ -203,7 +227,7 @@ final class HighlightPlayerStore {
     }
 
     private func reshuffleQueue(avoidingFirstTrackID trackID: Track.ID?) {
-        queue = sourceTracks.shuffled()
+        queue = selectedTracks(from: sourceTracks)
         if let trackID, queue.count > 1, queue.first?.id == trackID {
             queue.swapAt(0, 1)
         }
@@ -297,6 +321,25 @@ final class HighlightPlayerStore {
                 if track.id == activeTrackID { isAnalyzingCurrentTrack = false }
             }
         }
+    }
+
+    private func eligibleTracks(from tracks: [Track]) -> [Track] {
+        tracks.filter {
+            $0.duration.isFinite && $0.duration > 1
+                && playbackHistoryStore.isEligibleForRegularShuffle($0)
+        }
+    }
+
+    private func selectedTracks(from tracks: [Track], now: Date = Date()) -> [Track] {
+        let eligible = tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
+        let baseWeights = playbackHistoryStore.automaticSelectionWeights(for: eligible, now: now)
+        let features = Dictionary(eligible.compactMap { track in
+            trackFeatureStore.feature(for: track.id).map { (track.id, $0.values) }
+        }, uniquingKeysWith: { first, _ in first })
+        return HighlightSelectionPolicy.orderedTracks(
+            eligible, mode: selectionMode, baseWeights: baseWeights,
+            histories: playbackHistoryStore.entries, features: features, now: now
+        )
     }
 
 }

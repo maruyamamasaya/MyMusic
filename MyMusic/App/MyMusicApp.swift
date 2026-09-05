@@ -44,7 +44,11 @@ struct MyMusicApp: App {
         _playbackHistoryStore = State(initialValue: historyStore)
         _trackPreferenceStore = State(initialValue: preferenceStore)
         _playerStore = State(initialValue: playerStore)
-        _highlightPlayerStore = State(initialValue: HighlightPlayerStore(playerStore: playerStore))
+        _highlightPlayerStore = State(initialValue: HighlightPlayerStore(
+            playerStore: playerStore,
+            playbackHistoryStore: historyStore,
+            trackFeatureStore: featureStore
+        ))
         _settingsStore = State(initialValue: SettingsStore(
             equalizerController: audioPlayer,
             playbackTransitionController: audioPlayer,

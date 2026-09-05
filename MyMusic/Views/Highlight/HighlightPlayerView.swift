@@ -64,12 +64,14 @@ struct HighlightPlayerView: View {
                     ForEach(highlightStore.queue) { track in
                         HighlightTrackPage(
                             track: track,
+                            selectionMode: highlightStore.selectionMode,
                             candidate: highlightStore.candidate(for: track),
                             isCurrent: track.id == highlightStore.currentTrack?.id,
                             isAnalyzing: track.id == highlightStore.currentTrack?.id && highlightStore.isAnalyzingCurrentTrack,
                             isHighlightPlaybackActive: highlightStore.isHighlightPlaybackActive,
                             candidateNumber: highlightStore.currentCandidateNumber,
                             candidateCount: highlightStore.currentCandidateCount,
+                            onSelectMode: highlightStore.selectMode,
                             onReshuffle: highlightStore.reshuffle,
                             onAnotherPart: highlightStore.playAnotherPart,
                             onAddToPlaylist: {
@@ -121,12 +123,14 @@ private struct HighlightTrackPage: View {
     @Environment(SettingsStore.self) private var settingsStore
 
     let track: Track
+    let selectionMode: HighlightSelectionMode
     let candidate: HighlightCandidate
     let isCurrent: Bool
     let isAnalyzing: Bool
     let isHighlightPlaybackActive: Bool
     let candidateNumber: Int
     let candidateCount: Int
+    let onSelectMode: (HighlightSelectionMode) -> Void
     let onReshuffle: () -> Void
     let onAnotherPart: () -> Void
     let onAddToPlaylist: () -> Void
@@ -190,18 +194,28 @@ private struct HighlightTrackPage: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("ハイライト")
-                    .font(.headline)
-                Text("上へスワイプして次の曲")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.72))
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ハイライト")
+                        .font(.headline)
+                    Text("上へスワイプして次の曲")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                Spacer()
+                Button("シャッフルし直す", systemImage: "shuffle", action: onReshuffle)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(HighlightCircleButtonStyle())
             }
-            Spacer()
-            Button("シャッフルし直す", systemImage: "shuffle", action: onReshuffle)
-                .labelStyle(.iconOnly)
-                .buttonStyle(HighlightCircleButtonStyle())
+
+            Picker("選曲モード", selection: Binding(get: { selectionMode }, set: onSelectMode)) {
+                ForEach(HighlightSelectionMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .colorScheme(.dark)
         }
     }
 

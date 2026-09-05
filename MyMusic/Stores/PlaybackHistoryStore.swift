@@ -288,26 +288,37 @@ final class PlaybackHistoryStore {
     }
 
     func isEligibleForRegularShuffle(_ track: Track) -> Bool {
-        track.isEligibleForRegularPlayback && !isHiddenFromShuffle(trackID: track.id)
+        isEligibleForRegularShuffle(track, now: Date())
+    }
+
+    func isEligibleForRegularShuffle(_ track: Track, now: Date) -> Bool {
+        track.isEligibleForRegularPlayback && !isHiddenFromShuffle(trackID: track.id, now: now)
     }
 
     /// Returns every track once, ordered by a preference-weighted random draw.
     /// Positive preferences are more likely to appear early, while negative
     /// preferences use the reciprocal weight and remain eligible for playback.
     func preferenceWeightedShuffle(_ tracks: [Track], now: Date = Date()) -> [Track] {
-        let eligible = tracks.filter(isEligibleForRegularShuffle)
+        let eligible = tracks.filter { isEligibleForRegularShuffle($0, now: now) }
         return weightedShuffle(eligible, weights: automaticSelectionWeights(for: eligible, now: now))
+    }
+
+    /// Highlight playback is an automatic regular-shuffle entry point and therefore
+    /// shares the same eligibility, Preference, and Overplay policy.
+    func highlightPlaybackTracks(from tracks: [Track], now: Date = Date()) -> [Track] {
+        preferenceWeightedShuffle(tracks, now: now)
     }
 
     /// Work-playback tracks have their own playback entry point and stay out
     /// of the app's regular shuffle flows.
     func workPlaybackTracks(from tracks: [Track]) -> [Track] {
-        preferenceOnlyWeightedShuffle(tracks.filter(\.isEligibleForWorkPlayback))
+        preferenceOnlyWeightedShuffle(tracks.filter {
+            $0.isEligibleForWorkPlayback && !isHiddenFromShuffle(trackID: $0.id)
+        })
     }
 
     private func weightedShuffle(_ tracks: [Track], weights: [Track.ID: Double]) -> [Track] {
         tracks
-            .filter { !isHiddenFromShuffle(trackID: $0.id) }
             .map { track in
                 let unitRandom = Double.random(in: Double.leastNonzeroMagnitude ... 1)
                 let key = -log(unitRandom) / (weights[track.id] ?? 1)
