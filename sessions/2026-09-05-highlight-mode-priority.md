@@ -19,3 +19,10 @@
 - 極端なPreference／Recent／Randomを与えてもアガる・穏やかの逆傾向曲が適合曲を越えないこと、発掘優先、シャッフル中立、同等候補だけRandomで順序変更することを確認した。
 - iOS Simulator Debug build成功。既存のasset catalog／Swift 6 isolation warningのみ。
 - 実機操作確認は未実施。
+
+## 多様性追補
+
+- 同一mode band内を先頭から貪欲配置し、直前Artist 4、直近3曲Artist 2、直前Album 4、直近5曲に同Album 2曲以上で3のdiversity penaltyを適用した。
+- 主要8特徴量の共通有効次元でRMS距離を計算し、0.08未満だけscoreを0.97倍にした。シャッフルでは特徴距離を使わない。
+- モード切替時は保持済み曲列を多様性文脈に渡し、後続queueにも同じ規則を適用する。
+- ハイライト／既存選曲テスト全22件成功。Simulator Debug build成功。

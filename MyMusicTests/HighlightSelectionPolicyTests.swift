@@ -71,6 +71,116 @@ final class HighlightSelectionPolicyTests: XCTestCase {
         XCTAssertEqual(queue.map(\.id), [matching.id, opposite.id])
     }
 
+    func testDifferentModeBandCannotBeReversedByDiversity() {
+        let preceding = track("Previous", artist: "Same", album: "Same Album")
+        let matching = track("Matching", artist: "Same", album: "Same Album")
+        let opposite = track("Opposite", artist: "Different", album: "Different Album")
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [opposite, matching], mode: .upbeat,
+            baseWeights: [matching.id: 0.01, opposite.id: 42], histories: [:],
+            features: [
+                matching.id: values(energy: 1, aggressive: 1, bright: 1),
+                opposite.id: values(energy: 0, aggressive: 0, bright: 0)
+            ], randomValues: [matching.id: 0, opposite.id: 1], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(queue.first?.id, matching.id)
+    }
+
+    func testSameBandAvoidsImmediateArtistAndAlbumWhenAlternativeExists() {
+        let preceding = track("Previous", artist: "Same", album: "Same Album")
+        let repeated = track("Repeated", artist: "Same", album: "Same Album")
+        let varied = track("Varied", artist: "Different", album: "Different Album")
+        let feature = values(energy: 0.8, aggressive: 0.7, bright: 0.6)
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [repeated, varied], mode: .upbeat,
+            baseWeights: [repeated.id: 42, varied.id: 0.01], histories: [:],
+            features: [repeated.id: feature, varied.id: feature],
+            randomValues: [repeated.id: 1, varied.id: 0], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(queue.map(\.id), [varied.id, repeated.id])
+    }
+
+    func testSameBandAvoidsArtistIndependentlyOfAlbum() {
+        let preceding = track("Previous", artist: "Same", album: "First Album")
+        let repeated = track("Repeated", artist: "Same", album: "Second Album")
+        let varied = track("Varied", artist: "Different", album: "Third Album")
+        let feature = values(calm: 0.8, ambient: 0.7, piano: 0.6)
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [repeated, varied], mode: .calm,
+            baseWeights: [repeated.id: 42, varied.id: 0.01], histories: [:],
+            features: [repeated.id: feature, varied.id: feature], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(queue.first?.id, varied.id)
+    }
+
+    func testSameBandAvoidsAlbumIndependentlyOfTrackArtist() {
+        let preceding = track("Previous", artist: "Singer A", album: "Compilation", albumArtist: "Various")
+        let repeated = track("Repeated", artist: "Singer B", album: "Compilation", albumArtist: "Various")
+        let varied = track("Varied", artist: "Singer C", album: "Other", albumArtist: "Singer C")
+        let feature = values(energy: 0.8, aggressive: 0.7, bright: 0.6)
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [repeated, varied], mode: .upbeat,
+            baseWeights: [repeated.id: 42, varied.id: 0.01], histories: [:],
+            features: [repeated.id: feature, varied.id: feature], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(queue.first?.id, varied.id)
+    }
+
+    func testArtistAndAlbumPenaltiesExpireOutsideTheirWindows() {
+        let candidate = track("Candidate", artist: "Same", album: "Same Album")
+        let matching = track("Old", artist: "Same", album: "Same Album")
+        let other = (0..<5).map { track("Other \($0)", artist: "Other \($0)", album: "Other \($0)") }
+        XCTAssertGreaterThan(
+            HighlightSelectionPolicy.diversityPenalty(for: candidate, recentTracks: [matching]), 0
+        )
+        XCTAssertEqual(
+            HighlightSelectionPolicy.diversityPenalty(for: candidate, recentTracks: [matching] + other), 0
+        )
+    }
+
+    func testRepeatedArtistAndAlbumRemainSelectableWhenOnlyCandidate() {
+        let preceding = track("Previous", artist: "Same", album: "Same Album")
+        let only = track("Only", artist: "Same", album: "Same Album")
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [only], mode: .upbeat, baseWeights: [only.id: 1], histories: [:],
+            features: [only.id: values(energy: 0.8)], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(queue.map(\.id), [only.id])
+    }
+
+    func testFeatureSimilarityIsLightAndOnlyBreaksOtherwiseCloseScores() throws {
+        let preceding = track("Previous", artist: "Previous")
+        let similar = track("Similar", artist: "Similar")
+        let varied = track("Varied", artist: "Varied")
+        let previousFeature = values(energy: 0.8, aggressive: 0.5, bright: 0.7)
+        let similarFeature = values(energy: 0.81, aggressive: 0.50, bright: 0.69)
+        let variedFeature = values(energy: 0.9, aggressive: 0.7, bright: 0.4)
+        XCTAssertLessThan(
+            try XCTUnwrap(HighlightSelectionPolicy.featureDistance(previousFeature, similarFeature)),
+            HighlightSelectionPolicy.featureSimilarityDistanceThreshold
+        )
+        XCTAssertGreaterThan(
+            try XCTUnwrap(HighlightSelectionPolicy.featureDistance(previousFeature, variedFeature)),
+            HighlightSelectionPolicy.featureSimilarityDistanceThreshold
+        )
+
+        let closeQueue = HighlightSelectionPolicy.orderedTracks(
+            [similar, varied], mode: .upbeat,
+            baseWeights: [similar.id: 1, varied.id: 1], histories: [:],
+            features: [preceding.id: previousFeature, similar.id: similarFeature, varied.id: variedFeature],
+            randomValues: [similar.id: 0.5, varied.id: 0.5], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(closeQueue.first?.id, varied.id)
+
+        let preferenceQueue = HighlightSelectionPolicy.orderedTracks(
+            [similar, varied], mode: .upbeat,
+            baseWeights: [similar.id: 2, varied.id: 1], histories: [:],
+            features: [preceding.id: previousFeature, similar.id: similarFeature, varied.id: variedFeature],
+            randomValues: [similar.id: 0, varied.id: 1], precedingTracks: [preceding]
+        )
+        XCTAssertEqual(preferenceQueue.first?.id, similar.id)
+    }
+
     func testRandomOnlyReordersOtherwiseEquivalentCandidates() {
         let first = track("First")
         let second = track("Second")
@@ -160,8 +270,12 @@ final class HighlightSelectionPolicyTests: XCTestCase {
         XCTAssertEqual(highlightWeight, regularWeight! * 0.20)
     }
 
-    private func track(_ title: String) -> Track {
-        Track(id: UUID(), title: title, artistName: "Artist", duration: 180,
+    private func track(
+        _ title: String, artist: String = "Artist", album: String? = nil,
+        albumArtist: String? = nil
+    ) -> Track {
+        Track(id: UUID(), title: title, artistName: artist, albumArtistName: albumArtist,
+              albumTitle: album, duration: 180,
               fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"))
     }
 

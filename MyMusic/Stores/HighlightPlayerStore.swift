@@ -113,7 +113,10 @@ final class HighlightPlayerStore {
         }
         let retained = Array(queue.prefix(through: currentIndex))
         let retainedIDs = Set(retained.map(\.id))
-        queue = retained + selectedTracks(from: sourceTracks.filter { !retainedIDs.contains($0.id) })
+        queue = retained + selectedTracks(
+            from: sourceTracks.filter { !retainedIDs.contains($0.id) },
+            precedingTracks: retained
+        )
         analysisTask?.cancel()
         prefetchHighlights()
     }
@@ -330,7 +333,11 @@ final class HighlightPlayerStore {
         }
     }
 
-    private func selectedTracks(from tracks: [Track], now: Date = Date()) -> [Track] {
+    private func selectedTracks(
+        from tracks: [Track],
+        now: Date = Date(),
+        precedingTracks: [Track] = []
+    ) -> [Track] {
         let eligible = tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
         let baseWeights = playbackHistoryStore.automaticSelectionWeights(for: eligible, now: now)
         let features = Dictionary(eligible.compactMap { track in
@@ -338,7 +345,8 @@ final class HighlightPlayerStore {
         }, uniquingKeysWith: { first, _ in first })
         return HighlightSelectionPolicy.orderedTracks(
             eligible, mode: selectionMode, baseWeights: baseWeights,
-            histories: playbackHistoryStore.entries, features: features, now: now
+            histories: playbackHistoryStore.entries, features: features, now: now,
+            precedingTracks: precedingTracks
         )
     }
 
