@@ -155,6 +155,7 @@ final class PlayerStore {
             trackID: currentTrack?.id,
             title: currentTrack?.title ?? "",
             artist: currentTrack?.artistName ?? "",
+            album: currentTrack?.albumTitle ?? "",
             isPlaying: isPlaying,
             currentTime: currentTime,
             duration: duration,

@@ -3,47 +3,34 @@ import SwiftUI
 
 struct NowPlayingView: View {
     @Environment(WatchSessionManager.self) private var sessionManager
-    @State private var showsPreferences = false
+    @State private var showsDetails = false
 
     var body: some View {
-        GeometryReader { proxy in
-            let metrics = LayoutMetrics(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
-            ZStack {
-                artworkBackground
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                LinearGradient(
-                    colors: [.black.opacity(0.72), .black.opacity(0.38), .black.opacity(0.76)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+        ZStack {
+            GeometryReader { proxy in
+                backgroundLayer(size: proxy.size)
+            }
+            .ignoresSafeArea()
+
+            GeometryReader { proxy in
+                let metrics = LayoutMetrics(size: proxy.size)
                 mainContent(metrics: metrics)
             }
         }
         .foregroundStyle(.white)
-        .sheet(isPresented: $showsPreferences) {
-            PreferenceControlsView(sessionManager: sessionManager)
+        .sheet(isPresented: $showsDetails) {
+            PlaybackDetailsView()
         }
     }
 
     private func mainContent(metrics: LayoutMetrics) -> some View {
         let state = sessionManager.playbackState
         return VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 4) {
-                trackInformation(for: state)
-                Button { showsPreferences = true } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 40, height: 36)
-                        .background(.black.opacity(0.32), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("お気に入りと再生傾向")
-            }
-
-            Spacer(minLength: metrics.minimumVerticalSpacing)
+            utilityControls(metrics: metrics)
+            trackInformation(for: state)
+            preferenceControls(for: state)
             playbackProgress(for: state)
+            Spacer(minLength: metrics.minimumVerticalSpacing)
 
             HStack(spacing: metrics.controlSpacing) {
                 transportButton("backward.fill", label: "前の曲", command: .previous, diameter: metrics.controlDiameter)
@@ -52,30 +39,23 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity)
             .disabled(!sessionManager.isPhoneReachable || state.trackID == nil)
-
-            HStack(spacing: 5) {
-                Image(systemName: "speaker.wave.2.fill")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.82))
-                Text("音量")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.82))
-                Spacer(minLength: 4)
-                CompanionVolumeControl()
-                    .frame(width: metrics.volumeControlWidth, height: metrics.volumeHeight)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("iPhoneの音量")
-                    .accessibilityHint("選択してDigital Crownを回すと音量を調整できます")
-            }
-            .frame(height: metrics.volumeHeight)
-            .padding(.horizontal, 7)
-            .background(.black.opacity(0.30), in: Capsule())
-            .offset(y: metrics.volumeVerticalAdjustment)
         }
-        .padding(.top, metrics.contentTopPadding)
+        .frame(height: metrics.contentHeight, alignment: .top)
         .padding(.horizontal, metrics.horizontalPadding)
-        .padding(.bottom, metrics.contentBottomPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func backgroundLayer(size: CGSize) -> some View {
+        ZStack {
+            artworkBackground
+            LinearGradient(
+                colors: [.black.opacity(0.72), .black.opacity(0.38), .black.opacity(0.76)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+        .ignoresSafeArea()
     }
 
     @ViewBuilder
@@ -120,14 +100,103 @@ struct NowPlayingView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func preferenceControls(for state: WatchPlaybackState) -> some View {
+        HStack(spacing: 4) {
+            compactActionButton(
+                state.isFavorite ? "heart.fill" : "heart",
+                label: state.isFavorite ? "お気に入りから削除" : "お気に入りに追加",
+                value: state.isFavorite ? "お気に入り" : "未登録",
+                command: .toggleFavorite,
+                isSelected: state.isFavorite
+            )
+            compactActionButton(
+                state.playbackPreference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup",
+                label: "再生頻度を増やす",
+                value: preferenceAccessibilityValue(for: state),
+                command: .increasePlaybackPreference,
+                isSelected: state.playbackPreference > 0
+            )
+            compactActionButton(
+                state.playbackPreference < 0 ? "hand.thumbsdown.fill" : "hand.thumbsdown",
+                label: "再生頻度を減らす",
+                value: preferenceAccessibilityValue(for: state),
+                command: .decreasePlaybackPreference,
+                isSelected: state.playbackPreference < 0
+            )
+        }
+        .frame(height: 30)
+        .disabled(!sessionManager.isPhoneReachable || state.trackID == nil)
+    }
+
+    private func utilityControls(metrics: LayoutMetrics) -> some View {
+        HStack(spacing: 3) {
+            Spacer(minLength: 0)
+            Button { showsDetails = true } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
+            }
+            .buttonStyle(.plain)
+            .background(.black.opacity(0.28), in: Circle())
+            .accessibilityLabel("詳細")
+
+            CompanionVolumeControl()
+                .frame(width: 28, height: 28)
+                .scaleEffect(0.55)
+                .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
+                .contentShape(Rectangle())
+                .accessibilityLabel("iPhoneの音量")
+                .accessibilityHint("選択してDigital Crownを回すと音量を調整できます")
+        }
+        .frame(height: metrics.utilityControlSize)
+    }
+
     @ViewBuilder
     private func playbackProgress(for state: WatchPlaybackState) -> some View {
         if state.duration > 0 {
-            ProgressView(value: min(state.currentTime, state.duration), total: state.duration)
-                .tint(.white)
+            GeometryReader { proxy in
+                let progress = min(max(state.currentTime / state.duration, 0), 1)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.24))
+                    Capsule()
+                        .fill(.white.opacity(0.92))
+                        .frame(width: proxy.size.width * progress)
+                }
+            }
+                .frame(height: 1)
                 .accessibilityLabel("再生位置")
-                .padding(.bottom, 4)
+                .accessibilityValue("\(Int(min(state.currentTime, state.duration)))秒 / \(Int(state.duration))秒")
+                .padding(.top, 1)
         }
+    }
+
+    private func compactActionButton(
+        _ symbol: String,
+        label: String,
+        value: String,
+        command: WatchPlaybackCommand,
+        isSelected: Bool
+    ) -> some View {
+        Button { sessionManager.send(command) } label: {
+            Group {
+                if command == .toggleFavorite {
+                    Image(systemName: symbol)
+                } else {
+                    Text(command == .increasePlaybackPreference ? "Good" : "Bad")
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: 28)
+            .background(isSelected ? .white.opacity(0.24) : .black.opacity(0.24), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+    }
+
+    private func preferenceAccessibilityValue(for state: WatchPlaybackState) -> String {
+        guard state.playbackPreference != 0 else { return "未評価" }
+        return "\(state.playbackPreference > 0 ? "グッド" : "バッド") \(abs(state.playbackPreference))、10段階中"
     }
 
     private func playPauseButton(for state: WatchPlaybackState, diameter: CGFloat) -> some View {
@@ -149,7 +218,11 @@ struct NowPlayingView: View {
             Image(systemName: symbol)
                 .font(.system(size: diameter * 0.37, weight: .semibold))
                 .frame(width: diameter, height: diameter)
-                .background(.black.opacity(0.38), in: Circle())
+                .background {
+                    Circle()
+                        .fill(.black.opacity(0.38))
+                        .frame(width: diameter - 4, height: diameter - 4)
+                }
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
@@ -164,71 +237,33 @@ struct NowPlayingView: View {
 
 private struct LayoutMetrics {
     let horizontalPadding: CGFloat
-    let contentTopPadding: CGFloat
-    let contentBottomPadding: CGFloat
     let controlDiameter: CGFloat
     let controlSpacing: CGFloat
-    let volumeHeight: CGFloat
-    let volumeControlWidth: CGFloat
-    let volumeVerticalAdjustment: CGFloat
+    let utilityControlSize: CGFloat
     let minimumVerticalSpacing: CGFloat
+    let contentHeight: CGFloat
 
-    init(size: CGSize, safeAreaInsets: EdgeInsets) {
+    init(size: CGSize) {
         horizontalPadding = max(8, size.width * 0.045)
-        contentTopPadding = max(safeAreaInsets.top, 5)
-        contentBottomPadding = max(safeAreaInsets.bottom, 3)
         controlSpacing = max(6, size.width * 0.04)
         let availableControlWidth = size.width - horizontalPadding * 2 - controlSpacing * 2
         controlDiameter = min(max(availableControlWidth / 3, 44), 52)
-        volumeHeight = size.height < 210 ? 28 : 38
-        volumeControlWidth = size.height < 210 ? 40 : 48
-        volumeVerticalAdjustment = size.height < 210 ? -6 : 0
-        minimumVerticalSpacing = size.height < 210 ? 3 : 7
+        utilityControlSize = 32
+        minimumVerticalSpacing = 2
+        contentHeight = size.height
     }
 }
 
-private struct PreferenceControlsView: View {
-    let sessionManager: WatchSessionManager
-
+private struct PlaybackDetailsView: View {
     var body: some View {
-        let state = sessionManager.playbackState
-        VStack(spacing: 8) {
-            Text("曲の設定").font(.headline)
-            HStack(spacing: 8) {
-                actionButton(state.isFavorite ? "heart.fill" : "heart", label: state.isFavorite ? "お気に入りから削除" : "お気に入りに追加", value: state.isFavorite ? "お気に入り" : "未登録", command: .toggleFavorite)
-                actionButton(state.playbackPreference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup", label: "再生頻度を増やす", value: preferenceAccessibilityValue, command: .increasePlaybackPreference)
-                actionButton(state.playbackPreference < 0 ? "hand.thumbsdown.fill" : "hand.thumbsdown", label: "再生頻度を減らす", value: preferenceAccessibilityValue, command: .decreasePlaybackPreference)
+        List {
+            Section("詳細") {
+                Label("シャッフル", systemImage: "shuffle")
+                Label("おすすめ再生", systemImage: "sparkles")
             }
-            Text(preferenceLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .foregroundStyle(.secondary)
         }
-        .disabled(!sessionManager.isPhoneReachable || state.trackID == nil)
-        .padding(.horizontal, 8)
-    }
-
-    private func actionButton(_ symbol: String, label: String, value: String, command: WatchPlaybackCommand) -> some View {
-        Button { sessionManager.send(command) } label: {
-            Image(systemName: symbol)
-                .font(.title3)
-                .frame(width: 48, height: 48)
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.circle)
-        .accessibilityLabel(label)
-        .accessibilityValue(value)
-    }
-
-    private var preferenceLabel: String {
-        let value = sessionManager.playbackState.playbackPreference
-        guard value != 0 else { return "再生傾向: 未評価" }
-        return "再生傾向: \(value > 0 ? "Good" : "Bad") \(abs(value))/10"
-    }
-
-    private var preferenceAccessibilityValue: String {
-        let value = sessionManager.playbackState.playbackPreference
-        guard value != 0 else { return "未評価" }
-        return "\(value > 0 ? "グッド" : "バッド") \(abs(value))、10段階中"
+        .accessibilityHint("これらの機能は今後利用できるようになります")
     }
 }
 

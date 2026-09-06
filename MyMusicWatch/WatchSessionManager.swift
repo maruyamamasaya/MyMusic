@@ -27,6 +27,7 @@ final class WatchSessionManager: NSObject {
             trackID: UUID(),
             title: "A Long Song Title for Apple Watch",
             artist: "MyMusic Artist",
+            album: "A Long Album Title for Apple Watch",
             isPlaying: true,
             currentTime: 72,
             duration: 245,

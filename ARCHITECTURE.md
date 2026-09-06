@@ -172,7 +172,7 @@ Artwork本体はstateへ含めない。Watchが新しいTrackのArtworkを一度
 
 Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolumeControl`の`.companion` sourceをSwiftUIへbridgeする。これはペアリング中iPhoneのシステム出力音量をDigital Crownで制御する経路であり、`PlayerStore`、`AudioPlayerService`の内部mixer gain、WatchConnectivity契約は変更しない。画面をscroll containerにせず、volume controlを明示選択した時だけCrown focusを得る。
 
-`NowPlayingView`は`GeometryReader`の利用可能サイズとSafe Areaを入力に、Watch SE 40mmで成立する単一画面を構成する。Artworkとcontrast overlayだけをSafe Area外へ延長し、曲情報・進捗・44〜52ptの3つの再生操作・独立した音量controlはSafe Area側へ置く。Favorite／Good／Badは再生操作の幅と高さを圧迫しない別sheetから同じWatch commandを送る。
+`NowPlayingView`は背景と前景に別の`GeometryReader`を使う。背景側だけをSafe Area外へ拡張し、そのfull-screen sizeをArtworkとcontrast overlayの共通containerへ一度だけ指定する。前景側はwatchOSが提案するSafe Area内sizeだけで、右上の詳細／小型音量、曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部の44〜52pt再生操作を配置する。詳細sheetのShuffle／おすすめ再生は、現状のWatch command境界から既存Library／History／Highlight文脈を安全に呼べないため未接続の将来枠とする。
 
 ## 永続化
 

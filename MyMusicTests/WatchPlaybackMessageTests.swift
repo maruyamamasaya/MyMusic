@@ -4,7 +4,7 @@ import XCTest
 final class WatchPlaybackMessageTests: XCTestCase {
     func testPlaybackStateRoundTrip() throws {
         let expected = WatchPlaybackState(
-            trackID: UUID(), title: "Title", artist: "Artist",
+            trackID: UUID(), title: "Title", artist: "Artist", album: "Album",
             isPlaying: true, currentTime: 12, duration: 120,
             isFavorite: true, playbackPreference: -4, hasArtwork: true
         )
@@ -32,6 +32,7 @@ final class WatchPlaybackMessageTests: XCTestCase {
         ]
         let state = try XCTUnwrap(WatchPlaybackState(message: message))
         XCTAssertFalse(state.isFavorite)
+        XCTAssertEqual(state.album, "")
         XCTAssertEqual(state.playbackPreference, 0)
         XCTAssertFalse(state.hasArtwork)
     }

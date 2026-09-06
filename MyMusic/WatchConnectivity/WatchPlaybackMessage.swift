@@ -19,6 +19,7 @@ struct WatchPlaybackState: Equatable, Sendable {
     var trackID: UUID?
     var title: String
     var artist: String
+    var album: String
     var isPlaying: Bool
     var currentTime: TimeInterval
     var duration: TimeInterval
@@ -30,6 +31,7 @@ struct WatchPlaybackState: Equatable, Sendable {
         trackID: nil,
         title: "",
         artist: "",
+        album: "",
         isPlaying: false,
         currentTime: 0,
         duration: 0,
@@ -45,6 +47,7 @@ struct WatchPlaybackState: Equatable, Sendable {
             "trackID": trackID?.uuidString ?? "",
             "title": title,
             "artist": artist,
+            "album": album,
             "isPlaying": isPlaying,
             "currentTime": currentTime.isFinite ? max(currentTime, 0) : 0,
             "duration": duration.isFinite ? max(duration, 0) : 0,
@@ -58,6 +61,7 @@ struct WatchPlaybackState: Equatable, Sendable {
         trackID: UUID?,
         title: String,
         artist: String,
+        album: String = "",
         isPlaying: Bool,
         currentTime: TimeInterval,
         duration: TimeInterval,
@@ -68,6 +72,7 @@ struct WatchPlaybackState: Equatable, Sendable {
         self.trackID = trackID
         self.title = title
         self.artist = artist
+        self.album = album
         self.isPlaying = isPlaying
         self.currentTime = currentTime
         self.duration = duration
@@ -92,6 +97,7 @@ struct WatchPlaybackState: Equatable, Sendable {
             trackID: UUID(uuidString: trackIDString),
             title: title,
             artist: artist,
+            album: message["album"] as? String ?? "",
             isPlaying: isPlaying,
             currentTime: max(currentTime, 0),
             duration: max(duration, 0),
