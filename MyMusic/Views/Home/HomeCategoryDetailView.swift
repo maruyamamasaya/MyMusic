@@ -91,7 +91,7 @@ struct HomeDestinationView: View {
                 title: "最近追加した曲",
                 emptyTitle: "最近追加した曲はありません",
                 emptyDescription: "追加から2週間以内の曲がここに表示されます。",
-                systemImage: "clock.badge.plus",
+                systemImage: "clock",
                 tracks: playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
             )
         case .selectiveRandomPlay:

@@ -23,10 +23,10 @@ enum PlayerPresentationMode: Sendable, Equatable {
 @MainActor
 @Observable
 final class PlayerStore {
-    private(set) var currentTrack: Track?
-    private(set) var isPlaying = false
-    private(set) var currentTime: TimeInterval = 0
-    private(set) var duration: TimeInterval = 0
+    private(set) var currentTrack: Track? { didSet { publishWatchState() } }
+    private(set) var isPlaying = false { didSet { publishWatchState() } }
+    private(set) var currentTime: TimeInterval = 0 { didSet { publishWatchState() } }
+    private(set) var duration: TimeInterval = 0 { didSet { publishWatchState() } }
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var queue: [Track] = []
@@ -82,6 +82,7 @@ final class PlayerStore {
     private var isCompletingCustomEnd = false
     private var lastPositionPersistenceDate = Date.distantPast
     private let periodicPositionPersistenceInterval: TimeInterval = 7
+    private var watchConnectivityService: WatchConnectivityServicing?
 
     init(
         audioPlayer: AudioPlayerServicing? = nil,
@@ -119,6 +120,38 @@ final class PlayerStore {
             seek: { [weak self] time in self?.seek(to: time) }
         ))
         updateRemoteCommandAvailability()
+    }
+
+    func connectWatch(using service: WatchConnectivityServicing) {
+        watchConnectivityService = service
+        service.commandHandler = { [weak self] command in
+            switch command {
+            case .play: self?.resume()
+            case .pause: self?.pause()
+            case .togglePlayPause: self?.togglePlayPause()
+            case .next: self?.next()
+            case .previous: self?.previous()
+            case .requestState: break
+            }
+        }
+        service.stateProvider = { [weak self] in self?.watchPlaybackState ?? .empty }
+        service.activate()
+        service.publish(watchPlaybackState)
+    }
+
+    private var watchPlaybackState: WatchPlaybackState {
+        WatchPlaybackState(
+            trackID: currentTrack?.id,
+            title: currentTrack?.title ?? "",
+            artist: currentTrack?.artistName ?? "",
+            isPlaying: isPlaying,
+            currentTime: currentTime,
+            duration: duration
+        )
+    }
+
+    private func publishWatchState() {
+        watchConnectivityService?.publish(watchPlaybackState)
     }
 
     convenience init(

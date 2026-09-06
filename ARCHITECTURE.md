@@ -162,6 +162,12 @@ music root recursive scan
 - 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 
+## Apple Watch リモコン
+
+`MyMusicWatch/NowPlayingView` → `WatchSessionManager` → WatchConnectivity → iPhoneの`WatchConnectivityService` → `PlayerStore` → `AudioPlayerService` の一方向の操作経路とする。WatchはPlayerStore、queue、再生処理を複製しない。
+
+通信契約は`WatchPlaybackMessage`に集約し、commandとversion付きの再生状態をProperty List互換dictionaryへ変換する。iPhoneの`PlayerStore`だけが状態の正本であり、Watchのボタン操作では楽観的に表示状態を変更しない。iPhoneは到達中の即時messageに加え、最新状態を`updateApplicationContext`へ保存するため、一時的な非到達から復帰したWatchも同期できる。ArtworkはMVPではplaceholderであり、後続で任意payloadまたはfile transferを同Service境界へ追加する。
+
 ## 永続化
 
 server / database migration はありません。端末内の file と UserDefaults が保存境界です。

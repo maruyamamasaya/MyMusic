@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		C0DE00000000000000000001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE00000000000000000004 /* ZIPFoundation */; };
 		C0DE00000000000000000002 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE00000000000000000005 /* ZIPFoundation */; };
+		D0C000000000000000000001 /* MyMusicWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0C000000000000000000002 /* MyMusicWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D0C000000000000000000003 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,10 +21,33 @@
 			remoteGlobalIDString = FCC1BB19302B265200C78471;
 			remoteInfo = MyMusic;
 		};
+		D0C000000000000000000005 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FCC1BB12302B265200C78471 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D0C000000000000000000006;
+			remoteInfo = MyMusicWatch;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D0C000000000000000000007 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				D0C000000000000000000001 /* MyMusicWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AB1000000000000000000001 /* MyMusicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyMusicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D0C000000000000000000002 /* MyMusicWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyMusicWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyMusic/WatchConnectivity/WatchPlaybackMessage.swift; sourceTree = SOURCE_ROOT; };
 		FCC1BB1A302B265200C78471 /* MyMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -40,6 +65,11 @@
 		AB1000000000000000000002 /* MyMusicTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MyMusicTests;
+			sourceTree = "<group>";
+		};
+		D0C000000000000000000008 /* MyMusicWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MyMusicWatch;
 			sourceTree = "<group>";
 		};
 		FCC1BB1C302B265200C78471 /* MyMusic */ = {
@@ -61,6 +91,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0C000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FCC1BB17302B265200C78471 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -76,6 +113,8 @@
 			isa = PBXGroup;
 			children = (
 				FCC1BB1C302B265200C78471 /* MyMusic */,
+				D0C000000000000000000008 /* MyMusicWatch */,
+				D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */,
 				AB1000000000000000000002 /* MyMusicTests */,
 				FCC1BB1B302B265200C78471 /* Products */,
 			);
@@ -85,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				FCC1BB1A302B265200C78471 /* MyMusic.app */,
+				D0C000000000000000000002 /* MyMusicWatch.app */,
 				AB1000000000000000000001 /* MyMusicTests.xctest */,
 			);
 			name = Products;
@@ -117,6 +157,28 @@
 			productReference = AB1000000000000000000001 /* MyMusicTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D0C000000000000000000006 /* MyMusicWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0C00000000000000000000A /* Build configuration list for PBXNativeTarget "MyMusicWatch" */;
+			buildPhases = (
+				D0C00000000000000000000B /* Sources */,
+				D0C000000000000000000009 /* Frameworks */,
+				D0C00000000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D0C000000000000000000008 /* MyMusicWatch */,
+			);
+			name = MyMusicWatch;
+			packageProductDependencies = (
+			);
+			productName = MyMusicWatch;
+			productReference = D0C000000000000000000002 /* MyMusicWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 		FCC1BB19302B265200C78471 /* MyMusic */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FCC1BB25302B265400C78471 /* Build configuration list for PBXNativeTarget "MyMusic" */;
@@ -124,10 +186,12 @@
 				FCC1BB16302B265200C78471 /* Sources */,
 				FCC1BB17302B265200C78471 /* Frameworks */,
 				FCC1BB18302B265200C78471 /* Resources */,
+				D0C000000000000000000007 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D0C00000000000000000000D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FCC1BB1C302B265200C78471 /* MyMusic */,
@@ -154,6 +218,9 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = FCC1BB19302B265200C78471;
 					};
+					D0C000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					FCC1BB19302B265200C78471 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -177,6 +244,7 @@
 			projectRoot = "";
 			targets = (
 				FCC1BB19302B265200C78471 /* MyMusic */,
+				D0C000000000000000000006 /* MyMusicWatch */,
 				AB1000000000000000000006 /* MyMusicTests */,
 			);
 		};
@@ -184,6 +252,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		AB1000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0C00000000000000000000C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -207,6 +282,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0C00000000000000000000B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D0C000000000000000000003 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FCC1BB16302B265200C78471 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -221,6 +304,11 @@
 			isa = PBXTargetDependency;
 			target = FCC1BB19302B265200C78471 /* MyMusic */;
 			targetProxy = AB1000000000000000000007 /* PBXContainerItemProxy */;
+		};
+		D0C00000000000000000000D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0C000000000000000000006 /* MyMusicWatch */;
+			targetProxy = D0C000000000000000000005 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -276,6 +364,53 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MyMusic.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MyMusic";
+			};
+			name = Release;
+		};
+		D0C00000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29GY347DY;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MyMusic;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = maruyama.MyMusic;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maruyama.MyMusic.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		D0C00000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29GY347DY;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MyMusic;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = maruyama.MyMusic;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maruyama.MyMusic.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -474,6 +609,15 @@
 			buildConfigurations = (
 				AB1000000000000000000009 /* Debug */,
 				AB100000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D0C00000000000000000000A /* Build configuration list for PBXNativeTarget "MyMusicWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0C00000000000000000000E /* Debug */,
+				D0C00000000000000000000F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

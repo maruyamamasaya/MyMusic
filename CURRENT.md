@@ -17,6 +17,13 @@ updated: 2026-09-05
 
 ## 実装済み
 
+### Apple Watch リモコン MVP
+
+- 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
+- iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
+- iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
+- Watchの「再生中」画面は曲名、Artist、接続状態、再生進捗、前／再生停止／次を表示する。Artwork実データ転送は後続範囲とし、現在は将来置換可能なプレースホルダーを表示する。
+
 ### ローカルWeb Analytics v0
 
 - Web UI/UX Betaを更新。Artist／Genreは全文字列候補から部分一致検索する選択UI（全角・半角／英字大小を正規化、完全一致・前方一致優先、候補表示は最大30件）へ変更。全画面の読み込み・再試行、期間／検索条件表示、日付入力、スマホ幅ナビゲーション、件数／ページ移動を共通化した。Tracks／Data Sourcesの表はページと一緒に縦スクロールし、必要な場合だけ表内を横スクロールする。Tracksは基本／詳細指標切替、Rankingsは種類別表示切替、Data Sourcesは全件対象の名称／Artist検索を提供する。iOS・既存JSON契約・SQLite schemaの変更はない。
@@ -55,6 +62,8 @@ updated: 2026-09-05
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
+
+- **Highlight Good／Bad数値表示**: ハイライト画面のGood／Bad操作に、現在の再生傾向の強さ（1〜10）を有効側の数値バッジとして表示する。未評価側は従来どおり通常アイコンとし、VoiceOverでは評価方向・数値・10段階中であることを読み上げる。
 
 - **Highlight bounded選曲**: 起動・アガる／穏やか／発掘／シャッフル切替・reshuffleで全LibraryをO(n²) Greedy整列せず、O(n log k)の全体評価＋最大150曲pool＋最大40曲queueへ変更した。多様性・mode band・Preference・Overplay・Recent Highlightを維持し、pureなrankingはMainActor外で実行する。generation照合で古い非同期結果を破棄し、Debugでは件数と時間を集約ログへ出す。
 
