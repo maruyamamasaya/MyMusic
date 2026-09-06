@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 # MyMusic の現在状態
@@ -22,7 +22,10 @@ updated: 2026-09-05
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
-- Watchの「再生中」画面は曲名、Artist、接続状態、再生進捗、前／再生停止／次を表示する。Artwork実データ転送は後続範囲とし、現在は将来置換可能なプレースホルダーを表示する。
+- Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchからTrack単位で一度だけ要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。失敗・未収録時はplaceholderを維持する。
+- 同画面の音量はWatchKit標準の`WKInterfaceVolumeControl(origin: .companion)`をSwiftUIへbridgeして表示する。選択時のDigital Crownと現在音量表示はシステムに任せ、WatchConnectivity messageやWatch独自のvolume stateは追加しない。
+- Watch再生画面はWatch SE 40mmを最小基準とし、Artworkと黒gradientだけを全面へ延長し、UIはSafe Area内へ置く。曲情報、再生位置、44〜52ptの前／再生停止／次を同一横列、独立した下部音量へ再構成し、お気に入り／Good／Badは省スペースな別sheetへ移した。長いmetadataは1行末尾省略とし、SE 40／44mmとUltra 49mm Simulatorで一画面表示を確認済み。
+- 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
 
 ### ローカルWeb Analytics v0
 

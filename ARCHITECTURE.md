@@ -166,7 +166,13 @@ music root recursive scan
 
 `MyMusicWatch/NowPlayingView` → `WatchSessionManager` → WatchConnectivity → iPhoneの`WatchConnectivityService` → `PlayerStore` → `AudioPlayerService` の一方向の操作経路とする。WatchはPlayerStore、queue、再生処理を複製しない。
 
-通信契約は`WatchPlaybackMessage`に集約し、commandとversion付きの再生状態をProperty List互換dictionaryへ変換する。iPhoneの`PlayerStore`だけが状態の正本であり、Watchのボタン操作では楽観的に表示状態を変更しない。iPhoneは到達中の即時messageに加え、最新状態を`updateApplicationContext`へ保存するため、一時的な非到達から復帰したWatchも同期できる。ArtworkはMVPではplaceholderであり、後続で任意payloadまたはfile transferを同Service境界へ追加する。
+通信契約は`WatchPlaybackMessage`に集約し、commandとversion付きの再生状態をProperty List互換dictionaryへ変換する。iPhoneの`PlayerStore`と`TrackPreferenceStore`だけが状態の正本であり、Watchのボタン操作では楽観的に表示状態を変更しない。iPhoneは到達中の即時messageに加え、最新状態を`updateApplicationContext`へ保存するため、一時的な非到達から復帰したWatchも同期できる。version 1 stateへ追加したfavorite／preference／Artwork有無はoptional decodeとし、旧version 1 payloadを維持する。
+
+Artwork本体はstateへ含めない。Watchが新しいTrackのArtworkを一度だけ要求し、`WatchArtworkPreparationService` actorが既存`ArtworkService`のデータをアスペクト比を維持した最大512px・JPEG品質0.82へ変換する。元画像の最大辺が512px未満なら拡大しない。iPhoneの`WatchConnectivityService`が一時fileを`transferFile`し、完了時に削除する。Watchは現在Track分だけをmemoryに保持し、Track変更時に破棄するため永続cacheを増やさない。Artwork失敗はstate／command経路へ影響させない。
+
+Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolumeControl`の`.companion` sourceをSwiftUIへbridgeする。これはペアリング中iPhoneのシステム出力音量をDigital Crownで制御する経路であり、`PlayerStore`、`AudioPlayerService`の内部mixer gain、WatchConnectivity契約は変更しない。画面をscroll containerにせず、volume controlを明示選択した時だけCrown focusを得る。
+
+`NowPlayingView`は`GeometryReader`の利用可能サイズとSafe Areaを入力に、Watch SE 40mmで成立する単一画面を構成する。Artworkとcontrast overlayだけをSafe Area外へ延長し、曲情報・進捗・44〜52ptの3つの再生操作・独立した音量controlはSafe Area側へ置く。Favorite／Good／Badは再生操作の幅と高さを圧迫しない別sheetから同じWatch commandを送る。
 
 ## 永続化
 

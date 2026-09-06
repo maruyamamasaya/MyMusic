@@ -14,6 +14,7 @@ final class TrackPreferenceStore {
     private let persistence: TrackPreferencePersistenceServicing
     private var saveTask: Task<Void, Never>?
     private var isLoading = false
+    var stateChangeHandler: (() -> Void)?
 
     init(persistence: TrackPreferencePersistenceServicing = TrackPreferencePersistenceService()) {
         self.persistence = persistence
@@ -58,6 +59,7 @@ final class TrackPreferenceStore {
             entries = merged
             homePresentationRevision &+= 1
             isLoaded = true
+            stateChangeHandler?()
             if hadPendingChanges { try await persistence.save(Array(merged.values)) }
         } catch {
             errorMessage = "曲の設定を読み込めませんでした: \(error.localizedDescription)"
@@ -112,6 +114,7 @@ final class TrackPreferenceStore {
             try await persistence.save(Array(merged.values))
             entries = merged
             homePresentationRevision &+= 1
+            stateChangeHandler?()
         }
         return TrackPreferenceImportResult(
             total: imported.count,
@@ -135,6 +138,7 @@ final class TrackPreferenceStore {
     private func update(_ preference: TrackPreference) {
         entries[preference.trackID] = preference
         homePresentationRevision &+= 1
+        stateChangeHandler?()
         guard isLoaded else { return }
         let snapshot = Array(entries.values)
         let preceding = saveTask

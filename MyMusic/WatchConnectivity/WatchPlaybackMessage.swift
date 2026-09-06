@@ -6,11 +6,15 @@ enum WatchPlaybackCommand: String, CaseIterable, Sendable {
     case togglePlayPause
     case next
     case previous
+    case toggleFavorite
+    case increasePlaybackPreference
+    case decreasePlaybackPreference
+    case requestArtwork
     case requestState
 }
 
 struct WatchPlaybackState: Equatable, Sendable {
-    static let schemaVersion = 1
+    nonisolated static let schemaVersion = 1
 
     var trackID: UUID?
     var title: String
@@ -18,6 +22,9 @@ struct WatchPlaybackState: Equatable, Sendable {
     var isPlaying: Bool
     var currentTime: TimeInterval
     var duration: TimeInterval
+    var isFavorite: Bool
+    var playbackPreference: Int
+    var hasArtwork: Bool
 
     static let empty = WatchPlaybackState(
         trackID: nil,
@@ -25,7 +32,10 @@ struct WatchPlaybackState: Equatable, Sendable {
         artist: "",
         isPlaying: false,
         currentTime: 0,
-        duration: 0
+        duration: 0,
+        isFavorite: false,
+        playbackPreference: 0,
+        hasArtwork: false
     )
 
     var message: [String: Any] {
@@ -37,7 +47,10 @@ struct WatchPlaybackState: Equatable, Sendable {
             "artist": artist,
             "isPlaying": isPlaying,
             "currentTime": currentTime.isFinite ? max(currentTime, 0) : 0,
-            "duration": duration.isFinite ? max(duration, 0) : 0
+            "duration": duration.isFinite ? max(duration, 0) : 0,
+            "isFavorite": isFavorite,
+            "playbackPreference": playbackPreference,
+            "hasArtwork": hasArtwork
         ]
     }
 
@@ -47,7 +60,10 @@ struct WatchPlaybackState: Equatable, Sendable {
         artist: String,
         isPlaying: Bool,
         currentTime: TimeInterval,
-        duration: TimeInterval
+        duration: TimeInterval,
+        isFavorite: Bool = false,
+        playbackPreference: Int = 0,
+        hasArtwork: Bool = false
     ) {
         self.trackID = trackID
         self.title = title
@@ -55,6 +71,9 @@ struct WatchPlaybackState: Equatable, Sendable {
         self.isPlaying = isPlaying
         self.currentTime = currentTime
         self.duration = duration
+        self.isFavorite = isFavorite
+        self.playbackPreference = min(max(playbackPreference, -10), 10)
+        self.hasArtwork = hasArtwork
     }
 
     init?(message: [String: Any]) {
@@ -75,7 +94,10 @@ struct WatchPlaybackState: Equatable, Sendable {
             artist: artist,
             isPlaying: isPlaying,
             currentTime: max(currentTime, 0),
-            duration: max(duration, 0)
+            duration: max(duration, 0),
+            isFavorite: message["isFavorite"] as? Bool ?? false,
+            playbackPreference: message["playbackPreference"] as? Int ?? 0,
+            hasArtwork: message["hasArtwork"] as? Bool ?? false
         )
     }
 
@@ -88,5 +110,18 @@ struct WatchPlaybackState: Equatable, Sendable {
               message["version"] as? Int == schemaVersion,
               let value = message["command"] as? String else { return nil }
         return WatchPlaybackCommand(rawValue: value)
+    }
+}
+
+enum WatchArtworkFileMetadata {
+    nonisolated static func message(trackID: UUID) -> [String: Any] {
+        ["kind": "artwork", "version": WatchPlaybackState.schemaVersion, "trackID": trackID.uuidString]
+    }
+
+    nonisolated static func trackID(from message: [String: Any]?) -> UUID? {
+        guard message?["kind"] as? String == "artwork",
+              message?["version"] as? Int == WatchPlaybackState.schemaVersion,
+              let value = message?["trackID"] as? String else { return nil }
+        return UUID(uuidString: value)
     }
 }

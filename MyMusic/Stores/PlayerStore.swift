@@ -83,6 +83,7 @@ final class PlayerStore {
     private var lastPositionPersistenceDate = Date.distantPast
     private let periodicPositionPersistenceInterval: TimeInterval = 7
     private var watchConnectivityService: WatchConnectivityServicing?
+    private weak var watchPreferenceStore: TrackPreferenceStore?
 
     init(
         audioPlayer: AudioPlayerServicing? = nil,
@@ -122,21 +123,31 @@ final class PlayerStore {
         updateRemoteCommandAvailability()
     }
 
-    func connectWatch(using service: WatchConnectivityServicing) {
+    func connectWatch(using service: WatchConnectivityServicing, preferenceStore: TrackPreferenceStore) {
         watchConnectivityService = service
+        watchPreferenceStore = preferenceStore
         service.commandHandler = { [weak self] command in
+            guard let self else { return }
             switch command {
-            case .play: self?.resume()
-            case .pause: self?.pause()
-            case .togglePlayPause: self?.togglePlayPause()
-            case .next: self?.next()
-            case .previous: self?.previous()
+            case .play: self.resume()
+            case .pause: self.pause()
+            case .togglePlayPause: self.togglePlayPause()
+            case .next: self.next()
+            case .previous: self.previous()
+            case .toggleFavorite:
+                if let trackID = self.currentTrack?.id { preferenceStore.toggleFavorite(trackID: trackID) }
+            case .increasePlaybackPreference:
+                if let trackID = self.currentTrack?.id { preferenceStore.increasePlaybackPreference(for: trackID) }
+            case .decreasePlaybackPreference:
+                if let trackID = self.currentTrack?.id { preferenceStore.decreasePlaybackPreference(for: trackID) }
+            case .requestArtwork: break
             case .requestState: break
             }
         }
         service.stateProvider = { [weak self] in self?.watchPlaybackState ?? .empty }
+        preferenceStore.stateChangeHandler = { [weak self] in self?.publishWatchState() }
         service.activate()
-        service.publish(watchPlaybackState)
+        publishWatchState()
     }
 
     private var watchPlaybackState: WatchPlaybackState {
@@ -146,12 +157,18 @@ final class PlayerStore {
             artist: currentTrack?.artistName ?? "",
             isPlaying: isPlaying,
             currentTime: currentTime,
-            duration: duration
+            duration: duration,
+            isFavorite: currentTrack.map { watchPreferenceStore?.isFavorite(trackID: $0.id) ?? false } ?? false,
+            playbackPreference: currentTrack.map { watchPreferenceStore?.playbackPreference(for: $0.id) ?? 0 } ?? 0,
+            hasArtwork: currentTrack?.artworkIdentifier != nil
         )
     }
 
     private func publishWatchState() {
-        watchConnectivityService?.publish(watchPlaybackState)
+        watchConnectivityService?.publish(
+            watchPlaybackState,
+            artworkIdentifier: currentTrack?.artworkIdentifier
+        )
     }
 
     convenience init(
