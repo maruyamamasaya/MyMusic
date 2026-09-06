@@ -178,16 +178,10 @@ struct NowPlayingView: View {
         isSelected: Bool
     ) -> some View {
         Button { sessionManager.send(command) } label: {
-            Group {
-                if command == .toggleFavorite {
-                    Image(systemName: symbol)
-                } else {
-                    Text(command == .increasePlaybackPreference ? "Good" : "Bad")
-                }
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .frame(maxWidth: .infinity, minHeight: 28)
-            .background(isSelected ? .white.opacity(0.24) : .black.opacity(0.24), in: Capsule())
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .background(isSelected ? .white.opacity(0.24) : .black.opacity(0.24), in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
