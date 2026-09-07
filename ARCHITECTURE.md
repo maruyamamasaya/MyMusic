@@ -178,6 +178,8 @@ Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolu
 
 server / database migration はありません。端末内の file と UserDefaults が保存境界です。
 
+App外バックアップは`ExternalBackupView` → `ExternalBackupService`の経路に限定する。外部フォルダは正本ではなく2世代snapshotであり、manifest付きstagingを完全検証した場合だけrotationする。Restoreは実行中のStoreやWAL databaseを置換せず、Application Supportと同じvolumeのpending directoryへ準備し、次回`MyMusicApp.init`のStore生成前にatomic swapする。音楽フォルダbookmarkは権限再取得が必要なため対象外とし、復元したTrack Identityと再scanでTrack ID参照データを再接続する。
+
 | データ | 主な所有者 | 保存形態 / 場所 |
 | --- | --- | --- |
 | Library folder access | `FileImportService` | UserDefaults の security-scoped bookmark |

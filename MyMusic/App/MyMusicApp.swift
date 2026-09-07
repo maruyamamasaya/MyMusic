@@ -15,6 +15,9 @@ struct MyMusicApp: App {
     @State private var stationStore: StationStore
 
     init() {
+        // A restore is staged while the app is running and swapped in only here,
+        // before any Store or SQLite connection opens the authoritative files.
+        _ = try? ExternalBackupService().applyPendingRestoreIfNeeded()
         let preferenceStore = TrackPreferenceStore()
         let historyStore = PlaybackHistoryStore(preferenceStore: preferenceStore)
         let audioPlayer = AudioPlayerService()

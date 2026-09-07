@@ -37,6 +37,15 @@ struct DataManagementView: View {
         List {
             Section {
                 NavigationLink {
+                    ExternalBackupView()
+                } label: {
+                    Label("App外バックアップ", systemImage: "externaldrive.badge.icloud")
+                }
+            } footer: {
+                Text("アンインストールに備えて、重要データをFilesまたはiCloud Driveへ2世代保存します。")
+            }
+            Section {
+                NavigationLink {
                     AnalyticsDataExportView()
                 } label: {
                     Label("Analyticsと同期", systemImage: "arrow.up.doc")

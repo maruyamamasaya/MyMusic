@@ -70,6 +70,10 @@ final class FavoriteStore {
 
     func dismissError() { errorMessage = nil }
 
+    func waitForPendingSave() async {
+        await saveTask?.value
+    }
+
     private func limited<Element>(_ values: [Element], to limit: Int?) -> [Element] {
         guard let limit else { return values }
         return Array(values.prefix(limit))

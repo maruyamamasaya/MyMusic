@@ -86,6 +86,10 @@ final class TrackPreferenceStore {
 
     func dismissError() { errorMessage = nil }
 
+    func waitForPendingSave() async {
+        await saveTask?.value
+    }
+
     func importPreferences(
         _ imported: [TrackPreference],
         libraryTrackIDs: Set<Track.ID>

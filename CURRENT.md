@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # MyMusic の現在状態
@@ -16,6 +16,13 @@ updated: 2026-09-06
 この方針を採った経緯は [ADR-0002](decisions/ADR-0002-baseline-and-beta-delivery.md)、利用者向け機能説明は [README.md](README.md) を参照してください。
 
 ## 実装済み
+
+### App外バックアップ / Restore基盤
+
+- 設定の「データ管理」からFiles / iCloud Driveのユーザー選択フォルダを保存先として登録し、security-scoped bookmarkで次回起動後も利用できる。外部には`MyMusic Backup/latest`と`previous`の2世代だけを保持する。
+- 再生履歴SQLite（Playback Events、boredom、soft deleteを含む）、Track Preference、Playlist、Track Identity、Track Features、曲別再生位置・start/end・音量調整、Libraryお気に入り、Highlight、選択したEQ／transition／volume normalization／Genre・表示設定を保存する。音源、Artwork、library cache、音楽フォルダbookmark、内部破損対策Backupは含めない。
+- SQLite online backup、staging検証、manifest、JSON／plist／SQLite integrity／Track ID検証を行い、成功時だけlatest/previousをrotationする。Restoreも検証済みpendingへ一旦配置し、次回起動時にStoreやSQLiteを開く前だけ正本とatomicに入れ替える。失敗時は現データへrollbackする。
+- Restore後は音楽フォルダを再選択する。復元したIdentity registryと再scanによりStable Track IDを再利用し、不一致データを別曲へ推測接続しない。詳細は[App外バックアップ v1](Documentation/ExternalBackup.md)を参照する。
 
 ### Apple Watch リモコン MVP
 
