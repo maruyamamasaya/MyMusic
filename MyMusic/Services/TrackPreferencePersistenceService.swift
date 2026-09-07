@@ -10,7 +10,11 @@ actor TrackPreferencePersistenceService: TrackPreferencePersistenceServicing {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(applicationDirectory: URL? = nil) {
+    init() {
+        self.init(applicationDirectory: nil)
+    }
+
+    init(applicationDirectory: URL?) {
         let root = applicationDirectory ?? FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         )[0].appending(path: "MyMusic")

@@ -88,7 +88,11 @@ actor TrackIdentityService: TrackIdentityServicing {
     private var isDirty = false
     private var recordsBeforeScan: [Record]?
 
-    init(registryURL: URL? = nil) {
+    init() {
+        self.init(registryURL: nil)
+    }
+
+    init(registryURL: URL?) {
         if let registryURL {
             self.registryURL = registryURL
         } else {

@@ -16,8 +16,12 @@ final class TrackPreferenceStore {
     private var isLoading = false
     var stateChangeHandler: (() -> Void)?
 
-    init(persistence: TrackPreferencePersistenceServicing = TrackPreferencePersistenceService()) {
+    init(persistence: TrackPreferencePersistenceServicing) {
         self.persistence = persistence
+    }
+
+    convenience init() {
+        self.init(persistence: TrackPreferencePersistenceService())
     }
 
     /// The absence of the v2 file is the one-time migration marker. Legacy values

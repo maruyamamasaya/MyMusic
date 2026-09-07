@@ -87,7 +87,7 @@ private struct TrackSearchOutput: Sendable {
 actor TrackSearchWorker {
     let searchService: TrackSearchService
 
-    nonisolated init(searchService: TrackSearchService = TrackSearchService()) {
+    init(searchService: TrackSearchService = TrackSearchService()) {
         self.searchService = searchService
     }
 

@@ -1,13 +1,13 @@
 import Foundation
 
-enum PlaybackStartKind: String, Codable, CaseIterable, Sendable {
+nonisolated enum PlaybackStartKind: String, Codable, CaseIterable, Sendable {
     case manual
     /// The user pressed next/previous, but did not directly choose the destination track.
     case userAdvanced = "user_advanced"
     case automatic
 }
 
-enum PlaybackStartSource: String, Codable, CaseIterable, Sendable {
+nonisolated enum PlaybackStartSource: String, Codable, CaseIterable, Sendable {
     case album
     case artist
     case favorite
@@ -25,13 +25,13 @@ enum PlaybackStartSource: String, Codable, CaseIterable, Sendable {
     case unknown
 }
 
-enum PlaybackEndKind: String, Codable, CaseIterable, Sendable {
+nonisolated enum PlaybackEndKind: String, Codable, CaseIterable, Sendable {
     case natural
     case userSkipped = "user_skipped"
     case other
 }
 
-struct PlaybackStartContext: Codable, Hashable, Sendable {
+nonisolated struct PlaybackStartContext: Codable, Hashable, Sendable {
     var kind: PlaybackStartKind
     var source: PlaybackStartSource
 
@@ -39,7 +39,7 @@ struct PlaybackStartContext: Codable, Hashable, Sendable {
     nonisolated static let automaticUnknown = PlaybackStartContext(kind: .automatic, source: .unknown)
 }
 
-struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
+nonisolated struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let trackID: Track.ID
     let startedAt: Date
@@ -82,7 +82,7 @@ struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-struct PlaybackDailySummary: Codable, Hashable, Sendable {
+nonisolated struct PlaybackDailySummary: Codable, Hashable, Sendable {
     var playCount: Int
     var manualPlayCount: Int
     var automaticPlayCount: Int
@@ -125,7 +125,7 @@ struct PlaybackDailySummary: Codable, Hashable, Sendable {
     }
 }
 
-struct PlaybackHistory: Codable, Hashable, Sendable {
+nonisolated struct PlaybackHistory: Codable, Hashable, Sendable {
     let trackID: Track.ID
     /// Legacy migration field. TrackPreferenceStore is the authoritative owner.
     var isFavorite: Bool

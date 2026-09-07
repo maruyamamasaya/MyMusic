@@ -26,10 +26,12 @@ final class TrackFingerprintBuildStore {
     private var fingerprints: [Track.ID: String] = [:]
     private var deferredTrackIDs: Set<Track.ID> = []
 
-    init(
-        identityService: TrackIdentityServicing = TrackIdentityService.shared
-    ) {
+    init(identityService: TrackIdentityServicing) {
         self.identityService = identityService
+    }
+
+    convenience init() {
+        self.init(identityService: TrackIdentityService.shared)
     }
 
     func refresh(tracks: [Track]) async {

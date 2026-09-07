@@ -1,7 +1,7 @@
 import Foundation
 
-struct AudioFormat: Codable, Hashable, Sendable {
-    enum Codec: String, Codable, CaseIterable, Sendable {
+nonisolated struct AudioFormat: Codable, Hashable, Sendable {
+    nonisolated enum Codec: String, Codable, CaseIterable, Sendable {
         case flac = "FLAC"
         case alac = "ALAC"
         case aac = "AAC"

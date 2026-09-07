@@ -52,7 +52,7 @@ actor GenreLibraryFilterService {
     }
 }
 
-final class MusicLibraryService: MusicLibraryServicing, Sendable {
+nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
     private let fileImportService: FileImportServicing
     private let metadataService: MetadataServicing
     private let identityService: TrackIdentityServicing
@@ -60,14 +60,22 @@ final class MusicLibraryService: MusicLibraryServicing, Sendable {
 
     init(
         fileImportService: FileImportServicing = FileImportService(),
-        metadataService: MetadataServicing = MetadataService(),
-        identityService: TrackIdentityServicing = TrackIdentityService.shared,
+        metadataService: MetadataServicing,
+        identityService: TrackIdentityServicing,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.fileImportService = fileImportService
         self.metadataService = metadataService
         self.identityService = identityService
         self.now = now
+    }
+
+    @MainActor convenience init() {
+        let identityService = TrackIdentityService.shared
+        self.init(
+            metadataService: MetadataService(identityService: identityService),
+            identityService: identityService
+        )
     }
 
     func loadLibrary(from folderURL: URL, previousTracks: [Track] = []) async throws -> MusicLibrary {

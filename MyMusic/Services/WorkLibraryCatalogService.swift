@@ -5,7 +5,7 @@ enum WorkLibraryCatalogService {
         build(from: MusicLibrary.build(from: tracks))
     }
 
-    static func build(from library: MusicLibrary) -> WorkLibraryCatalog {
+    nonisolated static func build(from library: MusicLibrary) -> WorkLibraryCatalog {
         let tracks = library.tracks
         let workTracks = tracks.filter(\.isEligibleForWorkPlayback)
         guard !workTracks.isEmpty else { return .empty }

@@ -5,7 +5,7 @@ protocol MetadataServicing: Sendable {
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track
 }
 
-final class MetadataService: MetadataServicing, Sendable {
+nonisolated final class MetadataService: MetadataServicing, Sendable {
     nonisolated static let currentMetadataRevision = 1
 
     private let artworkService: ArtworkServicing
@@ -13,10 +13,14 @@ final class MetadataService: MetadataServicing, Sendable {
 
     init(
         artworkService: ArtworkServicing = ArtworkService.shared,
-        identityService: TrackIdentityServicing = TrackIdentityService.shared
+        identityService: TrackIdentityServicing
     ) {
         self.artworkService = artworkService
         self.identityService = identityService
+    }
+
+    @MainActor convenience init() {
+        self.init(identityService: TrackIdentityService.shared)
     }
 
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track {

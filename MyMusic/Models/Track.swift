@@ -1,6 +1,6 @@
 import Foundation
 
-struct Track: Identifiable, Codable, Hashable, Sendable {
+nonisolated struct Track: Identifiable, Codable, Hashable, Sendable {
     nonisolated static let longFormMinimumDuration: TimeInterval = 20 * 60
     nonisolated static let workPlaybackGenre = "作業用BGM"
 

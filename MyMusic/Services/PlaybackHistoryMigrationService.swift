@@ -8,7 +8,7 @@ enum PlaybackHistoryMigrationState: String, Codable, Sendable {
     case failed
 }
 
-private struct PlaybackHistoryMigrationStateDocument: Codable {
+nonisolated private struct PlaybackHistoryMigrationStateDocument: Codable, Sendable {
     let state: PlaybackHistoryMigrationState
     let updatedAt: Date
     let failureReason: String?
