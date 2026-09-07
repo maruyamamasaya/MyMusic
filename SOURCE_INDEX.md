@@ -1,6 +1,6 @@
 # MyMusic Source Index
 
-> **AI 向け:** 実装や調査を始める前にこのファイルを確認し、まず対象機能に関連する範囲だけを調査する。不明な場合にのみリポジトリ全体検索を行う。
+> **AI 向け:** これは CODEMAP（探索開始点）の正本であり、全ファイル一覧ではない。まず対象機能に関連する範囲だけを調査する。概念しか分からない場合は semantic / repository search を使い、symbol が判明したら exact / symbol / references search と `rg` / `git grep` に切り替える。不明な場合だけリポジトリ全体を検索する。
 
 この文書は、機能変更時の調査開始地点を示すソースコード管理用インデックスです。プロジェクト概要と起動方法は [`README.md`](README.md)、設計思想と全体の依存方向は [`ARCHITECTURE.md`](ARCHITECTURE.md)、現在の実装状況と既知問題は [`CURRENT.md`](CURRENT.md) を参照してください。
 
