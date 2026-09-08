@@ -59,6 +59,21 @@ MyMusic / future data sources
 
 `analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQとジャンルプリセットは曲非依存の設定スナップショットとして扱う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
 
+### Static Web Analytics
+
+```text
+MyMusic JSON files
+  → Browser File API
+  → analytics/web-static/core.js adapter
+  → in-memory normalized tracks / playEvents / features / preferences
+  → client-side aggregation
+  → analytics/web-static/app.js UI
+```
+
+`analytics/web-static/`はLocal版のFastAPI UIである`analytics/web/`とは別アプリである。静的配信だけを必要とし、JSON、音源、Artwork、SQLiteをserverへ送らない。入力と集計結果はJavaScript heapにだけ保持し、永続Web Storageや外部DBを使わない。CSPの`connect-src 'none'`を追加の通信防止境界とする。既存のPlayback Events v1、Library v1、Preferences v1/v2、Track Features v1をadapterでNormalized Dataへ変換し、Local版と同じTrack ID結合、2026-09-01以降の詳細指標、30秒以下のEarly Skip定義を用いる。Local版のSQL集計を壊す共通化は行わず、将来はversioned contract、normalized model、指標fixtureを共通化境界とする。
+
+静的Web版はSitesへ一般公開する。ホスティングは静的ファイルの配信境界に限定し、runtime binding、server-side database、認証、upload APIを持たない。Sitesのproject IDと静的出力設定は`analytics/web-static/.openai/hosting.json`で管理する。
+
 Web UIはOverview、Music History、Insights、Rankings、Tracks、Data Sources、Importを独立ページとして持つ。Insightsの品質フィルターは期間条件と独立して日時だけで判定する。特徴量分析は`source_records`の最新analysisVersionだけを対象に、許可リスト化した特徴量をSQLite `json_extract`／`json_each`で検証・抽出してPlayback EventへTrack ID結合する。最近の変化は選択期間と直前の同日数（allは30日ずつ）を比較し、曲、特徴、Artist／Album／Genreを共通閾値で抽出する。時間帯分析はJSTの朝／昼／夜／深夜、Listening Profileは完走率−Skip率−Early Skip率×0.5の説明可能なscoreを使う。推薦はProfile・Preference・Favorite・完走実績を加点し、Skip・Early Skip・選択期間の再生過多を減点するread-only派生値で、未再生曲の行動値は推測しない。詳細イベントとEarly Skipの判定条件はQueries層の共通predicateへ集約し、Raw JSONやLibraryを更新しない。
 
 Webの大量候補検索は`analytics/web/controls.js`の`SearchPicker`に分離し、候補文字列の正規化検索と最大30件のDOM表示を担当する。`app.js`は画面ごとのAbortControllerで古い読込を中断し、表示中の条件と結果の一致、読み込み状態、エラー時の再試行を管理する。`experience.css`は共通操作部品とレスポンシブ表示を担当する。Tracks／Data Sourcesはページ本体だけを縦スクロール境界とし、表のoverflowは横方向の列閲覧だけに使う。Data Sourcesの`search`はQueries層で名称／補足情報（Artist等）を検索し、検索後の件数・紐付け件数と同じ条件でSQLページングする。検索文字はバインドし、LIKEの特殊文字はエスケープする。永続化境界やschemaは変更しない。

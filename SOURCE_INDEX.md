@@ -70,13 +70,21 @@
 - **関連機能・依存:** 通常shuffle、Highlight、Mood StationがPreference／Overplayを使う。手動選択、Discovery、作業用など除外経路がある。Analytics Webの推薦・Listening ProfileはiOSとは別に `analytics/app/queries.py` でread-only導出する。
 - **変更時の入口:** 値の更新・移行は `TrackPreferenceStore.swift`、JSON検証はImport Service、重み表は `PlaybackPreferenceWeightPolicy.swift`、Overplay／Drift式は `PlaybackBehaviorScoring.swift`、履歴window集計は `PlaybackBehaviorAnalyzer.swift`、適用先は各Selection Policy。テストは `MyMusicTests/TrackPreferencePersistenceTests.swift` と `MyMusicTests/PlaybackBehaviorScoringTests.swift`。
 
-## Analytics Web
+## Analytics Local Web
 
 - **責務:** iOS等から手動exportしたJSONを独自SQLiteへ取り込み、Overview、Music History、Insights、Rankings、Tracks、Data Sources、Import UIをローカルブラウザで提供する。
 - **主な関連ファイル:** 起動・契約 `analytics/README.md`、設定 `analytics/app/config.py`、DB `analytics/app/database.py`、route `analytics/app/main.py`、集計SQL `analytics/app/queries.py`、入力model `analytics/importer/schema.py`、import `analytics/importer/service.py`、特徴照合 `analytics/importer/track_feature_resolver.py`、UI `analytics/web/index.html`、`app.js`、`controls.js`、各CSS、起動 `analytics/start.sh` / `analytics/start.ps1`。
 - **関連データ / DB / JSON:** `analytics/data/analytics.sqlite3`、受理原本 `analytics/imports/`。Playback Events、Library、Preferences、Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの8種JSON。Playback契約は `analytics/playback-export-v1.schema.json`。
 - **関連機能・依存:** iOS／Analyzerとはプロセス・DB・依存を共有しない。Track ID（特徴量は安全なidentity fallbackあり）でデータを結合し、Preferenceだけschema v2 JSONとして書き戻し用exportが可能。期間集計はJST、保存event日時はUTC。
 - **変更時の入口:** API追加は `main.py`、SQL・指標定義・推薦は `queries.py`、schema／判別は `importer/schema.py` と `service.py`、table変更と後方互換ALTERは `database.py`、画面状態は `web/app.js`、候補・paging共通操作は `web/controls.js`。テストは `analytics/tests/test_analytics.py`、UIは `controls.test.cjs` と `browser_ux.cjs`。
+
+## Analytics Static Web
+
+- **責務:** MyMusicの既存JSONをFile APIでブラウザメモリへ読み、サーバー通信・DB・ログインなしで主要分析を表示する。
+- **主な関連ファイル:** 利用方法 `analytics/web-static/README.md`、入力Adapter・Normalized Data・集計 `analytics/web-static/core.js`、UI状態と表示 `analytics/web-static/app.js`、入口 `index.html`、表示 `styles.css`。
+- **関連データ / DB / JSON:** Playback Events v1、Library v1、Preferences v1/v2、Track Features v1を受け付ける。DBと永続Web Storageはなく、ページ終了時にデータを破棄する。
+- **関連機能・依存:** iOS ExportとLocal版Importerが読む既存契約を後方互換で利用する。Local版とは実装を共有せず、Track ID、詳細イベント開始日、Early Skip定義を揃える。
+- **変更時の入口:** JSON判別・検証・集計は`core.js`、画面は`app.js`、契約回帰は`analytics/tests/web_static_core.test.cjs`。ネットワーク禁止境界は`index.html`のCSPと、通信・Storage APIを使用しない実装の双方を確認する。
 
 ## Settings / Library 管理
 

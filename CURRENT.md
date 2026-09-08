@@ -34,7 +34,11 @@ updated: 2026-09-08
 - Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上に32ptの詳細と同じタップ枠内へ約22pt表示の音量、続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。詳細sheetには未接続のShuffle／おすすめ再生の将来枠を置く。
 - 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
 
-### ローカルWeb Analytics v0
+### Web Analytics v0
+
+- 既存Local版を維持したまま、`analytics/web-static/`にブラウザ完結型のMyMusic Analytics Web初期版を追加した。既存のLibrary、Playback Events、Preferences、Track Features JSONをFile APIで複数選択し、Track IDでメモリ内結合する。Dashboard、期間指定、Track Library、再生回数・再生時間・完走率・Skip・Early Skip、特徴量帯別傾向、Preference、簡易Insightsを表示する。DB・ログイン・外部保存・API送信はなく、CSPでもnetwork接続を禁止する。既存FastAPI / SQLite / Analyzer / iOS Export契約は変更しない。
+- 静的Web版はSitesで一般公開している。公開されるのはHTML、CSS、JavaScriptだけで、利用者が選択したJSONと集計結果はブラウザメモリ内に限定する。
+- 一般公開版の画面構成はLocal版を正本とし、同じ左サイドバー、配色、概要／音楽史／インサイト／ランキング／曲ライブラリ／データソース／インポートの7画面、同程度の情報密度へ揃えている。ブラウザ版独自のJSON形式は増やさず、既存Analyticsの8形式を判別する。
 
 - Web UI/UX Betaを更新。Artist／Genreは全文字列候補から部分一致検索する選択UI（全角・半角／英字大小を正規化、完全一致・前方一致優先、候補表示は最大30件）へ変更。全画面の読み込み・再試行、期間／検索条件表示、日付入力、スマホ幅ナビゲーション、件数／ページ移動を共通化した。Tracks／Data Sourcesの表はページと一緒に縦スクロールし、必要な場合だけ表内を横スクロールする。Tracksは基本／詳細指標切替、Rankingsは種類別表示切替、Data Sourcesは全件対象の名称／Artist検索を提供する。iOS・既存JSON契約・SQLite schemaの変更はない。
 

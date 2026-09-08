@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>MyMusic Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">メインコンテンツへ</a>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">♪</span><div><strong>MyMusic</strong><small>Analytics Web</small></div></div>
+    <nav aria-label="メインナビゲーション">
+      <button class="nav-item active" data-page="dashboard">概要</button>
+      <button class="nav-item" data-page="history">音楽史</button>
+      <button class="nav-item" data-page="insights">インサイト</button>
+      <button class="nav-item" data-page="rankings">ランキング</button>
+      <button class="nav-item" data-page="tracks">曲ライブラリ</button>
+      <button class="nav-item" data-page="sources">データソース</button>
+      <button class="nav-item" data-page="import">インポート</button>
+    </nav>
+    <p class="local-badge">● Browser only</p>
+  </aside>
+  <main id="main-content" tabindex="-1">
+    <div id="data-summary" class="data-summary" hidden><span id="sourceSummary"></span><label for="fileInputMore">JSONを追加</label><input id="fileInputMore" type="file" accept="application/json,.json" multiple><button id="resetButton">データを閉じる</button></div>
+    <div id="global-error" class="error" role="alert" hidden></div>
+    <section id="dashboard" class="page active">
+      <header><div><p class="eyebrow">LISTENING OVERVIEW</p><h1>あなたの音楽の時間</h1></div><div class="periods"><button data-period="today">今日</button><button class="active" data-period="7d">7日</button><button data-period="30d">30日</button><button data-period="all">全期間</button><button data-period="custom">期間指定</button></div></header>
+      <div class="custom-period" hidden><label>開始日<input id="startDate" type="date"></label><span>〜</span><label>終了日<input id="endDate" type="date"></label><p id="filterError" class="form-error" role="alert"></p></div>
+      <div id="dashboardView"><article class="empty-panel"><p>MyMusicのJSONを読み込むと、ここに再生状況が表示されます。</p><button class="open-import">JSONを読み込む</button></article></div>
+    </section>
+    <section id="history" class="page"><header><div><p class="eyebrow">YOUR MUSIC HISTORY</p><h1>音楽と過ごした時間</h1><p class="subtitle">月ごとの記憶を、よく聴いた曲とArtistでたどります。</p></div></header><div id="historyView"></div></section>
+    <section id="insights" class="page"><header><div><p class="eyebrow">LISTENING INSIGHTS</p><h1>再生行動を知る</h1><p class="subtitle">好みと実際の聴き方を比較します。</p></div></header><div id="insightsView"></div></section>
+    <section id="rankings" class="page"><header><div><p class="eyebrow">LISTENING RANKINGS</p><h1>期間ごとのランキング</h1></div><div id="rankingMetric" class="segmented"><button class="active" data-metric="plays">再生回数</button><button data-metric="duration">再生時間</button></div></header><div id="rankingsView"></div></section>
+    <section id="tracks" class="page"><header><div><p class="eyebrow">TRACK LIBRARY</p><h1>曲ごとの傾向</h1></div></header><div class="track-filters"><label>曲名・Artist・Album・Genre<input id="trackSearch" type="search" placeholder="名前の一部を入力"></label><button id="clearTrackSearch">クリア</button></div><div id="tracksView"></div></section>
+    <section id="sources" class="page"><header><div><p class="eyebrow">LIBRARY &amp; SETTINGS</p><h1>データソース管理</h1><p class="subtitle">読み込んだJSONとLibraryとの紐付け状況を確認できます。</p></div></header><div id="sourcesView"></div></section>
+    <section id="import" class="page">
+      <header><div><p class="eyebrow">MYMUSIC DATA</p><h1>JSON Import</h1><p class="subtitle">既存のMyMusic JSONを自動判別し、ブラウザ内だけで分析します。</p></div></header>
+      <label id="drop-zone" class="drop-zone"><input id="fileInput" type="file" accept="application/json,.json" multiple><span class="upload-icon">⇧</span><strong>JSONをここへドロップ</strong><span>またはクリックして複数ファイルを選択</span><small>MyMusic Analyticsの既存8形式に対応</small></label>
+      <p class="privacy-note">ファイルはアップロードされません。内容と集計結果はこのページのメモリ内だけに保持されます。</p>
+      <div id="importView"></div>
+    </section>
+  </main>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

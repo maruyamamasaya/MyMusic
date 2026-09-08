@@ -1,6 +1,8 @@
-# MyMusic Analytics v0
+# MyMusic Analytics Local v0
 
 MyMusicの再生履歴JSONをPCへ取り込み、ローカルブラウザで閲覧する独立ツールです。iOSアプリのファイル、内部DB、再生処理には接続しません。PreferenceだけはAnalytics内で編集し、明示的に書き出したJSONをアプリで読み込む手動連携に対応します。
+
+このFastAPI / SQLite版は引き続き詳細分析用のLocal版です。DBやサーバーを使わず、静的配信できる別実装は [`web-static/README.md`](web-static/README.md) を参照してください。
 
 iPhoneの「設定」→「データ管理」から生成される8種類のJSONに対応します。Library、再生、特徴量、音量、プレイリスト内の曲は共通のTrack IDで結合されます。EQとジャンルプリセットは曲単位ではないため、独立した設定スナップショットとして保持します。
 
