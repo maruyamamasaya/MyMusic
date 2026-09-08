@@ -31,7 +31,7 @@ updated: 2026-09-08
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
 - Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchからTrack単位で一度だけ要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。失敗・未収録時はplaceholderを維持する。
 - 同画面の音量はWatchKit標準の`WKInterfaceVolumeControl(origin: .companion)`をSwiftUIへbridgeして表示する。選択時のDigital Crownと現在音量表示はシステムに任せ、WatchConnectivity messageやWatch独自のvolume stateは追加しない。
-- Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上に32ptの詳細と同じタップ枠内へ約22pt表示の音量、続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。詳細sheetには未接続のShuffle／おすすめ再生の将来枠を置く。
+- Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上は音量、右端は32ptの詳細とし、音量も同じ32pt枠で見やすく表示する。続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。詳細sheetには未接続のShuffle／おすすめ再生の将来枠を置く。
 - 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
 
 ### Web Analytics v0

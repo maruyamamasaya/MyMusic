@@ -131,6 +131,14 @@ struct NowPlayingView: View {
     private func utilityControls(metrics: LayoutMetrics) -> some View {
         HStack(spacing: 3) {
             Spacer(minLength: 0)
+            CompanionVolumeControl()
+                .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
+                .scaleEffect(0.65)
+                .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
+                .contentShape(Rectangle())
+                .accessibilityLabel("iPhoneの音量")
+                .accessibilityHint("選択してDigital Crownを回すと音量を調整できます")
+
             Button { showsDetails = true } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .semibold))
@@ -139,14 +147,6 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
             .background(.black.opacity(0.28), in: Circle())
             .accessibilityLabel("詳細")
-
-            CompanionVolumeControl()
-                .frame(width: 28, height: 28)
-                .scaleEffect(0.55)
-                .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
-                .contentShape(Rectangle())
-                .accessibilityLabel("iPhoneの音量")
-                .accessibilityHint("選択してDigital Crownを回すと音量を調整できます")
         }
         .frame(height: metrics.utilityControlSize)
     }
