@@ -2,13 +2,54 @@
 
 このファイルは、AI エージェントが MyMusic の作業を安全に再開するための入口です。現在の製品状態は [CURRENT.md](CURRENT.md)、実装構成は [ARCHITECTURE.md](ARCHITECTURE.md)、判断の理由は [`decisions/`](decisions/)、作業記録は [`sessions/`](sessions/) を正とします。
 
+## Project Context
+
+- **Project Name:** MyMusic
+- **Purpose:** 手元の音源を不要に変換せず、探す、整理する、再生することを中心にした、個人利用向けの iPhone ローカル音楽プレイヤー。
+- **Primary Stack:** Swift、SwiftUI、Observation、AVFoundation を中心とする iPhone / Apple Watch アプリ。補助領域として、Mac 上で音源特徴量を生成する Python CLI Analyzer、書き出した JSON を分析する Python / FastAPI / SQLite の Local Web Analytics と JavaScript の Static Web Analyticsを含む。
+- **Main Domains:** Files / iCloud Drive からの音楽ライブラリ管理、metadata と Track Identity、ローカル音源再生と queue、検索、お気に入り、プレイリスト、再生履歴と選曲、Highlight / Mood Station、音響特徴量と音量補正、データ import / export と backup、Apple Watch リモコン、ローカル分析。
+- **Expected Work:** 上記のアプリ機能、品質、テスト、Apple プラットフォーム連携、Analyzer / Analytics、既存 JSON 契約、関連文書や開発スクリプトの保守、および MyMusic の目的に沿う新機能の段階的な追加。これは固定的な機能ホワイトリストではない。
+- **Clearly Unrelated Examples:** 別製品名を前提とする EC サイトや業務 SaaS の画面、MyMusic に存在しない別サービス固有の Next.js route や DB table、別ゲーム固有の scene / character / game logic、別リポジトリ固有の class・file・directory を複数指定する変更。`Python`、`JavaScript`、`API`、`SQLite`、`Docker`、`Swift` などの一般語が一つ現れるだけでは無関係と判断しない。
+
+## Project Context Guard
+
+すべてのユーザー要求について、実装、ファイル操作、依存追加、またはコマンド実行を始める前に、要求と上記 Project Context の整合性を次の3段階で判定します。この確認は作業開始時の必須ゲートですが、正当な新機能を既存機能の列挙だけで拒否するものではありません。
+
+### MATCH
+
+MyMusic、その構成要素、または目的に沿う保守・機能追加と明確に関連する要求です。通常の調査・実装・検証へ進みます。
+
+### UNCERTAIN
+
+MyMusic で実現できる可能性はあるものの、新技術、新領域、大きな構成変更、または不足した文脈のため即断できない要求です。拒否せず、まずこのリポジトリ内の文書、コード、履歴を read-only で追加確認し、その根拠から MATCH または MISMATCH を再判定します。必要なら実装前にユーザーへ確認します。迷う場合は MISMATCH ではなく UNCERTAIN とします。
+
+### MISMATCH
+
+別プロジェクト名、別製品固有の機能・class・file・directory、明確に異なる platform など、複数の矛盾した signal から別プロジェクト向けだと高い確信で判断できる要求です。単一の keyword や一般技術名だけでは MISMATCH にしません。
+
+MISMATCH の場合は直ちに停止し、ファイル変更、新規ファイル作成、package 追加、DB 変更、destructive command、commit、push を行いません。回答には次だけを簡潔に示します。
+
+- **Current Project:** MyMusic
+- **Reason:** MISMATCH と判断した理由
+- **Conflicting Prompt Elements:** prompt 内の具体的な不一致要素
+- **No files were modified.**
+
+## Repository Boundaries
+
+- 作業開始時に `git rev-parse --show-toplevel` で現在の Git root を確認し、想定する `/workspace/MyMusic`（環境が異なる場合は、この `AGENTS.md` を含む MyMusic repository root）と一致することを確認します。
+- 原則として現在の Git root 内だけを読み書きし、隣接 directory や別 repository を勝手に変更しません。明示的なユーザー依頼がある場合だけ、対象と境界を再確認して例外とします。
+- Git root が想定と一致しない、または対象 file が境界外を指す場合は変更を止め、誤った repository で続行しません。
+- MISMATCH 判定後は、Git root 確認を含む追加 command も実行しません。
+
 ## 作業開始時
 
-1. この `AGENTS.md` を読む。
-2. `CURRENT.md` で現在の状態、優先事項、既知の制約を確認する。
-3. `ARCHITECTURE.md` で責務、データフロー、永続化境界を確認する。
-4. タスクに関係する ADR だけを `decisions/` から読む。
-5. 関係する既存コード、テスト、詳細資料、Git 履歴を調査する。
+1. この `AGENTS.md` と Project Context を読む。
+2. 要求を Context Guard で MATCH / UNCERTAIN / MISMATCH に判定する。
+3. MATCH、または UNCERTAIN の read-only 追加調査を行う場合だけ、Git root と Repository Boundaries を確認する。
+4. `CURRENT.md` で現在の状態、優先事項、既知の制約を確認する。
+5. `ARCHITECTURE.md` で責務、データフロー、永続化境界を確認する。
+6. タスクに関係する ADR だけを `decisions/` から読む。
+7. 関係する既存コード、テスト、詳細資料、Git 履歴を調査する。
 
 すべての資料を無条件に読む必要はありません。コードと文書が矛盾する場合、コードを現在状態の重要な一次情報として確認しますが、それが意図された仕様だとは推測しません。不明点は不明と記録してください。
 
