@@ -125,7 +125,18 @@ struct MusicHistoryView: View {
     private func artistsSection(_ year: MusicHistorySnapshot.Year) -> some View {
         if !year.topArtists.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                MusicHistorySectionHeader(title: "この年のアーティスト", subtitle: "よく聴いたTOP5")
+                if year.topArtists.count > 5 {
+                    MusicHistoryLinkedSectionHeader(title: "この年のアーティスト", subtitle: "よく聴いたTOP5") {
+                        MusicHistoryRankingView(
+                            title: "この年のアーティスト",
+                            periodDescription: "\(year.year)年・TOP\(year.topArtists.count)",
+                            ranking: .artists(year.topArtists),
+                            trackHistories: snapshot.memories.trackHistories
+                        )
+                    }
+                } else {
+                    MusicHistorySectionHeader(title: "この年のアーティスト", subtitle: "よく聴いたTOP5")
+                }
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 14) {
@@ -144,11 +155,22 @@ struct MusicHistoryView: View {
     private func tracksSection(_ year: MusicHistorySnapshot.Year) -> some View {
         if !year.topTracks.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                MusicHistorySectionHeader(title: "よく聴いた曲", subtitle: "この一年を彩ったTOP10")
+                if year.topTracks.count > 10 {
+                    MusicHistoryLinkedSectionHeader(title: "よく聴いた曲", subtitle: "この一年を彩ったTOP10") {
+                        MusicHistoryRankingView(
+                            title: "よく聴いた曲",
+                            periodDescription: "\(year.year)年・TOP\(year.topTracks.count)",
+                            ranking: .tracks(year.topTracks),
+                            trackHistories: snapshot.memories.trackHistories
+                        )
+                    }
+                } else {
+                    MusicHistorySectionHeader(title: "よく聴いた曲", subtitle: "この一年を彩ったTOP10")
+                }
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 14) {
-                        ForEach(year.topTracks) { item in
+                        ForEach(year.topTracks.prefix(10)) { item in
                             if let history = snapshot.memories.trackHistories[item.track.id] {
                                 NavigationLink {
                                     TrackMusicHistoryView(summary: history)

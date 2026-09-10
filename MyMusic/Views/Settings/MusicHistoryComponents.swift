@@ -24,6 +24,27 @@ struct MusicHistorySectionHeader: View {
     }
 }
 
+struct MusicHistoryLinkedSectionHeader<Destination: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            MusicHistorySectionHeader(title: title, subtitle: subtitle)
+                .padding(.horizontal, -16)
+
+            Spacer(minLength: 0)
+
+            NavigationLink(destination: destination) {
+                Text("続きを見る")
+                    .font(.caption.weight(.semibold))
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
 struct MusicHistoryHeroView: View {
     let eyebrow: String
     let item: MusicHistorySnapshot.TrackRanking
@@ -181,6 +202,34 @@ struct MusicHistoryTrackRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+
+            Spacer(minLength: 8)
+
+            Text("\(item.playCount)回")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct MusicHistoryArtistRow: View {
+    let rank: Int
+    let item: MusicHistorySnapshot.ArtistRanking
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(rank)")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 22, alignment: .trailing)
+
+            AlbumArtworkView(artworkIdentifier: item.representativeTrack.artworkIdentifier)
+                .frame(width: 56, height: 56)
+
+            Text(item.name)
+                .font(.headline)
+                .lineLimit(2)
 
             Spacer(minLength: 8)
 

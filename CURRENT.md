@@ -26,6 +26,7 @@ updated: 2026-09-10
 
 ### Apple Watch リモコン MVP
 
+- iPhone単体の実機検証を優先する暫定構成として、`MyMusic` ターゲットから `MyMusicWatch` の Target Dependency と `Embed Watch Content` を外している。Watchターゲットとコードは維持しているが、現在の `MyMusic` ビルドにはWatch Appを埋め込まない。
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
@@ -79,6 +80,8 @@ updated: 2026-09-10
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
+
+- **音楽史ランキング50位表示**: 年別の「この年のアーティスト」「よく聴いた曲」と、各月の「よく聴いた曲」「よく聴いたアーティスト」は概要のTOP5／TOP10を維持し、件数が続く場合は小さな「続きを見る」から最大50位の専用ランキングへ移動できる。曲は従来どおり曲ごとの音楽史へ遷移でき、月の「この頃を再生」は最大25曲のqueue上限を維持する。
 
 - **Highlight Good／Bad数値表示**: ハイライト画面のGood／Bad操作に、現在の再生傾向の強さ（1〜10）を有効側の数値バッジとして表示する。未評価側は従来どおり通常アイコンとし、VoiceOverでは評価方向・数値・10段階中であることを読み上げる。
 

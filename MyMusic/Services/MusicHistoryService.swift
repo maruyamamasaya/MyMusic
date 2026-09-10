@@ -58,8 +58,8 @@ struct MusicHistorySnapshot {
 
 @MainActor
 final class MusicHistoryService {
-    private let trackRankingLimit = 10
-    private let artistRankingLimit = 10
+    private let trackRankingLimit = 50
+    private let artistRankingLimit = 50
     private let playbackTrackLimit = 25
 
     /// Builds a read-only history from the month groups already resolved by AnalyticsService.
@@ -130,8 +130,7 @@ final class MusicHistoryService {
 
     private func makeMonth(_ month: AnalyticsSnapshot.MonthGroup) -> MusicHistorySnapshot.Month {
         let events = month.days.flatMap(\.events)
-        let playbackRankings = makeTrackRankings(from: events, limit: playbackTrackLimit)
-        let topTracks = Array(playbackRankings.prefix(trackRankingLimit))
+        let topTracks = makeTrackRankings(from: events, limit: trackRankingLimit)
         let topArtists = makeArtistRankings(from: events, limit: artistRankingLimit)
 
         return MusicHistorySnapshot.Month(
@@ -141,7 +140,7 @@ final class MusicHistoryService {
             artistCount: Set(events.map { $0.track.artistName }).count,
             topTracks: topTracks,
             topArtists: topArtists,
-            playbackTracks: playbackRankings.map(\.track)
+            playbackTracks: topTracks.prefix(playbackTrackLimit).map(\.track)
         )
     }
 

@@ -75,10 +75,21 @@ struct MusicHistoryMonthView: View {
     private var tracksSection: some View {
         if !month.topTracks.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                MusicHistorySectionHeader(title: "よく聴いた曲", subtitle: "この月のTOP10")
+                if month.topTracks.count > 10 {
+                    MusicHistoryLinkedSectionHeader(title: "よく聴いた曲", subtitle: "この月のTOP10") {
+                        MusicHistoryRankingView(
+                            title: "よく聴いた曲",
+                            periodDescription: "\(month.date.formatted(.dateTime.year().month(.wide)))・TOP\(month.topTracks.count)",
+                            ranking: .tracks(month.topTracks),
+                            trackHistories: trackHistories
+                        )
+                    }
+                } else {
+                    MusicHistorySectionHeader(title: "よく聴いた曲", subtitle: "この月のTOP10")
+                }
 
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(month.topTracks.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(month.topTracks.prefix(10).enumerated()), id: \.element.id) { index, item in
                         if let history = trackHistories[item.track.id] {
                             NavigationLink {
                                 TrackMusicHistoryView(summary: history)
@@ -91,7 +102,7 @@ struct MusicHistoryMonthView: View {
                             MusicHistoryTrackRow(rank: index + 1, item: item)
                                 .padding(.vertical, 8)
                         }
-                        if item.id != month.topTracks.last?.id {
+                        if index < min(month.topTracks.count, 10) - 1 {
                             Divider().padding(.leading, 90)
                         }
                     }
@@ -105,11 +116,22 @@ struct MusicHistoryMonthView: View {
     private var artistsSection: some View {
         if !month.topArtists.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                MusicHistorySectionHeader(title: "よく聴いたアーティスト", subtitle: "この月のTOP10")
+                if month.topArtists.count > 10 {
+                    MusicHistoryLinkedSectionHeader(title: "よく聴いたアーティスト", subtitle: "この月のTOP10") {
+                        MusicHistoryRankingView(
+                            title: "よく聴いたアーティスト",
+                            periodDescription: "\(month.date.formatted(.dateTime.year().month(.wide)))・TOP\(month.topArtists.count)",
+                            ranking: .artists(month.topArtists),
+                            trackHistories: trackHistories
+                        )
+                    }
+                } else {
+                    MusicHistorySectionHeader(title: "よく聴いたアーティスト", subtitle: "この月のTOP10")
+                }
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 14) {
-                        ForEach(month.topArtists) { item in
+                        ForEach(month.topArtists.prefix(10)) { item in
                             MusicHistoryArtistTile(item: item, width: 136)
                         }
                     }
