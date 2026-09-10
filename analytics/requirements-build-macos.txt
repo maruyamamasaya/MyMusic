@@ -1,0 +1,2 @@
+-r requirements-desktop.txt
+py2app>=0.28,<0.29

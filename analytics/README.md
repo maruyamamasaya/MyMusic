@@ -45,6 +45,36 @@ cd analytics
 
 サーバーはループバックアドレスだけでlistenします。認証機能はないため、`--host 0.0.0.0`へ変更してLANやインターネットへ公開しないでください。
 
+## デスクトップ版（pywebview Beta）
+
+既存のFastAPI / SQLite / Web UIを変更せず、OS標準WebViewのアプリウィンドウで開くデスクトップ版を用意しています。起動ごとに空いているloopback portと一時tokenを生成し、tokenを持たないローカルプロセスからのAPI操作を拒否します。ウィンドウを閉じると同一プロセス内のFastAPI serverも停止します。
+
+保存先はブラウザ起動版の`analytics/data`とは分離されます。
+
+- Windows: `%LOCALAPPDATA%/MyMusic Analytics/data`と`imports`
+- macOS: `~/Library/Application Support/MyMusic Analytics/data`と`imports`
+
+従来の開発用データは自動移動・削除しません。必要なJSONをデスクトップ版へ改めてImportしてください。
+
+Windows 10 / 11（WebView2 Runtimeが必要）:
+
+```powershell
+cd analytics
+.\build-windows.ps1
+```
+
+出力は`dist/MyMusicAnalytics/MyMusicAnalytics.exe`です。同じフォルダの`_internal`も必要なため、`MyMusicAnalytics`フォルダ全体を配布します。
+
+macOS（macOS上で実行）:
+
+```bash
+cd analytics
+chmod +x build-macos.sh
+./build-macos.sh
+```
+
+出力は`dist/MyMusic Analytics.app`です。現在のBetaビルドは未署名・未Notarizeです。別のMacへ一般配布する場合はDeveloper ID署名とNotarizationを別途構成してください。Windows版もコード署名とinstaller作成は今後の配布工程です。
+
 ## Playback Export JSON v1
 
 完全な契約は[`playback-export-v1.schema.json`](playback-export-v1.schema.json)、入力例は[`playback-export-v1.example.json`](playback-export-v1.example.json)です。

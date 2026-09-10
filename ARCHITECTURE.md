@@ -222,6 +222,8 @@ Trackの`firstSeenAt`はMyMusicが論理Trackを初めてscanで確認した絶�
 
 ## Build, tests, delivery
 
+PC版AnalyticsのDesktop Betaは`analytics/desktop.py`がOS別Application Data配下の`Settings`を生成し、空きloopback socket上で既存FastAPI appをbackground threadとして起動してpywebviewへ渡す。Desktop sessionだけは起動ごとのtoken cookieを必須とし、同一PC上の別processからの無認証API操作を拒否する。Window event loopの終了後はuvicornへ終了を通知してthreadをjoinする。Windows packageはPyInstaller、macOS packageはpy2appを使い、`analytics/web/`をread-only resourceとして同梱する。既存のbrowser起動版と静的Web版の保存境界・起動方法は変更しない。
+
 - Xcode project / scheme: `MyMusic.xcodeproj` / `MyMusic`
 - App と `MyMusicTests` は Xcode File System Synchronized Groups を使用。
 - iOS Simulator Debug build は `xcodebuild ... CODE_SIGNING_ALLOWED=NO build`。

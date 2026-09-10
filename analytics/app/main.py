@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import hmac
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -28,6 +29,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="MyMusic Analytics", version="0.1.0", lifespan=lifespan)
     app.state.settings = configured
+
+    @app.middleware("http")
+    async def protect_desktop_api(request: Request, call_next):
+        token = configured.desktop_token
+        if token:
+            supplied = request.cookies.get("mymusic_desktop_token") or request.query_params.get("desktopToken")
+            if supplied is None or not hmac.compare_digest(supplied, token):
+                return JSONResponse({"detail": "Desktop session is not authorized."}, status_code=403)
+        response = await call_next(request)
+        if token and request.query_params.get("desktopToken") == token:
+            response.set_cookie(
+                "mymusic_desktop_token", token, httponly=True, samesite="strict"
+            )
+        return response
+
     app.mount("/static", StaticFiles(directory=ROOT_DIR / "web"), name="static")
 
     @app.get("/", include_in_schema=False)
