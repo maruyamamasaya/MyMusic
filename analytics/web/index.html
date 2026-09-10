@@ -24,7 +24,21 @@
       <button class="nav-item" data-page="sources">データソース</button>
       <button class="nav-item" data-page="import">インポート</button>
     </nav>
-    <p class="local-badge">● Local only</p>
+    <div class="sidebar-tools">
+      <div class="zoom-control" role="group" aria-label="表示倍率">
+        <span>表示倍率</span>
+        <div>
+          <button id="zoom-out" type="button" aria-label="表示を縮小" title="縮小 (Ctrl/Cmd + -)">−</button>
+          <label><span class="visually-hidden">表示倍率</span><select id="zoom-level" aria-label="表示倍率">
+            <option value="75">75%</option><option value="80">80%</option><option value="90">90%</option>
+            <option value="100" selected>100%</option><option value="110">110%</option>
+            <option value="125">125%</option><option value="150">150%</option>
+          </select></label>
+          <button id="zoom-in" type="button" aria-label="表示を拡大" title="拡大 (Ctrl/Cmd + +)">＋</button>
+        </div>
+      </div>
+      <p class="local-badge">● Local only</p>
+    </div>
   </aside>
   <main id="main-content" tabindex="-1">
     <section id="dashboard" class="page active">
@@ -96,6 +110,7 @@
     </section>
   </main>
   <script src="/static/controls.js" defer></script>
+  <script src="/static/zoom.js" defer></script>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

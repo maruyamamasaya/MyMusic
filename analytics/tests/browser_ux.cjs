@@ -16,6 +16,21 @@ const base = process.env.ANALYTICS_TEST_URL || 'http://127.0.0.1:8877';
     await page.route('**/api/ranking-filters', route => route.fulfill({json: {artists, genres:['Rock', 'ピアノ']}}));
     await page.goto(`${base}/#rankings`);
     await waitView('rankings');
+    // Zoom UI, keyboard shortcuts and persistence use only presentation state.
+    const zoomSelect = page.locator('#zoom-level');
+    assert.equal(await zoomSelect.inputValue(), '100');
+    await zoomSelect.selectOption('75');
+    assert.equal(await page.evaluate(()=>document.documentElement.style.zoom), '75%');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('mymusic.analytics.zoomPercent')), '75');
+    await page.reload();
+    await waitView('rankings');
+    assert.equal(await zoomSelect.inputValue(), '75');
+    await page.keyboard.press('Control+=');
+    assert.equal(await zoomSelect.inputValue(), '80');
+    await page.keyboard.press('Control+-');
+    assert.equal(await zoomSelect.inputValue(), '75');
+    await page.keyboard.press('Control+0');
+    assert.equal(await zoomSelect.inputValue(), '100');
     const artist = page.locator('#ranking-artist-input');
     await artist.focus();
     assert.equal(await page.locator('#ranking-artist [role=option]').count(), 30);
@@ -76,6 +91,23 @@ const base = process.env.ANALYTICS_TEST_URL || 'http://127.0.0.1:8877';
     assert.match(await page.locator('#rankings .view-status').textContent(), /終了日は開始日以降/);
     await page.locator('#rankings [data-period="30d"]').click();
     await waitView('rankings');
+    // Every supported scale keeps page-level overflow contained on information-dense views.
+    await page.setViewportSize({width:1440, height:1000});
+    await page.locator('[data-page=tracks]').click();
+    await waitView('tracks');
+    const trackWidth100 = await page.locator('#tracks .table-wrap').evaluate(element=>element.clientWidth);
+    await zoomSelect.selectOption('75');
+    const trackWidth75 = await page.locator('#tracks .table-wrap').evaluate(element=>element.clientWidth);
+    assert.ok(trackWidth75 > trackWidth100, `75% should expose more track table width (${trackWidth75} <= ${trackWidth100})`);
+    for (const level of ['75','80','90','100','110','125','150']) {
+      await zoomSelect.selectOption(level);
+      for (const name of ['insights','tracks']) {
+        await page.locator(`.nav-item[data-page=${name}]`).click();
+        await waitView(name);
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${name} overflow at ${level}%`);
+      }
+    }
+    await zoomSelect.selectOption('100');
     // Real API flow and layout at desktop, tablet and phone widths.
     for (const width of [1440, 768, 390]) {
       await page.setViewportSize({width, height:1000});

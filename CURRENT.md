@@ -37,6 +37,7 @@ updated: 2026-09-10
 ### Web Analytics v0
 
 - Local版Analyticsを既存FastAPI / SQLiteのままOS標準WebViewで開くpywebview Desktop Betaを追加した。WindowsはWebView2＋PyInstaller、macOSはWKWebView＋py2appでplatform別にbuildする。起動時に空きloopback portと一時tokenを生成し、終了時にserverを停止する。DesktopデータはOSのApplication Data配下へ保存し、従来のrepository内データを自動移動・削除しない。署名、Notarization、installer、自動更新は未対応。
+- Local／Desktop版Analyticsは画面全体を75／80／90／100／110／125／150%へ変更できる。サイドバーUIとCtrl／Command＋`+`／`-`／`0`を提供し、選択値をWebView／ブラウザのlocal storageへ保存する。75%ではTrack Library等の実効表示幅を広げ、倍率変更時も表の横overflowをtable container内へ限定する。分析API、SQLite、入力契約は変更しない。
 
 - 既存Local版を維持したまま、`analytics/web-static/`にブラウザ完結型のMyMusic Analytics Web初期版を追加した。既存のLibrary、Playback Events、Preferences、Track Features JSONをFile APIで複数選択し、Track IDでメモリ内結合する。Dashboard、期間指定、Track Library、再生回数・再生時間・完走率・Skip・Early Skip、特徴量帯別傾向、Preference、簡易Insightsを表示する。DB・ログイン・外部保存・API送信はなく、CSPでもnetwork接続を禁止する。既存FastAPI / SQLite / Analyzer / iOS Export契約は変更しない。
 - 静的Web版はSitesで一般公開している。公開されるのはHTML、CSS、JavaScriptだけで、利用者が選択したJSONと集計結果はブラウザメモリ内に限定する。

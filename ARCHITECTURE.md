@@ -224,6 +224,8 @@ Trackの`firstSeenAt`はMyMusicが論理Trackを初めてscanで確認した絶�
 
 PC版AnalyticsのDesktop Betaは`analytics/desktop.py`がOS別Application Data配下の`Settings`を生成し、空きloopback socket上で既存FastAPI appをbackground threadとして起動してpywebviewへ渡す。Desktop sessionだけは起動ごとのtoken cookieを必須とし、同一PC上の別processからの無認証API操作を拒否する。Window event loopの終了後はuvicornへ終了を通知してthreadをjoinする。Windows packageはPyInstaller、macOS packageはpy2appを使い、`analytics/web/`をread-only resourceとして同梱する。既存のbrowser起動版と静的Web版の保存境界・起動方法は変更しない。
 
+Local／Desktop版の表示倍率は`analytics/web/zoom.js`だけが所有するpresentation stateである。許可した倍率をCSS `zoom`としてdocument rootへ適用し、local storageへ保存する。pywebviewは永続Web storageを有効にするが、FastAPI session tokenは起動ごとに再生成する。倍率変更はAPI request、SQLite、集計query、Import／Export contractへ影響させない。静的公開版はブラウザメモリ限定方針を維持するため、この永続設定を共有しない。
+
 - Xcode project / scheme: `MyMusic.xcodeproj` / `MyMusic`
 - App と `MyMusicTests` は Xcode File System Synchronized Groups を使用。
 - iOS Simulator Debug build は `xcodebuild ... CODE_SIGNING_ALLOWED=NO build`。

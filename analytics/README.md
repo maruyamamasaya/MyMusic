@@ -77,6 +77,12 @@ chmod +x build-macos.sh
 
 `dist/`、`release/`、`out/`以下のPortable版・installer・アプリbundleなど、生成した配布物はGit管理しません。公開する配布物はGitHub Releasesへ添付し、リポジトリではソースコード、依存定義、build script、packaging設定だけを管理します。
 
+### 表示倍率
+
+Local／Desktop版はサイドバー下部の表示倍率から75%、80%、90%、100%、110%、125%、150%を選択できます。`Ctrl + +`／`Ctrl + -`で一段ずつ変更し、`Ctrl + 0`で100%へ戻します。macOSでは`Command`キーも同じ操作に対応します。選択値は端末内のWeb storageへ保存され、次回起動時に復元されます。倍率はUI表示だけに適用され、分析データやSQLiteには影響しません。
+
+Track LibraryやInsightsで表示量を増やす場合は75〜90%を使用してください。表の縦scrollはページと共有し、列が収まらない場合だけ従来どおりtable内で横scrollします。
+
 ## Playback Export JSON v1
 
 完全な契約は[`playback-export-v1.schema.json`](playback-export-v1.schema.json)、入力例は[`playback-export-v1.example.json`](playback-export-v1.example.json)です。

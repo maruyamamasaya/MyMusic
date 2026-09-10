@@ -114,9 +114,9 @@ def main() -> int:
     webview.create_window(APP_NAME, url, width=1280, height=820, min_size=(960, 640))
     try:
         if platform.system() == "Windows":
-            webview.start(gui="edgechromium", private_mode=True)
+            webview.start(gui="edgechromium", private_mode=False)
         else:
-            webview.start(private_mode=True)
+            webview.start(private_mode=False)
     finally:
         server.stop()
     return 0
