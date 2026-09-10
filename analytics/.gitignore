@@ -9,4 +9,21 @@ imports/*
 !imports/.gitkeep
 build/
 dist/
+release/
+out/
 MyMusicAnalytics.spec
+
+# Packaged desktop applications and installers belong in GitHub Releases.
+*.exe
+*.msi
+*.msix
+*.dmg
+*.pkg
+*.AppImage
+*.deb
+*.rpm
+*.blockmap
+*.app/
+latest*.yml
+.electron/
+.electron-builder-cache/

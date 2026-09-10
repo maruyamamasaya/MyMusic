@@ -75,6 +75,8 @@ chmod +x build-macos.sh
 
 出力は`dist/MyMusic Analytics.app`です。現在のBetaビルドは未署名・未Notarizeです。別のMacへ一般配布する場合はDeveloper ID署名とNotarizationを別途構成してください。Windows版もコード署名とinstaller作成は今後の配布工程です。
 
+`dist/`、`release/`、`out/`以下のPortable版・installer・アプリbundleなど、生成した配布物はGit管理しません。公開する配布物はGitHub Releasesへ添付し、リポジトリではソースコード、依存定義、build script、packaging設定だけを管理します。
+
 ## Playback Export JSON v1
 
 完全な契約は[`playback-export-v1.schema.json`](playback-export-v1.schema.json)、入力例は[`playback-export-v1.example.json`](playback-export-v1.example.json)です。
