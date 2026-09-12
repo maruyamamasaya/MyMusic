@@ -80,6 +80,20 @@ MISMATCH の場合は直ちに停止し、ファイル変更、新規ファイ�
 - `MyMusic.xcodeproj/project.pbxproj` の不要な変更を避け、Xcode File System Synchronized Groups を尊重します。
 - ソース、設定、schema、小さな意図的 fixture は追跡対象です。
 
+## Xcode のストレージ管理
+
+iOS / macOS プロジェクトの検証では、Mac のストレージ消費を最小限にします。
+
+- 変更内容の確認に build だけで十分な場合は、`xcodebuild test` を実行しません。
+- test が必要な場合は既存の Simulator を1台だけ使用し、新しい Simulator、test端末、runtimeを不要に作成・downloadしません。
+- test は `-parallel-testing-enabled NO` と `-maximum-parallel-testing-workers 1` を指定して並列実行を無効にします。
+- 同じ test を理由なく繰り返しません。
+- test開始前に `~/Library/Developer/XCTestDevices` の既存UUID folder一覧と各容量・合計容量を記録します。
+- test完了後、そのタスクによって新規作成された `XCTestDevices` 内のUUID folderだけを削除します。開始前から存在したデータは削除しません。
+- Xcode、Simulator、またはtest processが実行中の場合は `XCTestDevices` を削除せず、その状況を報告します。
+- DerivedDataなど、`XCTestDevices` 以外のXcode dataを削除する場合は、事前にユーザーへ確認を求めます。
+- 作業終了時に、そのタスクで作成・削除したtest端末の数と、`XCTestDevices` に残っている合計容量を報告します。testを実行しなかった場合は、その旨を報告します。
+
 ## 検証と Definition of Done
 
 開発タスクの終了前に、実際の変更に該当する項目を原則実施します。
