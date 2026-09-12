@@ -50,10 +50,13 @@ struct FavoritesView: View {
     }
 
     private func play(shuffled: Bool) {
-        guard !tracks.isEmpty else { return }
+        let playbackTracks = shuffled
+            ? tracks.filter(\.isEligibleForRegularRandomPlayback)
+            : tracks
+        guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(shuffled)
         playerStore.playQueue(
-            tracks,
+            playbackTracks,
             startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: shuffled ? .shuffle : .favorite)
         )

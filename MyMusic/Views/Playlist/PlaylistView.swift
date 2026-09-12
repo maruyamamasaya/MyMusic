@@ -265,7 +265,7 @@ private struct PlaylistManagementView: View {
 
     private var emptyDescription: String {
         if kind == .work {
-            "＋ボタンから作成し、20分以上またはジャンルが作業用BGMの曲を追加できます。"
+            "＋ボタンから作成し、ジャンルが作業用BGMの曲を追加できます。"
         } else {
             "＋ボタンからプレイリストを作成できます。"
         }

@@ -51,9 +51,6 @@ struct StationResultView: View {
     }
 
     private func selectionDetail(for station: MoodStation) -> String {
-        let prefix = station.answers.decade.map {
-            "\($0.title)に該当する、年と特徴量のある\(station.analyzedTrackCount)曲"
-        } ?? "特徴量のある\(station.analyzedTrackCount)曲"
-        return "\(prefix)のうち、近さの基準を満たした\(station.matchingTrackCount)曲から選びました。"
+        "特徴量のある\(station.analyzedTrackCount)曲をライブラリ内の相対的な傾向で比べ、条件に近い\(station.matchingTrackCount)曲から選びました。"
     }
 }

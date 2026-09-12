@@ -8,7 +8,8 @@ final class WorkLibraryCatalogTests: XCTestCase {
             artist: "Performer A",
             albumArtist: "Focus Collective",
             album: "Long Sessions",
-            duration: Track.longFormMinimumDuration
+            duration: 60 * 60,
+            genre: "Ambient"
         )
         let genreTrack = makeTrack(
             title: "Short Focus",
@@ -31,14 +32,110 @@ final class WorkLibraryCatalogTests: XCTestCase {
             from: [longTrack, genreTrack, regularTrack]
         )
 
-        XCTAssertEqual(Set(catalog.tracks.map(\.id)), [longTrack.id, genreTrack.id])
-        XCTAssertEqual(Set(catalog.albums.map(\.title)), ["Long Sessions", "Focus Cues"])
-        XCTAssertEqual(Set(catalog.artists.map(\.name)), ["Performer A", "Performer B"])
-        XCTAssertEqual(
-            Set(catalog.albumArtists.map(\.name)),
-            ["Focus Collective", "Performer B"]
-        )
+        XCTAssertEqual(Set(catalog.tracks.map(\.id)), [genreTrack.id])
+        XCTAssertEqual(Set(catalog.albums.map(\.title)), ["Focus Cues"])
+        XCTAssertEqual(Set(catalog.artists.map(\.name)), ["Performer B"])
+        XCTAssertEqual(Set(catalog.albumArtists.map(\.name)), ["Performer B"])
+        XCTAssertFalse(catalog.albums.flatMap(\.trackIDs).contains(longTrack.id))
         XCTAssertFalse(catalog.albums.flatMap(\.trackIDs).contains(regularTrack.id))
+    }
+
+    func testWorkEligibilityRequiresExactGenreEntryAndIgnoresDuration() {
+        let longTrack = makeTrack(
+            title: "Long Regular",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 60 * 60,
+            genre: "Ambient"
+        )
+        let combinedGenreTrack = makeTrack(
+            title: "Tagged Work",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 180,
+            genre: "Ambient; 作業用BGM"
+        )
+        let similarGenreTrack = makeTrack(
+            title: "Similar Genre",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 180,
+            genre: "作業用BGM向け"
+        )
+
+        XCTAssertFalse(longTrack.isEligibleForWorkPlayback)
+        XCTAssertTrue(longTrack.isEligibleForRegularPlayback)
+        XCTAssertTrue(combinedGenreTrack.isEligibleForWorkPlayback)
+        XCTAssertFalse(similarGenreTrack.isEligibleForWorkPlayback)
+    }
+
+    func testRegularRandomEligibilityExcludesOnlyTracksBelowThirtySeconds() {
+        let veryShort = makeTrack(
+            title: "Very Short",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 29.999,
+            genre: "Jingle"
+        )
+        let boundary = makeTrack(
+            title: "Thirty Seconds",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: Track.regularRandomMinimumDuration,
+            genre: "Jingle"
+        )
+        let workTrack = makeTrack(
+            title: "Work",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 180,
+            genre: Track.workPlaybackGenre
+        )
+
+        XCTAssertTrue(veryShort.isEligibleForRegularPlayback)
+        XCTAssertFalse(veryShort.isEligibleForRegularRandomPlayback)
+        XCTAssertTrue(boundary.isEligibleForRegularRandomPlayback)
+        XCTAssertFalse(workTrack.isEligibleForRegularRandomPlayback)
+    }
+
+    @MainActor
+    func testRegularRandomEntryPointsExcludeVeryShortTracks() {
+        let veryShort = makeTrack(
+            title: "Very Short",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: 29.999,
+            genre: "Jingle"
+        )
+        let boundary = makeTrack(
+            title: "Thirty Seconds",
+            artist: "Artist",
+            albumArtist: nil,
+            album: "Album",
+            duration: Track.regularRandomMinimumDuration,
+            genre: "Jingle"
+        )
+        let store = PlaybackHistoryStore()
+
+        XCTAssertEqual(
+            Set(store.preferenceWeightedShuffle([veryShort, boundary]).map(\.id)),
+            [boundary.id]
+        )
+        XCTAssertEqual(
+            Set(store.discoveryPlayTracks(from: [veryShort, boundary]).map(\.id)),
+            [boundary.id]
+        )
+        XCTAssertEqual(
+            Set(store.highlightPlaybackTracks(from: [veryShort, boundary]).map(\.id)),
+            [boundary.id]
+        )
     }
 
     func testWorkLibraryCategoriesUseRequestedOrderAndNames() {

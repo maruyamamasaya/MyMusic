@@ -48,10 +48,10 @@ struct HomeCategory: Identifiable, Hashable {
         HomeCategory(
             id: .playback,
             title: "作業用",
-            description: "長尺の音楽を作業のお供に",
+            description: "指定したBGMを作業のお供に",
             systemImage: "timer",
             items: [
-                HomeCategoryItem(title: "作業用サイズ再生", description: "作業用の曲を項目別に探す", systemImage: "timer", destination: .workSizePlay)
+                HomeCategoryItem(title: "作業用BGM再生", description: "作業用の曲を項目別に探す", systemImage: "timer", destination: .workSizePlay)
             ]
         ),
         HomeCategory(

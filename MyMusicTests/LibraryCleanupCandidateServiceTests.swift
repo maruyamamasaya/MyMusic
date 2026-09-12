@@ -65,17 +65,30 @@ final class LibraryCleanupCandidateServiceTests: XCTestCase {
         ).isEmpty)
     }
 
-    func testWorkSizedTracksAreExcluded() {
-        let track = makeTrack("Work", duration: Track.longFormMinimumDuration)
-        let events = makeEvents(track: track, count: 10, skipped: 10, ratio: 0.01)
-        XCTAssertTrue(service.candidates(
-            tracks: [track], historyByTrackID: [track.id: history(track, events: events)]
-        ).isEmpty)
+    func testWorkGenreTracksAreExcludedWhileLongTracksRemainEligible() {
+        let workTrack = makeTrack("Work", duration: 180, genre: Track.workPlaybackGenre)
+        let longTrack = makeTrack("Long", duration: 60 * 60, genre: "Ambient")
+        let workEvents = makeEvents(track: workTrack, count: 10, skipped: 10, ratio: 0.01)
+        let longEvents = makeEvents(track: longTrack, count: 10, skipped: 10, ratio: 0.01)
+        let histories = [
+            workTrack.id: history(workTrack, events: workEvents),
+            longTrack.id: history(longTrack, events: longEvents)
+        ]
+
+        let result = service.candidates(
+            tracks: [workTrack, longTrack], historyByTrackID: histories
+        )
+
+        XCTAssertEqual(result.map(\.id), [longTrack.id])
     }
 
-    private func makeTrack(_ title: String, duration: TimeInterval = 180) -> Track {
+    private func makeTrack(
+        _ title: String,
+        duration: TimeInterval = 180,
+        genre: String? = nil
+    ) -> Track {
         Track(id: UUID(), title: title, artistName: "Artist", albumTitle: "Album", duration: duration,
-              fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"))
+              fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"), genre: genre)
     }
 
     private func history(_ track: Track, playCount: Int = 1, events: [PlaybackEvent]) -> PlaybackHistory {

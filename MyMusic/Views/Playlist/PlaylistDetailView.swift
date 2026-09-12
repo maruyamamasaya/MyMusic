@@ -182,9 +182,12 @@ struct PlaylistDetailView: View {
         if playlist.kind == .work && shuffled {
             playbackTracks = playbackHistoryStore.workPlaybackTracks(from: tracks)
             playerStore.setShuffleEnabled(false)
+        } else if shuffled {
+            playbackTracks = tracks.filter(\.isEligibleForRegularRandomPlayback)
+            playerStore.setShuffleEnabled(true)
         } else {
             playbackTracks = tracks
-            playerStore.setShuffleEnabled(shuffled)
+            playerStore.setShuffleEnabled(false)
         }
         guard !playbackTracks.isEmpty else { return }
         playerStore.playQueue(

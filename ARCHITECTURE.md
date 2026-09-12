@@ -42,7 +42,7 @@ Homeのライブラリ／アクティビティタイルは、`MyMusic/Resources/
 
 HomeとPlaylistで共有するステーション入口カードは、`MyMusic/Resources/HomeTileImages/station-background.*`を同じく任意のbuild resourceとして読み込む。画像がない、またはdecodeできない場合は、`StationEntryView`が従来のグラデーションを表示する。
 
-Homeの「作業用サイズ再生」は即時再生ではなく、作業用対象を曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別に閲覧する入口とする。各一覧は対象内検索を持ち、曲の再生は`PlayerStore`へ`.workSize` presentationを指定して専用playerへ接続する。
+Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「作業用BGM」と明示した対象を曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別に閲覧する入口とする。各一覧は対象内検索を持ち、曲の再生は`PlayerStore`へ`.workSize` presentationを指定して専用playerへ接続する。
 
 ## 主要データフロー
 
@@ -86,7 +86,7 @@ Library View → LibraryStore → FileImportService
                            → LibraryPersistenceService / TrackIdentityService
 ```
 
-`LibraryStore`は表示対象ライブラリを反映するとき、`WorkLibraryCatalogService`で20分以上または「作業用BGM」の曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として同時に更新する。`WorkLibraryView`はこの派生catalogだけを読み、通常曲を専用一覧へ混在させない。
+`LibraryStore`は表示対象ライブラリを反映するとき、`WorkLibraryCatalogService`でジャンルに「作業用BGM」が指定された曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として同時に更新する。再生時間は分類に使わない。`WorkLibraryView`はこの派生catalogだけを読み、通常曲を専用一覧へ混在させない。
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 
@@ -147,7 +147,7 @@ music root recursive scan
 ### Search, favorites, playlists, history
 
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
-- `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`は気分・音の特徴量scoreに加え、任意指定された10年単位の年代で候補を先に絞り、近さとartist分散から一時queueを生成する。年代候補は対象Trackの有効な年metadataから降順で導出し、候補がなければ年代質問を省略する。年代無指定では年の有無にかかわらず従来どおり選曲する。
+- `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
 - `PlaybackHistoryStore` は再生回数、正式なPlayback Event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。曲Favoriteと`playbackPreference`の正本は`TrackPreferenceStore`であり、Historyの旧fieldはmigration互換用に限る。分析画面から1曲の履歴をリセットしてもPreferenceは変更しない。
 - `LibraryCleanupCandidateService` は通常曲と履歴snapshotを読み、終了理由を持つ直近20件までのPlayback Eventを評価する。最低5件、`user_skipped`率50%以上、平均completion ratio 10%以下をすべて満たす曲だけを候補にする。既存`playCount`、直接選択、Good / Badは判定に使わず、終了理由のない旧eventも誤分類防止のため除外する。途中スキップ率降順、次に平均再生率昇順、同数時は最終再生の新しい順に並べ、履歴・評価・飽き度・shuffle非表示を変更しない。
@@ -157,7 +157,7 @@ music root recursive scan
 - `OverplayScoring`は `burstRatio = (recent + 1) / (weeklyBaseline + 1)`、`relativeScore = clamp(log2(burstRatio) / 2)`、`volumeScore = clamp((recent - 4) / 8)`、`OverplayScore = clamp(0.6 × relativeScore + 0.4 × volumeScore)` を使う（`clamp`は0...1）。候補表示だけは直近5回以上かつScore 0.5以上を条件とするが、選曲補正には候補閾値を設けず連続値を使う。
 - `PlaybackPreferenceWeightPolicy`はユーザーの長期的で明示的なGood / Bad（-10〜+10）を正の基本weight（0.01〜42）へ写像する。一方Overplayは時間で回復する短期補正であり、`multiplier = 1 - 0.875 × OverplayScore²` とする。最終shuffle weightは `Preference weight × multiplier` なので、Favoriteや高Preferenceにも補正が効く。Favorite自体はこのweightへ加点せず、入口や候補集合の構成に使われる。
 - multiplierは1.0〜0.125で完全除外しない。軽度のOverplayはほぼ維持し、高い値ほど二次曲線で強く抑える。日別集計を再計算するため、再生が直近7日から外れ、さらに56日のbaseline期間を通過するとScoreが自然に低下し、補正なしの確率へ戻る。派生score／weightは永続化しない。
-- 通常shuffle、Quick Play、Favorite系shuffle、Repeat、Selective Random候補、Genre Randomの選択曲より後、PlayerStoreの自動shuffle order、ハイライトの曲順は、1選曲単位の同じOverplay snapshotを使う。ハイライトは`PlaybackHistoryStore`の通常shuffle eligibilityとPreference × Overplay基本weightだけを共有し、その後の順位付けを`HighlightSelectionPolicy`へ閉じる。アガる／穏やか／発掘は適合度を0.05幅のbandにして第一条件とする。同一bandは選択済み曲列に基づくArtist／Album反復段階、Preference × Overplay × Recent Highlight、直前曲との特徴類似0.97倍、±0.5% Randomの順で貪欲に配置する。多様性は絶対除外せず、異なるmode bandを逆転しない。シャッフルはmode bandと特徴類似を使わない。詳細パラメータと具体例は[Highlight Selection Policy](Documentation/HighlightSelectionPolicy.md)を正とする。未再生Discoveryと作業用再生は各入口の目的を維持するためPreferenceだけを使う。手動選択にも適用しない。
+- 通常shuffle、Quick Play、Favorite系shuffle、Repeat、Selective Random候補、Genre Randomの選択曲より後、PlayerStoreの自動shuffle order、ハイライトの曲順は、`Track.isEligibleForRegularRandomPlayback`を共通の候補条件とし、30秒未満のベリーショート曲を除外する。30秒ちょうどを含むそれ以上の通常曲は候補とし、ライブラリ表示、検索、Playlist互換性、手動選択・順再生にはこの時間条件を適用しない。各経路は1選曲単位の同じOverplay snapshotを使う。ハイライトは`PlaybackHistoryStore`の通常shuffle eligibilityとPreference × Overplay基本weightだけを共有し、その後の順位付けを`HighlightSelectionPolicy`へ閉じる。アガる／穏やか／発掘は適合度を0.05幅のbandにして第一条件とする。同一bandは選択済み曲列に基づくArtist／Album反復段階、Preference × Overplay × Recent Highlight、直前曲との特徴類似0.97倍、±0.5% Randomの順で貪欲に配置する。多様性は絶対除外せず、異なるmode bandを逆転しない。シャッフルはmode bandと特徴類似を使わない。詳細パラメータと具体例は[Highlight Selection Policy](Documentation/HighlightSelectionPolicy.md)を正とする。未再生Discoveryと作業用再生は各入口の目的を維持するためPreferenceだけを使う。手動選択にも適用しない。
 - Mood Stationは純粋なMood scoreでthresholdと候補poolを確定した後、同じOverplay multiplierをrankingにだけ掛け、既存artist減点を続ける。Mood StationはPreference／Favoriteをrankingへ使わない。Preference Driftは候補表示専用のままである。
 - PC版Analyticsの「おすすめ」はiOS選曲とは独立したread-only分析である。選択期間内の分析可能な再生1回につき4点、最大24点を推薦scoreから減点し、iOSの7日対56日OverplayScore、二次multiplier、Preference weight表は使用しない。
 - 永続化は`PlaybackHistoryPersistenceService` actorから`PlaybackHistorySQLiteRepository`を呼び、`Application Support/MyMusic/playback-history.sqlite3`を正本とする。schema version 2ではevent IDと完走flag、version 3では終了理由`natural / user_skipped / other`を追加する。通常変更は1曲snapshotを1 transactionで渡し、`playback_events`はevent IDによる`INSERT OR IGNORE`でappendし、track／日別／入口別はupsertする。空event snapshotだけが曲別resetの削除境界となる。初回は`PlaybackHistoryMigrationService`が旧JSONを上書きなしの永久backupへcopyし、transaction import後の全Model一致でのみDB metadataとDB外stateを`verified`にする。`PlaybackHistoryBackupService`は起動load時に24時間条件の日次JSON snapshot（7世代）を作る。

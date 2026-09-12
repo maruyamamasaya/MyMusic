@@ -4,7 +4,7 @@ import XCTest
 
 final class TrackFirstSeenAtTests: XCTestCase {
     @MainActor
-    func testRecentlyAddedUsesInclusiveTwoWeekWindowAndExcludesUnknownFutureAndWorkTracks() {
+    func testRecentlyAddedExcludesUnknownFutureWorkAndVeryShortTracks() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = PlaybackHistoryStore()
         let recent = makeTrack(name: "recent", firstSeenAt: now.addingTimeInterval(-60))
@@ -15,13 +15,19 @@ final class TrackFirstSeenAtTests: XCTestCase {
         let unknown = makeTrack(name: "unknown", firstSeenAt: nil)
         let future = makeTrack(name: "future", firstSeenAt: now.addingTimeInterval(1))
         var work = makeTrack(name: "work", firstSeenAt: now)
-        work.duration = Track.longFormMinimumDuration
+        work.genre = Track.workPlaybackGenre
+        var longTrack = makeTrack(name: "long", firstSeenAt: now)
+        longTrack.duration = 60 * 60
+        var veryShort = makeTrack(name: "very-short", firstSeenAt: now)
+        veryShort.duration = 29.999
+        var thirtySeconds = makeTrack(name: "thirty-seconds", firstSeenAt: now)
+        thirtySeconds.duration = Track.regularRandomMinimumDuration
 
         let result = store.recentlyAddedTracks(
-            from: [recent, boundary, old, unknown, future, work], now: now
+            from: [recent, boundary, old, unknown, future, work, longTrack, veryShort, thirtySeconds], now: now
         )
 
-        XCTAssertEqual(Set(result.map(\.id)), Set([recent.id, boundary.id]))
+        XCTAssertEqual(Set(result.map(\.id)), Set([recent.id, boundary.id, longTrack.id, thirtySeconds.id]))
     }
 
     func testLegacyTrackJSONDecodesUnknownFirstSeenAtAsNil() throws {

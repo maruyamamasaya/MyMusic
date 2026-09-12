@@ -27,66 +27,29 @@ extension StationMood {
 extension StationSound {
     var title: String {
         switch self {
-        case .soft: "静かでやわらかい"
-        case .light: "軽くて心地いい"
-        case .rhythmic: "リズムに乗れる"
-        case .heavy: "重くて力強い"
-        case .bright: "明るく華やか"
-        case .dark: "暗くて深い"
+        case .any: "指定しない"
+        case .vocals: "ボーカル"
+        case .instrumental: "インストゥルメンタル"
+        case .electronic: "電子的な音"
+        case .ambient: "アンビエントな音"
+        case .piano: "ピアノ"
         }
     }
 
     var symbol: String {
         switch self {
-        case .soft: "cloud"
-        case .light: "wind"
-        case .rhythmic: "waveform"
-        case .heavy: "flame"
-        case .bright: "sparkles"
-        case .dark: "moon"
+        case .any: "slider.horizontal.3"
+        case .vocals: "person.wave.2"
+        case .instrumental: "music.note"
+        case .electronic: "waveform.path.ecg"
+        case .ambient: "cloud"
+        case .piano: "pianokeys"
         }
     }
-}
-
-extension StationRefinement {
-    var firstTitle: String {
-        switch self {
-        case .vocals: "歌を聴きたい"
-        case .texture: "生っぽい"
-        case .intensity: "穏やか"
-        }
-    }
-
-    var secondTitle: String {
-        switch self {
-        case .vocals: "音そのものを楽しみたい"
-        case .texture: "電子的"
-        case .intensity: "激しい"
-        }
-    }
-
-    var explanation: String {
-        switch self {
-        case .vocals: "ボーカルとインスト、今はどちらを楽しみたい？"
-        case .texture: "電子音の少なさ・多さを目安に、音色を選びます。"
-        case .intensity: "最後に、音の勢いを少しだけ調整します。"
-        }
-    }
-}
-
-extension StationDecade {
-    var title: String { "\(startYear)年代" }
 }
 
 extension StationAnswers {
     var summary: String {
-        var parts = [mood.title, sound.title]
-        if let refinement, let direction {
-            parts.append(direction == .first ? refinement.firstTitle : refinement.secondTitle)
-        }
-        if let decade {
-            parts.append(decade.title)
-        }
-        return parts.joined(separator: " · ")
+        [mood.title, sound.title].joined(separator: " · ")
     }
 }

@@ -55,9 +55,7 @@ final class HighlightPlayerStore {
     }
 
     func updateLibrary(_ tracks: [Track]) {
-        let playableTracks = tracks.filter {
-            $0.duration.isFinite && $0.duration > 1 && !$0.isEligibleForWorkPlayback
-        }
+        let playableTracks = tracks.filter(\.isEligibleForRegularRandomPlayback)
         let previousIDs = Set(sourceTracks.map(\.id))
         sourceTracks = playableTracks
         let eligibleTracks = eligibleTracks(from: playableTracks)

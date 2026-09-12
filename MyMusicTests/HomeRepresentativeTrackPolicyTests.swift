@@ -2,17 +2,18 @@ import XCTest
 @testable import MyMusic
 
 final class HomeRepresentativeTrackPolicyTests: XCTestCase {
-    func testEligibleArtworkTracksExcludeWorkPlaybackAndMissingArtwork() {
+    func testEligibleArtworkTracksExcludeVeryShortWorkAndMissingArtwork() {
         let regular = makeTrack(title: "Regular", duration: 180, artworkIdentifier: "regular")
-        let longForm = makeTrack(title: "Long", duration: Track.longFormMinimumDuration, artworkIdentifier: "long")
+        let longForm = makeTrack(title: "Long", duration: 60 * 60, artworkIdentifier: "long")
+        let veryShort = makeTrack(title: "Very Short", duration: 29.999, artworkIdentifier: "short")
         let workGenre = makeTrack(title: "Work", duration: 180, artworkIdentifier: "work", genre: Track.workPlaybackGenre)
         let noArtwork = makeTrack(title: "No Artwork", duration: 180, artworkIdentifier: nil)
 
         XCTAssertEqual(
             HomeRepresentativeTrackPolicy.eligibleArtworkTracks(
-                from: [regular, longForm, workGenre, noArtwork]
+                from: [regular, longForm, veryShort, workGenre, noArtwork]
             ).map(\.id),
-            [regular.id]
+            [regular.id, longForm.id]
         )
     }
 

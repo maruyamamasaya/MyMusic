@@ -293,7 +293,8 @@ final class PlaybackHistoryStore {
     }
 
     func isEligibleForRegularShuffle(_ track: Track, now: Date) -> Bool {
-        track.isEligibleForRegularPlayback && !isHiddenFromShuffle(trackID: track.id, now: now)
+        track.isEligibleForRegularRandomPlayback
+            && !isHiddenFromShuffle(trackID: track.id, now: now)
     }
 
     /// Returns every track once, ordered by a preference-weighted random draw.

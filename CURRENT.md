@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # MyMusic の現在状態
@@ -69,6 +69,7 @@ updated: 2026-09-12
 - Files / iCloud Drive の複数フォルダ登録、security-scoped bookmark の復元、音源 scan と library cache。
 - ライブラリ同期の走査、metadata／Track Identity照合、cache保存、結合・派生モデル構築は専用actorでMainActor外かつ直列に実行する。UIへはフォルダ単位の完成結果だけを反映し、同期中も既存libraryと再生を維持する。
 - 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。ジャンル設定適用時の全ライブラリ再構築は専用actorで実行し、最新の結果だけをMainActorへ反映する。
+- アーティスト詳細のヘッダーは、そのアーティストのArtwork付きアルバムから最大4枚を画面表示ごとにランダム選択して2×2タイルで表示し、同じArtworkをぼかした色のにじみとライティングを背面へ重ねる。お気に入りアーティスト一覧はアルバムArtwork 1枚を円形表示し、同じ日は固定、日付が変わると選択を切り替える。
 - ジャンル表示設定では、ライブラリに「作業用BGM」が存在する場合は常に表示対象とし、選択画面に固定項目として表示する。個別設定、全解除、保存済み／旧プリセットからOFFにはできない。
 - iTunes / ID3のAlbum Artistと年を保持し、アルバムの統合・表示・検索に使用。検索画面では曲名、アルバム名、アーティスト名、アルバムアーティスト、年代を個別に選べ、225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
@@ -108,13 +109,14 @@ updated: 2026-09-12
 - **ライブラリ整理候補 M2**: 通常曲の新形式Playback Eventを直近20件まで使い、最低5件、ユーザーの「次へ」による途中スキップ率50%以上、平均再生率10%以下をすべて満たす曲を確認できる。既存`playCount`や直接選択、Good / Badは判定に使わない。候補提示は評価、飽き度、恒久非表示、履歴を自動変更しない。
 - **Behavior Scoring M3**: 保存済み日別集計から直近7日対過去56日のOverplayと、直近30日対それ以前の完走率によるPreference Driftを都度導出する。Good / Bad重みは専用Policyの-10〜+10テーブルへ分離し、設定の「再生傾向」で候補を確認できる。スコアは保存せず、評価・飽き度・恒久非表示を自動変更しない。選曲補正はM4対象。
 - **Selection Integration M4**: Overplayを保存済み日別集計から選曲処理ごとに導出し、通常の自動shuffle系とMood Station rankingへ、軽度では影響が小さく最大時は通常の1/8となる一時補正を適用する。手動選択、未再生Discovery、作業用再生には適用せず、Preference Drift、Good / Bad、Boredom、永続データを変更しない。計算式と適用範囲の正本は[ARCHITECTURE.md](ARCHITECTURE.md#再生履歴行動スコアと自動選曲)とする。
-- **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。シャッフル／アガる／穏やか／発掘の4モードを持つ。方向性のあるモードは適合度帯を第一条件とし、帯内で通常shuffleのPreference × Overplayと直近Highlight減衰を使う。Randomは帯内scoreの±0.5%だけで、Boredom中／永久shuffle非表示の曲は全モードから除外する。
-- **作業用サイズ再生**: 20分以上または「作業用BGM」の曲を通常ランダム再生から分離し、専用 player / playlist を提供。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
+- **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。シャッフル／アガる／穏やか／発掘の4モードを持つ。方向性のあるモードは適合度帯を第一条件とし、帯内で通常shuffleのPreference × Overplayと直近Highlight減衰を使う。Randomは帯内scoreの±0.5%だけで、30秒未満のベリーショート曲、Boredom中／永久shuffle非表示の曲は全モードから除外する。ベリーショート曲のライブラリ表示と手動再生は維持する。
+- **作業用BGM再生**: ジャンルに「作業用BGM」が明示された曲だけを通常ランダム再生から分離し、専用 player / playlist を提供する。再生時間は分類に使わない。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
+- **通常ランダム再生のベリーショート除外**: 30秒未満の曲を通常shuffle、Quick Play、Favorite系shuffle、Repeat、Discovery、最近追加、Selective／Genre Random、Mood Stationから除外する。30秒ちょうどの曲は候補に含め、ライブラリ表示、検索、通常Playlist、手動選択・順再生は変更しない。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。
 - **ホーム代表アートワーク**: 「マイミュージック」の各タイルは通常再生対象の代表Trackをホーム表示時と約1分ごとに選び、単なる再描画では変更しない。即時ランダム再生では表示中の代表Trackを先頭へ置き、後続は既存の選曲順を重複なしで維持する。
   - 代表候補・代表Track・artwork identifier・即時再生可否はDestination単位のsnapshotとして保持し、Library／履歴／お気に入りの変更時と約1分ごとだけ再構築する。SwiftUIの再描画やスクロールでは全Libraryを再走査しない。ArtworkはDataとdecode済みUIImageをactor内でcacheし、decodeをMainActor外で行う。
   - Home Tileへは配列ではなくsnapshotで確定した単一artwork identifierを渡し、配列を`task(id:)`で監視しない。画像はImageIOで最大1024pxへdownsample／decodeし、破損または未読込identifierは失敗cacheへ記録して同一セッション中の再decodeを防ぐ。
-- **気分ステーションの年代指定**: 気分・音の特徴に加え、通常再生対象かつ特徴量のある曲の年metadataから10年単位の候補を構成し、任意の年代へ絞って一時queueを生成できる。年がないlibraryでは年代質問を省略し、「すべての年代」では従来の選曲を維持する。
+- **気分ステーション再チューニング**: 年代指定を撤去し、質問を「気分」と「特に聴きたい音の要素」の2問へ整理した。Semantic v2のraw headを確率として固定閾値へ直接当てず、現在の対象Library内percentileへ正規化してから気分profileとの近さを評価する。差が小さすぎる軸はscoreに使わず、1問目は実際に候補を作れる気分、2問目はvocal／instrumental／electronic／ambient／pianoのうち十分な件数と差がある選択肢だけを表示する。「指定しない」では気分だけ、「任せたい」＋「指定しない」では解析済み対象曲全体から選ぶ。
 - **共通再生トランジション**: 設定可能な fade と切替時の安全減衰。crossfade ではない。
 - **音楽特徴量 Beta 1 / 3**: Mac Analyzer の schema v1 JSON を安全に照合・永続化し、audio 情報面で分類 badge と詳細を表示。
 - **Semantic v2 Analyzer**: 保存済みEmbeddingと学習済みheadからVocal / Instrumental、Mood、音色系特徴量を生成する。通常運用は音楽Rootを再帰走査し、relativePathとfileSize / mtimeNSで新規・更新・削除を差分反映する。library単位のcacheを維持したまま、完了済みJSONだけを`--export-all`でアプリ用の1ファイルへ統合できる。2026-08-29にインスト／OST中心3,837曲と従来3,552曲で分布を評価し、追加calibrationなしでraw headをFIXした。
@@ -133,7 +135,6 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-08-30 のジャンルフィルタ非同期化後、連続する設定変更で最新結果だけが反映されるXCTestを追加し、iPhone 17 / iOS 26.5 Simulatorの全XCTestとiOS Device Debug buildが成功。
 - 2026-08-30 のホームタイル画像設定追加後、画像名mappingを含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug test buildが成功。
 - 2026-08-30 のAlbum Artist / 年代検索追加後、metadata field別検索と複合条件のXCTestを追加し、iPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug buildが成功。
-- 2026-08-30 の気分ステーション年代指定追加後、年代候補、年metadata絞り込み、質問遷移、Dynamic Type / Dark Modeを含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug buildが成功。
 - 2026-08-30 のプレイリストタグ追加後、旧data decode、正規化、絞り込み、連続保存、import / export、再生中のPlaylist更新とqueue分離を含むiPhone 17 / iOS 26.5 Simulatorの全XCTestとDebug test buildが成功。
 - 2026-08-30 のデータ管理拡張後、解析JSONの内容、EQ／ジャンルプリセットのround-trip・同名merge・永続化・不正値拒否を含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 74件とDebug test buildが成功。
 - 2026-08-30 の共有Popover修正後、iPhone 17 / iOS 26.5 Simulatorの全XCTestと、iPad Pro 11-inch (M5) / iOS 26.5 Simulatorの共有専用XCTest 2件が成功。
@@ -148,6 +149,8 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-01 にBehavior Scoring M3を追加。CloudではSwift parse、独立Scoring typecheck、diff静的検査のみ実施し、Xcode build、Simulator XCTest、実機はローカルMacで未検証。Overplayの選曲適用はM4へ保留。
 - 2026-09-02 にTrack Preference責務分離後のMood Station描画testへ不足していた`TrackPreferenceStore`のtest fixture注入を追加し、Xcode 26.6、iPhone 17 / iOS 26.5 Simulatorで全XCTest 129件が成功した。
 - 2026-09-02 にTrack Fingerprint作成の1日100曲上限を撤廃。件数無制限の処理testは成功し、Debug test buildも成功した。全XCTestでは無関係なTrack Preference永続化testが一度失敗したが、同testの単独再実行は成功した。
+- 2026-09-13 の作業用BGMジャンル指定への統一後、専用catalog、通常再生対象、ホーム代表Artwork、整理候補、最近追加の関連XCTest 17件とDebug test buildがiPhone 17 / iOS 26.5 Simulatorで成功。
+- 2026-09-13 のベリーショート曲自動選曲除外後、30秒境界、通常ランダム入口、Highlight共通候補、最近追加、ホーム代表Artworkの関連XCTest 12件とDebug test buildがiPhone 17 / iOS 26.5 Simulatorで成功。
 - 専用 lint 設定、CI/CD workflow はリポジトリ内で確認できない。Swift Package Manager依存はZIP書き出し専用のZIPFoundation 0.9.20だけを固定している。
 
 ## 既知の制約・未検証
@@ -157,13 +160,12 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - Semantic単独では新規Trackの`energy` / `tempo`を生成しない。同一relativePathのproduction DSP baselineがある場合だけ値を継承し、2.048秒未満の曲はmodel patchを構成できないため未解析となる。
 - schema v1はmusic-root識別fieldを持たない。異なるrootの同一relativePathはmerged JSONで両方保持するが、fileSize / durationまで同じ複製音源はiPhone importでAmbiguousになり得る。source/library対応はimport対象外sidecarに保持する。
 - 特徴量 schema v1 の `contentHash` は予約項目で、iPhone での生成・照合は未実装。未照合 / 曖昧項目の修正 UI もない。
-- 作業用の20分境界、暗転時間、完全一致 genre 名は固定。通常ライブラリから直接選曲した場合は通常 playerを使い、作業用専用一覧からの選曲時だけ専用 playerを使う。
+- 作業用判定は完全一致するgenre項目「作業用BGM」だけを使い、暗転時間は固定。通常ライブラリから直接選曲した場合は通常 playerを使い、作業用専用一覧からの選曲時だけ専用 playerを使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
 - Playback History SQLite移行とPlayback Event FoundationのXCTestは追加済みだが未実行。Xcode build、Simulator、実機でのmigration／長期運用／ディスク障害検証、Restore UI、月次集約、生event retentionは未検証または将来拡張である。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
-- 気分ステーションの年代指定はTrackの年metadataを10年単位で扱う。年代指定時、年がない曲は候補外となり、年metadata自体の正確性は音源tagに依存する。
 - プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。タグの一括名称変更、色、階層は未実装。
 - `MetadataService` は `.m4a` container を AAC と表示し、ALAC の stream-level 判別は未実装。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。

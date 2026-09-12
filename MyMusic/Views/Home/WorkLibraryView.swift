@@ -57,10 +57,10 @@ struct WorkLibraryView: View {
             } header: {
                 Text("作業用ライブラリ")
             } footer: {
-                Text("20分以上、またはジャンルが「作業用BGM」の曲だけを表示します。")
+                Text("ジャンルが「作業用BGM」に指定された曲だけを表示します。")
             }
         }
-        .navigationTitle("作業用サイズ再生")
+        .navigationTitle("作業用BGM再生")
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: WorkLibraryCategory.self) { category in
             destination(for: category)

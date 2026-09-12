@@ -6,62 +6,48 @@ import XCTest
 final class MoodStationServiceTests: XCTestCase {
     private let service = MoodStationService()
 
-    func testCalmAndEnergeticAnswersFavorDifferentTracks() throws {
-        let calm = stationValues(["calm": 0.95, "energy": 0.15, "aggressive": 0.05, "bright": 0.2, "dark": 0.7])
-        let energetic = stationValues(["calm": 0.1, "energy": 0.9, "aggressive": 0.9, "bright": 0.8, "dark": 0.4])
-        let relax = StationAnswers(mood: .relax, sound: .soft)
-        let uplift = StationAnswers(mood: .uplift, sound: .heavy)
-        XCTAssertGreaterThan(try XCTUnwrap(service.score(calm, for: relax)), try XCTUnwrap(service.score(energetic, for: relax)))
-        XCTAssertGreaterThan(try XCTUnwrap(service.score(energetic, for: uplift)), try XCTUnwrap(service.score(calm, for: uplift)))
+    func testLibraryRelativeCalibrationFavorsOppositeProfiles() throws {
+        let calm = candidate(["calm": 0.95, "energy": 0.2, "aggressive": 0.02])
+        let middle = candidate(["calm": 0.7, "energy": 0.5, "aggressive": 0.15])
+        let energetic = candidate(["calm": 0.1, "energy": 0.8, "aggressive": 0.7])
+        let candidates = [calm, middle, energetic]
+        let relax = StationAnswers(mood: .relax, sound: .any)
+        let stimulate = StationAnswers(mood: .stimulate, sound: .any)
+        XCTAssertGreaterThan(try XCTUnwrap(service.score(calm, for: relax, among: candidates)),
+                             try XCTUnwrap(service.score(energetic, for: relax, among: candidates)))
+        XCTAssertGreaterThan(try XCTUnwrap(service.score(energetic, for: stimulate, among: candidates)),
+                             try XCTUnwrap(service.score(calm, for: stimulate, among: candidates)))
     }
 
     func testMissingAndInvalidValuesAreNotTreatedAsLowScores() {
-        let answers = StationAnswers(mood: .relax, sound: .soft)
-        XCTAssertNil(service.score(stationValues([:]), for: answers))
-        XCTAssertNil(service.score(stationValues(["tempo": 85]), for: answers))
-        XCTAssertNil(service.score(stationValues(["calm": .nan, "energy": -.infinity, "aggressive": 2]), for: answers))
-        XCTAssertNil(service.score(stationValues(["energy": 0.15]), for: answers))
+        let answers = StationAnswers(mood: .relax, sound: .any)
+        let valid = candidate(["calm": 0.9, "energy": 0.2, "aggressive": 0.1])
+        let candidates = [valid]
+        XCTAssertNil(service.score(candidate([:]), for: answers, among: candidates))
+        XCTAssertNil(service.score(candidate(["tempo": 85]), for: answers, among: candidates))
+        XCTAssertNil(service.score(candidate(["calm": .nan, "energy": -.infinity, "aggressive": 2]),
+                                   for: answers, among: candidates))
+        XCTAssertNil(service.score(candidate(["energy": 0.15]), for: answers, among: candidates))
         XCTAssertFalse(service.hasUsableFeatures(stationValues(["tempo": 85])))
     }
 
-    func testSurpriseAndIndistinguishablePoolsFinishAfterTwoQuestions() {
-        let candidates = [candidate(vocal: 0.1), candidate(vocal: 0.9)]
-        XCTAssertNil(service.followUp(for: StationAnswers(mood: .surprise, sound: .soft), candidates: candidates))
-        XCTAssertNil(service.followUp(for: StationAnswers(mood: .focus, sound: .soft), candidates: [candidates[0]]))
-        XCTAssertNil(service.followUp(for: StationAnswers(mood: .focus, sound: .soft), candidates: [candidate(), candidate()]))
+    func testSoundChoicesOnlyExposeFeaturesThatCanActuallySeparateTracks() {
+        let candidates = [
+            candidate(["vocal": 0.1, "instrumental": 0.9, "electronic": 0.20, "ambient": 0.1]),
+            candidate(["vocal": 0.9, "instrumental": 0.1, "electronic": 0.21, "ambient": 0.6]),
+            candidate(["vocal": 0.5, "instrumental": 0.5, "electronic": 0.22])
+        ]
+        XCTAssertEqual(service.availableSounds(in: candidates), [.any, .vocals, .instrumental, .ambient])
     }
 
-    func testFollowUpBranchesByMoodAndAvailableVariation() {
-        XCTAssertEqual(service.followUp(
-            for: StationAnswers(mood: .focus, sound: .soft),
-            candidates: [candidate(vocal: 0.1), candidate(vocal: 0.9)]
-        ), .vocals)
-        XCTAssertEqual(service.followUp(
-            for: StationAnswers(mood: .relax, sound: .soft),
-            candidates: [candidate(electronic: 0.1), candidate(electronic: 0.9)]
-        ), .texture)
-        let energetic = [0.2, 0.9].map { aggression in
-            StationCandidate(trackID: UUID(), artist: "A", values: stationValues([
-                "energy": 0.85, "aggressive": aggression, "calm": 0.2, "bright": 0.8, "dark": 0.6
-            ]))
-        }
-        XCTAssertEqual(service.followUp(for: StationAnswers(mood: .uplift, sound: .heavy), candidates: energetic), .intensity)
-    }
-
-    func testFinalVocalAnswerOverridesFocusDefault() throws {
-        let vocal = candidate(vocal: 0.9).values
-        let instrumental = candidate(vocal: 0.1).values
-        let song = StationAnswers(mood: .focus, sound: .soft, refinement: .vocals, direction: .first)
-        let sound = StationAnswers(mood: .focus, sound: .soft, refinement: .vocals, direction: .second)
-        XCTAssertGreaterThan(try XCTUnwrap(service.score(vocal, for: song)), try XCTUnwrap(service.score(instrumental, for: song)))
-        XCTAssertGreaterThan(try XCTUnwrap(service.score(instrumental, for: sound)), try XCTUnwrap(service.score(vocal, for: sound)))
-        let skipped = StationAnswers(mood: .focus, sound: .soft, refinement: .vocals)
-        XCTAssertEqual(service.score(vocal, for: skipped), service.score(vocal, for: StationAnswers(mood: .focus, sound: .soft)))
+    func testMoodChoicesHideProfilesThatCannotBeMeasured() {
+        let candidates = [candidate(["vocal": 0.1]), candidate(["vocal": 0.9])]
+        XCTAssertEqual(service.availableMoods(in: candidates), [.surprise])
     }
 
     func testLimitUniquenessAndSeededVariation() {
-        let candidates = (0..<60).map { _ in candidate() }
-        let answers = StationAnswers(mood: .relax, sound: .soft)
+        let candidates = (0..<60).map { _ in candidate(["calm": 0.5]) }
+        let answers = StationAnswers(mood: .surprise, sound: .any)
         var first = StationSeed(seed: 1)
         var same = StationSeed(seed: 1)
         var other = StationSeed(seed: 2)
@@ -73,39 +59,29 @@ final class MoodStationServiceTests: XCTestCase {
         XCTAssertNotEqual(result.trackIDs, service.makeStation(answers: answers, candidates: candidates, using: &other).trackIDs)
     }
 
-    func testAvailableDecadesAreDerivedFromValidYearMetadataAndFilterTheStation() throws {
-        let nineties = candidate(year: 1994)
-        let twoThousands = candidate(year: 2007)
-        let unknown = candidate(year: nil)
-        let invalid = candidate(year: 0)
-        let candidates = [twoThousands, unknown, nineties, invalid]
-
-        XCTAssertEqual(service.availableDecades(in: candidates).map(\.startYear), [2000, 1990])
-
+    func testCompressedRawHeadStillSelectsTheRelativeHighEnd() {
+        let low = candidate(["ambient": 0.01, "calm": 0.4, "dark": 0.01])
+        let middle = candidate(["ambient": 0.05, "calm": 0.6, "dark": 0.04])
+        let high = candidate(["ambient": 0.15, "calm": 0.9, "dark": 0.12])
         var rng = StationSeed(seed: 1)
-        let decade = try XCTUnwrap(StationDecade(year: 1994))
         let result = service.makeStation(
-            answers: StationAnswers(mood: .relax, sound: .soft, decade: decade),
-            candidates: candidates,
+            answers: StationAnswers(mood: .immerse, sound: .ambient),
+            candidates: [low, middle, high],
             using: &rng
         )
-
-        XCTAssertEqual(result.trackIDs, [nineties.trackID])
-        XCTAssertEqual(result.analyzedTrackCount, 1)
-        XCTAssertEqual(result.answers.decade, decade)
-        XCTAssertTrue(decade.contains(1999))
-        XCTAssertFalse(decade.contains(2000))
-        XCTAssertFalse(decade.contains(nil))
+        XCTAssertEqual(result.trackIDs, [high.trackID])
+        XCTAssertEqual(result.analyzedTrackCount, 3)
     }
 
     func testUnrelatedTracksDoNotFillTheQueue() {
-        let close = candidate()
+        let close = candidate(["energy": 0.1, "aggressive": 0.05, "calm": 0.95])
+        let middle = candidate(["energy": 0.5, "aggressive": 0.3, "calm": 0.6])
         let unrelated = StationCandidate(trackID: UUID(), artist: "B", values: stationValues([
             "energy": 1, "aggressive": 1, "calm": 0
         ]))
         var rng = StationSeed(seed: 1)
-        let result = service.makeStation(answers: StationAnswers(mood: .relax, sound: .soft),
-                                         candidates: [close, unrelated], using: &rng)
+        let result = service.makeStation(answers: StationAnswers(mood: .relax, sound: .any),
+                                         candidates: [close, middle, unrelated], using: &rng)
         XCTAssertEqual(result.trackIDs, [close.trackID])
         XCTAssertEqual(result.matchingTrackCount, 1)
         XCTAssertTrue(service.makeStation(answers: result.answers, candidates: [unrelated], using: &rng).trackIDs.isEmpty)
@@ -115,10 +91,10 @@ final class MoodStationServiceTests: XCTestCase {
 
     func testArtistDiversityAmongEquivalentMatches() {
         let candidates = (0..<12).map { index in
-            StationCandidate(trackID: UUID(), artist: index < 6 ? "A" : "B", values: candidate().values)
+            StationCandidate(trackID: UUID(), artist: index < 6 ? "A" : "B", values: candidate(["calm": 0.5]).values)
         }
         var rng = StationSeed(seed: 2)
-        let result = service.makeStation(answers: StationAnswers(mood: .relax, sound: .soft), candidates: candidates, using: &rng)
+        let result = service.makeStation(answers: StationAnswers(mood: .surprise, sound: .any), candidates: candidates, using: &rng)
         let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.trackID, $0.artist) })
         for pair in zip(result.trackIDs, result.trackIDs.dropFirst()) {
             XCTAssertNotEqual(byID[pair.0], byID[pair.1])
@@ -126,19 +102,16 @@ final class MoodStationServiceTests: XCTestCase {
     }
 
     func testOverplayChangesRankingButNotPureMoodEligibility() {
-        let answers = StationAnswers(mood: .relax, sound: .soft)
+        let answers = StationAnswers(mood: .surprise, sound: .any)
         let overplayed = StationCandidate(
-            trackID: UUID(), artist: "A", values: candidate().values, overplayFactor: 0.8
+            trackID: UUID(), artist: "A", values: candidate(["calm": 0.5]).values, overplayFactor: 0.8
         )
         let normal = StationCandidate(
-            trackID: UUID(), artist: "B", values: candidate().values, overplayFactor: 1
+            trackID: UUID(), artist: "B", values: candidate(["calm": 0.5]).values, overplayFactor: 1
         )
-        let unrelated = StationCandidate(trackID: UUID(), artist: "C", values: stationValues([
-            "energy": 1, "aggressive": 1, "calm": 0
-        ]), overplayFactor: 1)
         var rng = StationSeed(seed: 8)
         let result = service.makeStation(
-            answers: answers, candidates: [overplayed, normal, unrelated], using: &rng
+            answers: answers, candidates: [overplayed, normal], using: &rng
         )
 
         XCTAssertEqual(result.matchingTrackCount, 2)
@@ -147,11 +120,8 @@ final class MoodStationServiceTests: XCTestCase {
         XCTAssertTrue(result.trackIDs.contains(overplayed.trackID))
     }
 
-    private func candidate(vocal: Double = 0.1, electronic: Double = 0.3, year: Int? = nil) -> StationCandidate {
-        StationCandidate(trackID: UUID(), artist: "Artist", year: year, values: stationValues([
-            "energy": 0.2, "calm": 0.9, "aggressive": 0.1, "ambient": 0.8,
-            "vocal": vocal, "instrumental": 1 - vocal, "electronic": electronic
-        ]))
+    private func candidate(_ values: [String: Double]) -> StationCandidate {
+        StationCandidate(trackID: UUID(), artist: "Artist", values: stationValues(values))
     }
 }
 
@@ -161,11 +131,9 @@ final class StationStoreIntegrationTests: XCTestCase {
         let fixture = StationFixture(featureCount: 3)
         await fixture.store.prepare()
         fixture.store.begin()
-        fixture.store.chooseMood(.focus)
+        fixture.store.chooseMood(.surprise)
         XCTAssertEqual(fixture.store.phase, .sound)
-        fixture.store.chooseSound(.soft)
-        XCTAssertEqual(fixture.store.phase, .refinement)
-        fixture.store.chooseDirection(.second)
+        fixture.store.chooseSound(.any)
         XCTAssertEqual(fixture.store.phase, .generating)
         await fixture.store.generate()
         XCTAssertEqual(fixture.store.phase, .result)
@@ -180,9 +148,8 @@ final class StationStoreIntegrationTests: XCTestCase {
         let fixture = StationFixture(featureCount: 1)
         await fixture.store.prepare()
         fixture.store.begin()
-        fixture.store.chooseMood(.relax)
-        fixture.store.chooseSound(.soft)
-        if fixture.store.phase == .refinement { fixture.store.chooseDirection(nil) }
+        fixture.store.chooseMood(.surprise)
+        fixture.store.chooseSound(.any)
         await fixture.store.generate()
         let trackID = try XCTUnwrap(fixture.store.stationTracks.first?.id)
         fixture.history.permanentlyHideFromShuffle(trackID: trackID)
@@ -191,26 +158,16 @@ final class StationStoreIntegrationTests: XCTestCase {
         XCTAssertNotNil(fixture.store.errorMessage)
     }
 
-    func testDecadeQuestionUsesOnlyYearsPresentInEligibleTracks() async throws {
-        let fixture = StationFixture(featureCount: 3, years: [1994, 2007, nil])
+    func testStationFlowHasNoDecadeStep() async {
+        let fixture = StationFixture(featureCount: 3)
         await fixture.store.prepare()
         fixture.store.begin()
-        fixture.store.chooseMood(.relax)
-        fixture.store.chooseSound(.soft)
-        if fixture.store.phase == .refinement { fixture.store.chooseDirection(nil) }
-
-        XCTAssertEqual(fixture.store.phase, .decade)
-        XCTAssertEqual(fixture.store.availableDecades.map(\.startYear), [2000, 1990])
-
-        let nineties = try XCTUnwrap(fixture.store.availableDecades.last)
-        fixture.store.chooseDecade(nineties)
+        fixture.store.chooseMood(.surprise)
+        fixture.store.chooseSound(.any)
         XCTAssertEqual(fixture.store.phase, .generating)
         await fixture.store.generate()
-
         XCTAssertEqual(fixture.store.phase, .result)
-        XCTAssertEqual(fixture.store.stationTracks.map(\.year), [1994])
-        XCTAssertEqual(fixture.store.station?.answers.decade, nineties)
-        XCTAssertTrue(fixture.store.station?.answers.summary.contains("1990年代") == true)
+        XCTAssertFalse(fixture.store.station?.answers.summary.contains("年代") == true)
     }
 
     func testNoImportedFeaturesProducesUnavailableState() async {
@@ -222,10 +179,10 @@ final class StationStoreIntegrationTests: XCTestCase {
     }
 
     func testQuestionAndResultRenderForAccessibilityAndDarkMode() async throws {
-        let fixture = StationFixture(featureCount: 3, years: [1994, 2007, 2013])
+        let fixture = StationFixture(featureCount: 3)
         await fixture.store.prepare()
         fixture.store.begin()
-        fixture.store.chooseMood(.focus)
+        fixture.store.chooseMood(.surprise)
         let question = try await snapshot(
             StationQuestionView().environment(fixture.store).dynamicTypeSize(.accessibility2),
             colorScheme: .light
@@ -233,17 +190,7 @@ final class StationStoreIntegrationTests: XCTestCase {
         XCTAssertEqual(question.size, CGSize(width: 390, height: 844))
         attach(question, name: "Station question 2 - Accessibility Light")
 
-        fixture.store.chooseSound(.soft)
-        if fixture.store.phase == .refinement { fixture.store.chooseDirection(.second) }
-        XCTAssertEqual(fixture.store.phase, .decade)
-        let decadeQuestion = try await snapshot(
-            StationQuestionView().environment(fixture.store).dynamicTypeSize(.accessibility2),
-            colorScheme: .dark
-        )
-        XCTAssertEqual(decadeQuestion.size, CGSize(width: 390, height: 844))
-        attach(decadeQuestion, name: "Station decade question - Accessibility Dark")
-
-        fixture.store.chooseDecade(nil)
+        fixture.store.chooseSound(.any)
         await fixture.store.generate()
         let result = try await snapshot(
             NavigationStack { StationResultView() }
@@ -296,13 +243,11 @@ private final class StationFixture {
     let playlists = PlaylistStore(persistence: StationPlaylistPersistence())
     let store: StationStore
 
-    init(featureCount: Int, years: [Int?]? = nil) {
-        let trackYears = years ?? Array(repeating: nil, count: 3)
+    init(featureCount: Int) {
         tracks = (0..<3).map { index in
             Track(id: UUID(), title: "Song \(index)", artistName: "Artist \(index)", duration: 180,
                   fileURL: URL(fileURLWithPath: "/tmp/station-\(index).flac"),
-                  relativePath: "station-\(index).flac", fileSize: Int64(100 + index),
-                  year: index < trackYears.count ? trackYears[index] : nil)
+                  relativePath: "station-\(index).flac", fileSize: Int64(100 + index))
         }
         let folder = URL(fileURLWithPath: "/tmp/station-library")
         let importService = StationFileImport(folders: [folder])

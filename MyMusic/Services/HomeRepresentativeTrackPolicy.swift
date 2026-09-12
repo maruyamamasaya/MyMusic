@@ -3,7 +3,7 @@ import Foundation
 enum HomeRepresentativeTrackPolicy {
     static func eligibleArtworkTracks(from tracks: [Track]) -> [Track] {
         tracks.filter {
-            $0.isEligibleForRegularPlayback && $0.artworkIdentifier != nil
+            $0.isEligibleForRegularRandomPlayback && $0.artworkIdentifier != nil
         }
     }
 

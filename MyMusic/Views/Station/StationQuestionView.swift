@@ -25,7 +25,7 @@ struct StationQuestionView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }
-                if store.phase == .sound || store.phase == .refinement || store.phase == .decade || store.phase == .result {
+                if store.phase == .sound || store.phase == .result {
                     ToolbarItem(placement: .primaryAction) {
                         Button("回答を戻る") { store.goBack() }
                     }
@@ -73,36 +73,16 @@ struct StationQuestionView: View {
                 VStack(spacing: 10) {
                     switch store.phase {
                     case .mood:
-                        ForEach(StationMood.allCases) { mood in
+                        ForEach(store.availableMoods) { mood in
                             StationAnswerButton(title: mood.title, symbol: mood.symbol, selected: store.mood == mood) {
                                 store.chooseMood(mood)
                             }
                         }
                     case .sound:
-                        ForEach(StationSound.allCases) { sound in
+                        ForEach(store.availableSounds) { sound in
                             StationAnswerButton(title: sound.title, symbol: sound.symbol, selected: store.sound == sound) {
                                 store.chooseSound(sound)
                             }
-                        }
-                    case .refinement:
-                        if let refinement = store.refinement {
-                            StationAnswerButton(title: refinement.firstTitle, symbol: "circle.lefthalf.filled",
-                                                selected: store.direction == .first) { store.chooseDirection(.first) }
-                            StationAnswerButton(title: refinement.secondTitle, symbol: "circle.righthalf.filled",
-                                                selected: store.direction == .second) { store.chooseDirection(.second) }
-                            Button("どちらでも・このままつくる") { store.chooseDirection(nil) }
-                                .font(.subheadline).padding(.vertical, 12)
-                        }
-                    case .decade:
-                        StationAnswerButton(
-                            title: "すべての年代", symbol: "calendar", selected: store.decade == nil
-                        ) { store.chooseDecade(nil) }
-                        ForEach(store.availableDecades) { decade in
-                            StationAnswerButton(
-                                title: decade.title,
-                                symbol: "calendar.badge.clock",
-                                selected: store.decade == decade
-                            ) { store.chooseDecade(decade) }
                         }
                     case .generating, .result: EmptyView()
                     }
@@ -120,26 +100,23 @@ struct StationQuestionView: View {
         switch store.phase {
         case .mood: "QUESTION 1"
         case .sound: "QUESTION 2"
-        case .decade: "最後に、年代を選ぶ"
-        default: "最後に、もうひとつ"
+        default: ""
         }
     }
 
     private var questionTitle: String {
         switch store.phase {
         case .mood: "今、どんな音楽がほしい？"
-        case .sound: "今日はどんな音の感じがいい？"
-        case .decade: "どの年代から聴きたい？"
-        default: "最後に、今日はどっち寄り？"
+        case .sound: "特に聴きたい音の要素は？"
+        default: ""
         }
     }
 
     private var questionDetail: String {
         switch store.phase {
         case .mood: "今の気分に近いものを、ひとつ。"
-        case .sound: "\(store.mood?.title ?? "")気分に、どんな音を合わせましょう。"
-        case .decade: "曲の年メタデータを使って絞り込みます。迷ったら、すべての年代のままで大丈夫です。"
-        default: store.refinement?.explanation ?? ""
+        case .sound: "今のライブラリで区別できる特徴だけを表示しています。迷ったら「指定しない」で大丈夫です。"
+        default: ""
         }
     }
 }

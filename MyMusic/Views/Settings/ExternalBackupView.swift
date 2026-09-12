@@ -2,13 +2,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ExternalBackupView: View {
+    private enum FolderSelectionPurpose {
+        case destination
+        case restore
+    }
+
     @Environment(PlaybackHistoryStore.self) private var historyStore
     @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var status = ExternalBackupStatus(destinationName: nil, lastBackupDate: nil, hasRestorableBackup: false)
-    @State private var isChoosingDestination = false
-    @State private var isChoosingRestore = false
+    @State private var folderSelectionPurpose = FolderSelectionPurpose.destination
+    @State private var isChoosingFolder = false
     @State private var isWorking = false
     @State private var pendingRestoreURL: URL?
     @State private var resultMessage: String?
@@ -21,7 +26,7 @@ struct ExternalBackupView: View {
             Section("保存先") {
                 LabeledContent("フォルダ", value: status.destinationName ?? "未選択")
                 Button("バックアップ保存先を選択", systemImage: "folder.badge.plus") {
-                    isChoosingDestination = true
+                    presentFolderImporter(for: .destination)
                 }
             }
 
@@ -36,7 +41,7 @@ struct ExternalBackupView: View {
                 Button("今すぐバックアップ", systemImage: "externaldrive.badge.check") { createBackup() }
                     .disabled(status.destinationName == nil || isWorking)
                 Button("バックアップから復元", systemImage: "arrow.counterclockwise") {
-                    isChoosingRestore = true
+                    presentFolderImporter(for: .restore)
                 }
                 .disabled(isWorking)
             } footer: {
@@ -50,18 +55,8 @@ struct ExternalBackupView: View {
         .navigationTitle("App外バックアップ")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { refreshStatus() }
-        .fileImporter(isPresented: $isChoosingDestination, allowedContentTypes: [.folder]) { result in
-            do {
-                let url = try result.get()
-                try service.saveDestination(url)
-                refreshStatus()
-            } catch let error as CocoaError where error.code == .userCancelled { }
-            catch { errorMessage = error.localizedDescription }
-        }
-        .fileImporter(isPresented: $isChoosingRestore, allowedContentTypes: [.folder]) { result in
-            do { pendingRestoreURL = try result.get() }
-            catch let error as CocoaError where error.code == .userCancelled { }
-            catch { errorMessage = error.localizedDescription }
+        .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+            handleFolderSelection(result, purpose: folderSelectionPurpose)
         }
         .confirmationDialog(
             "現在のMyMusicデータをバックアップの内容へ置き換えます。続けますか？",
@@ -80,6 +75,28 @@ struct ExternalBackupView: View {
     }
 
     private func refreshStatus() { status = service.status() }
+
+    private func presentFolderImporter(for purpose: FolderSelectionPurpose) {
+        folderSelectionPurpose = purpose
+        isChoosingFolder = true
+    }
+
+    private func handleFolderSelection(
+        _ result: Result<URL, Error>,
+        purpose: FolderSelectionPurpose
+    ) {
+        do {
+            let url = try result.get()
+            switch purpose {
+            case .destination:
+                try service.saveDestination(url)
+                refreshStatus()
+            case .restore:
+                pendingRestoreURL = url
+            }
+        } catch let error as CocoaError where error.code == .userCancelled { }
+        catch { errorMessage = error.localizedDescription }
+    }
 
     private func createBackup() {
         isWorking = true

@@ -95,6 +95,11 @@ final class LibraryStore {
         }
     }
 
+    /// Lets feature-driven entry points wait until the initial genre-filter snapshot is visible.
+    func waitForPendingGenreFilter() async {
+        await genreFilterTask?.value
+    }
+
     func addFolders(_ urls: [URL]) async {
         errorMessage = nil
         let oldIDs = Set(libraryFolders.map(\.id))

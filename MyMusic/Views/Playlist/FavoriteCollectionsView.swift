@@ -90,9 +90,12 @@ struct FavoriteArtistsView: View {
                             playRandomly(libraryStore.tracks(for: artist))
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "person.circle")
-                                    .font(.title2)
-                                    .foregroundStyle(.tint)
+                                AlbumArtworkView(artworkIdentifier: dailyArtworkIdentifier(for: artist))
+                                    .frame(width: 48, height: 48)
+                                    .clipShape(Circle())
+                                    .overlay {
+                                        Circle().stroke(.white.opacity(0.18), lineWidth: 1)
+                                    }
                                 Text(artist.name)
                                     .foregroundStyle(.primary)
                                 Spacer(minLength: 8)
@@ -112,6 +115,13 @@ struct FavoriteArtistsView: View {
             }
         }
         .navigationTitle("お気に入りのアーティスト")
+    }
+
+    private func dailyArtworkIdentifier(for artist: Artist) -> String? {
+        DailyArtistArtworkSelection.identifier(
+            for: artist.id,
+            from: libraryStore.albums(for: artist).compactMap(\.artworkIdentifier)
+        )
     }
 
     private func playRandomly(_ sourceTracks: [Track]) {
