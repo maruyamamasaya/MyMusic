@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-10
+updated: 2026-09-12
 ---
 
 # MyMusic の現在状態
@@ -26,7 +26,7 @@ updated: 2026-09-10
 
 ### Apple Watch リモコン MVP
 
-- iPhone単体の実機検証を優先する暫定構成として、`MyMusic` ターゲットから `MyMusicWatch` の Target Dependency と `Embed Watch Content` を外している。Watchターゲットとコードは維持しているが、現在の `MyMusic` ビルドにはWatch Appを埋め込まない。
+- 2026-09-12に元のiPhone上のアプリコンテナとFinder暗号化バックアップを確認した後、`MyMusic` ターゲットの `MyMusicWatch` Target Dependencyと`Embed Watch Content`を復旧した。現在の`MyMusic`ビルドはWatch Appを埋め込む構成で、iOS／WatchともDevelopment Teamは`U29GY347DY`、Bundle Identifierはそれぞれ`maruyama.MyMusic`／`maruyama.MyMusic.watchkitapp`である。
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
