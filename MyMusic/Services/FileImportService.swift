@@ -4,6 +4,25 @@ nonisolated protocol FileImportServicing: Sendable {
     nonisolated func saveLibraryFolders(_ urls: [URL]) throws
     nonisolated func restoreLibraryFolders() throws -> [URL]
     nonisolated func audioFiles(in folderURL: URL) async throws -> [URL]
+    nonisolated func audioFileScan(in folderURL: URL) async throws -> AudioFileScanResult
+}
+
+extension FileImportServicing {
+    nonisolated func audioFileScan(in folderURL: URL) async throws -> AudioFileScanResult {
+        AudioFileScanResult(files: try await audioFiles(in: folderURL), notices: [])
+    }
+}
+
+nonisolated struct AudioFileScanResult: Sendable {
+    let files: [URL]
+    let notices: [LibraryScanNotice]
+}
+
+nonisolated enum LibraryScanNotice: Sendable, Equatable {
+    case iCloudDownloadPending(relativePath: String)
+    case fileInspectionFailed(relativePath: String, detail: String)
+    case directoryReadFailed(relativePath: String, detail: String)
+    case metadataReadFailed(relativePath: String, detail: String)
 }
 
 enum FileImportServiceError: LocalizedError {
@@ -95,6 +114,10 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
     }
 
     nonisolated func audioFiles(in folderURL: URL) async throws -> [URL] {
+        try await audioFileScan(in: folderURL).files
+    }
+
+    nonisolated func audioFileScan(in folderURL: URL) async throws -> AudioFileScanResult {
         try await Task.detached(priority: .userInitiated) {
             try Self.scanAudioFiles(in: folderURL)
         }.value
@@ -102,7 +125,7 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
 
     /// `DirectoryEnumerator` is a synchronous Objective-C iterator. Keeping it in a
     /// nonisolated synchronous function avoids using its iterator from an async context.
-    private nonisolated static func scanAudioFiles(in folderURL: URL) throws -> [URL] {
+    private nonisolated static func scanAudioFiles(in folderURL: URL) throws -> AudioFileScanResult {
         let hasAccess = folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
 
@@ -110,12 +133,19 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
             throw FileImportServiceError.accessDenied
         }
 
-        let keys: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isHiddenKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        var notices: [LibraryScanNotice] = []
         guard let enumerator = FileManager.default.enumerator(
             at: folderURL,
-            includingPropertiesForKeys: keys,
+            includingPropertiesForKeys: Array(keys),
             options: [.skipsHiddenFiles, .skipsPackageDescendants],
-            errorHandler: { _, _ in true }
+            errorHandler: { url, error in
+                notices.append(.directoryReadFailed(
+                    relativePath: relativePath(for: url, root: folderURL),
+                    detail: diagnosticDetail(for: error)
+                ))
+                return true
+            }
         ) else {
             throw FileImportServiceError.folderUnavailable
         }
@@ -124,16 +154,38 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
         while let url = enumerator.nextObject() as? URL {
             if Task.isCancelled { throw CancellationError() }
             guard supportedExtensions.contains(url.pathExtension.lowercased()) else { continue }
-            guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true, values.isHidden != true else { continue }
+            let values: URLResourceValues
+            do {
+                values = try url.resourceValues(forKeys: keys)
+            } catch {
+                notices.append(.fileInspectionFailed(
+                    relativePath: relativePath(for: url, root: folderURL),
+                    detail: diagnosticDetail(for: error)
+                ))
+                continue
+            }
+            guard values.isRegularFile == true, values.isHidden != true else { continue }
 
             // Avoid downloading the user's complete iCloud library during a scan.
             if values.isUbiquitousItem == true,
                values.ubiquitousItemDownloadingStatus == .notDownloaded {
+                notices.append(.iCloudDownloadPending(
+                    relativePath: relativePath(for: url, root: folderURL)
+                ))
                 continue
             }
             files.append(url)
         }
-        return files
+        return AudioFileScanResult(files: files, notices: notices)
+    }
+
+    private nonisolated static func relativePath(for url: URL, root: URL) -> String {
+        StableTrackIdentifier.relativePath(for: url, relativeTo: root)
+    }
+
+    private nonisolated static func diagnosticDetail(for error: Error) -> String {
+        let nsError = error as NSError
+        return "\(nsError.localizedDescription) [\(nsError.domain):\(nsError.code)]"
     }
 
     private nonisolated func storedBookmarks() -> [Data] {

@@ -32,17 +32,21 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 ## Composition と画面構成
 
-`MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Highlight の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。
+`MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Settings の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。HighlightはHomeの「マイミュージック」タイル列左端から同じHome NavigationStack内へ遷移する。
 
 ファイル共有は各画面の`ShareLink`へ委ねず、共通の`ActivityShareSheet`が一時ファイル作成と`UIActivityViewController` presentationを担当する。共有シートは画面rootの安定したpresentation stateから開き、`popoverPresentationController`が存在する場合は生成時・更新時ともsource view / rectを設定するため、iPhoneのsheet適応とiPadのPopover適応を同じ経路で扱う。
 
 主な View 群は責務別に `Home`、`Library`、`Player`、`Playlist`、`Search`、`Settings`、`Highlight`、`Components` に分かれます。
 
-Homeのライブラリ／アクティビティタイルは、`MyMusic/Resources/HomeTileImages/`に所定のベース名で置かれたローカル画像をbuild resourceとして任意に読み込む。対象画像がない、またはdecodeできない場合は、`HomeItemTile`が従来のdestination別グラデーションをそのまま表示する。ローカル画像は永続化データではなく、build時だけアプリbundleへ取り込まれる任意assetである。
+Homeの「マイミュージック」左端にあるHighlightタイルとライブラリ／アクティビティタイルは、`MyMusic/Resources/HomeTileImages/`に所定のベース名で置かれたローカル画像をbuild resourceとして任意に読み込む。Highlight画像がない場合は通常再生対象からランダムに選んだArtworkを装飾として表示し、再生queueや先頭曲には接続しない。ライブラリ／アクティビティ画像がない、またはdecodeできない場合は、`HomeItemTile`が従来のdestination別グラデーションをそのまま表示する。ローカル画像は永続化データではなく、build時だけアプリbundleへ取り込まれる任意assetである。
 
 HomeとPlaylistで共有するステーション入口カードは、`MyMusic/Resources/HomeTileImages/station-background.*`を同じく任意のbuild resourceとして読み込む。画像がない、またはdecodeできない場合は、`StationEntryView`が従来のグラデーションを表示する。
 
 Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「作業用BGM」と明示した対象を曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別に閲覧する入口とする。各一覧は対象内検索を持ち、曲の再生は`PlayerStore`へ`.workSize` presentationを指定して専用playerへ接続する。
+
+## テーマの表示境界
+
+`SettingsStore.theme` → `MyMusicApp`のEnvironment／tint → `ThemePalette`／`ThemeBackground`／各画面の`themeScreen()`。保存IDは`AppTheme`、視覚パラメータはViews/Themeへ分離する。設定はUserDefaultsの`appearance.theme`に保存し、App外バックアップの許可キーへ含める。再生StoreとWatch通信には接続しない。詳細は[Themes](Documentation/Themes.md)。
 
 ## 主要データフロー
 
@@ -92,6 +96,12 @@ Library View → LibraryStore → FileImportService
 
 `LibrarySyncService` actorはscanを1件ずつ直列化し、Track Identityのscan sessionとLibrary cache更新の競合を防ぐ。ファイル走査、差分判定、metadata／Identity照合、cache保存、複数folderの重複排除と`MusicLibrary`派生モデル構築はMainActor外で行う。`LibraryStore`は同期状態と完成snapshotの反映だけをMainActorで行い、曲単位ではObservable stateを更新しない。同期中は現在の表示libraryを保持するため、既存Track IDを参照する再生・履歴・Preference・Playlistは同期処理から独立して継続する。
 
+手動同期は`LibraryScanDepth.quick`と`complete`の2段階を持つ。quickはfile sizeと更新日時が一致するTrackをcacheから再利用し、completeは全ての取得可能な音源を`MetadataService`へ渡してタグとArtworkを再抽出する。どちらも`TrackIdentityService`のpath／resource identifier／fingerprint照合を経るため、metadataの再構築をTrack UUIDの再生成とは分離する。Artworkは`Track UUID + image content hash`をidentifierとし、同一Trackの埋め込み画像が変わった場合だけ表示identifierも変えてViewの画像再loadを発火する。
+
+complete同期は`LibraryScanCheckpointService`へ取得済み`Track`と取得日時をfolder別にbatch保存する。再実行時は10分以内かつrelative path・file size・更新日時が一致するentryだけを候補とし、`TrackIdentityService.resolveIdentity`の結果も同じUUIDの場合だけmetadata読取をskipする。元fileが更新された場合やIdentityが一致しない場合は必ず再取得する。scan完了だけではcheckpointを消さず、`LibraryPersistenceService`への完成library保存後にだけ削除するため、scan後の保存失敗からも再開できる。checkpointは同期最適化であり、書込失敗はlibrary同期自体を失敗させない。
+
+`MusicLibraryService`は曲数ベースの`LibraryScanProgress`を`LibrarySyncService`経由で`LibraryStore`へ返す。directory列挙前は総数不明、列挙後はfolder単位の総数／完了数／残数をMainActor stateへ反映する。iCloud未download、directory enumerator、resource values、AVFoundation metadataの失敗は`LibraryScanNotice`として収集する。成功したTrackのlibrary更新は従来どおり継続し、noticeはfolder別に集約してLibrary alertへ表示するため、診断追加によってscanの成否規則は変えない。
+
 Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を件数上限なく逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。処理済みの正本はidentity registryとする。
 
 ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorが表示曲の抽出とAlbum / Artist / Genre / Composerの再構築をutility priorityで実行し、`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
@@ -109,7 +119,7 @@ PlaybackControlsView / playable Views
 
 `PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。再生セッション中の総再生時間、開始日時、開始文脈はPlayerStore内の軽量な一時状態として保持し、曲変更・停止・自然終了時に実聴秒数、完走率、skip／完走を単一の`PlaybackEvent`へ確定します。同じセッションの終了通知は一度だけ確定し、lifecycle境界は途中時間をflushするだけです。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
 
-`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
+`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierはこれらのDestination snapshotと分離し、表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
 
 通常再生開始前にPlayerStoreはStable Track IDで`TrackPlaybackAdjustmentStore`を遅延loadし、有効な`customStartPosition`を開始時刻へ反映する。`AudioPlayerService`から0.5秒間隔で届く再生時刻eventを利用し、7秒間隔とpause／曲変更／backgroundで前回位置を保存する。有効な`customEndPosition`到達時は音声を停止して既存の曲終了・repeat・次曲経路へ合流する。Highlight区間には曲別の開始／終了位置を適用しない。
 

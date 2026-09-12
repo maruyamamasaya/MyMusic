@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AddSongsToPlaylistView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(\.dismiss) private var dismiss
@@ -30,7 +31,7 @@ struct AddSongsToPlaylistView: View {
                 } label: {
                     HStack {
                         Image(systemName: selection.contains(track.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(selection.contains(track.id) ? Color.accentColor : .secondary)
+                            .foregroundStyle(selection.contains(track.id) ? ThemePalette.resolve(appTheme).accent : .secondary)
                         VStack(alignment: .leading) {
                             Text(track.title).foregroundStyle(.primary).lineLimit(1)
                             Text(track.artistName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -39,6 +40,7 @@ struct AddSongsToPlaylistView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "曲、アーティスト、アルバムを検索")
+            .themeScreen()
             .navigationTitle(playlist?.kind == .work ? "作業用の曲を追加" : "曲を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

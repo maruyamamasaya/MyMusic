@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Shared by Home and the regular playlist list.
 struct StationEntryView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(StationStore.self) private var store
     @State private var showsQuestions = false
     @State private var backgroundImage: UIImage?
@@ -29,7 +30,7 @@ struct StationEntryView: View {
                     }
                     Label("ステーションをつくる", systemImage: "arrow.right")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(backgroundImage == nil ? Color.accentColor : foregroundColor)
+                        .foregroundStyle(backgroundImage == nil ? ThemePalette.resolve(appTheme).accent : foregroundColor)
                 }
                 .foregroundStyle(foregroundColor)
                 .padding(20)
@@ -83,7 +84,7 @@ struct StationEntryView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20))
         } else {
             LinearGradient(
-                colors: [Color.accentColor.opacity(0.14), Color.teal.opacity(0.1)],
+                colors: [ThemePalette.resolve(appTheme).accent.opacity(0.14), Color.teal.opacity(0.1)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

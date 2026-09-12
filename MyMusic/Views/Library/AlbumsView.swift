@@ -29,6 +29,7 @@ struct AlbumsView: View {
                 textList
             }
         }
+        .themeScreen()
         .navigationTitle("アルバム")
         .searchable(text: $query, prompt: "アルバム、アーティスト")
         .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }

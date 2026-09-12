@@ -23,6 +23,7 @@ struct HomeCategoryDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .themeScreen()
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: HomeDestination.self) { destination in
@@ -148,6 +149,7 @@ struct HomeDestinationView: View {
 }
 
 private struct HomeTuningListView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(LibraryStore.self) private var libraryStore
 
     var body: some View {
@@ -159,12 +161,13 @@ private struct HomeTuningListView: View {
                     Label(preset.name, systemImage: "tuningfork")
                     Spacer()
                     if libraryStore.isGenreDisplayPresetActive(preset) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(ThemePalette.resolve(appTheme).accent)
                     }
                 }
                 .foregroundStyle(.primary)
             }
         }
+        .themeScreen()
         .navigationTitle("チューニング")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -205,6 +208,7 @@ private struct QuickPlayView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("クイック再生")
     }
 
@@ -238,6 +242,7 @@ private struct HomeTrackListView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
     }
 }
@@ -271,6 +276,7 @@ private struct GeneratedQueueView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
     }
 }

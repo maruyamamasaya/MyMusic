@@ -39,6 +39,7 @@ struct MusicHistoryView: View {
                 yearContent(displayedYear)
             }
         }
+        .themeScreen()
         .navigationTitle("音楽史")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: dataRevision) { await rebuildSnapshot() }

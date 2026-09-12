@@ -46,6 +46,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(album.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

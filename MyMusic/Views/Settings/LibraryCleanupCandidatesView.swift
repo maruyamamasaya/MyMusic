@@ -30,6 +30,7 @@ struct LibraryCleanupCandidatesView: View {
                 .listStyle(.plain)
             }
         }
+        .themeScreen()
         .navigationTitle("ライブラリ整理候補")
         .navigationBarTitleDisplayMode(.inline)
     }

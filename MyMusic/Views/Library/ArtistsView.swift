@@ -27,6 +27,7 @@ struct ArtistsView: View {
                 textList
             }
         }
+        .themeScreen()
         .navigationTitle("アーティスト")
         .searchable(text: $query, prompt: "アーティスト")
         .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }

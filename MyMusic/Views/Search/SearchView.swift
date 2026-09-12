@@ -112,6 +112,7 @@ struct SearchView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("検索")
             .searchable(text: $query, prompt: searchPrompt)
             .task { updateSearch() }
@@ -305,6 +306,7 @@ private struct SearchFilterView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("検索フィルター")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

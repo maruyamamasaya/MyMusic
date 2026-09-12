@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MiniPlayerView: View {
+    @Environment(\.appTheme) private var theme
     @Environment(PlayerStore.self) private var playerStore
     let onOpen: () -> Void
 
@@ -51,7 +52,7 @@ struct MiniPlayerView: View {
                 .accessibilityLabel("再生位置")
                 .accessibilityValue("\(Int(progress * 100)) percent")
         }
-        .background(.bar)
+        .background(ThemePalette.resolve(theme).surface)
         .overlay(alignment: .top) { Divider() }
     }
 

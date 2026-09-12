@@ -56,7 +56,7 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
     private let lastBackupKey = "externalBackupLastSuccessfulDate"
     private let settingsKeys = [
         "equalizerSettings", "customEqualizerPresets", "playbackTransitionSettings",
-        "volumeNormalizationEnabled", "library.disabledGenreNames", "library.genreDisplayPresets",
+        "appearance.theme", "volumeNormalizationEnabled", "library.disabledGenreNames", "library.genreDisplayPresets",
         "library.songsDisplayMode", "library.albumsDisplayMode", "library.artistsDisplayMode"
     ]
     private let paths = [

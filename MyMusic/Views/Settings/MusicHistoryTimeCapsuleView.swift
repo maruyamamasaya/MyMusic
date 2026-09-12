@@ -25,6 +25,7 @@ struct MusicHistoryTimeCapsuleView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("タイムカプセル")
         .navigationBarTitleDisplayMode(.inline)
     }

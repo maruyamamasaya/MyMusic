@@ -17,19 +17,33 @@ actor LibrarySyncService {
 
     func scan(
         folderURL: URL,
-        previousTracks: [Track]
-    ) async throws -> MusicLibrary {
+        previousTracks: [Track],
+        depth: LibraryScanDepth = .quick,
+        progress: @escaping @Sendable (LibraryScanProgress) async -> Void = { _ in }
+    ) async throws -> MusicLibraryScanResult {
         await acquireScanPermit()
         defer { releaseScanPermit() }
 
         try Task.checkCancellation()
-        let library = try await service.loadLibrary(from: folderURL, previousTracks: previousTracks)
+        let result = try await service.loadLibraryReport(
+            from: folderURL,
+            previousTracks: previousTracks,
+            depth: depth,
+            progress: progress
+        )
         try Task.checkCancellation()
-        return library
+        return result
     }
 
-    func save(_ library: MusicLibrary, for folderURL: URL) async throws {
+    func save(
+        _ library: MusicLibrary,
+        for folderURL: URL,
+        completedScanDepth: LibraryScanDepth? = nil
+    ) async throws {
         try await persistence.save(library, for: folderURL)
+        if completedScanDepth == .complete {
+            await service.removeCompleteScanCheckpoint(for: folderURL)
+        }
     }
 
     func combinedLibrary(

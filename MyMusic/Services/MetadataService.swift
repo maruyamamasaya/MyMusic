@@ -1,4 +1,5 @@
 import AVFoundation
+import CryptoKit
 import Foundation
 
 protocol MetadataServicing: Sendable {
@@ -92,7 +93,11 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
         guard let item = AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .commonIdentifierArtwork).first,
               let data = try? await item.load(.dataValue),
               !data.isEmpty else { return nil }
-        return try? await artworkService.storeArtwork(data, identifier: trackID.uuidString)
+        let digest = SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
+        return try? await artworkService.storeArtwork(
+            data,
+            identifier: "\(trackID.uuidString)-\(digest)"
+        )
     }
 
     private func stringValue(for identifier: AVMetadataIdentifier, in items: [AVMetadataItem]) async -> String? {

@@ -30,6 +30,7 @@ struct ComposersView: View {
                 ContentUnavailableView.search(text: query)
             }
         }
+        .themeScreen()
         .navigationTitle("作曲者")
         .searchable(text: $query, prompt: "作曲者")
         .navigationDestination(for: Composer.self) { composer in

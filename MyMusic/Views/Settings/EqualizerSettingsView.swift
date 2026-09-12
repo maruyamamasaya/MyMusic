@@ -91,6 +91,7 @@ struct EqualizerSettingsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("イコライザ")
         .navigationBarTitleDisplayMode(.inline)
         .alert("プリセットを保存", isPresented: $isNamingPreset) {

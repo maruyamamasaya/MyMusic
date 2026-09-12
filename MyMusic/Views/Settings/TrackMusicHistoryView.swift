@@ -12,6 +12,7 @@ struct TrackMusicHistoryView: View {
             }
             .padding(.vertical, 16)
         }
+        .themeScreen()
         .navigationTitle("曲の自分史")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -182,6 +183,7 @@ private struct TrackHistoryFactView: View {
 }
 
 private struct TrackHistoryTimelineRow: View {
+    @Environment(\.appTheme) private var appTheme
     let month: MusicHistoryTrackMonthSummary
     let isFirst: Bool
     let isMostPlayed: Bool
@@ -191,7 +193,7 @@ private struct TrackHistoryTimelineRow: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 0) {
                 Circle()
-                    .fill(isMostPlayed ? Color.accentColor : Color.secondary.opacity(0.45))
+                    .fill(isMostPlayed ? ThemePalette.resolve(appTheme).accent : Color.secondary.opacity(0.45))
                     .frame(width: isMostPlayed ? 13 : 10, height: isMostPlayed ? 13 : 10)
                     .padding(.top, 5)
                 if showsConnector {

@@ -52,6 +52,7 @@ struct MusicHistoryCalendarView: View {
                 )
             }
         }
+        .themeScreen()
         .navigationTitle("音楽カレンダー")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -201,6 +202,7 @@ private struct MusicHistoryDayView: View {
             }
             .padding(.vertical, 16)
         }
+        .themeScreen()
         .navigationTitle("この日の音楽")
         .navigationBarTitleDisplayMode(.inline)
     }

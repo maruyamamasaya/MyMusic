@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WorkSizeNowPlayingView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(SettingsStore.self) private var settingsStore
@@ -25,6 +26,7 @@ struct WorkSizeNowPlayingView: View {
                     nowPlayingContent
                 }
             }
+            .themeScreen()
             .navigationTitle("作業用再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -162,7 +164,7 @@ struct WorkSizeNowPlayingView: View {
                         Image(systemName: "slider.vertical.3")
                             .font(.title3)
                             .frame(width: 42, height: 36)
-                            .foregroundStyle(settingsStore.equalizer.isEnabled ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(settingsStore.equalizer.isEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("イコライザ設定を表示")
@@ -385,6 +387,7 @@ private struct WorkSizeArtworkView: View {
 }
 
 private struct WorkSizePlaybackControlsView: View {
+    @Environment(\.appTheme) private var appTheme
     let isPlaying: Bool
     let isLoading: Bool
     let isShuffleEnabled: Bool
@@ -398,7 +401,7 @@ private struct WorkSizePlaybackControlsView: View {
     var body: some View {
         HStack(spacing: 0) {
             Button("シャッフル", systemImage: "shuffle", action: onShuffle)
-                .foregroundStyle(isShuffleEnabled ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isShuffleEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
                 .accessibilityValue(isShuffleEnabled ? "On" : "Off")
                 .frame(minWidth: 42, minHeight: 44)
 
@@ -425,7 +428,7 @@ private struct WorkSizePlaybackControlsView: View {
             seekButton(title: "1分進む", systemImage: "goforward", offset: 60, caption: "1分")
 
             Button(repeatLabel, systemImage: repeatSymbol, action: onRepeat)
-                .foregroundStyle(repeatMode == .off ? Color.secondary : Color.accentColor)
+                .foregroundStyle(repeatMode == .off ? Color.secondary : ThemePalette.resolve(appTheme).accent)
                 .accessibilityValue(repeatLabel)
                 .frame(minWidth: 42, minHeight: 44)
         }

@@ -50,6 +50,10 @@ final class HomeCategoryTests: XCTestCase {
         XCTAssertEqual(HomeTileBackgroundImage.stationImageName, "station-background")
     }
 
+    func testHighlightHasStableLocalBackgroundImageName() {
+        XCTAssertEqual(HomeTileBackgroundImage.highlightImageName, "highlight-background")
+    }
+
     func testWorkSectionUsesTwelfthTileForContinuation() {
         XCTAssertEqual(HomeWorkTileLayout.maximumTileCount, 12)
         XCTAssertEqual(HomeWorkTileLayout.maximumPlaylistCount, 10)

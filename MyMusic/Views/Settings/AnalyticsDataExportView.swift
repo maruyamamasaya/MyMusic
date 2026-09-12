@@ -88,6 +88,7 @@ struct AnalyticsDataExportView: View {
                 Text("PC版Analyticsへ取り込むためのJSONを書き出します。オンライン同期は行いません。")
             }
         }
+        .themeScreen()
         .navigationTitle("Analyticsと同期")
         .activityShareSheet(item: $shareItem)
         .onAppear {

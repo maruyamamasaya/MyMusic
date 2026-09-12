@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TrackAdjustmentsView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlayerStore.self) private var playerStore
     @Environment(TrackPlaybackAdjustmentStore.self) private var adjustmentStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
@@ -169,7 +170,7 @@ struct TrackAdjustmentsView: View {
                 Spacer()
                 Text(settingsStore.volumeNormalizationEnabled ? "ノーマライズ：ON" : "ノーマライズ：OFF")
                     .font(.caption)
-                    .foregroundStyle(settingsStore.volumeNormalizationEnabled ? Color.accentColor : .secondary)
+                    .foregroundStyle(settingsStore.volumeNormalizationEnabled ? ThemePalette.resolve(appTheme).accent : .secondary)
             }
 
             if values?.integratedLUFS == nil,

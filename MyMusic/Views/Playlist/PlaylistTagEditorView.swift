@@ -78,6 +78,7 @@ struct PlaylistTagEditorView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("タグを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

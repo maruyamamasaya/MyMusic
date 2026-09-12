@@ -22,6 +22,9 @@ final class LibraryStore {
     private(set) var workLibraryCatalog = WorkLibraryCatalog.empty
     private(set) var libraryFolders: [LibraryFolder] = []
     private(set) var isLoading = false
+    private(set) var scanFolderName: String?
+    private(set) var scanCompletedCount = 0
+    private(set) var scanTotalCount: Int?
     private(set) var errorMessage: String?
     private(set) var isInitialLoadComplete = false
     private(set) var genreDisplayPresets: [GenreDisplayPreset]
@@ -37,7 +40,9 @@ final class LibraryStore {
     var unfilteredTracks: [Track] { allTracks }
 
     var hasLibraryFolder: Bool { !libraryFolders.isEmpty }
-    var scanProgress: Int { tracks.count }
+    var scanRemainingCount: Int? {
+        scanTotalCount.map { max(0, $0 - scanCompletedCount) }
+    }
 
     private var librariesByFolderID: [String: MusicLibrary] = [:]
     private var allTracks: [Track] = []
@@ -80,16 +85,18 @@ final class LibraryStore {
         hasRestoredFolder = true
         defer { isInitialLoadComplete = true }
         do {
+            var scanMessages: [String] = []
             libraryFolders = normalized(try fileImportService.restoreLibraryFolders()).map(LibraryFolder.init)
             for folder in libraryFolders {
                 if let cached = try? await persistence.load(for: folder.url) {
                     librariesByFolderID[folder.id] = cached
                     await identityService.registerExistingTracks(cached.tracks, in: folder.url)
                 } else {
-                    await scan(folder)
+                    scanMessages.append(contentsOf: await scan(folder))
                 }
             }
             await rebuildCombinedLibrary()
+            presentScanMessages(scanMessages)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -109,8 +116,12 @@ final class LibraryStore {
             try fileImportService.saveLibraryFolders(normalizedURLs)
             libraryFolders = newFolders
             librariesByFolderID = librariesByFolderID.filter { newFolders.map(\.id).contains($0.key) }
-            for folder in newFolders where !oldIDs.contains(folder.id) { await scan(folder) }
+            var scanMessages: [String] = []
+            for folder in newFolders where !oldIDs.contains(folder.id) {
+                scanMessages.append(contentsOf: await scan(folder))
+            }
             await rebuildCombinedLibrary()
+            presentScanMessages(scanMessages)
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -125,10 +136,15 @@ final class LibraryStore {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func rescan() async {
+    func rescan(depth: LibraryScanDepth = .quick) async {
         guard !libraryFolders.isEmpty else { errorMessage = "先に音楽フォルダを選択してください。"; return }
-        for folder in libraryFolders { await scan(folder) }
+        errorMessage = nil
+        var scanMessages: [String] = []
+        for folder in libraryFolders {
+            scanMessages.append(contentsOf: await scan(folder, depth: depth))
+        }
         await rebuildCombinedLibrary()
+        presentScanMessages(scanMessages)
     }
 
     func dismissError() { errorMessage = nil }
@@ -276,25 +292,100 @@ final class LibraryStore {
         errorMessage = "フォルダを選択できませんでした: \(error.localizedDescription)"
     }
 
-    private func scan(_ folder: LibraryFolder) async {
+    private func scan(_ folder: LibraryFolder, depth: LibraryScanDepth = .quick) async -> [String] {
+        scanFolderName = folder.name
+        scanCompletedCount = 0
+        scanTotalCount = nil
         isLoading = true; defer { isLoading = false }
         do {
             let previous = librariesByFolderID[folder.id]?.tracks ?? []
-            let library = try await syncService.scan(folderURL: folder.url, previousTracks: previous)
+            let result = try await syncService.scan(
+                folderURL: folder.url,
+                previousTracks: previous,
+                depth: depth
+            ) { [weak self] progress in
+                await self?.updateScanProgress(progress)
+            }
             // The user may unregister this folder while its asynchronous scan is running.
             // Do not restore scan results for a folder that is no longer registered.
-            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
-            try await syncService.save(library, for: folder.url)
-            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
-            librariesByFolderID[folder.id] = library
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return [] }
+            try await syncService.save(
+                result.library,
+                for: folder.url,
+                completedScanDepth: depth
+            )
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return [] }
+            librariesByFolderID[folder.id] = result.library
             await rebuildCombinedLibrary()
-        } catch is CancellationError { return }
+            return scanMessages(for: folder, notices: result.notices)
+        } catch is CancellationError { return [] }
         catch {
             // Likewise, a late access error from an unregistered folder should not be
             // presented after the user has successfully removed its registration.
-            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return }
-            errorMessage = error.localizedDescription
+            guard libraryFolders.contains(where: { $0.id == folder.id }) else { return [] }
+            let nsError = error as NSError
+            return [
+                "フォルダ: \(folder.name)\n処理失敗: \(error.localizedDescription)\n診断: \(nsError.domain) (\(nsError.code))"
+            ]
         }
+    }
+
+    private func updateScanProgress(_ progress: LibraryScanProgress) {
+        scanCompletedCount = progress.completedCount
+        scanTotalCount = progress.totalCount
+    }
+
+    private func presentScanMessages(_ messages: [String]) {
+        guard !messages.isEmpty else { return }
+        errorMessage = messages.joined(separator: "\n\n")
+    }
+
+    private func scanMessages(for folder: LibraryFolder, notices: [LibraryScanNotice]) -> [String] {
+        guard !notices.isEmpty else { return [] }
+
+        let pending = notices.compactMap { notice -> String? in
+            guard case let .iCloudDownloadPending(path) = notice else { return nil }
+            return path
+        }
+        let inspections = notices.compactMap { notice -> (String, String)? in
+            guard case let .fileInspectionFailed(path, detail) = notice else { return nil }
+            return (path, detail)
+        }
+        let directories = notices.compactMap { notice -> (String, String)? in
+            guard case let .directoryReadFailed(path, detail) = notice else { return nil }
+            return (path, detail)
+        }
+        let metadata = notices.compactMap { notice -> (String, String)? in
+            guard case let .metadataReadFailed(path, detail) = notice else { return nil }
+            return (path, detail)
+        }
+
+        var sections = ["フォルダ: \(folder.name)"]
+        if !pending.isEmpty {
+            sections.append("iCloud同期待ち: \(pending.count)件\n\(samplePaths(pending))")
+        }
+        if !directories.isEmpty {
+            sections.append("フォルダ走査エラー: \(directories.count)件\n\(sampleDiagnostics(directories))")
+        }
+        if !inspections.isEmpty {
+            sections.append("ファイル状態の取得失敗: \(inspections.count)件\n\(sampleDiagnostics(inspections))")
+        }
+        if !metadata.isEmpty {
+            sections.append("メタデータの読取失敗: \(metadata.count)件\n\(sampleDiagnostics(metadata))")
+        }
+        return [sections.joined(separator: "\n")]
+    }
+
+    private func samplePaths(_ paths: [String]) -> String {
+        let samples = paths.prefix(3).map { "・\($0)" }
+        let remainder = paths.count - samples.count
+        return (samples + (remainder > 0 ? ["ほか \(remainder)件"] : [])).joined(separator: "\n")
+    }
+
+    private func sampleDiagnostics(_ entries: [(String, String)]) -> String {
+        let samples = entries.prefix(2).map { "・\($0.0): \($0.1)" }
+        let remainder = entries.count - samples.count
+        return (samples + (remainder > 0 ? ["ほか \(remainder)件"] : [])).joined(separator: "\n")
     }
 
     private func rebuildCombinedLibrary() async {

@@ -18,33 +18,41 @@ struct HomeView: View {
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(FavoriteStore.self) private var favoriteStore
+    @Environment(HighlightPlayerStore.self) private var highlightStore
     @State private var randomizedPlaylistIDs: [Playlist.ID] = []
     @State private var destinationPresentations: [HomeDestination: HomeDestinationPresentation] = [:]
     @State private var regularPlaylists: [Playlist] = []
     @State private var workPlaylists: [Playlist] = []
     @State private var playlistTracks: [Playlist.ID: [Track]] = [:]
     @State private var playlistArtworkIdentifiers: [Playlist.ID: String] = [:]
+    @State private var highlightArtworkIdentifier: String?
 
     var isActive = true
+    @Binding var isHighlightPresented: Bool
+    let onPresentNowPlaying: () -> Void
 
     var body: some View {
         NavigationStack {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
-                        if category.id == .myMusic, !libraryStore.genreDisplayPresets.isEmpty {
-                            HomeTuningSection(
-                                presets: libraryStore.genreDisplayPresets,
-                                allGenresAreEnabled: libraryStore.areAllGenresEnabled,
-                                isActive: libraryStore.isGenreDisplayPresetActive,
-                                onShowAllGenres: libraryStore.showAllGenres,
-                                onApply: libraryStore.applyGenreDisplayPreset
-                            )
+                        if category.id == .myMusic {
+                            if !libraryStore.genreDisplayPresets.isEmpty {
+                                HomeTuningSection(
+                                    presets: libraryStore.genreDisplayPresets,
+                                    allGenresAreEnabled: libraryStore.areAllGenresEnabled,
+                                    isActive: libraryStore.isGenreDisplayPresetActive,
+                                    onShowAllGenres: libraryStore.showAllGenres,
+                                    onApply: libraryStore.applyGenreDisplayPreset
+                                )
+                            }
                         }
                         HomeCarouselSection(
                             category: category,
                             artworkIdentifier: artworkIdentifier,
                             instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                            highlightArtworkIdentifier: highlightArtworkIdentifier,
+                            onOpenHighlight: { isHighlightPresented = true },
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
@@ -83,11 +91,22 @@ struct HomeView: View {
                         }
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 12)
             }
+            .themeScreen()
             .navigationTitle("ホーム")
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
+            }
+            .navigationDestination(isPresented: $isHighlightPresented) {
+                HighlightPlayerView(onPresentNowPlaying: onPresentNowPlaying)
+                    .themeScreen()
+                    .navigationTitle("ハイライト")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .onDisappear {
+                        highlightStore.resetRandomSelection()
+                    }
             }
             .task(id: playlistStore.homeOrderingRevision) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
@@ -98,29 +117,29 @@ struct HomeView: View {
             .task(id: isActive) {
                 guard isActive else { return }
                 refreshDestinationPresentations(rotatingRepresentatives: destinationPresentations.isEmpty)
+                refreshHighlightArtwork(rotating: highlightArtworkIdentifier != nil)
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }
                     refreshDestinationPresentations(rotatingRepresentatives: true)
+                    refreshHighlightArtwork(rotating: true)
                 }
             }
             .onChange(of: libraryStore.homePresentationRevision) {
                 refreshDestinationPresentations()
+                refreshHighlightArtwork()
                 refreshPlaylistPresentations()
             }
-            .onChange(of: playbackHistoryStore.homePresentationRevision) { refreshDestinationPresentations() }
-            .onChange(of: trackPreferenceStore.homePresentationRevision) { refreshDestinationPresentations() }
+            .onChange(of: playbackHistoryStore.homePresentationRevision) {
+                refreshDestinationPresentations()
+                refreshHighlightArtwork()
+            }
+            .onChange(of: trackPreferenceStore.homePresentationRevision) {
+                refreshDestinationPresentations()
+                refreshHighlightArtwork()
+            }
             .onChange(of: favoriteStore.homePresentationRevision) { refreshDestinationPresentations() }
             .onChange(of: playlistStore.homeContentRevision) { refreshPlaylistPresentations() }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Label("設定", systemImage: "gearshape")
-                    }
-                }
-            }
         }
     }
 
@@ -331,12 +350,107 @@ struct HomeView: View {
         if regularPlaylists != refreshedRegularPlaylists { regularPlaylists = refreshedRegularPlaylists }
         if workPlaylists != refreshedWorkPlaylists { workPlaylists = refreshedWorkPlaylists }
     }
+
+    private func refreshHighlightArtwork(rotating: Bool = false) {
+        let candidates = Array(Set(
+            libraryStore.tracks
+                .filter(playbackHistoryStore.isEligibleForRegularShuffle)
+                .compactMap(\.artworkIdentifier)
+        ))
+        guard !candidates.isEmpty else {
+            highlightArtworkIdentifier = nil
+            return
+        }
+        if !rotating, let highlightArtworkIdentifier,
+           candidates.contains(highlightArtworkIdentifier) {
+            return
+        }
+        let alternatives = candidates.filter { $0 != highlightArtworkIdentifier }
+        highlightArtworkIdentifier = (alternatives.isEmpty ? candidates : alternatives).randomElement()
+    }
 }
 
 private struct HomeDestinationPresentation: Equatable {
     let representativeTrack: Track?
     let artworkIdentifier: String?
     let instantPlaybackIsAvailable: Bool
+}
+
+private struct HomeHighlightTile: View {
+    let artworkIdentifier: String?
+    let width: CGFloat
+    @State private var localBackgroundImage: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            background
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.12), location: 0),
+                    .init(color: .black.opacity(0.48), location: 0.58),
+                    .init(color: .black.opacity(0.88), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 6) {
+                Spacer()
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 46, height: 46)
+                    .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 13))
+
+                Spacer(minLength: 10)
+
+                Text("ハイライト再生")
+                    .font(.headline)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("曲のおいしいところを、次々と")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineLimit(2)
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+        }
+        .frame(width: width, height: 168, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(.white.opacity(0.14), lineWidth: 0.5)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("ハイライト再生画面を開きます")
+        .task {
+            localBackgroundImage = HomeTileBackgroundImage.load(
+                named: HomeTileBackgroundImage.highlightImageName
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if let localBackgroundImage {
+            Image(uiImage: localBackgroundImage)
+                .resizable()
+                .scaledToFill()
+        } else if let artworkIdentifier {
+            HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
+        } else {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.56, green: 0.20, blue: 0.76),
+                    Color(red: 0.10, green: 0.18, blue: 0.48),
+                    Color(red: 0.05, green: 0.06, blue: 0.12)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
 }
 
 private struct HomeTuningSection: View {
@@ -405,7 +519,7 @@ private struct HomeTuningSection: View {
         }
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .themeSurface()
         .overlay {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(.primary.opacity(0.08), lineWidth: 0.5)
@@ -791,6 +905,8 @@ private struct HomeCarouselSection: View {
     let category: HomeCategory
     let artworkIdentifier: (HomeDestination) -> String?
     let instantPlaybackIsAvailable: (HomeDestination) -> Bool
+    let highlightArtworkIdentifier: String?
+    let onOpenHighlight: () -> Void
     let onInstantPlay: (HomeDestination) -> Void
 
     private let spacing: CGFloat = 12
@@ -814,6 +930,16 @@ private struct HomeCarouselSection: View {
 
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: spacing) {
+                        if category.id == .myMusic {
+                            Button(action: onOpenHighlight) {
+                                HomeHighlightTile(
+                                    artworkIdentifier: highlightArtworkIdentifier,
+                                    width: tileWidth
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         ForEach(category.items) { item in
                             tile(for: item, width: tileWidth)
                         }
@@ -889,6 +1015,8 @@ private struct HomeCarouselSection: View {
 }
 
 private struct HomeItemTile: View {
+    @Environment(\.appTheme) private var appTheme
+    @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
 
     let item: HomeCategoryItem
@@ -962,9 +1090,9 @@ private struct HomeItemTile: View {
                 .opacity(colorScheme == .dark ? 0.68 : 0.58)
                 .overlay(readabilityMask)
         } else if categoryID == .library || categoryID == .activity {
-            decorativeGradientBackground
+            ThemeBackground(theme: theme)
         } else {
-            RoundedRectangle(cornerRadius: 18).fill(.background.secondary)
+            ThemePalette.resolve(theme).surface
         }
     }
 
@@ -1055,7 +1183,7 @@ private struct HomeItemTile: View {
                 Color(red: 0.34, green: 0.08, blue: 0.24)
             ]
         default:
-            [Color.accentColor, Color.accentColor.opacity(0.65), Color.black.opacity(0.72)]
+            [ThemePalette.resolve(appTheme).accent, ThemePalette.resolve(appTheme).accent.opacity(0.65), Color.black.opacity(0.72)]
         }
     }
 

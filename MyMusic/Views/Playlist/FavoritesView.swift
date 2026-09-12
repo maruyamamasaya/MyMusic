@@ -46,6 +46,7 @@ struct FavoritesView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("お気に入り")
     }
 

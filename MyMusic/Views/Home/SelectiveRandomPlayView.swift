@@ -38,6 +38,7 @@ struct SelectiveRandomPlayView: View {
                 Text("選んだ曲のあとに、同じジャンルの曲がランダムに再生されます。")
             }
         }
+        .themeScreen()
         .navigationTitle("選択してランダム再生")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -44,6 +44,7 @@ struct MusicHistoryMonthView: View {
             }
             .padding(.vertical, 16)
         }
+        .themeScreen()
         .navigationTitle(month.date.formatted(.dateTime.year().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
     }

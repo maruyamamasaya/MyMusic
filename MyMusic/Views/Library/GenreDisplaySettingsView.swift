@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct GenreDisplaySettingsView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(LibraryStore.self) private var libraryStore
     @State private var presetToDelete: GenreDisplayPreset?
     @State private var appliedSetName: String?
@@ -31,7 +32,7 @@ struct GenreDisplaySettingsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: libraryStore.areAllGenresEnabled ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
-                            .foregroundStyle(libraryStore.areAllGenresEnabled ? Color.accentColor : .secondary)
+                            .foregroundStyle(libraryStore.areAllGenresEnabled ? ThemePalette.resolve(appTheme).accent : .secondary)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("全曲表示")
                                 .foregroundStyle(.primary)
@@ -52,7 +53,7 @@ struct GenreDisplaySettingsView: View {
                     GenreSelectionEditorView(mode: .newPreset)
                 } label: {
                     Label("新しいプリセットを作成", systemImage: "plus.circle.fill")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(ThemePalette.resolve(appTheme).accent)
                 }
 
                 if libraryStore.genreDisplayPresets.isEmpty {
@@ -73,6 +74,7 @@ struct GenreDisplaySettingsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("ジャンルごとの表示")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -124,7 +126,7 @@ struct GenreDisplaySettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: libraryStore.isGenreDisplayPresetActive(preset) ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(libraryStore.isGenreDisplayPresetActive(preset) ? Color.accentColor : .secondary)
+                        .foregroundStyle(libraryStore.isGenreDisplayPresetActive(preset) ? ThemePalette.resolve(appTheme).accent : .secondary)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(preset.name).foregroundStyle(.primary)
                         Text("\(libraryStore.enabledGenreCount(for: preset))件を表示")
@@ -172,6 +174,7 @@ private struct SettingsSummaryRow: View {
 }
 
 struct GenreSelectionEditorView: View {
+    @Environment(\.appTheme) private var appTheme
     enum Mode {
         case current
         case newPreset
@@ -237,7 +240,7 @@ struct GenreSelectionEditorView: View {
                                   : selection.contains(option.id) ? "checkmark.circle.fill" : "circle")
                                 .font(.title3)
                                 .foregroundStyle(
-                                    selection.contains(option.id) ? Color.accentColor : .secondary
+                                    selection.contains(option.id) ? ThemePalette.resolve(appTheme).accent : .secondary
                                 )
                         }
                         .contentShape(Rectangle())
@@ -255,6 +258,7 @@ struct GenreSelectionEditorView: View {
                 Text("表示するジャンル（\(selection.count)件）")
             }
         }
+        .themeScreen()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

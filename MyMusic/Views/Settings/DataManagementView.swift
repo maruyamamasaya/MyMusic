@@ -141,6 +141,7 @@ struct DataManagementView: View {
                 Text("読み込み時、同名のプリセットは更新し、それ以外は追加します。現在のイコライザー設定は読み込んだ内容へ切り替わります。")
             }
         }
+        .themeScreen()
         .navigationTitle("データ管理")
         .activityShareSheet(item: $shareItem)
         .onAppear {

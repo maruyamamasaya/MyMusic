@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaylistTagFilterBar: View {
+    @Environment(\.appTheme) private var appTheme
     let tags: [String]
     @Binding var selectedTag: String?
 
@@ -28,8 +29,8 @@ struct PlaylistTagFilterBar: View {
                 .lineLimit(1)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.14), in: Capsule())
+                .foregroundStyle(isSelected ? ThemePalette.resolve(appTheme).base : Color.primary)
+                .background(isSelected ? ThemePalette.resolve(appTheme).accent : Color.secondary.opacity(0.14), in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

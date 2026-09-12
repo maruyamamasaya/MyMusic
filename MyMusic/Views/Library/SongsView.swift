@@ -55,6 +55,7 @@ struct SongsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
         .searchable(text: $query, prompt: "曲、アーティスト、アルバム")
         .toolbar {

@@ -73,6 +73,7 @@ struct TrackFingerprintBuildView: View {
                 Section { Text(message).foregroundStyle(.secondary) }
             }
         }
+        .themeScreen()
         .navigationTitle("Track Fingerprint")
         .navigationBarTitleDisplayMode(.inline)
         .task { await refresh() }

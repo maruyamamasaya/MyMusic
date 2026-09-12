@@ -65,6 +65,7 @@ struct ArtistDetailView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: availableArtworkIdentifiers) {

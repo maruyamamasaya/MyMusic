@@ -41,11 +41,25 @@ struct LibraryView: View {
 
                     if libraryStore.isLoading {
                         VStack(alignment: .leading, spacing: 8) {
-                            ProgressView()
-                            Text("音楽ライブラリを読み込み中…")
-                            Text("現在 \(libraryStore.scanProgress) 曲")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if let total = libraryStore.scanTotalCount {
+                                ProgressView(
+                                    value: Double(libraryStore.scanCompletedCount),
+                                    total: Double(max(total, 1))
+                                )
+                            } else {
+                                ProgressView()
+                            }
+                            Text(libraryStore.scanFolderName.map { "\($0) を同期中…" } ?? "音楽ライブラリを同期中…")
+                            if let total = libraryStore.scanTotalCount,
+                               let remaining = libraryStore.scanRemainingCount {
+                                Text("同期対象 \(total) 曲・完了 \(libraryStore.scanCompletedCount) 曲・残り \(remaining) 曲")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("ファイル一覧を確認しています")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -77,14 +91,20 @@ struct LibraryView: View {
                     }
 
                     Section {
-                        Button("ライブラリを再読み込み", systemImage: "arrow.clockwise") {
-                            Task { await libraryStore.rescan() }
+                        Button("クイック同期", systemImage: "arrow.clockwise") {
+                            Task { await libraryStore.rescan(depth: .quick) }
+                        }
+                        .disabled(libraryStore.isLoading)
+                        Button("メタデータと画像を再取得", systemImage: "arrow.triangle.2.circlepath") {
+                            Task { await libraryStore.rescan(depth: .complete) }
                         }
                         .disabled(libraryStore.isLoading)
                         Button("音楽フォルダを追加", systemImage: "folder.badge.plus") {
                             isFolderImporterPresented = true
                         }
                         .disabled(libraryStore.isLoading)
+                    } footer: {
+                        Text("クイック同期は変更されたファイルだけを確認します。再取得は全曲のタグとアートワークを読み直しますが、曲のUUIDと再生統計の紐付けは維持します。中断後10分以内は取得済みの曲から再開します。")
                     }
                 } else {
                     Button("音楽フォルダを選択", systemImage: "folder.badge.plus") {
@@ -92,6 +112,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("ライブラリ")
             .navigationDestination(for: LibraryDestination.self) { destination in
                 switch destination {

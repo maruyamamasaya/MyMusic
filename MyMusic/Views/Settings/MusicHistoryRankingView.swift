@@ -29,6 +29,7 @@ struct MusicHistoryRankingView: View {
             }
             .padding(16)
         }
+        .themeScreen()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct QueueView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlayerStore.self) private var playerStore
     @Environment(\.dismiss) private var dismiss
 
@@ -26,7 +27,7 @@ struct QueueView: View {
                                 } label: {
                                     HStack(spacing: 10) {
                                         Image(systemName: index == playerStore.currentIndex ? "speaker.wave.2.fill" : "music.note")
-                                            .foregroundStyle(index == playerStore.currentIndex ? Color.accentColor : Color.secondary)
+                                            .foregroundStyle(index == playerStore.currentIndex ? ThemePalette.resolve(appTheme).accent : Color.secondary)
                                             .frame(width: 22)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(track.title).lineLimit(1)
@@ -53,6 +54,7 @@ struct QueueView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("再生キュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

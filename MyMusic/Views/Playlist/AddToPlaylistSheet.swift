@@ -71,6 +71,7 @@ struct AddToPlaylistSheet: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle(playlistKind == .work ? "作業用プレイリストに追加" : "プレイリストに追加")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "プレイリストを検索")
@@ -112,6 +113,7 @@ private struct CreatePlaylistForTrackView: View {
                     .onSubmit(createPlaylist)
             }
         }
+        .themeScreen()
         .navigationTitle(kind == .work ? "新規作業用プレイリスト" : "新規プレイリスト")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

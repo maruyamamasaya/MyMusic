@@ -60,6 +60,7 @@ struct WorkLibraryView: View {
                 Text("ジャンルが「作業用BGM」に指定された曲だけを表示します。")
             }
         }
+        .themeScreen()
         .navigationTitle("作業用BGM再生")
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: WorkLibraryCategory.self) { category in
@@ -170,6 +171,7 @@ private struct WorkAlbumsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("アルバム")
         .searchable(text: $query, prompt: "アルバムを検索")
     }
@@ -224,6 +226,7 @@ private struct WorkArtistsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("アーティスト")
         .searchable(text: $query, prompt: "アーティストを検索")
     }
@@ -278,6 +281,7 @@ private struct WorkAlbumArtistsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("アルバムアーティスト")
         .searchable(text: $query, prompt: "アルバムアーティストを検索")
     }
@@ -356,6 +360,7 @@ private struct WorkTrackCollectionView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: searchPrompt)

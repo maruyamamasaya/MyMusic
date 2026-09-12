@@ -10,6 +10,64 @@ nonisolated struct MusicLibrary: Codable, Sendable {
 
 protocol MusicLibraryServicing: Sendable {
     func loadLibrary(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibrary
+    func loadLibraryReport(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibraryScanResult
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track],
+        depth: LibraryScanDepth
+    ) async throws -> MusicLibraryScanResult
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track],
+        depth: LibraryScanDepth,
+        progress: @escaping @Sendable (LibraryScanProgress) async -> Void
+    ) async throws -> MusicLibraryScanResult
+    func removeCompleteScanCheckpoint(for folderURL: URL) async
+}
+
+extension MusicLibraryServicing {
+    func loadLibraryReport(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibraryScanResult {
+        MusicLibraryScanResult(
+            library: try await loadLibrary(from: folderURL, previousTracks: previousTracks),
+            notices: []
+        )
+    }
+
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track],
+        depth: LibraryScanDepth
+    ) async throws -> MusicLibraryScanResult {
+        try await loadLibraryReport(from: folderURL, previousTracks: previousTracks)
+    }
+
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track],
+        depth: LibraryScanDepth,
+        progress: @escaping @Sendable (LibraryScanProgress) async -> Void
+    ) async throws -> MusicLibraryScanResult {
+        try await loadLibraryReport(from: folderURL, previousTracks: previousTracks, depth: depth)
+    }
+
+    func removeCompleteScanCheckpoint(for folderURL: URL) async {}
+}
+
+nonisolated enum LibraryScanDepth: Sendable, Equatable {
+    case quick
+    case complete
+}
+
+nonisolated struct LibraryScanProgress: Sendable, Equatable {
+    let completedCount: Int
+    let totalCount: Int
+
+    var remainingCount: Int { max(0, totalCount - completedCount) }
+}
+
+nonisolated struct MusicLibraryScanResult: Sendable {
+    let library: MusicLibrary
+    let notices: [LibraryScanNotice]
 }
 
 nonisolated struct LibraryPresentationSnapshot: Sendable {
@@ -56,17 +114,21 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
     private let fileImportService: FileImportServicing
     private let metadataService: MetadataServicing
     private let identityService: TrackIdentityServicing
+    private let checkpointService: LibraryScanCheckpointServicing
     private let now: @Sendable () -> Date
+    private static let checkpointLifetime: TimeInterval = 10 * 60
 
     init(
         fileImportService: FileImportServicing = FileImportService(),
         metadataService: MetadataServicing,
         identityService: TrackIdentityServicing,
+        checkpointService: LibraryScanCheckpointServicing = LibraryScanCheckpointService(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.fileImportService = fileImportService
         self.metadataService = metadataService
         self.identityService = identityService
+        self.checkpointService = checkpointService
         self.now = now
     }
 
@@ -79,29 +141,73 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
     }
 
     func loadLibrary(from folderURL: URL, previousTracks: [Track] = []) async throws -> MusicLibrary {
+        try await loadLibraryReport(from: folderURL, previousTracks: previousTracks).library
+    }
+
+    func loadLibraryReport(from folderURL: URL, previousTracks: [Track] = []) async throws -> MusicLibraryScanResult {
+        try await loadLibraryReport(from: folderURL, previousTracks: previousTracks, depth: .quick)
+    }
+
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track] = [],
+        depth: LibraryScanDepth
+    ) async throws -> MusicLibraryScanResult {
+        try await loadLibraryReport(
+            from: folderURL,
+            previousTracks: previousTracks,
+            depth: depth,
+            progress: { _ in }
+        )
+    }
+
+    func loadLibraryReport(
+        from folderURL: URL,
+        previousTracks: [Track] = [],
+        depth: LibraryScanDepth,
+        progress: @escaping @Sendable (LibraryScanProgress) async -> Void
+    ) async throws -> MusicLibraryScanResult {
         let hasAccess = folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
         guard hasAccess || FileManager.default.isReadableFile(atPath: folderURL.path) else {
             throw FileImportServiceError.accessDenied
         }
-        let files = try await fileImportService.audioFiles(in: folderURL)
+        let fileScan = try await fileImportService.audioFileScan(in: folderURL)
         let scanStartedAt = now()
-        let filesByPath = files.map { fileURL in
+        let filesByPath = fileScan.files.map { fileURL in
             (fileURL, StableTrackIdentifier.relativePath(for: fileURL, relativeTo: folderURL))
+        }
+        await progress(LibraryScanProgress(completedCount: 0, totalCount: filesByPath.count))
+        let checkpointEntries: [String: LibraryScanCheckpointEntry]
+        if depth == .complete {
+            checkpointEntries = await checkpointService.recentEntries(
+                for: folderURL,
+                since: now().addingTimeInterval(-Self.checkpointLifetime)
+            )
+        } else {
+            checkpointEntries = [:]
         }
         let identityPrefix = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping
         await identityService.prepareForScan(relativePaths: Set(filesByPath.map { identityPrefix + "/" + $0.1 }))
         do {
-            let library = try await scanFiles(
+            let result = try await scanFiles(
                 filesByPath, previousTracks: previousTracks, folderURL: folderURL,
-                identityPrefix: identityPrefix, scanStartedAt: scanStartedAt
+                identityPrefix: identityPrefix, scanStartedAt: scanStartedAt, depth: depth,
+                checkpointEntries: checkpointEntries, progress: progress
             )
             await identityService.finishScan()
-            return library
+            return MusicLibraryScanResult(
+                library: result.library,
+                notices: fileScan.notices + result.notices
+            )
         } catch {
             await identityService.abortScan()
             throw error
         }
+    }
+
+    func removeCompleteScanCheckpoint(for folderURL: URL) async {
+        await checkpointService.remove(for: folderURL)
     }
 
     private func scanFiles(
@@ -109,43 +215,103 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
         previousTracks: [Track],
         folderURL: URL,
         identityPrefix: String,
-        scanStartedAt: Date
-    ) async throws -> MusicLibrary {
+        scanStartedAt: Date,
+        depth: LibraryScanDepth,
+        checkpointEntries: [String: LibraryScanCheckpointEntry],
+        progress: @escaping @Sendable (LibraryScanProgress) async -> Void
+    ) async throws -> MusicLibraryScanResult {
         let previousByPath = Dictionary(uniqueKeysWithValues: previousTracks.compactMap { track in
             track.relativePath.map { ($0, track) }
         })
         let previousByID = Dictionary(uniqueKeysWithValues: previousTracks.map { ($0.id, $0) })
         var tracks: [Track] = []
+        var notices: [LibraryScanNotice] = []
+        var updatedCheckpointEntries = checkpointEntries
+        var unsavedCheckpointCount = 0
         tracks.reserveCapacity(filesByPath.count)
 
         // A corrupt, unsupported, or temporarily unavailable iCloud item does not abort the scan.
-        for (file, relativePath) in filesByPath {
+        for (index, entry) in filesByPath.enumerated() {
+            let (file, relativePath) = entry
             try Task.checkCancellation()
             let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let fileSize = values?.fileSize.map(Int64.init)
             let modificationDate = values?.contentModificationDate
-            if var existing = previousByPath[relativePath],
+            if depth == .complete,
+               let checkpoint = updatedCheckpointEntries[relativePath],
+               isSameSource(checkpoint.track, fileSize: fileSize, modificationDate: modificationDate) {
+                let identity = await identityService.resolveIdentity(
+                    for: file,
+                    relativePath: identityPrefix + "/" + relativePath,
+                    fileSize: fileSize,
+                    modificationDate: modificationDate,
+                    duration: checkpoint.track.duration,
+                    discoveredAt: checkpoint.track.firstSeenAt ?? scanStartedAt
+                )
+                if identity.id == checkpoint.track.id {
+                    var resumedTrack = checkpoint.track
+                    resumedTrack.fileURL = file
+                    resumedTrack.fileSize = fileSize
+                    resumedTrack.modificationDate = modificationDate
+                    tracks.append(resumedTrack)
+                    await progress(LibraryScanProgress(
+                        completedCount: index + 1,
+                        totalCount: filesByPath.count
+                    ))
+                    continue
+                }
+            }
+            if depth == .quick, var existing = previousByPath[relativePath],
                isUnchanged(existing, fileSize: fileSize, modificationDate: modificationDate) {
                 existing.fileURL = file
                 existing.fileSize = fileSize
                 existing.modificationDate = modificationDate
                 tracks.append(existing)
+                await progress(LibraryScanProgress(
+                    completedCount: index + 1,
+                    totalCount: filesByPath.count
+                ))
                 continue
             }
-            if var track = try? await metadataService.metadata(
-                for: file, relativeTo: folderURL, discoveredAt: scanStartedAt
-            ) {
+            do {
+                var track = try await metadataService.metadata(
+                    for: file, relativeTo: folderURL, discoveredAt: scanStartedAt
+                )
                 if let previous = previousByID[track.id] {
                     track.firstSeenAt = previous.firstSeenAt
                 }
                 tracks.append(track)
+                if depth == .complete {
+                    updatedCheckpointEntries[relativePath] = LibraryScanCheckpointEntry(
+                        track: track,
+                        refreshedAt: now()
+                    )
+                    unsavedCheckpointCount += 1
+                    if unsavedCheckpointCount >= 10 {
+                        await checkpointService.save(updatedCheckpointEntries, for: folderURL)
+                        unsavedCheckpointCount = 0
+                    }
+                }
+            } catch {
+                let nsError = error as NSError
+                notices.append(.metadataReadFailed(
+                    relativePath: relativePath,
+                    detail: "\(nsError.localizedDescription) [\(nsError.domain):\(nsError.code)]"
+                ))
             }
+            await progress(LibraryScanProgress(
+                completedCount: index + 1,
+                totalCount: filesByPath.count
+            ))
+        }
+        if depth == .complete, unsavedCheckpointCount > 0 {
+            await checkpointService.save(updatedCheckpointEntries, for: folderURL)
         }
         tracks.sort {
             ($0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending) ||
             ($0.artistName == $1.artistName && $0.title.localizedStandardCompare($1.title) == .orderedAscending)
         }
-        return MusicLibrary.build(from: tracks)
+        return MusicLibraryScanResult(library: MusicLibrary.build(from: tracks), notices: notices)
     }
 
     private func isUnchanged(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
@@ -154,6 +320,14 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
         // Current-revision entries can still lack lightweight fields when resource values are unavailable.
         guard let oldSize = track.fileSize, let oldDate = track.modificationDate else { return true }
         return oldSize == fileSize && abs(oldDate.timeIntervalSince(modificationDate ?? .distantPast)) < 0.001
+    }
+
+    private func isSameSource(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
+        guard let oldSize = track.fileSize,
+              let oldDate = track.modificationDate,
+              let fileSize,
+              let modificationDate else { return false }
+        return oldSize == fileSize && abs(oldDate.timeIntervalSince(modificationDate)) < 0.001
     }
 
 }

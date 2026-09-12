@@ -17,6 +17,10 @@ updated: 2026-09-13
 
 ## 実装済み
 
+### テーマ Beta
+
+- 設定 → テーマからシンプルダーク（先頭）／Living Aurora／Pulse Neon／Blue Cosmosを選択でき、選択は端末内へ保存しApp外バックアップへ含める。OS外観から独立した暗色の光・質感を画面背景と操作色へ反映する。黒背景用素材に合わせて全テーマの土台を純黒とし、装飾光を画面端へ配置する。Pulse Neonだけは強いシアン／青の発光レールと白い芯で明暗差を強調し、他テーマは控えめな光を維持する。パラメータ、適用境界、アクセシビリティ方針は[Themes](Documentation/Themes.md)に集約する。実機の見た目・全操作回帰は未検証。
+
 ### App外バックアップ / Restore基盤
 
 - 設定の「データ管理」からFiles / iCloud Driveのユーザー選択フォルダを保存先として登録し、security-scoped bookmarkで次回起動後も利用できる。外部には`MyMusic Backup/latest`と`previous`の2世代だけを保持する。
@@ -74,13 +78,17 @@ updated: 2026-09-13
 - iTunes / ID3のAlbum Artistと年を保持し、アルバムの統合・表示・検索に使用。検索画面では曲名、アルバム名、アーティスト名、アルバムアーティスト、年代を個別に選べ、225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
 - ローカル音源の再生、一時停止、seek、前後移動、queue、shuffle、repeat、EQ、共通 playback transition。
 - mini player / Now Playing、audio 情報、簡易 spectrum、lock screen / Control Center 情報、remote command、background audio 設定。
-- ホームのライブラリ／アクティビティ各タイルは、ビルド前に所定名のローカル画像を置くと背景へ使用する。未配置・破損時は既存の個別グラデーションを維持する。
+- ホームの「マイミュージック」左端にあるHighlightタイルとライブラリ／アクティビティ各タイルは、ビルド前に所定名のローカル画像を置くと背景へ使用する。Highlight画像の未配置時はランダムな曲Artworkを表示だけに使い、再生曲順には接続しない。その他の未配置・破損時は既存の個別グラデーションを維持する。
 - ステーションの「気分を伝えて再生」カードは、ビルド前に所定名のローカル画像を置くと背景へ使用する。未配置・破損時は既存のグラデーションを維持する。
 - 曲・アルバム・アーティストのお気に入り、通常 / 作業用 playlist、playlist import / export。
 - プレイリスト、ライブラリ、再生履歴、解析データ、設定、分析CSVの共有は共通の`UIActivityViewController`経路を使い、Popoverが必要な端末では常にsource view / rectを設定する。
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
+
+- **ホームHighlight入口と設定tab**: 下部5番目のHighlight tabをSettingsへ置き換え、ホームの「マイミュージック」タイル列の左端に既存タイルと同じ寸法のHighlightタイルを配置した。タイルは`highlight-background.*`を優先し、未配置時は通常再生対象のランダムArtwork、Artworkがない場合は専用グラデーションを表示する。背景選択はHighlightのqueue／先頭曲から分離する。ホーム右上の設定ボタンは撤去し、ホーム内容の上余白を8pt減らした。
+
+- **ライブラリ同期の診断・完全再取得**: Libraryの同期を、file size／更新日時による「クイック同期」と、全曲のmetadata／Artworkを読み直す「メタデータと画像を再取得」に分けた。完全再取得でもTrack Identity registryを使うためTrack UUID、firstSeenAt、再生履歴、Preference、Playlist等の紐付けを維持する。完全再取得は取得済みTrackを10分有効のcheckpointへbatch保存し、中断後はpath・size・更新日時・UUIDが一致する曲を再利用する。Library cache保存成功時だけcheckpointを削除する。同期中は現在folder、総曲数、完了数、残数を表示する。iCloud未取得、directory走査、file属性、metadata読取の失敗は黙って破棄せず、folder別の件数・代表path・NSError識別情報を完了時のpopupへ集約する。Artwork identifierはTrack UUIDと画像content hashから生成し、同一Trackの画像差し替えでもdisk／memory／SwiftUI表示cacheを更新する。
 
 - **音楽史ランキング50位表示**: 年別の「この年のアーティスト」「よく聴いた曲」と、各月の「よく聴いた曲」「よく聴いたアーティスト」は概要のTOP5／TOP10を維持し、件数が続く場合は小さな「続きを見る」から最大50位の専用ランキングへ移動できる。曲は従来どおり曲ごとの音楽史へ遷移でき、月の「この頃を再生」は最大25曲のqueue上限を維持する。
 

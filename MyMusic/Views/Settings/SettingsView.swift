@@ -5,6 +5,15 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            Section("デザイン") {
+                NavigationLink {
+                    ThemeSettingsView()
+                } label: {
+                    Label("テーマ", systemImage: "sparkles")
+                        .badge(ThemePalette.resolve(settingsStore.theme).title)
+                }
+            }
+
             Section {
                 Toggle(isOn: volumeNormalizationBinding) {
                     Label("音量ノーマライズ", systemImage: "speaker.wave.2.bubble")
@@ -69,6 +78,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)
     }

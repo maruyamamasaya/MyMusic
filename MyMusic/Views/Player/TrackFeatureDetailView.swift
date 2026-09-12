@@ -12,6 +12,7 @@ struct TrackFeatureDetailView: View {
                 ContentUnavailableView("特徴量がありません", systemImage: "waveform.slash")
             }
         }
+        .themeScreen()
         .navigationTitle("音楽特徴")
         .navigationBarTitleDisplayMode(.inline)
     }

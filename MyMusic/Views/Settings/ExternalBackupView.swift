@@ -52,6 +52,7 @@ struct ExternalBackupView: View {
                 Section { ProgressView("処理中…") }
             }
         }
+        .themeScreen()
         .navigationTitle("App外バックアップ")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { refreshStatus() }

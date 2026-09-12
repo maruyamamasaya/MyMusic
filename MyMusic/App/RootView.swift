@@ -7,12 +7,12 @@ struct RootView: View {
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(FavoriteStore.self) private var favoriteStore
-    @Environment(HighlightPlayerStore.self) private var highlightStore
     @Environment(TrackFeatureStore.self) private var trackFeatureStore
     @Environment(TrackPlaybackAdjustmentStore.self) private var trackPlaybackAdjustmentStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var isNowPlayingPresented = false
     @State private var returnsHomeAfterNowPlaying = false
+    @State private var isHomeHighlightPresented = false
     @State private var selectedTab = RootTab.home
 
     var body: some View {
@@ -21,21 +21,24 @@ struct RootView: View {
                 HomeView(
                     isActive: selectedTab == .home
                         && !isNowPlayingPresented
-                        && scenePhase == .active
-                )
-            }
-            Tab("ライブラリ", systemImage: "music.note.list", value: .library) { LibraryView() }
-            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
-            Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
-            Tab("ハイライト", systemImage: "sparkles.rectangle.stack", value: .highlight) {
-                HighlightPlayerView {
+                        && scenePhase == .active,
+                    isHighlightPresented: $isHomeHighlightPresented
+                ) {
                     returnsHomeAfterNowPlaying = true
                     isNowPlayingPresented = true
                 }
             }
+            Tab("ライブラリ", systemImage: "music.note.list", value: .library) { LibraryView() }
+            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
+            Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
+            Tab("設定", systemImage: "gearshape", value: .settings) {
+                NavigationStack {
+                    SettingsView()
+                }
+            }
         }
         .modifier(MiniPlayerAccessoryModifier(
-            isPresented: playerStore.currentTrack != nil && selectedTab != .highlight
+            isPresented: playerStore.currentTrack != nil && !isHomeHighlightPresented
         ) {
             returnsHomeAfterNowPlaying = false
             isNowPlayingPresented = true
@@ -52,12 +55,8 @@ struct RootView: View {
             .presentationDragIndicator(.visible)
         }
         .onChange(of: selectedTab) { oldTab, newTab in
-            if oldTab == .highlight, newTab.resetsHighlightSelection {
-                highlightStore.resetRandomSelection()
-            }
-            if newTab == .highlight {
-                highlightStore.updateLibrary(libraryStore.tracks)
-                highlightStore.startIfNeeded()
+            if oldTab == .home, newTab != .home {
+                isHomeHighlightPresented = false
             }
         }
         .alert("再生エラー", isPresented: errorIsPresented) {
@@ -108,6 +107,7 @@ struct RootView: View {
     private func handleNowPlayingDismissal() {
         guard returnsHomeAfterNowPlaying else { return }
         returnsHomeAfterNowPlaying = false
+        isHomeHighlightPresented = false
         selectedTab = .home
     }
 
@@ -152,16 +152,7 @@ private enum RootTab: Hashable {
     case library
     case playlist
     case search
-    case highlight
-
-    var resetsHighlightSelection: Bool {
-        switch self {
-        case .home, .library, .search:
-            true
-        case .playlist, .highlight:
-            false
-        }
-    }
+    case settings
 }
 
 private struct MiniPlayerAccessoryModifier: ViewModifier {

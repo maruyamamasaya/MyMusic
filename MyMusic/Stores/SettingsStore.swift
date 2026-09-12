@@ -4,8 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class SettingsStore {
-    enum Appearance { case system, light, dark }
-    var appearance: Appearance = .system
+    private(set) var theme: AppTheme = .livingAurora
     private(set) var volumeNormalizationEnabled = false
     var gaplessPlaybackEnabled = true
 
@@ -31,6 +30,7 @@ final class SettingsStore {
         self.playbackTransitionController = playbackTransitionController
         self.volumeNormalizationController = volumeNormalizationController
         self.defaults = defaults
+        theme = defaults.string(forKey: "appearance.theme").flatMap(AppTheme.init(rawValue:)) ?? .livingAurora
         volumeNormalizationEnabled = defaults.bool(forKey: volumeNormalizationKey)
         if let data = defaults.data(forKey: equalizerKey),
            var saved = try? JSONDecoder().decode(EqualizerSettings.self, from: data) {
@@ -55,6 +55,11 @@ final class SettingsStore {
         equalizerController?.applyEqualizer(equalizer)
         playbackTransitionController?.applyPlaybackTransition(playbackTransition)
         volumeNormalizationController?.setVolumeNormalizationEnabled(volumeNormalizationEnabled)
+    }
+
+    func setTheme(_ theme: AppTheme) {
+        self.theme = theme
+        defaults.set(theme.rawValue, forKey: "appearance.theme")
     }
 
     func setVolumeNormalizationEnabled(_ isEnabled: Bool) {

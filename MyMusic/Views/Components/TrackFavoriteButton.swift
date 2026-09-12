@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TrackFavoriteButton: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(TrackPreferenceStore.self) private var preferenceStore
 
     let track: Track
@@ -26,7 +27,7 @@ struct TrackFavoriteButton: View {
                         }
                         Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .font(font)
-                            .foregroundStyle(isFavorite ? Color.pink : Color.accentColor)
+                            .foregroundStyle(isFavorite ? Color.pink : ThemePalette.resolve(appTheme).accent)
                             .symbolEffect(.bounce, options: .speed(1.6), value: effectTrigger)
                             .scaleEffect(showsBurst ? 1.22 : 1)
                             .frame(width: width, height: 36)

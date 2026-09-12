@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaylistDetailView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
@@ -65,6 +66,7 @@ struct PlaylistDetailView: View {
             }
         }
         .environment(\.editMode, $editMode)
+        .themeScreen()
         .navigationTitle(playlist?.name ?? "プレイリスト")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -167,7 +169,7 @@ struct PlaylistDetailView: View {
         } label: {
             HStack {
                 Image(systemName: selectedTracks.contains(track.id) ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selectedTracks.contains(track.id) ? Color.accentColor : .secondary)
+                    .foregroundStyle(selectedTracks.contains(track.id) ? ThemePalette.resolve(appTheme).accent : .secondary)
                 VStack(alignment: .leading) {
                     Text(track.title).foregroundStyle(.primary).lineLimit(1)
                     Text(track.artistName).font(.caption).foregroundStyle(.secondary).lineLimit(1)

@@ -50,6 +50,7 @@ struct FavoriteAlbumsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("お気に入りのアルバム")
     }
 
@@ -114,6 +115,7 @@ struct FavoriteArtistsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("お気に入りのアーティスト")
     }
 

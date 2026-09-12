@@ -56,6 +56,7 @@ struct PlaybackBehaviorView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("再生傾向")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -72,6 +73,7 @@ private struct OverplayCandidatesView: View {
         List(results) { result in
             OverplayTrackRow(result: result)
         }
+        .themeScreen()
         .navigationTitle("聴きすぎている曲")
         .navigationBarTitleDisplayMode(.inline)
     }

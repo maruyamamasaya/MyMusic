@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct NowPlayingView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(SettingsStore.self) private var settingsStore
@@ -20,6 +21,7 @@ struct NowPlayingView: View {
                     nowPlayingContent
                 }
             }
+            .themeScreen()
             .navigationTitle("再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -98,7 +100,7 @@ struct NowPlayingView: View {
                         Image(systemName: "slider.vertical.3")
                             .font(.title3)
                             .frame(width: 42, height: 36)
-                            .foregroundStyle(settingsStore.equalizer.isEnabled ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(settingsStore.equalizer.isEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("イコライザ設定を表示")

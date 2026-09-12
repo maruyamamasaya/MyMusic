@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StationQuestionView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(StationStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
@@ -19,6 +20,7 @@ struct StationQuestionView: View {
                     questions
                 }
             }
+            .themeScreen()
             .navigationTitle("気分を伝えて再生")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -62,7 +64,7 @@ struct StationQuestionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(stepLabel).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor)
+                    Text(stepLabel).font(.caption.weight(.semibold)).foregroundStyle(ThemePalette.resolve(appTheme).accent)
                     Text(questionTitle).font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     Text(questionDetail).font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -122,6 +124,7 @@ struct StationQuestionView: View {
 }
 
 struct StationAnswerButton: View {
+    @Environment(\.appTheme) private var appTheme
     let title: String
     let symbol: String
     var selected = false
@@ -130,7 +133,7 @@ struct StationAnswerButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: symbol).font(.title3).foregroundStyle(Color.accentColor)
+                Image(systemName: symbol).font(.title3).foregroundStyle(ThemePalette.resolve(appTheme).accent)
                     .accessibilityHidden(true)
                 Text(title).font(.body.weight(.medium)).multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)

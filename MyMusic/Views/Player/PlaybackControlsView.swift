@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaybackControlsView: View {
+    @Environment(\.appTheme) private var appTheme
     let isPlaying: Bool
     let isLoading: Bool
     let isShuffleEnabled: Bool
@@ -16,7 +17,7 @@ struct PlaybackControlsView: View {
     var body: some View {
         HStack {
             Button("シャッフル", systemImage: "shuffle", action: onShuffle)
-                .foregroundStyle(isShuffleEnabled ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isShuffleEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
                 .accessibilityValue(isShuffleEnabled ? "On" : "Off")
 
             Spacer()
@@ -50,7 +51,7 @@ struct PlaybackControlsView: View {
             Spacer()
 
             Button(repeatLabel, systemImage: repeatSymbol, action: onRepeat)
-                .foregroundStyle(repeatMode == .off ? Color.secondary : Color.accentColor)
+                .foregroundStyle(repeatMode == .off ? Color.secondary : ThemePalette.resolve(appTheme).accent)
                 .accessibilityValue(repeatLabel)
         }
         .font(.system(size: 20))

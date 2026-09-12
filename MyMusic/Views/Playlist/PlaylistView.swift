@@ -53,6 +53,7 @@ struct WorkPlaylistView: View {
 }
 
 private struct PlaylistManagementView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(LibraryStore.self) private var libraryStore
     @State private var isCreatingPlaylist = false
@@ -170,6 +171,7 @@ private struct PlaylistManagementView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
         .playlistSearchable(text: $searchText, prompt: searchPrompt)
         .toolbar {
@@ -316,7 +318,7 @@ private struct PlaylistManagementView: View {
         HStack {
             if let selected {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .foregroundStyle(selected ? ThemePalette.resolve(appTheme).accent : .secondary)
             }
             VStack(alignment: .leading, spacing: 5) {
                 Label(playlist.name, systemImage: kind == .work ? "timer" : "music.note.list")

@@ -24,6 +24,7 @@ struct AnalyticsView: View {
             boredomSection
             mostPlayedSection
         }
+        .themeScreen()
         .navigationTitle("分析")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
@@ -231,6 +232,7 @@ private struct BoredomTracksView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -279,6 +281,7 @@ private struct PreferenceRatingsView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("いいね評価リスト")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -378,6 +381,7 @@ private enum RatingSortOrder: String, CaseIterable, Identifiable {
 }
 
 private struct PlaybackHistoryCalendarView: View {
+    @Environment(\.appTheme) private var appTheme
     let months: [AnalyticsSnapshot.MonthGroup]
     @State private var displayedMonthIndex = 0
 
@@ -472,6 +476,7 @@ private struct PlaybackHistoryCalendarView: View {
             }
             .padding()
         }
+        .themeScreen()
         .navigationTitle("再生履歴カレンダー")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -522,7 +527,7 @@ private struct PlaybackHistoryCalendarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .aspectRatio(0.82, contentMode: .fit)
-        .background(eventCount == nil ? Color.clear : Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .background(eventCount == nil ? Color.clear : ThemePalette.resolve(appTheme).accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
     }
 
@@ -563,6 +568,7 @@ private struct PlaybackDayDetailView: View {
                 .accessibilityHint("この曲を再生して再生画面を表示")
             }
         }
+        .themeScreen()
         .navigationTitle(day.date.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isNowPlayingPresented) {

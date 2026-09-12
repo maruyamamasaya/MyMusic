@@ -19,6 +19,7 @@ struct LibraryFoldersView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("音楽フォルダ")
         .navigationBarTitleDisplayMode(.inline)
     }

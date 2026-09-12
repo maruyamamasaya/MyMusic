@@ -63,6 +63,9 @@ struct MyMusicApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(\.appTheme, settingsStore.theme)
+                .tint(ThemePalette.resolve(settingsStore.theme).accent)
+                .preferredColorScheme(.dark)
                 .environment(playerStore)
                 .environment(libraryStore)
                 .environment(playlistStore)

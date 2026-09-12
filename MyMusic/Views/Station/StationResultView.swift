@@ -46,6 +46,7 @@ struct StationResultView: View {
                 }
             }
         }
+        .themeScreen()
         .navigationTitle("ステーション")
         .navigationBarTitleDisplayMode(.inline)
     }

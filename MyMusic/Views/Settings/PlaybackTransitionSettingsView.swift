@@ -41,6 +41,7 @@ struct PlaybackTransitionSettingsView: View {
                 Text("既存の再生感を維持するため、初期状態ではフェードはオフです。設定は通常再生とハイライト再生で共有されます。")
             }
         }
+        .themeScreen()
         .navigationTitle("再生トランジション")
         .navigationBarTitleDisplayMode(.inline)
     }

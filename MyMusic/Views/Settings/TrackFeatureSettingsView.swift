@@ -87,6 +87,7 @@ struct TrackFeatureSettingsView: View {
                 Text("曲、プレイリスト、再生履歴、評価、お気に入り、再生設定には影響しません。")
             }
         }
+        .themeScreen()
         .navigationTitle("音楽特徴量")
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
@@ -185,6 +186,7 @@ private struct TrackFeatureImportIssuesView: View {
                 paths: report.ambiguousSamplePaths
             )
         }
+        .themeScreen()
         .navigationTitle("照合できなかった曲")
         .navigationBarTitleDisplayMode(.inline)
     }

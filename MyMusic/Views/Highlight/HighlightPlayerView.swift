@@ -455,6 +455,7 @@ private struct HighlightTrackInformationView: View {
                     }
                 }
             }
+            .themeScreen()
             .navigationTitle("曲情報")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
