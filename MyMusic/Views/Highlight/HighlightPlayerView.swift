@@ -119,7 +119,9 @@ struct HighlightPlayerView: View {
 
 private struct HighlightTrackPage: View {
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var preferenceStore
+    @Environment(ListenLaterStore.self) private var listenLaterStore
     @Environment(SettingsStore.self) private var settingsStore
 
     let track: Track
@@ -141,6 +143,7 @@ private struct HighlightTrackPage: View {
     let onResumeHighlight: () -> Void
 
     private var isFavorite: Bool { preferenceStore.isFavorite(trackID: track.id) }
+    private var isListenLater: Bool { listenLaterStore.contains(track.id) }
 
     var body: some View {
         GeometryReader { proxy in
@@ -257,6 +260,17 @@ private struct HighlightTrackPage: View {
                     .foregroundStyle(isFavorite ? .pink : .white)
             }
             .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
+
+            Button {
+                listenLaterStore.toggle(
+                    trackID: track.id,
+                    currentPlayCount: playbackHistoryStore.playCount(for: track.id)
+                )
+            } label: {
+                Image(systemName: isListenLater ? "checkmark" : "plus")
+                    .foregroundStyle(isListenLater ? .green : .white)
+            }
+            .accessibilityLabel(isListenLater ? "あとで聴くから削除" : "あとで聴くに追加")
 
             Button {
                 preferenceStore.increasePlaybackPreference(for: track.id)
