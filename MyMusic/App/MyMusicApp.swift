@@ -36,8 +36,8 @@ struct MyMusicApp: App {
                 )
             }
         )
-        playerStore.connectWatch(using: WatchConnectivityService(), preferenceStore: preferenceStore)
         let libraryStore = LibraryStore()
+        playerStore.connectWatch(using: WatchConnectivityService(), preferenceStore: preferenceStore, libraryStore: libraryStore)
         _libraryStore = State(initialValue: libraryStore)
         _trackFeatureStore = State(initialValue: featureStore)
         _trackPlaybackAdjustmentStore = State(initialValue: adjustmentStore)

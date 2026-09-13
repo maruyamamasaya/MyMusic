@@ -123,7 +123,7 @@ final class PlayerStore {
         updateRemoteCommandAvailability()
     }
 
-    func connectWatch(using service: WatchConnectivityServicing, preferenceStore: TrackPreferenceStore) {
+    func connectWatch(using service: WatchConnectivityServicing, preferenceStore: TrackPreferenceStore, libraryStore: LibraryStore) {
         watchConnectivityService = service
         watchPreferenceStore = preferenceStore
         service.commandHandler = { [weak self] command in
@@ -144,10 +144,38 @@ final class PlayerStore {
             case .requestState: break
             }
         }
+        service.shuffleHandler = { [weak self, weak libraryStore] kind in
+            guard let self, let libraryStore else { return "iPhoneでMyMusicを開いてください" }
+            return await self.startRemoteShuffle(kind, tracks: libraryStore.tracks, preferenceStore: preferenceStore)
+        }
         service.stateProvider = { [weak self] in self?.watchPlaybackState ?? .empty }
         preferenceStore.stateChangeHandler = { [weak self] in self?.publishWatchState() }
         service.activate()
         publishWatchState()
+    }
+
+    /// Reuses the iPhone selection APIs, including Discovery's preference-only policy.
+    func startRemoteShuffle(_ kind: WatchShuffleKind, tracks: [Track], preferenceStore: TrackPreferenceStore) async -> String? {
+        guard playbackHistoryStore.isLoaded, preferenceStore.isLoaded else {
+            return "iPhoneでMyMusicを開いて読み込みを完了してください"
+        }
+        let selected: [Track]
+        switch kind {
+        case .normal:
+            selected = playbackHistoryStore.preferenceWeightedShuffle(tracks)
+        case .favorites:
+            selected = playbackHistoryStore.preferenceWeightedShuffle(preferenceStore.favoriteTracks(from: tracks))
+        case .unplayed:
+            selected = playbackHistoryStore.discoveryPlayTracks(from: tracks)
+        }
+        guard !selected.isEmpty else { return "対象の曲がありません" }
+        // Preserve the already selected order, especially Discovery's distinct policy.
+        setShuffleEnabled(false)
+        playQueue(selected, startingAt: 0, startContext: PlaybackStartContext(kind: .manual, source: kind == .unplayed ? .home : .shuffle))
+        let requestID = playbackRequestID
+        await playbackTask?.value
+        guard playbackRequestID == requestID else { return "再生操作が変更されました" }
+        return errorMessage == nil && isPlaying ? nil : "再生を開始できませんでした"
     }
 
     private var watchPlaybackState: WatchPlaybackState {

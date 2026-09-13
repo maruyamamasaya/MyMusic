@@ -30,13 +30,17 @@ updated: 2026-09-13
 
 ### Apple Watch リモコン MVP
 
+- 2026-09-13のVespera／Comet実機デプロイは署名で停止。deploy scriptの全targetへの`-sdk iphoneos`強制を除去し、既存自動署名のprofile更新を許可したが、Xcodeが`No Accounts`とWatch profile不足を返した。Vesperaは接続・Developer Mode正常、Cometはpaired／Developer Mode enabledだがtunnel disconnected。両端末へのinstall／launchは未実施。再開にはXcodeの既存TeamアカウントとWatch接続の復旧が必要。
+
+- Watchの再生画面右上から「通常」「お気に入り」「未発見再生」を選び、iPhoneの既存`preferenceWeightedShuffle`／`discoveryPlayTracks`で再生するBetaを追加した。通信中表示、対象曲なし・未読込・接続不可・再生失敗の表示と、成功時のsheet dismissalを行う。Watchへlibrary／履歴／選曲処理は複製しない。Simulator向けiPhone／Watch buildと通信契約の単体実行を確認。実機間通信と画面操作は未検証。
+
 - 2026-09-12に元のiPhone上のアプリコンテナとFinder暗号化バックアップを確認した後、`MyMusic` ターゲットの `MyMusicWatch` Target Dependencyと`Embed Watch Content`を復旧した。現在の`MyMusic`ビルドはWatch Appを埋め込む構成で、iOS／WatchともDevelopment Teamは`U29GY347DY`、Bundle Identifierはそれぞれ`maruyama.MyMusic`／`maruyama.MyMusic.watchkitapp`である。
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
 - Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchからTrack単位で一度だけ要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。失敗・未収録時はplaceholderを維持する。
 - 同画面の音量はWatchKit標準の`WKInterfaceVolumeControl(origin: .companion)`をSwiftUIへbridgeして表示する。選択時のDigital Crownと現在音量表示はシステムに任せ、WatchConnectivity messageやWatch独自のvolume stateは追加しない。
-- Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上は音量、右端は32ptの詳細とし、音量も同じ32pt枠で見やすく表示する。続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。詳細sheetには未接続のShuffle／おすすめ再生の将来枠を置く。
+- Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上は音量、右端は32ptの詳細とし、音量も同じ32pt枠で見やすく表示する。続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。右上のシャッフルボタンから3種類の選択sheetを開く。
 - 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
 
 ### Web Analytics v0

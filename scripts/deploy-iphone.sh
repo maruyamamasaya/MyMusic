@@ -115,11 +115,12 @@ done
 [[ $scheme_found -eq 1 ]] || fail "Scheme「${SCHEME}」が見つかりません。SCHEME環境変数またはXcodeの共有Scheme設定を確認してください。"
 ok "Scheme: $SCHEME"
 
+# Let the destination select each target SDK; forcing iphoneos also breaks the embedded Watch app.
 common_build_args=(
     "${container_args[@]}"
     -scheme "$SCHEME"
     -configuration "$CONFIGURATION"
-    -sdk iphoneos
+    -allowProvisioningUpdates
     -destination "platform=iOS,id=$device_udid"
     -destination-timeout 30
     -derivedDataPath "$DERIVED_DATA_PATH"

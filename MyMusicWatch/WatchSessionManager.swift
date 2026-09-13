@@ -66,6 +66,37 @@ final class WatchSessionManager: NSObject {
         )
     }
 
+    private(set) var pendingShuffle: WatchShuffleKind?
+    private(set) var shuffleError: String?
+    private(set) var completedShuffleCount = 0
+
+    func shuffle(_ kind: WatchShuffleKind) {
+        guard pendingShuffle == nil else { return }
+        guard let session, session.activationState == .activated, session.isReachable else {
+            shuffleError = "iPhoneに接続できません"
+            return
+        }
+        pendingShuffle = kind
+        shuffleError = nil
+        session.sendMessage(kind.message, replyHandler: { [weak self] message in
+            Task { @MainActor in
+                guard let self else { return }
+                self.apply(message)
+                self.pendingShuffle = nil
+                if message["shuffleSucceeded"] as? Bool == true {
+                    self.completedShuffleCount += 1
+                } else {
+                    self.shuffleError = message["shuffleError"] as? String ?? "iPhoneでMyMusicを確認してください"
+                }
+            }
+        }, errorHandler: { [weak self] _ in
+            Task { @MainActor in
+                self?.pendingShuffle = nil
+                self?.shuffleError = "iPhoneに接続できません"
+            }
+        })
+    }
+
     private func apply(_ message: [String: Any]) {
         guard let state = WatchPlaybackState(message: message) else { return }
         if state.trackID != playbackState.trackID {

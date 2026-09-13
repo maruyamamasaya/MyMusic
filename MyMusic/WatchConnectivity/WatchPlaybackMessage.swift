@@ -131,3 +131,19 @@ enum WatchArtworkFileMetadata {
         return UUID(uuidString: value)
     }
 }
+
+/// Wire values only; selection and playback remain on iPhone.
+enum WatchShuffleKind: String, CaseIterable, Sendable {
+    case normal, favorites, unplayed
+
+    var message: [String: Any] {
+        ["kind": "shuffle", "version": WatchPlaybackState.schemaVersion, "shuffle": rawValue]
+    }
+
+    init?(message: [String: Any]) {
+        guard message["kind"] as? String == "shuffle",
+              message["version"] as? Int == WatchPlaybackState.schemaVersion,
+              let value = message["shuffle"] as? String else { return nil }
+        self.init(rawValue: value)
+    }
+}

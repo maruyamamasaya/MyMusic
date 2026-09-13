@@ -197,7 +197,9 @@ Artwork本体はstateへ含めない。Watchが新しいTrackのArtworkを一度
 
 Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolumeControl`の`.companion` sourceをSwiftUIへbridgeする。これはペアリング中iPhoneのシステム出力音量をDigital Crownで制御する経路であり、`PlayerStore`、`AudioPlayerService`の内部mixer gain、WatchConnectivity契約は変更しない。画面をscroll containerにせず、volume controlを明示選択した時だけCrown focusを得る。
 
-`NowPlayingView`は背景と前景に別の`GeometryReader`を使う。背景側だけをSafe Area外へ拡張し、そのfull-screen sizeをArtworkとcontrast overlayの共通containerへ一度だけ指定する。前景側はwatchOSが提案するSafe Area内sizeだけで、右上の詳細／小型音量、曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部の44〜52pt再生操作を配置する。詳細sheetのShuffle／おすすめ再生は、現状のWatch command境界から既存Library／History／Highlight文脈を安全に呼べないため未接続の将来枠とする。
+`NowPlayingView`は背景と前景に別の`GeometryReader`を使う。背景側だけをSafe Area外へ拡張し、そのfull-screen sizeをArtworkとcontrast overlayの共通containerへ一度だけ指定する。前景側はwatchOSが提案するSafe Area内sizeだけで、右上の詳細／小型音量、曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部の44〜52pt再生操作を配置する。右上のshuffleボタンは`WatchShuffleView`の3種類一覧を1アクションで開く。
+
+Shuffleは`WatchShuffleKind`のversion 1 message（normal／favorites／unplayed）を即時送信する。`WatchConnectivityService.shuffleHandler` → `PlayerStore.startRemoteShuffle`で、Appから接続された最新Libraryと既存History／Preferenceを参照する。通常・お気に入りは`preferenceWeightedShuffle`、未発見再生は`discoveryPlayTracks`（最大30曲・Preferenceのみ）をそのまま呼ぶ。生成済み順序を再shuffleしないようqueue shuffleをOFFにして`playQueue`へ渡す。対象なし・読込未完了なら現queueを変更しない。既存playback taskの完了を待ち、request IDと再生状態を確認して、再生stateに`shuffleSucceeded`／`shuffleError`を添え返信する。Watchは返信成功時のみsheetを閉じる。通信不能時の遅延再生を避けるためcommandをapplication contextやuser infoへ蓄積しない。
 
 ## 永続化
 

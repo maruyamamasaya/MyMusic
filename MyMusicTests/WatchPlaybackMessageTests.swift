@@ -20,6 +20,18 @@ final class WatchPlaybackMessageTests: XCTestCase {
         }
     }
 
+    func testShuffleCommandsRoundTripAndRejectUnknownValues() throws {
+        for kind in WatchShuffleKind.allCases {
+            let data = try PropertyListSerialization.data(fromPropertyList: kind.message, format: .binary, options: 0)
+            let message = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+            XCTAssertEqual(WatchShuffleKind(message: message), kind)
+            XCTAssertNil(WatchPlaybackState.command(from: message))
+        }
+        XCTAssertNil(WatchShuffleKind(message: ["kind": "shuffle", "version": 1, "shuffle": "unknown"]))
+        XCTAssertNil(WatchShuffleKind(message: ["kind": "shuffle", "version": 2, "shuffle": "normal"]))
+        XCTAssertNil(WatchShuffleKind(message: WatchPlaybackState.commandMessage(.play)))
+    }
+
     func testMalformedStateIsRejected() {
         XCTAssertNil(WatchPlaybackState(message: ["kind": "playbackState", "version": 1]))
     }

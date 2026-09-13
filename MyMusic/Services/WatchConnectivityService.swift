@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 protocol WatchConnectivityServicing: AnyObject {
     var commandHandler: ((WatchPlaybackCommand) -> Void)? { get set }
+    var shuffleHandler: ((WatchShuffleKind) async -> String?)? { get set }
     var stateProvider: (() -> WatchPlaybackState)? { get set }
     func activate()
     func publish(_ state: WatchPlaybackState, artworkIdentifier: String?)
@@ -12,6 +13,7 @@ protocol WatchConnectivityServicing: AnyObject {
 @MainActor
 final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
     var commandHandler: ((WatchPlaybackCommand) -> Void)?
+    var shuffleHandler: ((WatchShuffleKind) async -> String?)?
     var stateProvider: (() -> WatchPlaybackState)?
 
     private let session: WCSession?
@@ -99,6 +101,19 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
 
     private func receive(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
         Task { @MainActor [weak self] in
+            if let self, let kind = WatchShuffleKind(message: message) {
+                let error: String?
+                if let handler = shuffleHandler {
+                    error = await handler(kind)
+                } else {
+                    error = "iPhoneでMyMusicを開いてください"
+                }
+                var reply = stateProvider?().message ?? WatchPlaybackState.empty.message
+                reply["shuffleSucceeded"] = error == nil
+                reply["shuffleError"] = error
+                replyHandler?(reply)
+                return
+            }
             guard let self, let command = WatchPlaybackState.command(from: message) else {
                 replyHandler?([:])
                 return

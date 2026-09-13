@@ -19,7 +19,7 @@ struct NowPlayingView: View {
         }
         .foregroundStyle(.white)
         .sheet(isPresented: $showsDetails) {
-            PlaybackDetailsView()
+            WatchShuffleView()
         }
     }
 
@@ -140,13 +140,13 @@ struct NowPlayingView: View {
                 .accessibilityHint("選択してDigital Crownを回すと音量を調整できます")
 
             Button { showsDetails = true } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "shuffle")
                     .font(.system(size: 14, weight: .semibold))
                     .frame(width: metrics.utilityControlSize, height: metrics.utilityControlSize)
             }
             .buttonStyle(.plain)
             .background(.black.opacity(0.28), in: Circle())
-            .accessibilityLabel("詳細")
+            .accessibilityLabel("シャッフル")
         }
         .frame(height: metrics.utilityControlSize)
     }
@@ -245,19 +245,6 @@ private struct LayoutMetrics {
         utilityControlSize = 32
         minimumVerticalSpacing = 2
         contentHeight = size.height
-    }
-}
-
-private struct PlaybackDetailsView: View {
-    var body: some View {
-        List {
-            Section("詳細") {
-                Label("シャッフル", systemImage: "shuffle")
-                Label("おすすめ再生", systemImage: "sparkles")
-            }
-            .foregroundStyle(.secondary)
-        }
-        .accessibilityHint("これらの機能は今後利用できるようになります")
     }
 }
 
