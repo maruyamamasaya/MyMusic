@@ -189,7 +189,10 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             if let track = playerStore.currentTrack {
-                TrackFavoriteButton(track: track, font: .title2, width: 36)
+                HStack(spacing: 8) {
+                    TrackFavoriteButton(track: track, font: .title2, width: 36)
+                    ListenLaterButton(track: track, font: .title2, width: 36)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

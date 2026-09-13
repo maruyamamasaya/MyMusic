@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(ListenLaterStore.self) private var listenLaterStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(LibraryStore.self) private var libraryStore
@@ -74,6 +75,11 @@ struct RootView: View {
         } message: {
             Text(favoriteStore.errorMessage ?? "お気に入りを保存できませんでした。")
         }
+        .alert("あとで聴くのエラー", isPresented: listenLaterErrorIsPresented) {
+            Button("閉じる") { listenLaterStore.dismissError() }
+        } message: {
+            Text(listenLaterStore.errorMessage ?? "あとで聴くリストを保存できませんでした。")
+        }
         .alert("曲の設定エラー", isPresented: preferenceErrorIsPresented) {
             Button("閉じる") { trackPreferenceStore.dismissError() }
         } message: {
@@ -91,17 +97,13 @@ struct RootView: View {
             }
         }
         .task { await playlistStore.loadIfNeeded() }
-        .task {
-            await playbackHistoryStore.loadIfNeeded()
-            await trackPreferenceStore.loadIfNeeded(
-                legacyHistory: playbackHistoryStore.errorMessage == nil
-                    ? playbackHistoryStore.entries
-                    : nil
-            )
-        }
+        .task { await loadPlaybackData() }
         .task { await favoriteStore.loadIfNeeded() }
         .task { await libraryStore.restoreAndLoadIfNeeded() }
         .task { await trackFeatureStore.loadIfNeeded() }
+        .onChange(of: playbackHistoryStore.homePresentationRevision) {
+            reconcileListenLater()
+        }
     }
 
     private func handleNowPlayingDismissal() {
@@ -130,6 +132,29 @@ struct RootView: View {
             get: { favoriteStore.errorMessage != nil },
             set: { if !$0 { favoriteStore.dismissError() } }
         )
+    }
+
+    private var listenLaterErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { listenLaterStore.errorMessage != nil },
+            set: { if !$0 { listenLaterStore.dismissError() } }
+        )
+    }
+
+    private func reconcileListenLater() {
+        listenLaterStore.reconcile(
+            playCounts: playbackHistoryStore.entries.mapValues(\.playCount)
+        )
+    }
+
+    private func loadPlaybackData() async {
+        await playbackHistoryStore.loadIfNeeded()
+        await listenLaterStore.loadIfNeeded()
+        reconcileListenLater()
+        let legacyHistory = playbackHistoryStore.errorMessage == nil
+            ? playbackHistoryStore.entries
+            : nil
+        await trackPreferenceStore.loadIfNeeded(legacyHistory: legacyHistory)
     }
 
     private var preferenceErrorIsPresented: Binding<Bool> {

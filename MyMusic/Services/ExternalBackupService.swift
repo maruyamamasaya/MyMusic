@@ -60,7 +60,7 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
         "library.songsDisplayMode", "library.albumsDisplayMode", "library.artistsDisplayMode"
     ]
     private let paths = [
-        "playback-history.sqlite3", "track-preferences.json", "playlists.json",
+        "playback-history.sqlite3", "track-preferences.json", "playlists.json", "listen-later.json",
         "track-identities.json", "track-features.json", "TrackPlaybackAdjustments",
         "library-favorites.json", "highlights.json"
     ]

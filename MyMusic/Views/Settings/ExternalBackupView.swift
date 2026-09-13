@@ -10,6 +10,7 @@ struct ExternalBackupView: View {
     @Environment(PlaybackHistoryStore.self) private var historyStore
     @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(ListenLaterStore.self) private var listenLaterStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @State private var status = ExternalBackupStatus(destinationName: nil, lastBackupDate: nil, hasRestorableBackup: false)
     @State private var folderSelectionPurpose = FolderSelectionPurpose.destination
@@ -105,6 +106,7 @@ struct ExternalBackupView: View {
             await historyStore.waitForPendingSave()
             await preferenceStore.waitForPendingSave()
             await playlistStore.waitForPendingSave()
+            await listenLaterStore.waitForPendingSave()
             await favoriteStore.waitForPendingSave()
             do {
                 let manifest = try await Task.detached { try service.createBackup() }.value

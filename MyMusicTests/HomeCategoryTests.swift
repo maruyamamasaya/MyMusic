@@ -9,12 +9,13 @@ final class HomeCategoryTests: XCTestCase {
         XCTAssertEqual(activity.items.map(\.title), ["再生分析", "音楽史"])
     }
 
-    func testRecentlyAddedTileFollowsDiscoveryPlay() throws {
+    func testListenLaterTileFollowsDiscoveryPlay() throws {
         let myMusic = try XCTUnwrap(HomeCategory.all.first { $0.id == .myMusic })
         let discoveryIndex = try XCTUnwrap(myMusic.items.firstIndex { $0.destination == .discoveryPlay })
 
-        XCTAssertEqual(myMusic.items[discoveryIndex + 1].destination, .recentlyAddedPlay)
-        XCTAssertEqual(myMusic.items[discoveryIndex + 1].title, "最近追加した曲")
+        XCTAssertEqual(myMusic.items[discoveryIndex + 1].destination, .listenLater)
+        XCTAssertEqual(myMusic.items[discoveryIndex + 1].title, "あとで聴く")
+        XCTAssertEqual(myMusic.items[discoveryIndex + 2].destination, .recentlyAddedPlay)
     }
 
     func testLibraryAndActivityTilesHaveStableLocalImageNames() throws {

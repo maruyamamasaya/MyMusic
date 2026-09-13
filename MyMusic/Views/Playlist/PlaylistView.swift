@@ -119,6 +119,11 @@ private struct PlaylistManagementView: View {
                     } label: {
                         Label("作業用プレイリスト", systemImage: "timer")
                     }
+                    NavigationLink {
+                        ListenLaterView()
+                    } label: {
+                        Label("あとで聴く", systemImage: "text.badge.plus")
+                    }
                 }
             }
 

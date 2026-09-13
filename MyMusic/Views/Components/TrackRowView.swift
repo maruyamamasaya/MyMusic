@@ -15,7 +15,6 @@ struct TrackRowView: View {
             }
             Spacer()
             Text(TimeFormatter.string(from: track.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            Image(systemName: "ellipsis").foregroundStyle(.secondary)
         }
     }
 }

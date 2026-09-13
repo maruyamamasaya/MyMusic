@@ -87,6 +87,8 @@ struct HomeDestinationView: View {
                 systemImage: "sparkles",
                 tracks: playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
             )
+        case .listenLater:
+            ListenLaterView()
         case .recentlyAddedPlay:
             GeneratedQueueView(
                 title: "最近追加した曲",

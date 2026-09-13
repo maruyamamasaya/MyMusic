@@ -17,6 +17,7 @@ struct HomeView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(ListenLaterStore.self) private var listenLaterStore
     @Environment(FavoriteStore.self) private var favoriteStore
     @Environment(HighlightPlayerStore.self) private var highlightStore
     @State private var randomizedPlaylistIDs: [Playlist.ID] = []
@@ -140,6 +141,9 @@ struct HomeView: View {
             }
             .onChange(of: favoriteStore.homePresentationRevision) { refreshDestinationPresentations() }
             .onChange(of: playlistStore.homeContentRevision) { refreshPlaylistPresentations() }
+            .onChange(of: listenLaterStore.homePresentationRevision) {
+                refreshDestinationPresentations()
+            }
         }
     }
 
@@ -260,6 +264,8 @@ struct HomeView: View {
                 playbackHistoryStore.playCount(for: $0.id) == 0
                     && playbackHistoryStore.isEligibleForRegularShuffle($0)
             }
+        case .listenLater:
+            listenLaterStore.tracks(in: libraryStore.tracks)
         case .recentlyAddedPlay:
             playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
         case .repeatPlay:

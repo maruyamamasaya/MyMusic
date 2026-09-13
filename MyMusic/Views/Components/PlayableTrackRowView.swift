@@ -14,6 +14,7 @@ struct PlayableTrackRowView: View {
             .buttonStyle(.plain)
 
             TrackFavoriteButton(track: track)
+            ListenLaterButton(track: track)
         }
     }
 }

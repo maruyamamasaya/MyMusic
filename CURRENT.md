@@ -90,6 +90,8 @@ updated: 2026-09-13
 
 ### Beta
 
+- **あとで聴く一時リスト**: 通常の再生中画面と共通の曲選択行で、お気に入りの右にある丸い＋から曲を追加する。曲選択行に表示だけされていた非操作の三点アイコンは削除した。追加時の曲別再生回数を`listen-later.json`へ保存し、その後に既存の再生回数が1以上増えた時点で自動的にリストから削除する。ホーム「マイミュージック」では未発見再生の右隣、プレイリスト画面では作業用プレイリストの下から一覧を開ける。一覧は順再生／シャッフル、曲単位の再生と手動削除に対応し、通常Playlistのモデルやqueue snapshotは変更しない。App外バックアップにも含める。
+
 - **ホームHighlight入口と設定tab**: 下部5番目のHighlight tabをSettingsへ置き換え、ホームの「マイミュージック」タイル列の左端に既存タイルと同じ寸法のHighlightタイルを配置した。タイルは`highlight-background.*`を優先し、未配置時は通常再生対象のランダムArtwork、Artworkがない場合は専用グラデーションを表示する。背景選択はHighlightのqueue／先頭曲から分離する。ホーム右上の設定ボタンは撤去し、ホーム内容の上余白を8pt減らした。
 
 - **ライブラリ同期の診断・完全再取得**: Libraryの同期を、file size／更新日時による「クイック同期」と、全曲のmetadata／Artworkを読み直す「メタデータと画像を再取得」に分けた。完全再取得でもTrack Identity registryを使うためTrack UUID、firstSeenAt、再生履歴、Preference、Playlist等の紐付けを維持する。完全再取得は取得済みTrackを10分有効のcheckpointへbatch保存し、中断後はpath・size・更新日時・UUIDが一致する曲を再利用する。Library cache保存成功時だけcheckpointを削除する。同期中は現在folder、総曲数、完了数、残数を表示する。iCloud未取得、directory走査、file属性、metadata読取の失敗は黙って破棄せず、folder別の件数・代表path・NSError識別情報を完了時のpopupへ集約する。Artwork identifierはTrack UUIDと画像content hashから生成し、同一Trackの画像差し替えでもdisk／memory／SwiftUI表示cacheを更新する。

@@ -34,6 +34,8 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 `MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Settings の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。HighlightはHomeの「マイミュージック」タイル列左端から同じHome NavigationStack内へ遷移する。
 
+「あとで聴く」は通常Playlistから独立した一時リストとする。`NowPlayingView` → `ListenLaterStore` → `ListenLaterPersistenceService`で追加時のTrack ID・再生回数・追加日時を保存する。`RootView`は`PlaybackHistoryStore.homePresentationRevision`の更新を受け、現在の再生回数が追加時より大きい項目を`ListenLaterStore`で削除する。判定は既存`PlayerStore`の再生カウント条件（実聴30秒または曲長50%）を正とし、別の完走判定を増やさない。一覧から作った再生queueは開始時snapshotのため、その後リストから自動削除されても再生中queueを変更しない。
+
 ファイル共有は各画面の`ShareLink`へ委ねず、共通の`ActivityShareSheet`が一時ファイル作成と`UIActivityViewController` presentationを担当する。共有シートは画面rootの安定したpresentation stateから開き、`popoverPresentationController`が存在する場合は生成時・更新時ともsource view / rectを設定するため、iPhoneのsheet適応とiPadのPopover適応を同じ経路で扱う。
 
 主な View 群は責務別に `Home`、`Library`、`Player`、`Playlist`、`Search`、`Settings`、`Highlight`、`Components` に分かれます。
@@ -213,7 +215,7 @@ App外バックアップは`ExternalBackupView` → `ExternalBackupService`の�
 | Folder scan cache | `LibraryPersistenceService` | Application Support 内 JSON |
 | Stable Track identity | `TrackIdentityService` | Application Support 内 JSON |
 | Artwork / highlight | `ArtworkService` / `HighlightRepository` | Caches 内 file / JSON |
-| Track preferences / playlists / playback history | 各 PersistenceService | `track-preferences.json` / JSON / `playback-history.sqlite3` |
+| Track preferences / playlists / あとで聴く / playback history | 各 PersistenceService | `track-preferences.json` / `playlists.json` / `listen-later.json` / `playback-history.sqlite3` |
 | Track features | `TrackFeaturePersistenceService` | Application Support `MyMusic/track-features.json` |
 | Track playback adjustments | `TrackPlaybackAdjustmentPersistenceService` | Application Support `MyMusic/TrackPlaybackAdjustments/<ID先頭2文字>/<Stable Track ID>.json` |
 | EQ / transition / volume normalization / display preferences | `SettingsStore` 等 | UserDefaults |

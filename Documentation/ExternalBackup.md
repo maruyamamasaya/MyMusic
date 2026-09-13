@@ -9,6 +9,7 @@
 | A 必須 | Playback History / Events / boredom / soft delete | `playback-history.sqlite3` のユーザー蓄積データ |
 | A 必須 | Track Favorite / Good・Bad / Preference | `track-preferences.json` の正本 |
 | A 必須 | Playlist | `playlists.json` |
+| A 必須 | あとで聴く一時リスト | `listen-later.json`。追加時の再生回数を保持し、次の再生カウント時に自動削除するため |
 | A 必須 | Track Identity / fingerprint / firstSeenAt | 再scan後に同じStable Track IDへ再接続するため |
 | A 必須 | Track Features | 再解析コストが高くTrack ID参照を持つため |
 | A 必須 | 再生位置 / custom start・end / volume adjustment | Track ID別sharded JSON |
