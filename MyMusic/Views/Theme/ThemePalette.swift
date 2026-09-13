@@ -23,9 +23,9 @@ struct ThemePalette {
                  base: .black, surface: Color(hex: 0x101116),
                  accent: Color(hex: 0x75E3DE), light: Color(hex: 0x9376EE), radius: 22, atmosphere: 0.12)
         case .pulseNeon:
-            Self(title: "Pulse Neon", subtitle: "闇を切り裂く、光のビート", symbol: "waveform.path",
+            Self(title: "Pulse Neon", subtitle: "静かな光を宿す、幾何学のガラス", symbol: "waveform.path",
                  base: .black, surface: Color(hex: 0x0D1114),
-                 accent: Color(hex: 0x63E6F5), light: Color(hex: 0x4263FF), radius: 12, atmosphere: 0.38)
+                 accent: Color(hex: 0x63E6F5), light: Color(hex: 0x4263FF), radius: 12, atmosphere: 0.14)
         case .blueCosmos:
             Self(title: "Blue Cosmos", subtitle: "静かな夜空へ、深く", symbol: "moon.stars",
                  base: .black, surface: Color(hex: 0x0E121A),

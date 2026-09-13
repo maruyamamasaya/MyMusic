@@ -18,17 +18,11 @@ struct ThemeBackground: View {
                     RadialGradient(colors: [palette.accent.opacity(palette.atmosphere * 0.5), .clear],
                                    center: .bottomTrailing, startRadius: 0, endRadius: proxy.size.width * 0.65)
                     if theme == .blueCosmos {
-                        Canvas { context, size in
-                            for index in 0..<32 {
-                                let x = CGFloat((index * 73 + 19) % 307) / 307 * size.width
-                                let y = CGFloat((index * 113 + 31) % 397) / 397 * size.height
-                                let diameter: CGFloat = index % 9 == 0 ? 1.8 : 0.8
-                                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: diameter, height: diameter)),
-                                             with: .color(.white.opacity(index % 9 == 0 ? 0.20 : 0.07)))
-                            }
-                        }
+                        CosmosStarField()
                     } else if theme == .pulseNeon {
                         PulseNeonLighting(palette: palette)
+                    } else if theme == .livingAurora {
+                        AuroraGradientLighting(palette: palette)
                     }
                 }
             }
@@ -46,7 +40,15 @@ private struct ThemeScreenModifier: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .background { ThemeBackground(theme: theme) }
-            .toolbarBackground(ThemePalette.resolve(theme).base, for: .navigationBar)
+            .toolbarBackground(
+                LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black.opacity(0.92), location: 0.35),
+                    .init(color: .black.opacity(0.45), location: 0.75),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom),
+                for: .navigationBar
+            )
             .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
@@ -64,7 +66,7 @@ private struct ThemeSurfaceModifier: ViewModifier {
             .overlay {
                 if theme != .simpleDark {
                 shape.strokeBorder(LinearGradient(
-                    colors: [palette.accent.opacity(contrast == .increased ? 0.65 : (theme == .pulseNeon ? 0.85 : 0.26)), .clear, palette.light.opacity(theme == .pulseNeon ? 0.48 : 0.12)],
+                    colors: [palette.accent.opacity(contrast == .increased ? 0.65 : (theme == .pulseNeon ? 0.38 : 0.26)), .clear, palette.light.opacity(theme == .pulseNeon ? 0.20 : 0.12)],
                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
                     .allowsHitTesting(false)
                 }

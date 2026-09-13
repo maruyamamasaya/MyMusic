@@ -1,48 +1,54 @@
 import SwiftUI
 
-/// Pulse-only light sculpture. Fixed geometry keeps black breathing space between two rails.
-/// Layered strokes simulate bloom without blur or continuous GPU animation.
+/// A tessellated optical-glass field. Deterministic facets, no timers or blur.
 struct PulseNeonLighting: View {
     let palette: ThemePalette
 
-    private enum Light {
-        static let haloWidth: CGFloat = 30
-        static let haloOpacity = 0.045
-        static let bloomWidth: CGFloat = 12
-        static let bloomOpacity = 0.13
-        static let tubeWidth: CGFloat = 3
-        static let coreWidth: CGFloat = 0.8
-        static let nodeRadius: CGFloat = 2.5
+    private enum Glass {
+        static let columns = 5
+        static let rowHeight: CGFloat = 115
+        static let edgeWidth: CGFloat = 0.45
+        static let edgeOpacity = 0.18
+        static let reflectionOpacity = 0.08
     }
 
     var body: some View {
         Canvas { context, size in
-            let rails: [(points: [CGPoint], color: Color)] = [
-                ([CGPoint(x: size.width * 0.76, y: -16),
-                  CGPoint(x: size.width * 0.93, y: size.height * 0.19),
-                  CGPoint(x: size.width * 0.93, y: size.height * 0.43),
-                  CGPoint(x: size.width + 16, y: size.height * 0.52)], palette.accent),
-                ([CGPoint(x: -16, y: size.height * 0.55),
-                  CGPoint(x: size.width * 0.065, y: size.height * 0.64),
-                  CGPoint(x: size.width * 0.065, y: size.height * 0.81),
-                  CGPoint(x: size.width * 0.24, y: size.height + 16)], palette.light)
-            ]
-            for rail in rails {
-                var path = Path()
-                path.addLines(rail.points)
-                context.stroke(path, with: .color(rail.color.opacity(Light.haloOpacity)),
-                               style: StrokeStyle(lineWidth: Light.haloWidth, lineJoin: .round))
-                context.stroke(path, with: .color(rail.color.opacity(Light.bloomOpacity)),
-                               style: StrokeStyle(lineWidth: Light.bloomWidth, lineJoin: .round))
-                context.stroke(path, with: .color(rail.color.opacity(0.9)),
-                               style: StrokeStyle(lineWidth: Light.tubeWidth, lineJoin: .bevel))
-                context.stroke(path, with: .color(.white.opacity(0.85)),
-                               style: StrokeStyle(lineWidth: Light.coreWidth, lineJoin: .bevel))
-                let node = rail.points[1]
-                context.fill(Path(ellipseIn: CGRect(x: node.x - Light.nodeRadius,
-                                                    y: node.y - Light.nodeRadius,
-                                                    width: Light.nodeRadius * 2,
-                                                    height: Light.nodeRadius * 2)), with: .color(.white))
+            let rows = max(3, Int(ceil(size.height / Glass.rowHeight)))
+            let cellWidth = size.width / CGFloat(Glass.columns)
+            let cellHeight = size.height / CGFloat(rows)
+            func point(_ column: Int, _ row: Int) -> CGPoint {
+                let shift = row.isMultiple(of: 2) ? 0.0 : 0.35
+                return CGPoint(x: (CGFloat(column) + shift) * cellWidth,
+                               y: CGFloat(row) * cellHeight)
+            }
+            for row in 0..<rows {
+                for column in -1..<Glass.columns {
+                    let a = point(column, row)
+                    let b = point(column + 1, row)
+                    let c = point(column + 1, row + 1)
+                    let d = point(column, row + 1)
+                    let triangles = [[a, b, d], [b, c, d]]
+                    for (index, points) in triangles.enumerated() {
+                        var facet = Path()
+                        facet.addLines(points)
+                        facet.closeSubpath()
+                        let color = (row + column + index).isMultiple(of: 3) ? palette.accent : palette.light
+                        let bright = (row * 7 + column * 3 + index).isMultiple(of: 5)
+                        context.fill(facet, with: .linearGradient(
+                            Gradient(colors: [color.opacity(bright ? Glass.reflectionOpacity : 0.018), .clear]),
+                            startPoint: points[0], endPoint: points[2]))
+                        context.stroke(facet, with: .color(color.opacity(Glass.edgeOpacity)),
+                                       lineWidth: Glass.edgeWidth)
+                        if bright {
+                            var edge = Path()
+                            edge.move(to: points[0]); edge.addLine(to: points[1])
+                            context.stroke(edge, with: .linearGradient(
+                                Gradient(colors: [.clear, color.opacity(0.65), .clear]),
+                                startPoint: points[0], endPoint: points[1]), lineWidth: 0.7)
+                        }
+                    }
+                }
             }
         }
         .clipped()
