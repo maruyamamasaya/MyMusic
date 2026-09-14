@@ -22,6 +22,7 @@ final class LibraryGenreFilterTests: XCTestCase {
         )
 
         await store.restoreAndLoadIfNeeded()
+        await store.waitForPendingGenreFilter()
         XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id])
 
         store.setEnabledGenres(["Ambient"])

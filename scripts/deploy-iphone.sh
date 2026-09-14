@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DEVICE_NAME="${DEVICE_NAME:-Vspera}"
+DEVICE_NAME="${DEVICE_NAME:-Vespera}"
 SCHEME="${SCHEME:-MyMusic}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/MyMusic-iPhone-DerivedData}"

@@ -196,7 +196,8 @@ final class StationStoreIntegrationTests: XCTestCase {
             NavigationStack { StationResultView() }
                 .environment(fixture.store)
                 .environment(fixture.history)
-                .environment(fixture.preferences),
+                .environment(fixture.preferences)
+                .environment(fixture.listenLater),
             colorScheme: .dark
         )
         XCTAssertEqual(result.size, CGSize(width: 390, height: 844))
@@ -239,6 +240,7 @@ private final class StationFixture {
     let features: TrackFeatureStore
     let history: PlaybackHistoryStore
     let preferences = TrackPreferenceStore(persistence: StationPreferencePersistence())
+    let listenLater = ListenLaterStore(persistence: StationListenLaterPersistence())
     let player: PlayerStore
     let playlists = PlaylistStore(persistence: StationPlaylistPersistence())
     let store: StationStore
@@ -320,6 +322,11 @@ private actor StationPreferencePersistence: TrackPreferencePersistenceServicing 
 private actor StationPlaylistPersistence: PlaylistPersistenceServicing {
     func load() async throws -> [Playlist] { [] }
     func save(_ playlists: [Playlist]) async throws {}
+}
+
+private actor StationListenLaterPersistence: ListenLaterPersistenceServicing {
+    func load() async throws -> [ListenLaterEntry] { [] }
+    func save(_ entries: [ListenLaterEntry]) async throws {}
 }
 
 @MainActor private final class StationAudioPlayer: AudioPlayerServicing {

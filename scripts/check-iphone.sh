@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-DEVICE_NAME="${DEVICE_NAME:-Vspera}"
+DEVICE_NAME="${DEVICE_NAME:-Vespera}"
 
 info() {
     printf '[INFO] %s\n' "$1"

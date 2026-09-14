@@ -30,7 +30,8 @@ updated: 2026-09-14
 
 ### Apple Watch リモコン MVP
 
-- 2026-09-13のVespera／Comet実機デプロイは署名で停止。deploy scriptの全targetへの`-sdk iphoneos`強制を除去し、既存自動署名のprofile更新を許可したが、Xcodeが`No Accounts`とWatch profile不足を返した。Vesperaは接続・Developer Mode正常、Cometはpaired／Developer Mode enabledだがtunnel disconnected。両端末へのinstall／launchは未実施。再開にはXcodeの既存TeamアカウントとWatch接続の復旧が必要。
+- 2026-09-14にVespera（iPhone 17e）向けDebug実機build、install、launchが成功した。`MyMusicWatch.app`はiPhone Appの`Watch/`へ埋め込まれ、Xcodeのembedded binary validationまで成功している。続いてComet（Apple Watch SE）への直接install、インストール一覧でのBundle ID確認、launchも成功した。iPhoneとの実機間通信と画面操作は引き続き手動確認対象とする。
+- 2026-09-13のVespera／Comet実機デプロイは署名で停止していた。deploy scriptの全targetへの`-sdk iphoneos`強制を除去し、既存自動署名のprofile更新を許可した時点では、Xcodeが`No Accounts`とWatch profile不足を返していた。署名問題と両端末へのデプロイは2026-09-14に解消した。
 
 - Watchの再生画面右上から「通常」「お気に入り」「未発見再生」を選び、iPhoneの既存`preferenceWeightedShuffle`／`discoveryPlayTracks`で再生するBetaを追加した。通信中表示、対象曲なし・未読込・接続不可・再生失敗の表示と、成功時のsheet dismissalを行う。Watchへlibrary／履歴／選曲処理は複製しない。Simulator向けiPhone／Watch buildと通信契約の単体実行を確認。実機間通信と画面操作は未検証。
 
@@ -144,6 +145,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 
 ## テスト・検証の現状
 
+- 2026-09-14 のデプロイ前検証で、iPhone 17 Pro / iOS 26.5 SimulatorのXCTest 190件とSwift Testing 6件、Analyzer / Semantic unittest 38件、Analytics unittest 52件が成功した。全件実行で判明したGenre filter初期表示testの待機不足、Mood Station描画fixtureの`ListenLaterStore`不足、Track Preference旧履歴移行時の未確定な配列順序を修正した。実測結果と未実施項目は[デプロイ前検証チェックリスト](sessions/2026-09-14-device-validation.md)を正とする。
 - `MyMusicTests` に音楽特徴量の import / matching / persistence / presentation / Observation / layout を対象とする XCTest がある。
 - `analyzer/tests` に discovery、cache、schema、audio analysis、CLI を対象とする Python unittest がある。
 - Semantic v2の差分更新testでは、既存曲Skip、新規曲と新規subfolderだけのaudio read、再実行の全Skip、head再評価時の`audioReads=0`、更新・削除・中断再開、20,000行reconciliationを確認している。

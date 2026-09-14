@@ -123,14 +123,14 @@ Xcode を利用できない環境では、その制約と未検証範囲を明�
 
 ## iPhone 実機デプロイ（明示依頼時のみ）
 
-通常の開発・Simulator 検証には適用しません。「Vspera へデプロイ」など物理端末への導入を明示された場合のみ、次の順で行います。
+通常の開発・Simulator 検証には適用しません。「Vespera へデプロイ」など物理端末への導入を明示された場合のみ、次の順で行います。
 
 1. 作業ツリーを変更せず `git status` を確認する。
 2. `./scripts/check-iphone.sh` を実行する。
 3. check 成功後だけ `./scripts/deploy-iphone.sh` を実行する。
 4. project / workspace、scheme、product、Bundle Identifier、端末名と UDID、Build / Install / Launch の結果を報告する。
 
-既定端末名は完全一致の `Vspera` です。別名はユーザーが明示した場合のみ `DEVICE_NAME` で指定します。デプロイだけの依頼は、アプリ、UI、署名、識別子、Team、Deployment Target の変更を許可しません。未コミット変更を破棄せず、そのまま build します。失敗時は原因を先に報告し、安全で小さなスクリプト修正を超える変更の前に停止します。
+既定端末名は完全一致の `Vespera` です。別名はユーザーが明示した場合のみ `DEVICE_NAME` で指定します。デプロイだけの依頼は、アプリ、UI、署名、識別子、Team、Deployment Target の変更を許可しません。未コミット変更を破棄せず、そのまま build します。失敗時は原因を先に報告し、安全で小さなスクリプト修正を超える変更の前に停止します。
 
 ## 作業終了時の報告
 

@@ -43,7 +43,7 @@ final class TrackPreferenceStore {
                         playbackPreference: Self.clamped($0.playbackPreference),
                         favorite: $0.isFavorite
                     )
-                }
+                }.sorted(by: Self.sort)
                 try await persistence.save(loaded)
                 guard let verified = try await persistence.load(), verified == loaded.sorted(by: Self.sort) else {
                     throw CocoaError(.fileReadCorruptFile)
