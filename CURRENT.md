@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 
 # MyMusic の現在状態
@@ -38,7 +38,7 @@ updated: 2026-09-13
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
-- Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchからTrack単位で一度だけ要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。失敗・未収録時はplaceholderを維持する。
+- Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchから要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。一時的な要求／準備／転送／読込失敗は到達性復帰を含め最大3回再試行し、同一TrackのArtwork identifier変更も再転送対象にする。未収録時はplaceholderを維持する。
 - 同画面の音量はWatchKit標準の`WKInterfaceVolumeControl(origin: .companion)`をSwiftUIへbridgeして表示する。選択時のDigital Crownと現在音量表示はシステムに任せ、WatchConnectivity messageやWatch独自のvolume stateは追加しない。
 - Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上は音量、右端は32ptの詳細とし、音量も同じ32pt枠で見やすく表示する。続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。右上のシャッフルボタンから3種類の選択sheetを開く。
 - 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
@@ -76,7 +76,7 @@ updated: 2026-09-13
 
 - Files / iCloud Drive の複数フォルダ登録、security-scoped bookmark の復元、音源 scan と library cache。
 - ライブラリ同期の走査、metadata／Track Identity照合、cache保存、結合・派生モデル構築は専用actorでMainActor外かつ直列に実行する。UIへはフォルダ単位の完成結果だけを反映し、同期中も既存libraryと再生を維持する。
-- 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。ジャンル設定適用時の全ライブラリ再構築は専用actorで実行し、最新の結果だけをMainActorへ反映する。
+- 曲、アルバム、アーティスト、ジャンル、作曲者別の閲覧、ジャンル表示設定、非同期 sort / 段階表示。「曲」はmetadata検索、お気に入り／Good／Bad／再生済み／未再生／最近追加の単一filterと、曲名／Artist／Album／追加・更新日／再生回数／最近再生／長さ／ランダムのsortを持つ。全件filter／sortはMainActor外で行い、100曲ずつ表示する。ジャンル設定適用時の全ライブラリ再構築は専用actorで実行し、最新の結果だけをMainActorへ反映する。
 - アーティスト詳細のヘッダーは、そのアーティストのArtwork付きアルバムから最大4枚を画面表示ごとにランダム選択して2×2タイルで表示し、同じArtworkをぼかした色のにじみとライティングを背面へ重ねる。お気に入りアーティスト一覧はアルバムArtwork 1枚を円形表示し、同じ日は固定、日付が変わると選択を切り替える。
 - ジャンル表示設定では、ライブラリに「作業用BGM」が存在する場合は常に表示対象とし、選択画面に固定項目として表示する。個別設定、全解除、保存済み／旧プリセットからOFFにはできない。
 - iTunes / ID3のAlbum Artistと年を保持し、アルバムの統合・表示・検索に使用。検索画面では曲名、アルバム名、アーティスト名、アルバムアーティスト、年代を個別に選べ、225ms debounce、入力Task cancellation、専用actor検索、結果state保持を行う。
@@ -89,6 +89,10 @@ updated: 2026-09-13
 - 複数条件検索、home の各種再生入口、アクティビティから直接開ける再生分析／音楽史、再生回数・評価・履歴・analytics、calendar / yearly insights / discovery / memory navigation。
 
 ### Beta
+
+- **Playlist管理改善**: 全タグと使用プレイリスト数を確認し、タグの名称変更・全体削除・通常／作業用Playlistへの割り当てを行う専用ページを追加した。曲をPlaylistへ登録する追加先選択画面では、従来の名前検索とPlaylistタグ絞り込みを維持し、最後に選択したタグを通常／作業用別に保存して次回表示時に復元する。元Playlistと既存queue snapshotの保存境界は変更しない。
+
+- **ホームのチューニング表示**: 見出し、現在設定、横スクロールするプリセットのカプセルUIを維持し、下層のsurface背景と外枠だけを撤去して他のホームセクションと同じ余白構成へ揃えた。
 
 - **あとで聴く一時リスト**: 通常の再生中画面、ハイライト再生画面、共通の曲選択行で、お気に入りの右にある丸い＋から曲を追加する。曲選択行に表示だけされていた非操作の三点アイコンは削除した。追加時の曲別再生回数を`listen-later.json`へ保存し、その後に既存の再生回数が1以上増えた時点で自動的にリストから削除する。ホーム「マイミュージック」では未発見再生の右隣、プレイリスト画面では作業用プレイリストの下から一覧を開ける。一覧は順再生／シャッフル、曲単位の再生と手動削除に対応し、通常Playlistのモデルやqueue snapshotは変更しない。App外バックアップにも含める。
 
@@ -110,7 +114,7 @@ updated: 2026-09-13
 - **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、Preferenceだけは厳格検証付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。解析データのiOS再Importは対象外。
 - **Analytics用JSON書き出し導線**: 設定の「データ管理」から、PC版Analyticsが対応する8種類の既存JSONを個別共有できるほか、8ファイルを日付付きZIPへまとめて共有・Files保存できる。オンライン同期や自動送信は行わない。
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を件数上限なく逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
-- **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
+- **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。専用タグ管理画面では全Playlistを横断して名称変更・削除・割り当てを行う。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
 - **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。開始／終了位置に共通の1秒戻る操作と、登録成功時のインラインフィードバックを持つ。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
@@ -180,7 +184,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - Playback History SQLite移行とPlayback Event FoundationのXCTestは追加済みだが未実行。Xcode build、Simulator、実機でのmigration／長期運用／ディスク障害検証、Restore UI、月次集約、生event retentionは未検証または将来拡張である。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
-- プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。タグの一括名称変更、色、階層は未実装。
+- プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。色、階層、複数タグのAND／OR条件は未実装。
 - `MetadataService` は `.m4a` container を AAC と表示し、ALAC の stream-level 判別は未実装。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。
 - 既存ライブラリキャッシュはそのままdecodeできる。Album Artistを旧キャッシュへ補完するには一度「再スキャン」が必要で、metadata revisionにより旧Trackだけを一度再抽出する。

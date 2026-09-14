@@ -191,6 +191,11 @@ private struct PlaylistManagementView: View {
                 } else {
                     Menu {
                         Button(newPlaylistLabel, systemImage: "plus") { presentCreatePlaylist() }
+                        NavigationLink {
+                            PlaylistTagManagementView()
+                        } label: {
+                            Label("タグを管理", systemImage: "tag")
+                        }
                         Button("プレイリストを選択", systemImage: "checkmark.circle") {
                             isSelecting = true
                         }

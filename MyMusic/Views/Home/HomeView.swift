@@ -523,14 +523,7 @@ private struct HomeTuningSection: View {
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
-        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .themeSurface()
-        .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(.primary.opacity(0.08), lineWidth: 0.5)
-        }
-        .padding(.horizontal, 16)
         .alert("設定しました", isPresented: appliedPresetIsPresented) {
             Button("OK", role: .cancel) { appliedPresetName = nil }
         } message: {

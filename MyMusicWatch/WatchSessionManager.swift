@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Observation
 @preconcurrency import WatchConnectivity
 
@@ -12,6 +13,9 @@ final class WatchSessionManager: NSObject {
 
     private let session: WCSession?
     private var requestedArtworkTrackID: UUID?
+    private var artworkRequestAttemptCount = 0
+    private var artworkRequestTimeoutTask: Task<Void, Never>?
+    private static let maximumArtworkRequestAttempts = 3
 
     override init() {
         session = WCSession.isSupported() ? .default : nil
@@ -102,23 +106,62 @@ final class WatchSessionManager: NSObject {
         if state.trackID != playbackState.trackID {
             artworkData = nil
             requestedArtworkTrackID = nil
+            artworkRequestAttemptCount = 0
+            artworkRequestTimeoutTask?.cancel()
         }
         playbackState = state
         errorMessage = nil
-        if state.hasArtwork,
-           let trackID = state.trackID,
-           artworkData == nil,
-           requestedArtworkTrackID != trackID,
-           session?.activationState == .activated,
-           session?.isReachable == true {
-            requestedArtworkTrackID = trackID
-            send(.requestArtwork)
-        }
+        requestArtworkIfNeeded()
     }
 
     private func applyArtwork(_ data: Data, trackID: UUID) {
-        guard playbackState.trackID == trackID, playbackState.hasArtwork else { return }
+        guard playbackState.trackID == trackID,
+              playbackState.hasArtwork,
+              CGImageSourceCreateWithData(data as CFData, nil) != nil else {
+            artworkRequestFailed(for: trackID)
+            return
+        }
+        artworkRequestTimeoutTask?.cancel()
         artworkData = data
+    }
+
+    private func requestArtworkIfNeeded() {
+        guard let trackID = playbackState.trackID,
+              playbackState.hasArtwork,
+              artworkData == nil,
+              requestedArtworkTrackID != trackID,
+              artworkRequestAttemptCount < Self.maximumArtworkRequestAttempts,
+              let session,
+              session.activationState == .activated,
+              session.isReachable else { return }
+        requestedArtworkTrackID = trackID
+        artworkRequestAttemptCount += 1
+        session.sendMessage(
+            WatchPlaybackState.commandMessage(.requestArtwork),
+            replyHandler: { [weak self] message in
+                Task { @MainActor in self?.apply(message) }
+            },
+            errorHandler: { [weak self] _ in
+                Task { @MainActor in self?.artworkRequestFailed(for: trackID) }
+            }
+        )
+        artworkRequestTimeoutTask?.cancel()
+        artworkRequestTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            self?.artworkRequestFailed(for: trackID)
+        }
+    }
+
+    private func artworkRequestFailed(for trackID: UUID) {
+        guard playbackState.trackID == trackID, artworkData == nil else { return }
+        requestedArtworkTrackID = nil
+        artworkRequestTimeoutTask?.cancel()
+        artworkRequestTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.requestArtworkIfNeeded()
+        }
     }
 }
 
@@ -140,7 +183,11 @@ extension WatchSessionManager: WCSessionDelegate {
         Task { @MainActor [weak self] in
             let canSend = session.activationState == .activated && session.isReachable
             self?.isPhoneReachable = canSend
-            if canSend { self?.send(.requestState) }
+            if canSend {
+                self?.requestedArtworkTrackID = nil
+                self?.artworkRequestAttemptCount = 0
+                self?.send(.requestState)
+            }
         }
     }
 

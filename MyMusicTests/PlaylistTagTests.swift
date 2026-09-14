@@ -80,6 +80,27 @@ final class PlaylistTagStoreTests: XCTestCase {
         XCTAssertEqual(saved.first?.tags, ["latest"])
     }
 
+    func testGlobalRenameAssignmentAndDeleteUpdateAllPlaylists() async {
+        let persistence = PlaylistMemoryPersistence()
+        let store = PlaylistStore(persistence: persistence)
+        let first = store.createPlaylist(named: "First")!
+        let second = store.createPlaylist(named: "Second")!
+        store.setTags(["夜"], for: first)
+        store.setTags(["夜", "集中"], for: second)
+
+        store.renameTag("夜", to: "Night")
+        XCTAssertEqual(store.playlist(id: first)?.tags, ["Night"])
+        XCTAssertEqual(store.playlist(id: second)?.tags, ["Night", "集中"])
+
+        store.setTag("集中", isAssigned: true, for: first)
+        XCTAssertEqual(store.playlist(id: first)?.tags, ["Night", "集中"])
+
+        store.deleteTag("Night")
+        XCTAssertEqual(store.playlist(id: first)?.tags, ["集中"])
+        XCTAssertEqual(store.playlist(id: second)?.tags, ["集中"])
+        await store.waitForPendingSave()
+    }
+
     func testEditingPlaylistDuringPlaybackDoesNotMutateActiveQueue() async {
         let playlistStore = PlaylistStore(persistence: PlaylistMemoryPersistence())
         let first = makeTrack("First")

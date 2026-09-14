@@ -17,7 +17,10 @@ class DesktopConfigurationTests(unittest.TestCase):
             environment={"LOCALAPPDATA": r"C:\Users\tester\AppData\Local"},
             home=Path(r"C:\Users\tester"),
         )
-        self.assertEqual(root, Path(r"C:\Users\tester\AppData\Local\MyMusic Analytics"))
+        self.assertEqual(
+            str(root).replace("\\", "/"),
+            "C:/Users/tester/AppData/Local/MyMusic Analytics",
+        )
 
     def test_macos_data_root_uses_application_support(self):
         root = desktop_data_root(system="Darwin", environment={}, home=Path("/Users/tester"))

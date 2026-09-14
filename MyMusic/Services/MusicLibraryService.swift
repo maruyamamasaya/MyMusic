@@ -122,7 +122,7 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
         fileImportService: FileImportServicing = FileImportService(),
         metadataService: MetadataServicing,
         identityService: TrackIdentityServicing,
-        checkpointService: LibraryScanCheckpointServicing = LibraryScanCheckpointService(),
+        checkpointService: LibraryScanCheckpointServicing,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.fileImportService = fileImportService
@@ -130,6 +130,21 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
         self.identityService = identityService
         self.checkpointService = checkpointService
         self.now = now
+    }
+
+    @MainActor convenience init(
+        fileImportService: FileImportServicing = FileImportService(),
+        metadataService: MetadataServicing,
+        identityService: TrackIdentityServicing,
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.init(
+            fileImportService: fileImportService,
+            metadataService: metadataService,
+            identityService: identityService,
+            checkpointService: LibraryScanCheckpointService(),
+            now: now
+        )
     }
 
     @MainActor convenience init() {

@@ -94,6 +94,8 @@ Library View → LibraryStore → FileImportService
 
 `LibraryStore`は表示対象ライブラリを反映するとき、`WorkLibraryCatalogService`でジャンルに「作業用BGM」が指定された曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として同時に更新する。再生時間は分類に使わない。`WorkLibraryView`はこの派生catalogだけを読み、通常曲を専用一覧へ混在させない。
 
+`SongsView`の検索・filter・sortはTrack、Track Preference、Playback HistoryのMainActor上snapshotを取得し、`Task.detached`内のpureな`arrange`で一括処理する。requestには各Storeのrevisionを含め、処理中に条件や正本が変わった古い結果は反映しない。UIへは先頭100曲から段階表示し、一覧scrollで全件Viewを同時生成しない。filter／sortは表示と、その表示から開始するqueueだけへ適用し、Library、履歴、Preferenceの正本を変更しない。
+
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 
 `LibrarySyncService` actorはscanを1件ずつ直列化し、Track Identityのscan sessionとLibrary cache更新の競合を防ぐ。ファイル走査、差分判定、metadata／Identity照合、cache保存、複数folderの重複排除と`MusicLibrary`派生モデル構築はMainActor外で行う。`LibraryStore`は同期状態と完成snapshotの反映だけをMainActorで行い、曲単位ではObservable stateを更新しない。同期中は現在の表示libraryを保持するため、既存Track IDを参照する再生・履歴・Preference・Playlistは同期処理から独立して継続する。
@@ -160,7 +162,7 @@ music root recursive scan
 
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
-- `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
+- `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。専用tag管理画面の名称変更・削除は全Playlistをmemory上で一括更新して1 snapshotとして保存し、割り当ては既存`setTags`境界へ合流する。曲の追加先選択画面のtag filterはpresentation stateとしてUserDefaultsへregular／work別に保存し、存在しないtagになった場合は解除する。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
 - `PlaybackHistoryStore` は再生回数、正式なPlayback Event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。曲Favoriteと`playbackPreference`の正本は`TrackPreferenceStore`であり、Historyの旧fieldはmigration互換用に限る。分析画面から1曲の履歴をリセットしてもPreferenceは変更しない。
 - `LibraryCleanupCandidateService` は通常曲と履歴snapshotを読み、終了理由を持つ直近20件までのPlayback Eventを評価する。最低5件、`user_skipped`率50%以上、平均completion ratio 10%以下をすべて満たす曲だけを候補にする。既存`playCount`、直接選択、Good / Badは判定に使わず、終了理由のない旧eventも誤分類防止のため除外する。途中スキップ率降順、次に平均再生率昇順、同数時は最終再生の新しい順に並べ、履歴・評価・飽き度・shuffle非表示を変更しない。
 ### 再生履歴行動スコアと自動選曲
@@ -195,7 +197,7 @@ music root recursive scan
 
 通信契約は`WatchPlaybackMessage`に集約し、commandとversion付きの再生状態をProperty List互換dictionaryへ変換する。iPhoneの`PlayerStore`と`TrackPreferenceStore`だけが状態の正本であり、Watchのボタン操作では楽観的に表示状態を変更しない。iPhoneは到達中の即時messageに加え、最新状態を`updateApplicationContext`へ保存するため、一時的な非到達から復帰したWatchも同期できる。version 1 stateへ追加したfavorite／preference／Artwork有無はoptional decodeとし、旧version 1 payloadを維持する。
 
-Artwork本体はstateへ含めない。Watchが新しいTrackのArtworkを一度だけ要求し、`WatchArtworkPreparationService` actorが既存`ArtworkService`のデータをアスペクト比を維持した最大512px・JPEG品質0.82へ変換する。元画像の最大辺が512px未満なら拡大しない。iPhoneの`WatchConnectivityService`が一時fileを`transferFile`し、完了時に削除する。Watchは現在Track分だけをmemoryに保持し、Track変更時に破棄するため永続cacheを増やさない。Artwork失敗はstate／command経路へ影響させない。
+Artwork本体はstateへ含めない。Watchが現在TrackのArtworkを要求し、`WatchArtworkPreparationService` actorが既存`ArtworkService`のデータをアスペクト比を維持した最大512px・JPEG品質0.82へ変換する。元画像の最大辺が512px未満なら拡大しない。iPhoneの`WatchConnectivityService`が一時fileを`transferFile`し、完了時に削除する。要求送信、画像準備、file転送、Watch側読込の一時失敗はTrack単位で最大3回再試行し、到達性復帰時も要求済み状態を解除する。送信管理keyはTrack IDとArtwork identifierを組み合わせ、同一Trackの画像更新も再送する。Watchは現在Track分だけをmemoryに保持し、Track変更時に破棄するため永続cacheを増やさない。Artwork失敗はstate／command経路へ影響させない。
 
 Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolumeControl`の`.companion` sourceをSwiftUIへbridgeする。これはペアリング中iPhoneのシステム出力音量をDigital Crownで制御する経路であり、`PlayerStore`、`AudioPlayerService`の内部mixer gain、WatchConnectivity契約は変更しない。画面をscroll containerにせず、volume controlを明示選択した時だけCrown focusを得る。
 

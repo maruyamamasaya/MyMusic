@@ -6,15 +6,16 @@ struct AddToPlaylistSheet: View {
     let track: Track
 
     @State private var isCreatingPlaylist = false
-    @State private var selectedTag: String?
     @State private var searchText = ""
+    @AppStorage("playlist.addDestination.regularTagFilter") private var regularTagFilter = ""
+    @AppStorage("playlist.addDestination.workTagFilter") private var workTagFilter = ""
 
     private var playlistKind: PlaylistKind {
         track.isEligibleForWorkPlayback ? .work : .regular
     }
 
     private var compatiblePlaylists: [Playlist] {
-        playlistStore.playlists(compatibleWith: track, tagged: selectedTag).filter {
+        playlistStore.playlists(compatibleWith: track, tagged: selectedTagValue).filter {
             searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)
         }
     }
@@ -28,7 +29,7 @@ struct AddToPlaylistSheet: View {
             List {
                 if !availableTags.isEmpty {
                     Section {
-                        PlaylistTagFilterBar(tags: availableTags, selectedTag: $selectedTag)
+                        PlaylistTagFilterBar(tags: availableTags, selectedTag: selectedTagBinding)
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
                     }
@@ -84,11 +85,33 @@ struct AddToPlaylistSheet: View {
                 }
             }
             .onChange(of: availableTags) { _, tags in
-                if let selectedTag {
-                    self.selectedTag = tags.first {
-                        PlaylistTagRules.contains([$0], tag: selectedTag)
-                    }
+                if let selectedTagValue,
+                   !tags.contains(where: { PlaylistTagRules.contains([$0], tag: selectedTagValue) }) {
+                    storedTagFilter = ""
                 }
+            }
+        }
+    }
+
+    private var selectedTagValue: String? {
+        let value = storedTagFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    private var selectedTagBinding: Binding<String?> {
+        Binding(
+            get: { selectedTagValue },
+            set: { storedTagFilter = $0 ?? "" }
+        )
+    }
+
+    private var storedTagFilter: String {
+        get { playlistKind == .work ? workTagFilter : regularTagFilter }
+        nonmutating set {
+            if playlistKind == .work {
+                workTagFilter = newValue
+            } else {
+                regularTagFilter = newValue
             }
         }
     }

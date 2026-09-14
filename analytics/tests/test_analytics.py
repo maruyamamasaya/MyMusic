@@ -459,7 +459,11 @@ class AnalyticsAPITests(unittest.TestCase):
 
     def test_tracks_periods_custom_dates_and_unplayed_library_tracks(self):
         now = datetime.now(timezone(timedelta(hours=9)))
-        dates = [now, now - timedelta(days=10), now - timedelta(days=40)]
+        legacy = min(
+            now - timedelta(days=40),
+            datetime(2026, 8, 31, 12, tzinfo=timezone(timedelta(hours=9))),
+        )
+        dates = [now, now - timedelta(days=10), legacy]
         self.upload(library_document([
             library_track("track-1"),
             library_track("track-unplayed", title="Never Played", artist="Quiet Artist"),
@@ -473,7 +477,7 @@ class AnalyticsAPITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/tracks?period=7d").json()["tracks"][0]["playCount"], 1)
         self.assertEqual(self.client.get("/api/tracks?period=30d").json()["tracks"][0]["playCount"], 2)
         self.assertEqual(self.client.get("/api/tracks?period=all").json()["tracks"][0]["playCount"], 3)
-        day = dates[1].date().isoformat()
+        day = legacy.date().isoformat()
         custom = self.client.get(
             f"/api/tracks?period=custom&startDate={day}&endDate={day}"
         ).json()["tracks"]

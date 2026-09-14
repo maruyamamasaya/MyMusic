@@ -75,6 +75,35 @@ final class PlaylistStore {
         update(playlistID) { $0.tags = normalizedTags }
     }
 
+    func setTag(_ tag: String, isAssigned: Bool, for playlistID: Playlist.ID) {
+        guard let normalizedTag = PlaylistTagRules.normalizedTag(tag) else { return }
+        update(playlistID) { playlist in
+            if isAssigned {
+                playlist.tags = PlaylistTagRules.normalizedTags(playlist.tags + [normalizedTag])
+            } else {
+                let key = PlaylistTagRules.comparisonKey(for: normalizedTag)
+                playlist.tags.removeAll { PlaylistTagRules.comparisonKey(for: $0) == key }
+            }
+        }
+    }
+
+    func renameTag(_ tag: String, to newName: String) {
+        guard let normalizedName = PlaylistTagRules.normalizedTag(newName) else { return }
+        let sourceKey = PlaylistTagRules.comparisonKey(for: tag)
+        updateTagsAcrossPlaylists { tags in
+            tags.map {
+                PlaylistTagRules.comparisonKey(for: $0) == sourceKey ? normalizedName : $0
+            }
+        }
+    }
+
+    func deleteTag(_ tag: String) {
+        let key = PlaylistTagRules.comparisonKey(for: tag)
+        updateTagsAcrossPlaylists { tags in
+            tags.filter { PlaylistTagRules.comparisonKey(for: $0) != key }
+        }
+    }
+
     func addTrack(_ track: Track, to playlistID: Playlist.ID) {
         update(playlistID) { playlist in
             guard playlist.kind.accepts(track), !playlist.trackIDs.contains(track.id) else { return }
@@ -224,6 +253,21 @@ final class PlaylistStore {
         change(&playlists[index])
         guard playlists[index] != previous else { return }
         playlists[index].updatedAt = Date()
+        homeContentRevision &+= 1
+        persist()
+    }
+
+    private func updateTagsAcrossPlaylists(_ transform: ([String]) -> [String]) {
+        let now = Date()
+        var didChange = false
+        for index in playlists.indices {
+            let tags = PlaylistTagRules.normalizedTags(transform(playlists[index].tags))
+            guard tags != playlists[index].tags else { continue }
+            playlists[index].tags = tags
+            playlists[index].updatedAt = now
+            didChange = true
+        }
+        guard didChange else { return }
         homeContentRevision &+= 1
         persist()
     }
