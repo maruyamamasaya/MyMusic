@@ -335,23 +335,81 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
     }
 
     private func snapshotDatabase(from source: URL, to destination: URL) throws {
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appending(path: "MyMusic-ExternalBackup-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let localSnapshot = temporaryDirectory.appending(path: "playback-history.sqlite3")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try createDatabaseSnapshot(from: source, to: localSnapshot)
+        try checkLocalDatabase(localSnapshot)
+        try fileManager.copyItem(at: localSnapshot, to: destination)
+    }
+
+    /// SQLite must only operate on a local file. A security-scoped Files destination may
+    /// be backed by a File Provider that supports ordinary copies but not SQLite locking.
+    private func createDatabaseSnapshot(from source: URL, to destination: URL) throws {
         var sourceDB: OpaquePointer?, destinationDB: OpaquePointer?
-        guard sqlite3_open_v2(source.path, &sourceDB, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
-              sqlite3_open_v2(destination.path, &destinationDB, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
-              let sourceDB, let destinationDB else { throw ExternalBackupError.invalidDatabase }
+        let sourceOpenResult = sqlite3_open_v2(source.path, &sourceDB, SQLITE_OPEN_READONLY, nil)
+        let destinationOpenResult = sqlite3_open_v2(destination.path, &destinationDB, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil)
+        guard sourceOpenResult == SQLITE_OK,
+              destinationOpenResult == SQLITE_OK,
+              let sourceDB, let destinationDB else {
+            if let sourceDB { sqlite3_close(sourceDB) }
+            if let destinationDB { sqlite3_close(destinationDB) }
+            throw ExternalBackupError.invalidDatabase
+        }
         defer { sqlite3_close(sourceDB); sqlite3_close(destinationDB) }
+        sqlite3_busy_timeout(sourceDB, 5_000)
+        sqlite3_busy_timeout(destinationDB, 5_000)
         guard let backup = sqlite3_backup_init(destinationDB, "main", sourceDB, "main") else { throw ExternalBackupError.invalidDatabase }
-        defer { sqlite3_backup_finish(backup) }
-        guard sqlite3_backup_step(backup, -1) == SQLITE_DONE else { throw ExternalBackupError.invalidDatabase }
+        var result = SQLITE_OK
+        var lockRetries = 0
+        repeat {
+            result = sqlite3_backup_step(backup, 256)
+            if result == SQLITE_BUSY || result == SQLITE_LOCKED {
+                guard lockRetries < 50 else { break }
+                lockRetries += 1
+                sqlite3_sleep(100)
+            } else {
+                lockRetries = 0
+            }
+        } while result == SQLITE_OK || result == SQLITE_BUSY || result == SQLITE_LOCKED
+        let finishResult = sqlite3_backup_finish(backup)
+        guard result == SQLITE_DONE, finishResult == SQLITE_OK else { throw ExternalBackupError.invalidDatabase }
+        // Online backup copies the source header's WAL mode. A standalone snapshot has
+        // no companion WAL/SHM files, so normalize it before read-only integrity checks.
+        guard sqlite3_exec(destinationDB, "PRAGMA journal_mode = DELETE", nil, nil, nil) == SQLITE_OK else {
+            throw ExternalBackupError.invalidDatabase
+        }
     }
 
     private func checkDatabase(_ url: URL) throws {
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appending(path: "MyMusic-ExternalBackup-Validation-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let localCopy = temporaryDirectory.appending(path: "playback-history.sqlite3")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+        do {
+            try fileManager.copyItem(at: url, to: localCopy)
+        } catch {
+            throw ExternalBackupError.invalidDatabase
+        }
+        try checkLocalDatabase(localCopy)
+    }
+
+    private func checkLocalDatabase(_ url: URL) throws {
         var db: OpaquePointer?
-        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else { throw ExternalBackupError.invalidDatabase }
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
+            if let db { sqlite3_close(db) }
+            throw ExternalBackupError.invalidDatabase
+        }
         defer { sqlite3_close(db) }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, "PRAGMA integrity_check", -1, &statement, nil) == SQLITE_OK, let statement else { throw ExternalBackupError.invalidDatabase }
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW, String(cString: sqlite3_column_text(statement, 0)) == "ok" else { throw ExternalBackupError.invalidDatabase }
+        let stepResult = sqlite3_step(statement)
+        let resultText = sqlite3_column_text(statement, 0).map { String(cString: $0) }
+        guard stepResult == SQLITE_ROW, resultText == "ok" else { throw ExternalBackupError.invalidDatabase }
     }
 }

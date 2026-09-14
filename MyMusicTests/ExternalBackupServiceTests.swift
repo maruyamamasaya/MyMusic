@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import MyMusic
 
@@ -41,6 +42,35 @@ struct ExternalBackupServiceTests {
 
         #expect(FileManager.default.fileExists(atPath: fixture.latest.appending(path: "manifest.json").path))
         #expect(FileManager.default.fileExists(atPath: fixture.backupRoot.appending(path: "previous/manifest.json").path))
+    }
+
+    @Test func liveWALDatabaseIsSnapshottedAndValidated() throws {
+        let fixture = try Fixture()
+        try FileManager.default.createDirectory(at: fixture.applicationRoot, withIntermediateDirectories: true)
+        let databaseURL = fixture.applicationRoot.appending(path: "playback-history.sqlite3")
+        var database: OpaquePointer?
+        #expect(sqlite3_open(databaseURL.path, &database) == SQLITE_OK)
+        let openedDatabase = try #require(database)
+        defer { sqlite3_close(openedDatabase) }
+        #expect(sqlite3_exec(openedDatabase, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
+        #expect(sqlite3_exec(openedDatabase, "CREATE TABLE playback_test(value TEXT NOT NULL)", nil, nil, nil) == SQLITE_OK)
+        #expect(sqlite3_exec(openedDatabase, "INSERT INTO playback_test VALUES('kept')", nil, nil, nil) == SQLITE_OK)
+
+        let manifest = try fixture.service.createBackup(at: fixture.destination)
+
+        #expect(manifest.files.contains { $0.path == "playback-history.sqlite3" })
+        #expect(try fixture.service.validateBackup(at: fixture.latest) == manifest)
+        let backupURL = fixture.latest.appending(path: "playback-history.sqlite3")
+        var backupDatabase: OpaquePointer?
+        #expect(sqlite3_open_v2(backupURL.path, &backupDatabase, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
+        let openedBackup = try #require(backupDatabase)
+        defer { sqlite3_close(openedBackup) }
+        var statement: OpaquePointer?
+        #expect(sqlite3_prepare_v2(openedBackup, "SELECT value FROM playback_test", -1, &statement, nil) == SQLITE_OK)
+        let preparedStatement = try #require(statement)
+        defer { sqlite3_finalize(preparedStatement) }
+        #expect(sqlite3_step(preparedStatement) == SQLITE_ROW)
+        #expect(String(cString: sqlite3_column_text(preparedStatement, 0)) == "kept")
     }
 
     @Test func invalidNewSnapshotDoesNotReplaceLatest() throws {

@@ -23,6 +23,6 @@
 
 ## 形式と安全性
 
-`manifest.json` はformat/schema version、アプリ版、ISO 8601作成日時、相対pathとbyte数を持つ。SQLiteはonline backup APIで一貫したsnapshotを作り、JSON、property list、SQLite integrity、曲別調整ファイル名のUUIDを適用前に検証する。stagingを検証した成功時だけ`latest`を入れ替え、旧`latest`を`previous`へ回す。
+`manifest.json` はformat/schema version、アプリ版、ISO 8601作成日時、相対pathとbyte数を持つ。SQLiteはアプリのローカル一時領域でonline backup APIによる一貫したsnapshotを作り、単体ファイルで検証できるようWALからDELETE journalへ正規化してから、通常ファイルとしてFiles / iCloud Driveへcopyする。外部File Provider上ではSQLiteを直接開かない。JSON、property list、SQLite integrity、曲別調整ファイル名のUUIDを適用前に検証する。stagingを検証した成功時だけ`latest`を入れ替え、旧`latest`を`previous`へ回す。
 
 Restoreは選択フォルダ内の`latest`（または世代フォルダそのもの）を検証し、Application Supportと同じvolume上のpending directoryへ展開・再検証する。次回プロセス起動時、StoreやSQLiteを開く前に現データをrollback directoryへ移してpendingを正本へrenameし、失敗時は元へ戻す。再起動後に音楽フォルダを再選択・scanすると、復元したIdentity registryを使ってTrack ID参照データへ再接続する。一致しないIDは各Storeに残り、別曲へ推測接続しない。
