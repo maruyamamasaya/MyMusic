@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bounded procedural geometry; no audio operations, assets, random allocation or full-screen blur.
+/// Lightweight sphere / Blue Cosmos night-sky fallback when Metal is unavailable.
 struct VisualWorldScene: View {
     let theme: AppTheme
     let primary: Color
@@ -14,178 +14,132 @@ struct VisualWorldScene: View {
     var body: some View {
         Canvas { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
-            var light = context
-            light.blendMode = .plusLighter
-            light.opacity = subdued ? 0.28 : (theme == .simpleDark ? 0.62 : 1)
-            atmosphere(context: &light, size: size)
-            switch theme {
-            case .livingAurora, .simpleDark: ribbons(context: &light, size: size)
-            case .pulseNeon: portals(context: &light, size: size)
-            case .blueCosmos: orbits(context: &light, size: size)
+            if theme == .blueCosmos {
+                nightSky(context: &context, size: size)
+                return
+            }
+            if theme == .pulseNeon {
+                lightGates(context: &context, size: size)
+                return
+            }
+            let radius = min(size.width, size.height) * 0.45
+            let center = CGPoint(x: size.width * 0.5, y: size.height * 0.43)
+            let sphere = Path(ellipseIn: CGRect(x: center.x-radius, y: center.y-radius, width: radius*2, height: radius*2))
+            let highlight = CGPoint(x: center.x-radius*0.35, y: center.y-radius*0.4)
+            context.opacity = subdued ? 0.4 : 1
+            for side in 0..<2 {
+                let source = CGPoint(x: center.x + radius * (side == 0 ? -0.35 : 0.35), y: center.y)
+                context.fill(Path(ellipseIn: CGRect(x: source.x-radius*1.7, y: source.y-radius*1.7,
+                                                    width: radius*3.4, height: radius*3.4)),
+                             with: .radialGradient(Gradient(colors: [(side == 0 ? primary : secondary).opacity(0.3), .clear]),
+                                                   center: source, startRadius: radius*0.5, endRadius: radius*1.7))
+            }
+            context.fill(sphere, with: .radialGradient(Gradient(colors: [primary.opacity(0.8), secondary.opacity(0.35), .black]),
+                                                      center: highlight, startRadius: 0, endRadius: radius*1.7))
+            context.clip(to: sphere)
+            context.blendMode = .plusLighter
+            for index in 0..<160 {
+                let seed = Double(index) * 2.399963
+                let z = 1 - 2 * (Double(index)+0.5)/160
+                let radial = sqrt(max(0,1-z*z))
+                let angle = seed + motion.time * 0.3
+                let x = radial*cos(angle), depth = radial*sin(angle)
+                let point = CGPoint(x: center.x+x*radius*0.94, y: center.y+z*radius*0.94)
+                let dotRadius = 0.5 + (depth+1)*0.65
+                let alpha = (0.12+(depth+1)*0.25) * (0.6+motion.level*0.4)
+                let dot = Path(ellipseIn: CGRect(x: point.x-dotRadius, y: point.y-dotRadius,
+                                                width: dotRadius*2, height: dotRadius*2))
+                context.fill(dot, with: .color((index%4 == 0 ? .white : primary).opacity(alpha)))
             }
         }
         .accessibilityHidden(true)
     }
 
-    private var t: Double { motion.time }
-    private var intensity: Double { 0.45 + brightness * 0.2 + motion.level * 0.45 + motion.impulse * 0.2 }
-
-    private func atmosphere(context: inout GraphicsContext, size: CGSize) {
-        let w = size.width, h = size.height
-        let centers = [
-            CGPoint(x: w * (0.4 + sin(t * 0.3) * 0.22 + motion.balance * 0.12), y: h * 0.35),
-            CGPoint(x: w * (0.65 + cos(t * 0.23) * 0.2), y: h * 0.65)
-        ]
-        for i in 0..<2 {
-            let radius = w * (0.8 + motion.width * 0.35)
-            context.fill(Path(ellipseIn: CGRect(x: centers[i].x - radius, y: centers[i].y - radius,
-                                               width: radius * 2, height: radius * 2)),
-                         with: .radialGradient(Gradient(colors: [(i == 0 ? primary : secondary).opacity(0.22 * intensity), .clear]),
-                                               center: centers[i], startRadius: 0, endRadius: radius))
-        }
-    }
-
-    private func ribbonPoint(_ u: Double, strand: Double, bundle: Int, size: CGSize) -> CGPoint {
-        let w = size.width, h = size.height
-        let offset = Double(bundle) * 1.65
-        let wave = sin(u * 5.0 + t * 0.63 + offset)
-        let fold = sin(u * 10.5 - t * 0.85 + offset) * (0.035 + energy * 0.035)
-        let separation = strand * (0.025 + 0.08 * pow(sin(u * .pi + t * 0.22), 2))
-        let expansion = 1 + motion.width * 0.3 + motion.impulse * 0.13
-        return CGPoint(
-            x: w * (-0.28 + u * 1.56 + motion.balance * 0.13),
-            y: h * (0.43 + wave * 0.20 * expansion + fold + separation + Double(bundle - 1) * 0.065)
-        )
-    }
-
-    private func ribbons(context: inout GraphicsContext, size: CGSize) {
-        let bundles = theme == .simpleDark ? 2 : 3
-        for bundle in 0..<bundles {
-            for strand in 0..<12 {
-                let lane = Double(strand) / 11 - 0.5
-                var path = Path()
-                for step in 0...72 {
-                    let point = ribbonPoint(Double(step) / 72, strand: lane, bundle: bundle, size: size)
-                    if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                }
-                let colors = bundle == 1 ? [secondary, primary] : [primary, secondary]
-                let shading = GraphicsContext.Shading.linearGradient(
-                    Gradient(colors: [colors[0].opacity(0.05), colors[0], colors[1], colors[1].opacity(0.05)]),
-                    startPoint: CGPoint(x: 0, y: size.height * 0.3),
-                    endPoint: CGPoint(x: size.width, y: size.height * 0.65))
-                if strand % 4 == 0 {
-                    var halo = context
-                    halo.opacity *= 0.08 * intensity
-                    halo.stroke(path, with: shading, style: StrokeStyle(lineWidth: 19 + motion.level * 14, lineCap: .round))
-                    halo.opacity *= 1.6
-                    halo.stroke(path, with: shading, lineWidth: 6)
-                }
-                var filament = context
-                filament.opacity *= (0.25 + Double(strand % 4) * 0.12) * intensity
-                filament.stroke(path, with: shading, lineWidth: strand % 3 == 0 ? 1.6 : 0.7)
-                let head = (t * 0.16 + Double(strand) * 0.041 + Double(bundle) * 0.29).truncatingRemainder(dividingBy: 1)
-                filament.opacity *= 0.75
-                filament.stroke(path.trimmedPath(from: max(head - 0.1, 0), to: head),
-                                with: .color(.white.opacity(0.65)), lineWidth: 1)
+    private func lightGates(context: inout GraphicsContext, size: CGSize) {
+        context.opacity = subdued ? 0.4 : 1
+        context.blendMode = .plusLighter
+        let unit = min(size.width,size.height)*0.5
+        let center = CGPoint(x: size.width*0.5, y: size.height*0.43)
+        for index in 0..<8 {
+            let phase = (Double(index)+0.5)/8-motion.time*0.32
+            let depth = phase-floor(phase)
+            let scale = unit/(0.3+depth*9)
+            let opacity = min(depth/0.07,1)*min((1-depth)/0.16,1)
+            func point(_ x: Double, _ y: Double) -> CGPoint {
+                CGPoint(x: center.x+x*scale,y: center.y-y*scale)
             }
-        }
-        for index in 0..<70 {
-            let u = (fraction(index * 37) + t * (0.055 + fraction(index * 13) * 0.035)).truncatingRemainder(dividingBy: 1)
-            let point = ribbonPoint(u, strand: fraction(index * 17) * 2 - 1, bundle: index % bundles, size: size)
-            let opacity = sin(u * .pi) * (0.25 + fraction(index * 23) * 0.5)
-            dot(context: &context, point: point, radius: 0.8 + fraction(index * 11) * 1.2,
-                color: index % 3 == 0 ? .white : secondary, opacity: opacity)
-        }
-    }
-
-    private func portals(context: inout GraphicsContext, size: CGSize) {
-        let center = CGPoint(x: size.width * (0.5 + sin(t * 0.3) * 0.12 + motion.balance * 0.1),
-                             y: size.height * (0.43 + cos(t * 0.21) * 0.065))
-        for ring in 0..<14 {
-            let depth = (Double(ring) / 14 + t * (0.065 + energy * 0.035)).truncatingRemainder(dividingBy: 1)
-            let scale = 0.09 + pow(depth, 2.1) * 2.3
-            let radius = size.width * scale * (1 + motion.impulse * 0.16)
-            let rotation = t * 0.15 + Double(ring) * 0.13
             var path = Path()
-            for vertex in 0...6 {
-                let angle = Double(vertex) / 6 * .pi * 2 + rotation
-                let point = CGPoint(x: center.x + cos(angle) * radius * (1 + motion.width * 0.3),
-                                    y: center.y + sin(angle) * radius * 1.18)
-                if vertex == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            for side in [-1.0,1.0] {
+                path.move(to: point(side*0.85,-1.1)); path.addLine(to: point(side*1.4,1.1))
+                path.move(to: point(side*1.4,-1.1)); path.addLine(to: point(side*0.85,1.1))
             }
-            let alpha = min(depth * 5, 1) * min((1 - depth) * 5, 1)
-            let color = ring % 3 == 0 ? primary : secondary
-            var ringContext = context
-            ringContext.opacity *= alpha * intensity
-            ringContext.stroke(path, with: .color(color.opacity(0.055)), lineWidth: 20)
-            ringContext.stroke(path, with: .color(color.opacity(0.22)), lineWidth: 3)
-            ringContext.stroke(path, with: .color(color.opacity(0.7)), lineWidth: 0.8)
-            let head = (t * 0.15 + Double(ring) * 0.12).truncatingRemainder(dividingBy: 1)
-            ringContext.stroke(path.trimmedPath(from: max(0, head - 0.16), to: head),
-                               with: .color(.white.opacity(0.75)), lineWidth: 1.2)
-        }
-        for index in 0..<60 {
-            let depth = (fraction(index * 19) + t * 0.08).truncatingRemainder(dividingBy: 1)
-            let angle = fraction(index * 43) * .pi * 2 + t * 0.09
-            let radius = pow(depth, 2) * size.height * 0.9
-            let point = CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
-            dot(context: &context, point: point, radius: 0.5 + depth * 1.6,
-                color: secondary, opacity: sin(depth * .pi) * 0.65)
-        }
-    }
-
-    private func orbitPoint(angle: Double, ring: Double, size: CGSize) -> (CGPoint, Double) {
-        let a = angle + t * (0.2 + ring * 0.01)
-        let radius = size.width * (0.29 + ring * 0.009) * (1 + motion.width * 0.4 + motion.impulse * 0.14)
-        let z = sin(a) * 0.65
-        let tilt = -0.48 + sin(t * 0.16) * 0.32
-        let x = cos(a) * radius
-        let y = sin(a) * radius * (0.5 + ambient * 0.3)
-        let perspective = 1 / (1 - z * 0.3)
-        let point = CGPoint(x: size.width * (0.5 + motion.balance * 0.1) + (x * cos(tilt) - y * sin(tilt)) * perspective,
-                            y: size.height * 0.45 + (x * sin(tilt) + y * cos(tilt)) * perspective)
-        return (point, z)
-    }
-
-    private func orbits(context: inout GraphicsContext, size: CGSize) {
-        for index in 0..<100 {
-            let depth = fraction(index * 13)
-            let x = (fraction(index * 53) + sin(t * 0.07) * (0.03 + depth * 0.035) + 1).truncatingRemainder(dividingBy: 1)
-            let y = (fraction(index * 31) + t * (0.003 + depth * 0.009)).truncatingRemainder(dividingBy: 1)
-            dot(context: &context, point: CGPoint(x: x * size.width, y: y * size.height),
-                radius: 0.4 + depth, color: .white, opacity: 0.12 + depth * 0.35)
-        }
-        for ring in 0..<28 {
-            var path = Path()
-            for step in 0...90 {
-                let angle = Double(step) / 90 * .pi * 2
-                let (point, _) = orbitPoint(angle: angle, ring: Double(ring), size: size)
-                if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            for y in [-1.1,1.1] {
+                path.move(to: point(-1.4,y)); path.addLine(to: point(1.4,y))
             }
-            let color = ring % 4 == 0 ? primary : secondary
-            if ring % 5 == 0 { context.stroke(path, with: .color(color.opacity(0.055 * intensity)), lineWidth: 15) }
-            context.stroke(path, with: .color(color.opacity((0.12 + motion.level * 0.16) * intensity)), lineWidth: 0.7)
-        }
-        for index in 0..<135 {
-            let ring = fraction(index * 47) * 28
-            let angle = fraction(index * 29) * .pi * 2 + t * (0.2 + fraction(index * 11) * 0.35)
-            let (point, z) = orbitPoint(angle: angle, ring: ring, size: size)
-            dot(context: &context, point: point, radius: 0.65 + (z + 1) * 0.9,
-                color: index % 5 == 0 ? .white : (index % 2 == 0 ? primary : secondary),
-                opacity: (0.35 + (z + 1) * 0.23) * intensity)
+            let gradient = GraphicsContext.Shading.linearGradient(Gradient(colors: [primary,secondary]),
+                startPoint: point(-1.4,1.1),endPoint: point(1.4,-1.1))
+            var layer = context
+            layer.opacity *= opacity
+            layer.stroke(path,with: gradient,lineWidth: max(2,scale*0.055))
+            layer.stroke(path,with: .color(.white.opacity(0.8)),lineWidth: max(0.7,scale*0.008))
         }
     }
 
-    private func dot(context: inout GraphicsContext, point: CGPoint, radius: Double, color: Color, opacity: Double) {
-        let shape = Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
-        context.fill(shape, with: .color(color.opacity(min(opacity, 1))))
-        if radius > 1.5 {
-            let halo = Path(ellipseIn: CGRect(x: point.x - radius * 3, y: point.y - radius * 3, width: radius * 6, height: radius * 6))
-            context.fill(halo, with: .radialGradient(Gradient(colors: [color.opacity(opacity * 0.22), .clear]), center: point, startRadius: 0, endRadius: radius * 3))
+    private func nightSky(context: inout GraphicsContext, size: CGSize) {
+        let blue = Color(red: 0.15, green: 0.36, blue: 0.9)
+        context.opacity = subdued ? 0.4 : 1
+        let center = CGPoint(x: size.width*0.45, y: size.height*0.43)
+        context.fill(Path(CGRect(origin: .zero, size: size)),
+                     with: .radialGradient(Gradient(colors: [primary.opacity(0.1), blue.opacity(0.08), .black]),
+                                           center: center, startRadius: 0, endRadius: size.height*0.6))
+        func random(_ value: Double) -> Double {
+            let n = sin(value*127.1+311.7)*43758.5453
+            return n-floor(n)
+        }
+        context.blendMode = .plusLighter
+        for i in 0..<200 {
+            let seed = random(Double(i))
+            let depth = random(Double(i)+227)
+            let driftPhase = random(Double(i)+239)*2*Double.pi
+            let rate = (0.18+random(Double(i)+251)*0.12)*(1+depth*0.36)
+            let driftRadius = 0.002+depth*0.006
+            let driftX = sin(motion.time*rate+driftPhase)*driftRadius
+            let driftY = cos(motion.time*rate*0.73+driftPhase*1.7)*driftRadius
+            let x = (random(Double(i)+41) + motion.time*0.0008 + driftX + 1).truncatingRemainder(dividingBy: 1)
+            let y = random(Double(i)+97) + driftY
+            let sizeSeed = random(Double(i)+53)
+            let sizeMix = min(max((sizeSeed-0.82)/0.18,0),1)
+            let largerStar = sizeMix*sizeMix*(3-2*sizeMix)
+            let radius = 0.3 + sizeSeed*0.42 + largerStar*0.75
+            let center = CGPoint(x: x*size.width, y: y*size.height)
+            let behavior = random(Double(i)+83)
+            let phaseValue = (motion.time*2.4)/(1.2+random(Double(i)+151)*2.2)+random(Double(i)+173)
+            let phase = phaseValue-floor(phaseValue)
+            func smooth(_ low: Double, _ high: Double, _ value: Double) -> Double {
+                let x = min(max((value-low)/(high-low),0),1)
+                return x*x*(3-2*x)
+            }
+            let pulse = smooth(0,0.1,phase)*(1-smooth(0.1,0.42,phase))
+            var light = 0.85
+            if behavior >= 0.45 && behavior < 0.8 {
+                light = (0.08+1.5*pow(0.5+0.5*sin(motion.time*(1.8+seed*2)+seed*71),2))*(0.8+motion.level*0.5)
+            } else if behavior >= 0.8 {
+                light = 0.06+pulse*(2.6+motion.level*1.5)
+            }
+            let alpha = min((0.35+seed*0.45)*light,1)
+            let colorSeed = random(Double(i)+109)
+            let artwork = colorSeed < 0.6 ? primary : secondary
+            let temperature = colorSeed < 0.55 ? blue : Color(red: 1,green: 0.3,blue: 0.2)
+            let dot = Path(ellipseIn: CGRect(x: center.x-radius,y: center.y-radius,width: radius*2,height: radius*2))
+            context.fill(dot,with: .color(artwork.opacity(alpha*0.8)))
+            context.fill(dot,with: .color(temperature.opacity(alpha*0.3)))
+            if behavior >= 0.8 { context.fill(dot,with: .color(.white.opacity(alpha*pulse*0.35))) }
+            if behavior >= 0.8 {
+                context.fill(Path(ellipseIn: CGRect(x: center.x-3,y: center.y-3,width: 6,height: 6)),
+                             with: .radialGradient(Gradient(colors: [artwork.opacity(alpha*pulse*0.45), .clear]),
+                                                   center: center,startRadius: 0,endRadius: 3))
+            }
         }
     }
 
-    private func fraction(_ seed: Int) -> Double {
-        (Double(seed + 1) * 0.61803398875).truncatingRemainder(dividingBy: 1)
-    }
 }

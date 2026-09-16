@@ -38,6 +38,13 @@ final class PlayerStore {
     private(set) var audioInformation = AudioInformation.unknown
     private(set) var spectrumLevels: [Float] = Array(repeating: 0, count: 32)
     private(set) var spatialSnapshot = AudioSpatialSnapshot.silent
+    private(set) var visualAudioFrame = VisualWorldAudioFrame.silent
+    private(set) var visualWorldSeed = Double.random(in: 0...1_000)
+
+    func setVisualAnalysisEnabled(_ enabled: Bool) {
+        (audioPlayer as? VisualWorldAudioControlling)?.setVisualAnalysisEnabled(enabled)
+        if !enabled { visualAudioFrame = .silent }
+    }
 
     var hasNext: Bool {
         guard currentPlaybackPosition != nil else { return false }
@@ -111,6 +118,9 @@ final class PlayerStore {
         }
         (resolvedPlayer as? SpatialAudioControlling)?.spatialHandler = { [weak self] snapshot in
             self?.spatialSnapshot = snapshot
+        }
+        (resolvedPlayer as? VisualWorldAudioControlling)?.visualAudioHandler = { [weak self] frame in
+            self?.visualAudioFrame = frame
         }
         self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate in
             self?.audioInformation.outputName = name
@@ -718,6 +728,7 @@ final class PlayerStore {
     private func handle(_ event: AudioPlaybackEvent) {
         switch event {
         case let .ready(duration):
+            visualWorldSeed = Double.random(in: 0...1_000)
             self.duration = duration
             isLoading = false
             nowPlayingService.updateDuration(duration, elapsedTime: currentTime, isPlaying: isPlaying)

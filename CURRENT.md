@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 # MyMusic の現在状態
@@ -18,6 +18,12 @@ updated: 2026-09-16
 ## 実装済み
 
 ### テーマ Beta
+
+- Visual Worldの球体を短辺約90%の固定サイズへ拡大し、音による膨張・収縮と急な回転を停止。内部粒子を維持し、Artworkの主色／副色／accentで周辺光を増強。Pulse Neonは交差する発光チューブのゲートを通過するワープ表現へ分岐。Blue Cosmosは夜空を維持。Metal／Canvas対応、Simulator buildとGPU描画確認成功。
+
+- Blue Cosmosのアート表示に夜空パターンを追加。青い暗部・淡い星雲・奥行きの異なる星の明滅を描画。星ごとに位相と速度の異なる緩やかな漂流を加え、手前ほど移動量を大きくする。星は小さい点光源を中心に約18%だけ少し大きい星を混ぜ、変化に気づきにくいとの実機フィードバックを受けて瞬きの明暗差と個別パルスの頻度・強度を増強。常時点灯45%・緩い瞬き35%・個別パルス20%を混在させる。Artwork主色／副色／accentを基に青・赤・白の色差を付け、変動する星の輝きだけを音域に接続する。Simple Dark／Living AuroraはPhoton Sphere、Pulse Neonは光のゲート。Metal／Canvas双方に対応。Simulator buildとMac GPU描画確認が成功。実機は未検証。
+
+- [Visual World / Photon Sphere](Documentation/NowPlayingVisualWorld-PhotonSphere.md)：ユーザーの方向変更により、幾何学の枠・膜・複数の弧を廃止し、光でできた球体ひとつへ変更。球内部の立体的な密度、光の流れ、微細な発光粒子、陰影とhaloをMetalで描く。Canvas fallbackも単一球体へ置換。Beta 3の音声解析・Artwork配色・既存操作・熱制御は維持。Simulator buildとMac GPUで描画確認。iPhone実機の連続性能・見え方は未検証。
 
 - 標準の再生中画面は維持し、右上の「完了」を通常画面／アート画面の切り替えに置き換えた。アート画面はテーマとジャケット由来の色を重ね、既存Track Featuresと再生出力のレベル・左右バランス・ステレオ幅で光を変化させる。Beta 2では背景タップ／左右スワイプはコントローラー表示だけにし、再生・曲送り・お気に入りはボタンのタップで実行する。0.85秒長押しで小さな揺れと触覚を伴う詳細操作を表示する。テーマ別の光の帯／幾何学の奥行き／粒子軌道、色相別Artwork配色、表示専用の平滑化と音量上昇アクセントを追加した。詳細は[再生中 Visual World](Documentation/NowPlayingVisualWorld.md)。Simulator buildは成功、実機の見た目・ジェスチャー回帰は未検証。
 - 設定 → テーマからシンプルダーク（先頭）／Living Aurora／Pulse Neon／Blue Cosmosを選択でき、選択は端末内へ保存しApp外バックアップへ含める。OS外観から独立した暗色の光・質感を画面背景と操作色へ反映する。黒背景用素材に合わせて全テーマの土台を純黒とし、装飾光を画面端へ配置する。Blue Cosmosは大小と明度差のある星空、Pulse Neonは細い光の幾何学ガラス面、Living Auroraは紫／シアン／青の重ねグラデーションを表示する。上部navigation barは黒から下端の透明へ変化するgradientとする。パラメータ、適用境界、アクセシビリティ方針は[Themes](Documentation/Themes.md)に集約する。実機の見た目・全操作回帰は未検証。

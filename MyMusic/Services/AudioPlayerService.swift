@@ -85,10 +85,17 @@ protocol VolumeNormalizationControlling: AnyObject {
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, SpatialAudioControlling, VolumeNormalizationControlling {
+final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, SpatialAudioControlling, VolumeNormalizationControlling, VisualWorldAudioControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     var spectrumHandler: (([Float]) -> Void)?
     var spatialHandler: ((AudioSpatialSnapshot) -> Void)?
+
+    private let visualAnalysis = VisualWorldAudioAnalysisService()
+    var visualAudioHandler: ((VisualWorldAudioFrame) -> Void)? {
+        get { visualAnalysis.handler }
+        set { visualAnalysis.handler = newValue }
+    }
+    func setVisualAnalysisEnabled(_ enabled: Bool) { visualAnalysis.setEnabled(enabled) }
 
     private let fileImportService: FileImportServicing
     private let engine = AVAudioEngine()
@@ -353,6 +360,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     }
 
     private func stopPlayback(clearTrack: Bool) {
+        visualAnalysis.invalidate()
         scheduleID = UUID()
         cancelScheduledFadeOut(clearBoundary: true)
         playbackTransitionService.cancelActiveRamp(resetVolume: false)
@@ -445,6 +453,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
 
     private func schedule(from requestedFrame: AVAudioFramePosition) {
         guard let audioFile else { return }
+        visualAnalysis.invalidate()
         scheduleID = UUID()
         let activeScheduleID = scheduleID
         playerNode.stop()
@@ -496,7 +505,9 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private func installSpectrumTapIfNeeded() {
         let mixer = engine.mainMixerNode
         if isSpectrumTapInstalled { mixer.removeTap(onBus: 0) }
+        let visualMailbox = visualAnalysis.mailbox
         mixer.installTap(onBus: 0, bufferSize: 2_048, format: nil) { [weak self] buffer, _ in
+            visualMailbox.capture(buffer)
             guard let channel = buffer.floatChannelData?.pointee else { return }
             let frameCount = Int(buffer.frameLength)
             guard frameCount > 0 else { return }
@@ -585,6 +596,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     }
 
     private func handleRouteChange(reason rawReason: UInt?) {
+        visualAnalysis.invalidate()
         guard let rawReason,
               AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable else { return }
         eventHandler?(.oldAudioDeviceUnavailable)

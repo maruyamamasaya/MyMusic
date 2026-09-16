@@ -52,7 +52,11 @@ Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「�
 
 ### 再生中のアート画面
 
-`NowPlayingView`の通常／アート切り替えで`NowPlayingVisualWorldView`を表示する。既存の`AudioPlayerService`出力tap → `PlayerStore.spatialSnapshot` → 表示専用`VisualWorldDynamics` → `VisualWorldScene`（SwiftUI Canvas）へ音量・左右バランス・幅を渡す。Dynamicsは短期／長期音量の差とattack／releaseを表示へ使用し、再生処理へ値を書き戻さない。`VisualWorldPaletteService` actorは既存ArtworkServiceから画像Dataを受け、縮小画像の色相別代表色を計算する。背景gestureは表示状態だけを変更し、`VisualWorldController`内の明示操作だけがPlayerStore等へ接続する。画面非表示、sheet表示、scene非active、一時停止では描画時計を止める。詳細は[Visual World](Documentation/NowPlayingVisualWorld.md)。
+`NowPlayingView` → `NowPlayingVisualWorldView` → `VisualWorldSimulation` → `VisualWorldMetalView`／`VisualWorldInstallation.metal`。既存の`AudioPlayerService`出力tapを共有し、追加のPCM copyは事前確保した`VisualWorldAudioMailbox`へ渡す。atomicな単一slotが満杯なら追加sampleをdropし、音声callbackを待たせない。`VisualWorldAudioAnalysisService`のserial queueが最大20Hzで`VisualWorldSpectrumAnalyzer`（Accelerate FFT／調波salience）を実行し、`PlayerStore.visualAudioFrame`へ返す。seek／曲切り替え／route変更はgenerationを更新し古い結果を拒否する。既存`spectrumLevels`と`spatialSnapshot`の契約は維持する。
+
+`PlayerStore`は表示用解析の有効／無効と再生sessionのseedを所有する。Viewは前面・scene・accessibility・再生状態に応じて解析購読を切り替える。Simulationは特徴量による力・拘束・減衰を表示状態だけへ積分する。Blue Cosmosでは最大3層の星空と低周波の星雲へ分岐する。Pulse Neonは最大10本分のゲート（低品質6）の発光チューブと透視投影へ分岐する。Simple Dark／Living AuroraのMetalは固定サイズの単一球体の交差と内部の有界volume sampling（通常18／低品質10 step）、発光粒子・陰影・halo・bloomを描き、GPUの未完了frameは最大2とする。フレーム間隔と解像度を低電力・thermal状態で下げる。Metal初期化不能時は`VisualWorldScene` Canvasを使う。
+
+`VisualWorldPaletteService` actorは縮小Artworkから主色／副色／accentと占有率を取得し、無彩色画像も扱う。曲切り替えの姿勢・色はRendererで補間する。背景gestureは表示状態だけを変更し、`VisualWorldController`の明示操作だけが既存Storeへ接続する。非表示／sheet／scene非activeでは描画と追加解析を休止、一時停止時は約10秒以内の有限の慣性を残す。詳細は[Visual World Beta 3](Documentation/NowPlayingVisualWorld-Beta3.md)、採用理由は[ADR-0006](decisions/ADR-0006-visual-world-rendering.md)。
 
 ## 主要データフロー
 
