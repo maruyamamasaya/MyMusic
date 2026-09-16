@@ -567,7 +567,28 @@ private struct HomeTuningTag: View {
         .padding(.horizontal, 15)
         .frame(minHeight: 44)
         .fixedSize(horizontal: true, vertical: false)
-        .background(tagGradient, in: Capsule())
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .fill(tagGradient)
+                        .opacity(0.8)
+                }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.35), .white.opacity(0.04)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .shadow(color: gradientColors[0].opacity(isActive ? 0.5 : 0), radius: 15)
+                .shadow(color: gradientColors[0].opacity(isActive ? 0.24 : 0), radius: 6)
+        }
         .overlay {
             Capsule()
                 .stroke(.white.opacity(isActive ? 0.9 : 0.18), lineWidth: isActive ? 2 : 0.5)

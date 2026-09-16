@@ -23,6 +23,23 @@ enum PlaybackSelectionPolicy {
             * shuffleOverplayFactor(overplayScore: overplayScore)
     }
 
+    /// Quick Play alone favors less-played tracks, while keeping every track eligible.
+    /// Use the stronger of this long-term adjustment and the temporary Overplay
+    /// adjustment so a track is not suppressed twice for the same listening.
+    static func quickPlayWeight(playbackPreference: Int, overplayScore: Double, playCount: Int) -> Double {
+        PlaybackPreferenceWeightPolicy.weight(for: playbackPreference)
+            * min(quickPlayCountFactor(playCount: playCount), shuffleOverplayFactor(overplayScore: overplayScore))
+    }
+
+    static func quickPlayCountFactor(playCount: Int) -> Double {
+        switch playCount {
+        case ...2: 1
+        case 3...5: 0.7
+        case 6...9: 0.4
+        default: 0.1
+        }
+    }
+
     private static func bounded(_ score: Double) -> Double {
         guard score.isFinite else { return 0 }
         return min(max(score, 0), 1)

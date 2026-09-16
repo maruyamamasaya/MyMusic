@@ -28,9 +28,8 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
     private var lastPublishedState: WatchPlaybackState?
     private var lastPublishDate = Date.distantPast
     private var artworkTransferKeyInFlightOrSent: ArtworkTransferKey?
-    private var artworkTransferRetryCount = 0
+    private var activeArtworkTransfer: WCSessionFileTransfer?
     private var artworkTask: Task<Void, Never>?
-    private static let maximumArtworkTransferAttempts = 3
 
     init(
         session: WCSession? = WCSession.isSupported() ? .default : nil,
@@ -54,8 +53,9 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
         }
         if artworkTransferKeyInFlightOrSent != transferKey {
             artworkTask?.cancel()
+            activeArtworkTransfer?.cancel()
+            activeArtworkTransfer = nil
             artworkTransferKeyInFlightOrSent = nil
-            artworkTransferRetryCount = 0
         }
         synchronizeLatestState()
     }
@@ -94,10 +94,8 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
               let trackID = state.trackID,
               let artworkIdentifier else { return }
         let transferKey = ArtworkTransferKey(trackID: trackID, identifier: artworkIdentifier)
-        guard artworkTransferKeyInFlightOrSent != transferKey,
-              artworkTransferRetryCount < Self.maximumArtworkTransferAttempts else { return }
+        guard artworkTransferKeyInFlightOrSent != transferKey else { return }
         artworkTransferKeyInFlightOrSent = transferKey
-        artworkTransferRetryCount += 1
         artworkTask = Task { @MainActor [weak self] in
             guard let self else { return }
             guard let fileURL = await artworkPreparationService.prepareArtworkFile(
@@ -109,18 +107,25 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
             }
             guard !Task.isCancelled,
                   lastPublishedState?.trackID == trackID,
+                  currentArtworkIdentifier == artworkIdentifier,
                   session.activationState == .activated,
                   session.isPaired,
                   session.isWatchAppInstalled else {
+                await WatchArtworkPreparationService.removePreparedFile(fileURL)
                 artworkPreparationFailed(for: transferKey)
                 return
             }
-            session.transferFile(fileURL, metadata: WatchArtworkFileMetadata.message(trackID: trackID))
+            activeArtworkTransfer = session.transferFile(
+                fileURL,
+                metadata: WatchArtworkFileMetadata.message(trackID: trackID, identifier: artworkIdentifier)
+            )
+            artworkTask = nil
         }
     }
 
     private func artworkPreparationFailed(for transferKey: ArtworkTransferKey) {
         guard artworkTransferKeyInFlightOrSent == transferKey else { return }
+        artworkTask = nil
         artworkTransferKeyInFlightOrSent = nil
     }
 
@@ -144,9 +149,11 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
                 return
             }
             if command == .requestArtwork {
-                artworkTransferKeyInFlightOrSent = nil
-                artworkTransferRetryCount = 0
                 if let state = stateProvider?(), let session {
+                    if activeArtworkTransfer == nil && artworkTask == nil {
+                        artworkTransferKeyInFlightOrSent = nil
+                    }
+                    // An in-progress request keeps its key, so duplicate requests share one transfer.
                     transferArtworkIfNeeded(
                         for: state,
                         artworkIdentifier: currentArtworkIdentifier,
@@ -206,20 +213,10 @@ extension WatchConnectivityService: WCSessionDelegate {
         error: Error?
     ) {
         Task { await WatchArtworkPreparationService.removePreparedFile(fileTransfer.file.fileURL) }
-        guard error != nil,
-              let trackID = WatchArtworkFileMetadata.trackID(from: fileTransfer.file.metadata) else { return }
         Task { @MainActor [weak self] in
-            guard let self,
-                  lastPublishedState?.trackID == trackID,
-                  let state = stateProvider?() else { return }
+            guard let self, activeArtworkTransfer === fileTransfer else { return }
+            activeArtworkTransfer = nil
             artworkTransferKeyInFlightOrSent = nil
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            transferArtworkIfNeeded(
-                for: state,
-                artworkIdentifier: currentArtworkIdentifier,
-                session: session
-            )
         }
     }
 }

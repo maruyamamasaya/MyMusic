@@ -29,6 +29,28 @@ final class PlaybackSelectionPolicyTests: XCTestCase {
         XCTAssertEqual(PlaybackSelectionPolicy.shuffleOverplayFactor(overplayScore: -.infinity), 1)
         XCTAssertGreaterThan(PlaybackSelectionPolicy.shuffleWeight(playbackPreference: -10, overplayScore: 1), 0)
     }
+
+    func testQuickPlayCountStepsAndOverplayDoNotCompound() {
+        let expected: [(Int, Double)] = [
+            (0, 1), (2, 1), (3, 0.7), (5, 0.7),
+            (6, 0.4), (9, 0.4), (10, 0.1), (100, 0.1)
+        ]
+        for (count, factor) in expected {
+            XCTAssertEqual(PlaybackSelectionPolicy.quickPlayCountFactor(playCount: count), factor)
+            XCTAssertEqual(
+                PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: 0, overplayScore: 0, playCount: count),
+                factor
+            )
+        }
+        XCTAssertEqual(
+            PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: 0, overplayScore: 1, playCount: 10),
+            0.1
+        )
+        XCTAssertEqual(
+            PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: 0, overplayScore: 1, playCount: 3),
+            0.125
+        )
+    }
 }
 
 @MainActor
@@ -109,6 +131,43 @@ final class PlaybackSelectionIntegrationTests: XCTestCase {
         XCTAssertEqual(preferenceStore.playbackPreference(for: track.id), 3)
         XCTAssertEqual(store.boredomLevel(for: track.id), 0)
         XCTAssertEqual(store.playCount(for: track.id), 12)
+    }
+
+    func testQuickPlayWeightsApplyToFavoritesAndOthersWhileKeepingPairs() async throws {
+        let now = try date(2026, 9, 7)
+        let favoriteLow = makeTrack("Favorite Low")
+        let favoriteHigh = makeTrack("Favorite High")
+        let otherLow = makeTrack("Other Low")
+        let otherHigh = makeTrack("Other High")
+        let tracks = [favoriteLow, favoriteHigh, otherLow, otherHigh]
+        let histories = [favoriteHigh, otherHigh].map {
+            PlaybackHistory(trackID: $0.id, isFavorite: false, playCount: 10, lastPlayedAt: now)
+        }
+        let preferences = tracks.map {
+            TrackPreference(trackID: $0.id, playbackPreference: 0,
+                            favorite: $0.id == favoriteLow.id || $0.id == favoriteHigh.id)
+        }
+        let preferenceStore = TrackPreferenceStore(
+            persistence: SelectionPreferencePersistence(entries: preferences)
+        )
+        await preferenceStore.loadIfNeeded(legacyHistory: nil)
+        let store = PlaybackHistoryStore(
+            persistence: SelectionHistoryPersistence(entries: histories), preferenceStore: preferenceStore
+        )
+        await store.loadIfNeeded()
+
+        let weights = store.quickPlaySelectionWeights(for: tracks, now: now)
+        XCTAssertEqual(weights[favoriteLow.id], 1)
+        XCTAssertEqual(weights[favoriteHigh.id], 0.1)
+        XCTAssertEqual(weights[otherLow.id], 1)
+        XCTAssertEqual(weights[otherHigh.id], 0.1)
+
+        let queue = store.quickPlayTracks(from: tracks, limit: 4, now: now)
+        XCTAssertEqual(Set(queue.map(\.id)), Set(tracks.map(\.id)))
+        XCTAssertTrue(preferenceStore.isFavorite(trackID: queue[0].id))
+        XCTAssertFalse(preferenceStore.isFavorite(trackID: queue[1].id))
+        XCTAssertTrue(preferenceStore.isFavorite(trackID: queue[2].id))
+        XCTAssertFalse(preferenceStore.isFavorite(trackID: queue[3].id))
     }
 
     private func makeTrack(_ title: String) -> Track {

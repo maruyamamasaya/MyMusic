@@ -26,6 +26,7 @@ struct WatchPlaybackState: Equatable, Sendable {
     var isFavorite: Bool
     var playbackPreference: Int
     var hasArtwork: Bool
+    var artworkIdentifier: String?
 
     static let empty = WatchPlaybackState(
         trackID: nil,
@@ -53,7 +54,8 @@ struct WatchPlaybackState: Equatable, Sendable {
             "duration": duration.isFinite ? max(duration, 0) : 0,
             "isFavorite": isFavorite,
             "playbackPreference": playbackPreference,
-            "hasArtwork": hasArtwork
+            "hasArtwork": hasArtwork,
+            "artworkIdentifier": artworkIdentifier ?? ""
         ]
     }
 
@@ -67,7 +69,8 @@ struct WatchPlaybackState: Equatable, Sendable {
         duration: TimeInterval,
         isFavorite: Bool = false,
         playbackPreference: Int = 0,
-        hasArtwork: Bool = false
+        hasArtwork: Bool = false,
+        artworkIdentifier: String? = nil
     ) {
         self.trackID = trackID
         self.title = title
@@ -79,6 +82,7 @@ struct WatchPlaybackState: Equatable, Sendable {
         self.isFavorite = isFavorite
         self.playbackPreference = min(max(playbackPreference, -10), 10)
         self.hasArtwork = hasArtwork
+        self.artworkIdentifier = artworkIdentifier
     }
 
     init?(message: [String: Any]) {
@@ -103,7 +107,8 @@ struct WatchPlaybackState: Equatable, Sendable {
             duration: max(duration, 0),
             isFavorite: message["isFavorite"] as? Bool ?? false,
             playbackPreference: message["playbackPreference"] as? Int ?? 0,
-            hasArtwork: message["hasArtwork"] as? Bool ?? false
+            hasArtwork: message["hasArtwork"] as? Bool ?? false,
+            artworkIdentifier: (message["artworkIdentifier"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 
@@ -120,8 +125,9 @@ struct WatchPlaybackState: Equatable, Sendable {
 }
 
 enum WatchArtworkFileMetadata {
-    nonisolated static func message(trackID: UUID) -> [String: Any] {
-        ["kind": "artwork", "version": WatchPlaybackState.schemaVersion, "trackID": trackID.uuidString]
+    nonisolated static func message(trackID: UUID, identifier: String) -> [String: Any] {
+        ["kind": "artwork", "version": WatchPlaybackState.schemaVersion,
+         "trackID": trackID.uuidString, "artworkIdentifier": identifier]
     }
 
     nonisolated static func trackID(from message: [String: Any]?) -> UUID? {
@@ -129,6 +135,10 @@ enum WatchArtworkFileMetadata {
               message?["version"] as? Int == WatchPlaybackState.schemaVersion,
               let value = message?["trackID"] as? String else { return nil }
         return UUID(uuidString: value)
+    }
+
+    nonisolated static func identifier(from message: [String: Any]?) -> String? {
+        message?["artworkIdentifier"] as? String
     }
 }
 

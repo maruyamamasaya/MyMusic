@@ -6,7 +6,8 @@ final class WatchPlaybackMessageTests: XCTestCase {
         let expected = WatchPlaybackState(
             trackID: UUID(), title: "Title", artist: "Artist", album: "Album",
             isPlaying: true, currentTime: 12, duration: 120,
-            isFavorite: true, playbackPreference: -4, hasArtwork: true
+            isFavorite: true, playbackPreference: -4, hasArtwork: true,
+            artworkIdentifier: "artwork-v2"
         )
         XCTAssertEqual(WatchPlaybackState(message: expected.message), expected)
     }
@@ -47,13 +48,18 @@ final class WatchPlaybackMessageTests: XCTestCase {
         XCTAssertEqual(state.album, "")
         XCTAssertEqual(state.playbackPreference, 0)
         XCTAssertFalse(state.hasArtwork)
+        XCTAssertNil(state.artworkIdentifier)
     }
 
     func testArtworkMetadataRoundTrip() {
         let trackID = UUID()
         XCTAssertEqual(
-            WatchArtworkFileMetadata.trackID(from: WatchArtworkFileMetadata.message(trackID: trackID)),
+            WatchArtworkFileMetadata.trackID(from: WatchArtworkFileMetadata.message(trackID: trackID, identifier: "artwork-v2")),
             trackID
+        )
+        XCTAssertEqual(
+            WatchArtworkFileMetadata.identifier(from: WatchArtworkFileMetadata.message(trackID: trackID, identifier: "artwork-v2")),
+            "artwork-v2"
         )
     }
 }

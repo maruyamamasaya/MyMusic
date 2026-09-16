@@ -39,7 +39,7 @@ updated: 2026-09-15
 - 既存iPhoneアプリに埋め込む `MyMusicWatch` watchOS targetを追加した。Watchは音源・queue・再生ロジックを持たず、WatchConnectivity経由でiPhoneの`PlayerStore`へplay／pause／toggle／next／previousを依頼する。
 - iPhoneは現在曲のTrack ID、曲名、Artist、再生中flag、再生位置、長さをversion 1の状態messageとして送る。到達中は即時message、非到達時も最新値をapplication contextへ保持する。Watchの表示はiPhoneから受け取った状態だけを正とする。
 - iPhoneはWCSession activation完了前の状態をmemoryに保留し、activatedかつpairedかつWatch App installedの場合だけ送信する。activation完了またはWatch状態変化後に条件を満たせば最新状態を同期し、Watch未導入時の反復送信を行わない。
-- Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchから要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。一時的な要求／準備／転送／読込失敗は到達性復帰を含め最大3回再試行し、同一TrackのArtwork identifier変更も再転送対象にする。未収録時はplaceholderを維持する。
+- Watchの「再生中」画面はArtwork、曲名、Artist、接続状態、再生進捗、前／再生停止／次、お気に入り、Good／Badと現在値を表示する。曲ArtworkはWatchから要求し、iPhoneで元画像を拡大せず最大512px・品質0.82のJPEGへ縮小・圧縮して`transferFile`で状態messageと分離して送る。現在曲のArtwork identifierだけをstateへ載せ、変更時にWatchの保持画像を破棄する。同じ画像の転送中要求は重複送信せず、曲変更時は古い転送を取り消す。Watchは30秒待機後に最大3回まで再要求し、到達性復帰時も再要求可能にする。未収録時はplaceholderを維持する。
 - 同画面の音量はWatchKit標準の`WKInterfaceVolumeControl(origin: .companion)`をSwiftUIへbridgeして表示する。選択時のDigital Crownと現在音量表示はシステムに任せ、WatchConnectivity messageやWatch独自のvolume stateは追加しない。
 - Watch再生画面はSE第2世代40mmを基準とする。背景専用GeometryReaderをSafe Area外へ広げ、Artworkと黒gradientを同じ162×197pt containerで全面描画する一方、曲情報と操作UIは別のSafe Area内GeometryReaderへ置く。右上は音量、右端は32ptの詳細とし、音量も同じ32pt枠で見やすく表示する。続いて曲名／Artist、Favorite／Good／Bad、1pt進捗、最下部に44pt以上の前／再生停止／次を配置する。右上のシャッフルボタンから3種類の選択sheetを開く。
 - 曲のお気に入りとGood／Badは既存`TrackPreferenceStore`を正本とする。Watch commandもiPhone UIと同じtoggle／±1 APIへ接続し、iPhone側変更を含め確定済みの値をWatchへ再同期する。
@@ -128,6 +128,7 @@ updated: 2026-09-15
 - **ライブラリ整理候補 M2**: 通常曲の新形式Playback Eventを直近20件まで使い、最低5件、ユーザーの「次へ」による途中スキップ率50%以上、平均再生率10%以下をすべて満たす曲を確認できる。既存`playCount`や直接選択、Good / Badは判定に使わない。候補提示は評価、飽き度、恒久非表示、履歴を自動変更しない。
 - **Behavior Scoring M3**: 保存済み日別集計から直近7日対過去56日のOverplayと、直近30日対それ以前の完走率によるPreference Driftを都度導出する。Good / Bad重みは専用Policyの-10〜+10テーブルへ分離し、設定の「再生傾向」で候補を確認できる。スコアは保存せず、評価・飽き度・恒久非表示を自動変更しない。選曲補正はM4対象。
 - **Selection Integration M4**: Overplayを保存済み日別集計から選曲処理ごとに導出し、通常の自動shuffle系とMood Station rankingへ、軽度では影響が小さく最大時は通常の1/8となる一時補正を適用する。手動選択、未再生Discovery、作業用再生には適用せず、Preference Drift、Good / Bad、Boredom、永続データを変更しない。計算式と適用範囲の正本は[ARCHITECTURE.md](ARCHITECTURE.md#再生履歴行動スコアと自動選曲)とする。
+- **クイック再生の再生回数補正 Beta**: お気に入り／その他の1:1構成を保ち、各群の候補を重み付きで選ぶ。累計再生回数が3〜5回なら0.7倍、6〜9回なら0.4倍、10回以上なら0.1倍とし、短期Overplay補正との二重掛けを避ける。お気に入りは直近から必要数の3倍まで候補を広げる。
 - **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。シャッフル／アガる／穏やか／発掘の4モードを持つ。方向性のあるモードは適合度帯を第一条件とし、帯内で通常shuffleのPreference × Overplayと直近Highlight減衰を使う。Randomは帯内scoreの±0.5%だけで、30秒未満のベリーショート曲、Boredom中／永久shuffle非表示の曲は全モードから除外する。ベリーショート曲のライブラリ表示と手動再生は維持する。
 - **作業用BGM再生**: ジャンルに「作業用BGM」が明示された曲だけを通常ランダム再生から分離し、専用 player / playlist を提供する。再生時間は分類に使わない。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
 - **通常ランダム再生のベリーショート除外**: 30秒未満の曲を通常shuffle、Quick Play、Favorite系shuffle、Repeat、Discovery、最近追加、Selective／Genre Random、Mood Stationから除外する。30秒ちょうどの曲は候補に含め、ライブラリ表示、検索、通常Playlist、手動選択・順再生は変更しない。

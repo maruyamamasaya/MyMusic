@@ -103,7 +103,7 @@ final class WatchSessionManager: NSObject {
 
     private func apply(_ message: [String: Any]) {
         guard let state = WatchPlaybackState(message: message) else { return }
-        if state.trackID != playbackState.trackID {
+        if state.trackID != playbackState.trackID || state.artworkIdentifier != playbackState.artworkIdentifier {
             artworkData = nil
             requestedArtworkTrackID = nil
             artworkRequestAttemptCount = 0
@@ -114,10 +114,13 @@ final class WatchSessionManager: NSObject {
         requestArtworkIfNeeded()
     }
 
-    private func applyArtwork(_ data: Data, trackID: UUID) {
+    private func applyArtwork(_ data: Data, trackID: UUID, identifier: String?) {
         guard playbackState.trackID == trackID,
               playbackState.hasArtwork,
-              CGImageSourceCreateWithData(data as CFData, nil) != nil else {
+              (playbackState.artworkIdentifier == nil || playbackState.artworkIdentifier == identifier) else {
+            return
+        }
+        guard CGImageSourceCreateWithData(data as CFData, nil) != nil else {
             artworkRequestFailed(for: trackID)
             return
         }
@@ -147,7 +150,7 @@ final class WatchSessionManager: NSObject {
         )
         artworkRequestTimeoutTask?.cancel()
         artworkRequestTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(6))
+            try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             self?.artworkRequestFailed(for: trackID)
         }
@@ -201,9 +204,13 @@ extension WatchSessionManager: WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         guard let trackID = WatchArtworkFileMetadata.trackID(from: file.metadata) else { return }
+        let identifier = WatchArtworkFileMetadata.identifier(from: file.metadata)
         Task.detached(priority: .utility) { [weak self] in
-            guard let data = try? Data(contentsOf: file.fileURL) else { return }
-            await self?.applyArtwork(data, trackID: trackID)
+            guard let data = try? Data(contentsOf: file.fileURL) else {
+                await self?.artworkRequestFailed(for: trackID)
+                return
+            }
+            await self?.applyArtwork(data, trackID: trackID, identifier: identifier)
         }
     }
 }

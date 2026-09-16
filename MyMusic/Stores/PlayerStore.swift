@@ -189,7 +189,8 @@ final class PlayerStore {
             duration: duration,
             isFavorite: currentTrack.map { watchPreferenceStore?.isFavorite(trackID: $0.id) ?? false } ?? false,
             playbackPreference: currentTrack.map { watchPreferenceStore?.playbackPreference(for: $0.id) ?? 0 } ?? 0,
-            hasArtwork: currentTrack?.artworkIdentifier != nil
+            hasArtwork: currentTrack?.artworkIdentifier != nil,
+            artworkIdentifier: currentTrack?.artworkIdentifier
         )
     }
 

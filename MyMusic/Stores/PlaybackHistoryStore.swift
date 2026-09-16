@@ -330,10 +330,10 @@ final class PlaybackHistoryStore {
             .map(\.track)
     }
 
-    func quickPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
+    func quickPlayTracks(from tracks: [Track], limit: Int = 30, now: Date = Date()) -> [Track] {
         guard limit > 0 else { return [] }
 
-        let shuffleEligibleTracks = tracks.filter(isEligibleForRegularShuffle)
+        let shuffleEligibleTracks = tracks.filter { isEligibleForRegularShuffle($0, now: now) }
         let recentFavorites = shuffleEligibleTracks
             .filter { preferenceStore.isFavorite(trackID: $0.id) }
             .sorted {
@@ -342,14 +342,31 @@ final class PlaybackHistoryStore {
             }
         let otherTracks = shuffleEligibleTracks.filter { !preferenceStore.isFavorite(trackID: $0.id) }
         let pairCount = min(limit / 2, recentFavorites.count, otherTracks.count)
+        let weights = quickPlaySelectionWeights(for: shuffleEligibleTracks, now: now)
 
         guard pairCount > 0 else {
-            return Array(preferenceWeightedShuffle(recentFavorites + otherTracks).prefix(limit))
+            return Array(weightedShuffle(shuffleEligibleTracks, weights: weights).prefix(limit))
         }
 
-        let favorites = preferenceWeightedShuffle(Array(recentFavorites.prefix(pairCount)))
-        let others = Array(preferenceWeightedShuffle(otherTracks).prefix(pairCount))
+        // Keep the recent-favorites character while letting the play-count
+        // weights affect which favorites actually enter the queue.
+        let favoritePool = Array(recentFavorites.prefix(min(recentFavorites.count, pairCount * 3)))
+        let favorites = Array(weightedShuffle(favoritePool, weights: weights).prefix(pairCount))
+        let others = Array(weightedShuffle(otherTracks, weights: weights).prefix(pairCount))
         return zip(favorites, others).flatMap { [$0, $1] }
+    }
+
+    func quickPlaySelectionWeights(for tracks: [Track], now: Date = Date()) -> [Track.ID: Double] {
+        let scores = PlaybackBehaviorAnalyzer().overplayScores(
+            for: tracks.map(\.id), historyByTrackID: entries, now: now
+        )
+        return Dictionary(tracks.map { track in
+            (track.id, PlaybackSelectionPolicy.quickPlayWeight(
+                playbackPreference: preferenceStore.playbackPreference(for: track.id),
+                overplayScore: scores[track.id] ?? 0,
+                playCount: playCount(for: track.id)
+            ))
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     func discoveryPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
