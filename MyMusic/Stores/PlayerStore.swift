@@ -37,6 +37,7 @@ final class PlayerStore {
     private(set) var presentationMode: PlayerPresentationMode = .standard
     private(set) var audioInformation = AudioInformation.unknown
     private(set) var spectrumLevels: [Float] = Array(repeating: 0, count: 32)
+    private(set) var spatialSnapshot = AudioSpatialSnapshot.silent
 
     var hasNext: Bool {
         guard currentPlaybackPosition != nil else { return false }
@@ -107,6 +108,9 @@ final class PlayerStore {
         }
         (resolvedPlayer as? EqualizerControlling)?.spectrumHandler = { [weak self] levels in
             self?.spectrumLevels = levels
+        }
+        (resolvedPlayer as? SpatialAudioControlling)?.spatialHandler = { [weak self] snapshot in
+            self?.spatialSnapshot = snapshot
         }
         self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate in
             self?.audioInformation.outputName = name
@@ -506,6 +510,7 @@ final class PlayerStore {
         presentationMode = .standard
         audioInformation = .unknown
         spectrumLevels = Array(repeating: 0, count: 32)
+        spatialSnapshot = .silent
         isPlaying = false
         currentTime = 0
         duration = 0

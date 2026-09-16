@@ -19,6 +19,7 @@ updated: 2026-09-15
 
 ### テーマ Beta
 
+- 標準の再生中画面は維持し、右上の「完了」を通常画面／アート画面の切り替えに置き換えた。アート画面はテーマとジャケット由来の色を重ね、既存Track Featuresと再生出力のレベル・左右バランス・ステレオ幅で光を変化させる。タップ／ダブルタップ／左右スワイプ／長押しから再生操作でき、長押しパネルに既存機能への入口を置く。詳細は[再生中 Visual World](Documentation/NowPlayingVisualWorld.md)。Simulator buildは成功、実機の見た目・ジェスチャー回帰は未検証。
 - 設定 → テーマからシンプルダーク（先頭）／Living Aurora／Pulse Neon／Blue Cosmosを選択でき、選択は端末内へ保存しApp外バックアップへ含める。OS外観から独立した暗色の光・質感を画面背景と操作色へ反映する。黒背景用素材に合わせて全テーマの土台を純黒とし、装飾光を画面端へ配置する。Blue Cosmosは大小と明度差のある星空、Pulse Neonは細い光の幾何学ガラス面、Living Auroraは紫／シアン／青の重ねグラデーションを表示する。上部navigation barは黒から下端の透明へ変化するgradientとする。パラメータ、適用境界、アクセシビリティ方針は[Themes](Documentation/Themes.md)に集約する。実機の見た目・全操作回帰は未検証。
 
 ### App外バックアップ / Restore基盤
@@ -117,6 +118,7 @@ updated: 2026-09-15
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を件数上限なく逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。専用タグ管理画面では全Playlistを横断して名称変更・削除・割り当てを行う。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
 - **Track Adjustments**: 通常Now Playingのアートワーク面を「アートワーク→オーディオ情報→曲別調整」の3状態にし、Stable Track IDごとの開始位置・終了位置・前回位置・±2 dBの手動ノーマライズ微調整を端末内へ保存する。開始／終了位置に共通の1秒戻る操作と、登録成功時のインラインフィードバックを持つ。終了位置はPlayerStoreの再生時刻eventから既存の次曲処理へ合流する。
+- **オーディオ情報の表示**: アートワーク裏面は暗い青の背景と、既存32帯域データを大きく描く発光スペクトラムに更新した。形式・音質の数値と特徴量Badgeは従来の導線を維持し、裏面内でスクロールして確認できる。
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **Playback History 拡張**: 再生履歴は初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保持する。再生中はPlayerStore内で軽量に集計し、曲変更・停止・一定間隔・background移行でまとめて保存する。日別集計は再生された日のみ保持し、直近7日／30日は保存値ではなく集計から算出する。

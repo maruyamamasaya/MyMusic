@@ -65,6 +65,19 @@ protocol EqualizerControlling: AnyObject {
     func applyEqualizer(_ settings: EqualizerSettings)
 }
 
+struct AudioSpatialSnapshot: Sendable {
+    let level: Float
+    let balance: Float
+    let width: Float
+
+    static let silent = Self(level: 0, balance: 0, width: 0)
+}
+
+@MainActor
+protocol SpatialAudioControlling: AnyObject {
+    var spatialHandler: ((AudioSpatialSnapshot) -> Void)? { get set }
+}
+
 @MainActor
 protocol VolumeNormalizationControlling: AnyObject {
     func setVolumeNormalizationEnabled(_ isEnabled: Bool)
@@ -72,9 +85,10 @@ protocol VolumeNormalizationControlling: AnyObject {
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, VolumeNormalizationControlling {
+final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, SpatialAudioControlling, VolumeNormalizationControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     var spectrumHandler: (([Float]) -> Void)?
+    var spatialHandler: ((AudioSpatialSnapshot) -> Void)?
 
     private let fileImportService: FileImportServicing
     private let engine = AVAudioEngine()
@@ -497,7 +511,32 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
                 for index in start..<end { peak = max(peak, abs(channel[index])) }
                 levels[bar] = min(sqrt(peak), 1)
             }
-            Task { @MainActor [weak self] in self?.spectrumHandler?(levels) }
+            let channelCount = Int(buffer.format.channelCount)
+            let right = channelCount > 1 ? buffer.floatChannelData?[1] : nil
+            var leftPower: Float = 0
+            var rightPower: Float = 0
+            var differencePower: Float = 0
+            for index in 0..<frameCount {
+                let leftSample = channel[index]
+                let rightSample = right?[index] ?? leftSample
+                leftPower += leftSample * leftSample
+                rightPower += rightSample * rightSample
+                let difference = leftSample - rightSample
+                differencePower += difference * difference
+            }
+            let leftRMS = sqrt(leftPower / Float(frameCount))
+            let rightRMS = sqrt(rightPower / Float(frameCount))
+            let total = leftRMS + rightRMS
+            let spatial = AudioSpatialSnapshot(
+                level: min(sqrt(total * 0.5), 1),
+                balance: total > 0.001 ? (rightRMS - leftRMS) / total : 0,
+                width: channelCount > 1 && total > 0.001
+                    ? min(sqrt(differencePower / Float(frameCount)) / total, 1) : 0
+            )
+            Task { @MainActor [weak self] in
+                self?.spectrumHandler?(levels)
+                self?.spatialHandler?(spatial)
+            }
         }
         isSpectrumTapInstalled = true
     }

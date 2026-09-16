@@ -6,28 +6,50 @@ struct NowPlayingView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(LibraryStore.self) private var libraryStore
-    @Environment(\.dismiss) private var dismiss
     @State private var isQueuePresented = false
     @State private var isEqualizerPresented = false
     @State private var isAddToPlaylistPresented = false
     @State private var artworkDisplayState = ArtworkDisplayState.artwork
+    @State private var showsVisualWorld = false
 
     var body: some View {
         NavigationStack {
-            ViewThatFits(in: .vertical) {
-                nowPlayingContent
-
-                ScrollView {
-                    nowPlayingContent
+            Group {
+                if showsVisualWorld {
+                    NowPlayingVisualWorldView(
+                        onQueue: { isQueuePresented = true },
+                        onEqualizer: { isEqualizerPresented = true },
+                        onAddToPlaylist: { isAddToPlaylistPresented = true },
+                        onAudioInformation: {
+                            artworkDisplayState = .audioInformation
+                            showsVisualWorld = false
+                        },
+                        onTrackAdjustments: {
+                            artworkDisplayState = .trackAdjustments
+                            showsVisualWorld = false
+                        }
+                    )
+                } else {
+                    ViewThatFits(in: .vertical) {
+                        nowPlayingContent
+                        ScrollView { nowPlayingContent }
+                    }
+                    .themeScreen()
                 }
             }
-            .themeScreen()
-            .navigationTitle("再生中")
+            .navigationTitle(showsVisualWorld ? "" : "再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }
-                        .accessibilityLabel("再生画面を閉じる")
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.35)) { showsVisualWorld.toggle() }
+                    } label: {
+                        Image(systemName: showsVisualWorld ? "rectangle" : "sparkles.rectangle.stack")
+                            .font(.system(size: showsVisualWorld ? 15 : 19, weight: .light))
+                            .foregroundStyle(.white.opacity(showsVisualWorld ? 0.55 : 0.9))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(showsVisualWorld ? "通常の再生画面へ" : "アート画面へ")
                 }
             }
             .sheet(isPresented: $isQueuePresented) {

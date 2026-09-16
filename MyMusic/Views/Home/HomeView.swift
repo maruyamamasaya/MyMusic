@@ -569,12 +569,8 @@ private struct HomeTuningTag: View {
         .fixedSize(horizontal: true, vertical: false)
         .background {
             Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .fill(tagGradient)
-                        .opacity(0.8)
-                }
+                .fill(tagGradient)
+                .opacity(0.6)
                 .overlay {
                     Capsule()
                         .strokeBorder(
@@ -586,8 +582,6 @@ private struct HomeTuningTag: View {
                             lineWidth: 1
                         )
                 }
-                .shadow(color: gradientColors[0].opacity(isActive ? 0.5 : 0), radius: 15)
-                .shadow(color: gradientColors[0].opacity(isActive ? 0.24 : 0), radius: 6)
         }
         .overlay {
             Capsule()
