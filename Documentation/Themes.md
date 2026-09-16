@@ -66,3 +66,7 @@
 ## ナビゲーションヘッダー
 
 `ThemeScreenModifier`で共通navigation barの背景を縦gradientへ統一。上端は黒、不透明度は位置0→1に対して1.0／0.92（35%）／0.45（75%）／0。大見出しが中央タイトルへ収まる標準navigationの背景表示タイミングを維持し、下端を透明にして画面との境界を和らげる。タイトル・戻る操作はシステムのdark schemeを維持する。
+
+## 再生中アート画面の例外
+
+通常のテーマ背景は上記の静的描画を維持する。再生中画面から切り替えるVisual Worldだけは、Auroraの光の帯、Neonの幾何学、Cosmosの粒子軌道を最大30fpsで描く。色はArtworkの代表色とテーマfallback、動きはTrack Featuresと再生音の表示専用値から作る。背景gestureはコントローラー表示のみ。詳細は[Visual World Beta 2](NowPlayingVisualWorld.md)を参照。

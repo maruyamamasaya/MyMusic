@@ -17,6 +17,7 @@ struct NowPlayingView: View {
             Group {
                 if showsVisualWorld {
                     NowPlayingVisualWorldView(
+                        isFrontmost: !isQueuePresented && !isEqualizerPresented && !isAddToPlaylistPresented,
                         onQueue: { isQueuePresented = true },
                         onEqualizer: { isEqualizerPresented = true },
                         onAddToPlaylist: { isAddToPlaylistPresented = true },

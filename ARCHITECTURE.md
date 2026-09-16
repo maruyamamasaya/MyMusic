@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-01
+updated: 2026-09-16
 ---
 
 # MyMusic Architecture
@@ -49,6 +49,10 @@ Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「�
 ## テーマの表示境界
 
 `SettingsStore.theme` → `MyMusicApp`のEnvironment／tint → `ThemePalette`／`ThemeBackground`／各画面の`themeScreen()`。保存IDは`AppTheme`、視覚パラメータはViews/Themeへ分離する。設定はUserDefaultsの`appearance.theme`に保存し、App外バックアップの許可キーへ含める。再生StoreとWatch通信には接続しない。詳細は[Themes](Documentation/Themes.md)。
+
+### 再生中のアート画面
+
+`NowPlayingView`の通常／アート切り替えで`NowPlayingVisualWorldView`を表示する。既存の`AudioPlayerService`出力tap → `PlayerStore.spatialSnapshot` → 表示専用`VisualWorldDynamics` → `VisualWorldScene`（SwiftUI Canvas）へ音量・左右バランス・幅を渡す。Dynamicsは短期／長期音量の差とattack／releaseを表示へ使用し、再生処理へ値を書き戻さない。`VisualWorldPaletteService` actorは既存ArtworkServiceから画像Dataを受け、縮小画像の色相別代表色を計算する。背景gestureは表示状態だけを変更し、`VisualWorldController`内の明示操作だけがPlayerStore等へ接続する。画面非表示、sheet表示、scene非active、一時停止では描画時計を止める。詳細は[Visual World](Documentation/NowPlayingVisualWorld.md)。
 
 ## 主要データフロー
 
