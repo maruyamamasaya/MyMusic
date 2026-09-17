@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NowPlayingVisualWorldView: View {
-    @Environment(\.appTheme) private var theme
+    @Environment(SettingsStore.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -11,17 +11,8 @@ struct NowPlayingVisualWorldView: View {
     @Environment(TrackPreferenceStore.self) private var preferences
 
     var isFrontmost = true
-    let onQueue: () -> Void
-    let onEqualizer: () -> Void
-    let onAddToPlaylist: () -> Void
-    let onAudioInformation: () -> Void
-    let onTrackAdjustments: () -> Void
 
     @State private var artworkColors: VisualWorldArtworkColors?
-    @State private var showsControls = false
-    @State private var expanded = false
-    @State private var suggestedDirection = 0
-    @State private var revealFeedback = 0
     @State private var motion = VisualWorldDynamics()
     @State private var simulation = VisualWorldSimulation()
     @State private var metalUnavailable = false
@@ -32,6 +23,7 @@ struct NowPlayingVisualWorldView: View {
     private var values: TrackFeatureValues? {
         player.currentTrack.flatMap { features.feature(for: $0.id)?.values }
     }
+    private var style: VisualWorldStyle { settings.visualWorldStyle }
     private var isAnimating: Bool {
         isFrontmost && scenePhase == .active && (player.isPlaying || !simulation.resting)
             && thermal != .critical
@@ -39,57 +31,29 @@ struct NowPlayingVisualWorldView: View {
     }
 
     var body: some View {
-        let shouldReduceMotion = reduceMotion
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                visualBackground
-                    .ignoresSafeArea()
+        ZStack(alignment: .bottom) {
+            visualBackground
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .gesture(artworkTapGesture)
+                .accessibilityElement()
+                .accessibilityLabel("再生中のビジュアル")
+                .accessibilityHint("1回タップで再生または一時停止、2回タップでいいねを切り替えます")
+                .accessibilityAction(named: "再生または一時停止") { togglePlayback() }
+                .accessibilityAction(named: "いいねを切り替え") { toggleFavorite() }
+            VStack(spacing: 14) {
+                Spacer(minLength: 0)
+                identity
                     .allowsHitTesting(false)
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(revealGesture)
-                    .accessibilityElement()
-                    .accessibilityLabel("音楽のアート。操作を表示")
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { reveal(expanded: false) }
-                VStack(spacing: 14) {
-                    Spacer(minLength: 0)
-                    identity
-                    if showsControls {
-                        VisualWorldController(
-                            expanded: $expanded, suggestedDirection: suggestedDirection,
-                            maximumHeight: geometry.size.height * 0.63,
-                            onClose: { withAnimation(.easeOut(duration: 0.2)) { showsControls = false } },
-                            onQueue: onQueue, onEqualizer: onEqualizer,
-                            onAddToPlaylist: onAddToPlaylist, onAudioInformation: onAudioInformation,
-                            onTrackAdjustments: onTrackAdjustments
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else {
-                        Button { reveal(expanded: false) } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(contrast == .increased ? 0.9 : 0.6))
-                                .frame(minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("コントローラーを表示")
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 10)
+                VisualWorldController()
             }
-            .keyframeAnimator(initialValue: CGFloat.zero, trigger: revealFeedback) { content, offset in
-                content.offset(x: shouldReduceMotion ? 0 : offset)
-            } keyframes: { _ in
-                LinearKeyframe(-2.5, duration: 0.05)
-                LinearKeyframe(2, duration: 0.06)
-                LinearKeyframe(-1, duration: 0.06)
-                LinearKeyframe(0, duration: 0.08)
-            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 10)
         }
         .background(.black)
-        .sensoryFeedback(.impact(weight: .light), trigger: revealFeedback)
         .task(id: player.currentTrack?.artworkIdentifier) {
             guard let identifier = player.currentTrack?.artworkIdentifier else { artworkColors = nil; return }
             let colors = await VisualWorldPaletteService.shared.colors(for: identifier)
@@ -115,21 +79,43 @@ struct NowPlayingVisualWorldView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
-        .onChange(of: player.currentTrack?.id) { _, _ in suggestedDirection = 0 }
     }
 
     private var analysisEnabled: Bool {
         isAnimating && player.isPlaying
     }
 
+    private var artworkTapGesture: some Gesture {
+        TapGesture(count: 2)
+            .exclusively(before: TapGesture())
+            .onEnded { value in
+                switch value {
+                case .first: toggleFavorite()
+                case .second: togglePlayback()
+                }
+            }
+    }
+
+    private func togglePlayback() {
+        guard player.currentTrack != nil && !player.isLoading else { return }
+        player.togglePlayPause()
+    }
+
+    private func toggleFavorite() {
+        guard let track = player.currentTrack, track.isEligibleForRegularPlayback else { return }
+        preferences.toggleFavorite(trackID: track.id)
+    }
+
     private var frameInterval: Double {
-        thermal == .serious ? 1.0 / 15 : (lowPower || showsControls ? 1.0 / 20 : 1.0 / 30)
+        thermal == .serious ? 1.0 / 15 : (lowPower ? 1.0 / 20 : 1.0 / 30)
     }
 
     private var visualBackground: some View {
-        let palette = ThemePalette.resolve(theme)
-        let primary = artworkColors.map { color($0.primary) } ?? (theme == .simpleDark ? .indigo : palette.light)
-        let secondary = artworkColors.map { color($0.secondary) } ?? palette.accent
+        let palette = ThemePalette.resolve(style.themePalette)
+        let primary = artworkColors.map { color($0.primary) }
+            ?? (style == .twilight ? Color(red: 0.63, green: 0.28, blue: 0.52) : (style == .photonSphere ? .indigo : palette.light))
+        let secondary = artworkColors.map { color($0.secondary) }
+            ?? (style == .twilight ? Color(red: 1, green: 0.54, blue: 0.31) : palette.accent)
         let energy = values?.energy ?? 0.5
         let speed = energy * 0.55 + min((values?.tempo ?? 100) / 180, 1) * 0.3 + (1 - (values?.calm ?? 0.5)) * 0.15
         return TimelineView(.animation(minimumInterval: frameInterval,
@@ -141,12 +127,12 @@ struct NowPlayingVisualWorldView: View {
                                          frameInterval: frameInterval,
                                          onFailure: { metalUnavailable = true })
                 } else {
-                    VisualWorldScene(theme: theme, primary: primary, secondary: secondary,
+                    VisualWorldScene(style: style, primary: primary, secondary: secondary,
                                      motion: motion, energy: energy, ambient: values?.ambient ?? 0.5,
                                      brightness: values?.bright ?? 0.5,
                                      subdued: reduceTransparency || contrast == .increased)
                 }
-                LinearGradient(stops: [.init(color: .clear, location: 0.62),
+                LinearGradient(stops: [.init(color: .clear, location: 0.76),
                                        .init(color: .black.opacity(0.68), location: 1)],
                                startPoint: .top, endPoint: .bottom)
             }
@@ -174,11 +160,11 @@ struct NowPlayingVisualWorldView: View {
             return SIMD4(linear(r), linear(g), linear(b), 1)
         }
         var u = VisualWorldUniforms()
-        let themeIndex: Float = switch theme {
-        case .simpleDark: 0
-        case .livingAurora: 1
-        case .pulseNeon: 2
-        case .blueCosmos: 3
+        let themeIndex: Float = switch style {
+        case .photonSphere: 0
+        case .lightGates: 2
+        case .nightSky: 3
+        case .twilight: 4
         }
         u.viewport = SIMD4(1, 1, Float(simulation.clock), themeIndex)
         u.motion = SIMD4(Float(simulation.displacement), Float(simulation.opening),
@@ -205,8 +191,6 @@ struct NowPlayingVisualWorldView: View {
 
     private var identity: some View {
         HStack(spacing: 12) {
-            AlbumArtworkView(artworkIdentifier: player.currentTrack?.artworkIdentifier)
-                .frame(width: 48, height: 48)
             VStack(alignment: .leading, spacing: 4) {
                 Text(player.currentTrack?.title ?? "未再生")
                     .font(.headline)
@@ -217,38 +201,10 @@ struct NowPlayingVisualWorldView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
-            if let track = player.currentTrack, preferences.isFavorite(trackID: track.id) {
-                Image(systemName: "heart.fill").foregroundStyle(.pink).accessibilityLabel("お気に入り")
-            }
         }
         .padding(12)
         .background(.black.opacity(0.48), in: RoundedRectangle(cornerRadius: 16))
         .foregroundStyle(.white)
-    }
-
-    /// Exclusive recognition: no background gesture can call a playback or preference API.
-    private var revealGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.85, maximumDistance: 18)
-            .onEnded { _ in
-                revealFeedback += 1
-                reveal(expanded: true)
-            }
-            .exclusively(before:
-                DragGesture(minimumDistance: 24)
-                    .onEnded { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
-                        suggestedDirection = value.translation.width > 0 ? 1 : -1
-                        reveal(expanded: false)
-                    }
-            )
-            .exclusively(before: TapGesture().onEnded { reveal(expanded: false) })
-    }
-
-    private func reveal(expanded: Bool) {
-        withAnimation(.spring(response: reduceMotion ? 0.01 : 0.3, dampingFraction: 0.86)) {
-            if !showsControls || expanded { self.expanded = expanded }
-            showsControls = true
-        }
     }
 
     private func color(_ rgb: VisualWorldRGB) -> Color {

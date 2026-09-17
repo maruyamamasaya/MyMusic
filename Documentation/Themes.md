@@ -69,4 +69,8 @@
 
 ## 再生中アート画面の例外
 
-通常のテーマ背景は上記の静的描画を維持する。再生中画面から切り替えるVisual Worldだけは、Auroraの光の帯、Neonの幾何学、Cosmosの粒子軌道を最大30fpsで描く。色はArtworkの代表色とテーマfallback、動きはTrack Featuresと再生音の表示専用値から作る。背景gestureはコントローラー表示のみ。詳細は[Visual World Beta 2](NowPlayingVisualWorld.md)を参照。
+Visual Worldの4種類は設定 → デザイン → 再生中のビジュアルで選択し、画面テーマと独立して保存する。旧Living Aurora由来の設定はPhoton Sphereへ統合する。
+
+「薄明」は青紫から桃色・琥珀色へ変わる空、速度の異なる雲の層と地平線の光を描く。曲のenergyと再生音で雲の速度、空の暖かさ、地平線の光量が変わる。Photon Sphereは固定外形のまま内部の光を強める。Pulse Neonはゲートの発光、Blue Cosmosは星雲と瞬く星が音へより強く応答する。常時点灯の星は音で一斉に点滅させない。Metalが利用できない場合はCanvasで各表現を描く。
+
+通常のテーマ背景は上記の静的描画を維持する。再生中画面から切り替えるVisual Worldだけは最大30fpsで描く。色はArtworkの代表色と種類ごとのfallback、動きはTrack Featuresと再生音の表示専用値から作る。現行の描画は[Photon Sphere](NowPlayingVisualWorld-PhotonSphere.md)、操作は`NowPlayingVisualWorldView`を参照。

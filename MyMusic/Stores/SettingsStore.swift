@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class SettingsStore {
     private(set) var theme: AppTheme = .livingAurora
+    private(set) var visualWorldStyle: VisualWorldStyle = .photonSphere
     private(set) var volumeNormalizationEnabled = false
     var gaplessPlaybackEnabled = true
 
@@ -30,7 +31,15 @@ final class SettingsStore {
         self.playbackTransitionController = playbackTransitionController
         self.volumeNormalizationController = volumeNormalizationController
         self.defaults = defaults
-        theme = defaults.string(forKey: "appearance.theme").flatMap(AppTheme.init(rawValue:)) ?? .livingAurora
+        let selectedTheme = defaults.string(forKey: "appearance.theme").flatMap(AppTheme.init(rawValue:)) ?? .livingAurora
+        theme = selectedTheme
+        let selectedVisualStyle = defaults.string(forKey: "appearance.visualWorldStyle")
+            .flatMap(VisualWorldStyle.init(rawValue:))
+            ?? VisualWorldStyle(rawValue: selectedTheme.rawValue) ?? .photonSphere
+        visualWorldStyle = selectedVisualStyle
+        if defaults.string(forKey: "appearance.visualWorldStyle") != selectedVisualStyle.rawValue {
+            defaults.set(selectedVisualStyle.rawValue, forKey: "appearance.visualWorldStyle")
+        }
         volumeNormalizationEnabled = defaults.bool(forKey: volumeNormalizationKey)
         if let data = defaults.data(forKey: equalizerKey),
            var saved = try? JSONDecoder().decode(EqualizerSettings.self, from: data) {
@@ -60,6 +69,11 @@ final class SettingsStore {
     func setTheme(_ theme: AppTheme) {
         self.theme = theme
         defaults.set(theme.rawValue, forKey: "appearance.theme")
+    }
+
+    func setVisualWorldStyle(_ style: VisualWorldStyle) {
+        visualWorldStyle = style
+        defaults.set(style.rawValue, forKey: "appearance.visualWorldStyle")
     }
 
     func setVolumeNormalizationEnabled(_ isEnabled: Bool) {

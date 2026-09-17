@@ -17,18 +17,7 @@ struct NowPlayingView: View {
             Group {
                 if showsVisualWorld {
                     NowPlayingVisualWorldView(
-                        isFrontmost: !isQueuePresented && !isEqualizerPresented && !isAddToPlaylistPresented,
-                        onQueue: { isQueuePresented = true },
-                        onEqualizer: { isEqualizerPresented = true },
-                        onAddToPlaylist: { isAddToPlaylistPresented = true },
-                        onAudioInformation: {
-                            artworkDisplayState = .audioInformation
-                            showsVisualWorld = false
-                        },
-                        onTrackAdjustments: {
-                            artworkDisplayState = .trackAdjustments
-                            showsVisualWorld = false
-                        }
+                        isFrontmost: !isQueuePresented && !isEqualizerPresented && !isAddToPlaylistPresented
                     )
                 } else {
                     ViewThatFits(in: .vertical) {
@@ -41,6 +30,26 @@ struct NowPlayingView: View {
             .navigationTitle(showsVisualWorld ? "" : "再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if showsVisualWorld {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            ForEach(VisualWorldStyle.allCases) { style in
+                                Button {
+                                    settingsStore.setVisualWorldStyle(style)
+                                } label: {
+                                    Label(style.title, systemImage: settingsStore.visualWorldStyle == style ? "checkmark" : "circle")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "paintpalette")
+                                .font(.system(size: 19, weight: .light))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("再生中のビジュアルを切り替え")
+                        .accessibilityValue(settingsStore.visualWorldStyle.title)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         withAnimation(.easeInOut(duration: 0.35)) { showsVisualWorld.toggle() }

@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Lightweight sphere / Blue Cosmos night-sky fallback when Metal is unavailable.
+/// Lightweight Canvas fallback when Metal is unavailable.
 struct VisualWorldScene: View {
-    let theme: AppTheme
+    let style: VisualWorldStyle
     let primary: Color
     let secondary: Color
     let motion: VisualWorldDynamics
@@ -14,12 +14,16 @@ struct VisualWorldScene: View {
     var body: some View {
         Canvas { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
-            if theme == .blueCosmos {
+            if style == .nightSky {
                 nightSky(context: &context, size: size)
                 return
             }
-            if theme == .pulseNeon {
+            if style == .lightGates {
                 lightGates(context: &context, size: size)
+                return
+            }
+            if style == .twilight {
+                twilight(context: &context, size: size)
                 return
             }
             let radius = min(size.width, size.height) * 0.45
@@ -46,7 +50,7 @@ struct VisualWorldScene: View {
                 let x = radial*cos(angle), depth = radial*sin(angle)
                 let point = CGPoint(x: center.x+x*radius*0.94, y: center.y+z*radius*0.94)
                 let dotRadius = 0.5 + (depth+1)*0.65
-                let alpha = (0.12+(depth+1)*0.25) * (0.6+motion.level*0.4)
+                let alpha = (0.12+(depth+1)*0.25) * (0.42+motion.level*0.95)
                 let dot = Path(ellipseIn: CGRect(x: point.x-dotRadius, y: point.y-dotRadius,
                                                 width: dotRadius*2, height: dotRadius*2))
                 context.fill(dot, with: .color((index%4 == 0 ? .white : primary).opacity(alpha)))
@@ -64,7 +68,7 @@ struct VisualWorldScene: View {
             let phase = (Double(index)+0.5)/8-motion.time*0.32
             let depth = phase-floor(phase)
             let scale = unit/(0.3+depth*9)
-            let opacity = min(depth/0.07,1)*min((1-depth)/0.16,1)
+            let opacity = min(1, min(depth/0.07,1)*min((1-depth)/0.16,1)*(0.62+motion.level*0.75))
             func point(_ x: Double, _ y: Double) -> CGPoint {
                 CGPoint(x: center.x+x*scale,y: center.y-y*scale)
             }
@@ -80,8 +84,58 @@ struct VisualWorldScene: View {
                 startPoint: point(-1.4,1.1),endPoint: point(1.4,-1.1))
             var layer = context
             layer.opacity *= opacity
-            layer.stroke(path,with: gradient,lineWidth: max(2,scale*0.055))
+            layer.stroke(path,with: gradient,lineWidth: max(2,scale*(0.05+motion.level*0.035)))
             layer.stroke(path,with: .color(.white.opacity(0.8)),lineWidth: max(0.7,scale*0.008))
+        }
+    }
+
+    private func twilight(context: inout GraphicsContext, size: CGSize) {
+        context.opacity = subdued ? 0.4 : 1
+        let sky = Path(CGRect(origin: .zero, size: size))
+        context.fill(sky, with: .linearGradient(
+            Gradient(stops: [
+                .init(color: Color(red: 0.015, green: 0.025, blue: 0.12), location: 0),
+                .init(color: Color(red: 0.23, green: 0.08, blue: 0.3), location: 0.33),
+                .init(color: Color(red: 0.68, green: 0.19, blue: 0.28), location: 0.5),
+                .init(color: Color(red: 0.88, green: 0.37, blue: 0.18), location: 0.58),
+                .init(color: Color(red: 0.055, green: 0.035, blue: 0.12), location: 1)
+            ]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.51)
+        let glowRadius = min(size.width * 0.8, size.height * 0.36)
+        let glow = Path(ellipseIn: CGRect(x: center.x-glowRadius, y: center.y-glowRadius*0.52,
+                                         width: glowRadius*2, height: glowRadius*1.04))
+        context.fill(glow, with: .radialGradient(
+            Gradient(colors: [Color(red: 1, green: 0.7, blue: 0.34).opacity(0.24 + motion.level*0.42), .clear]),
+            center: center, startRadius: 0, endRadius: glowRadius))
+        context.fill(glow, with: .radialGradient(
+            Gradient(colors: [secondary.opacity(0.09), primary.opacity(0.04), .clear]),
+            center: center, startRadius: 0, endRadius: glowRadius))
+
+        for layer in 0..<3 {
+            let baseline = size.height * (0.35 + Double(layer) * 0.13)
+            let drift = motion.time * (0.5 + energy*0.55 + Double(layer) * 0.45)
+            let amplitude = size.height * (0.018 + Double(layer) * 0.008)
+            var cloud = Path()
+            cloud.move(to: CGPoint(x: 0, y: baseline))
+            for step in 0...24 {
+                let x = size.width * Double(step) / 24
+                let wave = sin(x / size.width * 9 + drift) * 0.65
+                    + sin(x / size.width * 19 - drift * 0.73) * 0.35
+                cloud.addLine(to: CGPoint(x: x, y: baseline + wave * amplitude))
+            }
+            cloud.addLine(to: CGPoint(x: size.width, y: baseline + size.height * 0.065))
+            cloud.addLine(to: CGPoint(x: 0, y: baseline + size.height * 0.065))
+            cloud.closeSubpath()
+            let cloudColor: Color = switch layer {
+            case 0: Color(red: 0.20, green: 0.08, blue: 0.27)
+            case 1: Color(red: 0.38, green: 0.09, blue: 0.25)
+            default: Color(red: 0.055, green: 0.04, blue: 0.14)
+            }
+            context.fill(cloud, with: .linearGradient(
+                Gradient(colors: [cloudColor.opacity(0.34 + Double(layer)*0.12 + motion.level*0.13), cloudColor.opacity(0.04)]),
+                startPoint: CGPoint(x: 0, y: baseline),
+                endPoint: CGPoint(x: 0, y: baseline + size.height*0.065)))
         }
     }
 
@@ -90,7 +144,7 @@ struct VisualWorldScene: View {
         context.opacity = subdued ? 0.4 : 1
         let center = CGPoint(x: size.width*0.45, y: size.height*0.43)
         context.fill(Path(CGRect(origin: .zero, size: size)),
-                     with: .radialGradient(Gradient(colors: [primary.opacity(0.1), blue.opacity(0.08), .black]),
+                     with: .radialGradient(Gradient(colors: [primary.opacity(0.08+motion.level*0.14), blue.opacity(0.07+motion.level*0.07), .black]),
                                            center: center, startRadius: 0, endRadius: size.height*0.6))
         func random(_ value: Double) -> Double {
             let n = sin(value*127.1+311.7)*43758.5453
@@ -122,9 +176,9 @@ struct VisualWorldScene: View {
             let pulse = smooth(0,0.1,phase)*(1-smooth(0.1,0.42,phase))
             var light = 0.85
             if behavior >= 0.45 && behavior < 0.8 {
-                light = (0.08+1.5*pow(0.5+0.5*sin(motion.time*(1.8+seed*2)+seed*71),2))*(0.8+motion.level*0.5)
+                light = (0.08+1.5*pow(0.5+0.5*sin(motion.time*(1.8+seed*2)+seed*71),2))*(0.55+motion.level*1.3)
             } else if behavior >= 0.8 {
-                light = 0.06+pulse*(2.6+motion.level*1.5)
+                light = 0.06+pulse*(2.2+motion.level*3.0)
             }
             let alpha = min((0.35+seed*0.45)*light,1)
             let colorSeed = random(Double(i)+109)

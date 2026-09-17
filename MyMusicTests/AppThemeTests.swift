@@ -18,6 +18,35 @@ final class AppThemeTests: XCTestCase {
         XCTAssertEqual(SettingsStore(defaults: defaults).theme, .livingAurora)
     }
 
+    func testVisualWorldSelectionIsIndependentOfThemeAndPersists() throws {
+        let suite = "VisualWorldStyle.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set(AppTheme.blueCosmos.rawValue, forKey: "appearance.theme")
+        let settings = SettingsStore(defaults: defaults)
+        XCTAssertEqual(settings.visualWorldStyle, .nightSky)
+
+        settings.setVisualWorldStyle(.lightGates)
+        settings.setTheme(.simpleDark)
+        XCTAssertEqual(settings.visualWorldStyle, .lightGates)
+        XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .lightGates)
+        XCTAssertEqual(SettingsStore(defaults: defaults).theme, .simpleDark)
+        settings.setVisualWorldStyle(.twilight)
+        XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .twilight)
+    }
+
+    func testLegacyAuroraVisualWorldMigratesToPhotonSphere() throws {
+        let suite = "VisualWorldLegacy.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set("living-aurora", forKey: "appearance.visualWorldStyle")
+        XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .photonSphere)
+        XCTAssertEqual(defaults.string(forKey: "appearance.visualWorldStyle"), "simple-dark")
+        XCTAssertEqual(VisualWorldStyle.allCases.count, 4)
+    }
+
     func testThemeSelectionRendersForEveryThemeAndAccessibilitySize() throws {
         let suite = "AppThemeRender.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -52,11 +52,13 @@ Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「�
 
 ### 再生中のアート画面
 
+Visual Worldの描画種類は`SettingsStore.visualWorldStyle`が所有し、`appearance.visualWorldStyle`へ保存する。旧設定でキーがない場合は`appearance.theme`に対応する種類を初期値として採用する。旧`living-aurora`はPhoton Sphereへ読み替え、保存値を`simple-dark`へ正規化する。選択後はアプリのテーマと独立し、App外バックアップにも含める。
+
 `NowPlayingView` → `NowPlayingVisualWorldView` → `VisualWorldSimulation` → `VisualWorldMetalView`／`VisualWorldInstallation.metal`。既存の`AudioPlayerService`出力tapを共有し、追加のPCM copyは事前確保した`VisualWorldAudioMailbox`へ渡す。atomicな単一slotが満杯なら追加sampleをdropし、音声callbackを待たせない。`VisualWorldAudioAnalysisService`のserial queueが最大20Hzで`VisualWorldSpectrumAnalyzer`（Accelerate FFT／調波salience）を実行し、`PlayerStore.visualAudioFrame`へ返す。seek／曲切り替え／route変更はgenerationを更新し古い結果を拒否する。既存`spectrumLevels`と`spatialSnapshot`の契約は維持する。
 
-`PlayerStore`は表示用解析の有効／無効と再生sessionのseedを所有する。Viewは前面・scene・accessibility・再生状態に応じて解析購読を切り替える。Simulationは特徴量による力・拘束・減衰を表示状態だけへ積分する。Blue Cosmosでは最大3層の星空と低周波の星雲へ分岐する。Pulse Neonは最大10本分のゲート（低品質6）の発光チューブと透視投影へ分岐する。Simple Dark／Living AuroraのMetalは固定サイズの単一球体の交差と内部の有界volume sampling（通常18／低品質10 step）、発光粒子・陰影・halo・bloomを描き、GPUの未完了frameは最大2とする。フレーム間隔と解像度を低電力・thermal状態で下げる。Metal初期化不能時は`VisualWorldScene` Canvasを使う。
+`PlayerStore`は表示用解析の有効／無効と再生sessionのseedを所有する。Viewは前面・scene・accessibility・再生状態に応じて解析購読を切り替える。Simulationは特徴量による力・拘束・減衰を表示状態だけへ積分する。Blue Cosmosでは最大3層の星空と低周波の星雲へ分岐する。Pulse Neonは最大10本分のゲート（低品質6）の発光チューブと透視投影へ分岐する。Photon SphereのMetalは固定サイズの単一球体の交差と内部の有界volume sampling（通常18／低品質10 step）、発光粒子・陰影・halo・bloomを描き、GPUの未完了frameは最大2とする。フレーム間隔と解像度を低電力・thermal状態で下げる。Metal初期化不能時は`VisualWorldScene` Canvasを使う。
 
-`VisualWorldPaletteService` actorは縮小Artworkから主色／副色／accentと占有率を取得し、無彩色画像も扱う。曲切り替えの姿勢・色はRendererで補間する。背景gestureは表示状態だけを変更し、`VisualWorldController`の明示操作だけが既存Storeへ接続する。非表示／sheet／scene非activeでは描画と追加解析を休止、一時停止時は約10秒以内の有限の慣性を残す。詳細は[Visual World Beta 3](Documentation/NowPlayingVisualWorld-Beta3.md)、採用理由は[ADR-0006](decisions/ADR-0006-visual-world-rendering.md)。
+`VisualWorldPaletteService` actorは縮小Artworkから主色／副色／accentと占有率を取得し、無彩色画像も扱う。曲切り替えの姿勢・色はRendererで補間する。`VisualWorldController`は前へ・再生／一時停止・次へを`PlayerStore`、いいね・グッドを`TrackPreferenceStore`へ接続する。アート画面のボタン以外の全域は排他的な1回／2回タップで再生／一時停止といいねを実行する。詳細パネルは表示せず、通常画面への切り替えを使う。非表示／sheet／scene非activeでは描画と追加解析を休止、一時停止時は約10秒以内の有限の慣性を残す。詳細は[Visual World Beta 3](Documentation/NowPlayingVisualWorld-Beta3.md)、採用理由は[ADR-0006](decisions/ADR-0006-visual-world-rendering.md)。
 
 ## 主要データフロー
 

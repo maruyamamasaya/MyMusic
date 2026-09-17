@@ -12,6 +12,12 @@ struct SettingsView: View {
                     Label("テーマ", systemImage: "sparkles")
                         .badge(ThemePalette.resolve(settingsStore.theme).title)
                 }
+                NavigationLink {
+                    VisualWorldSettingsView()
+                } label: {
+                    Label("再生中のビジュアル", systemImage: "sparkles.rectangle.stack")
+                        .badge(settingsStore.visualWorldStyle.title)
+                }
             }
 
             Section {

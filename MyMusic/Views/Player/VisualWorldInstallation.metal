@@ -40,7 +40,7 @@ float3 nightSky(float2 uv, constant WorldUniforms &u) {
     float aspect = u.viewport.x / u.viewport.y;
     float2 p = (uv - 0.5) * float2(aspect, 1);
     float t = u.viewport.z;
-    float2 drift = float2(t * 0.0017, sin(t * 0.04) * 0.007);
+    float2 drift = float2(t * (0.002 + u.character.x * 0.002), sin(t * 0.08) * 0.009);
     float3 blue = float3(0.055, 0.18, 0.65);
     float3 tint = mix(blue, mix(u.primary.rgb,u.secondary.rgb,0.5), 0.32);
     float cloud = field(float3(p * 4 + drift, 7.2));
@@ -48,7 +48,7 @@ float3 nightSky(float2 uv, constant WorldUniforms &u) {
     float lane = exp(-pow((p.x + p.y * 0.46 + (cloud-0.5)*0.24) * 4.5, 2));
     float haze = lane * pow(cloud * 0.7 + detail * 0.3, 2.2);
     float3 color = float3(0.0006,0.0012,0.004);
-    color += tint * haze * (0.09 + u.motion.w * 0.035);
+    color += tint * haze * (0.08 + u.sound.x * 0.16 + u.motion.w * 0.11);
     int layers = u.tonal.w > 0.5 ? 2 : 3;
     for (int layer = 0; layer < layers; ++layer) {
         float depth = float(layer);
@@ -84,9 +84,9 @@ float3 nightSky(float2 uv, constant WorldUniforms &u) {
             float pulse = smoothstep(0.0,0.1,phase)*(1-smoothstep(0.1,0.42,phase));
             float light = 0.85; // 45% remain steadily lit, independent of audio.
             if (behavior >= 0.45 && behavior < 0.8) {
-                light = (0.08+1.5*pow(0.5+0.5*sin(t*(1.8+seed*2)+random3(key+191)*6.283),2.0))*(0.8+response*0.5);
+                light = (0.08+1.5*pow(0.5+0.5*sin(t*(1.8+seed*2)+random3(key+191)*6.283),2.0))*(0.65+response*1.25);
             } else if (behavior >= 0.8) {
-                light = 0.06+pulse*(2.6+response*1.5);
+                light = 0.06+pulse*(2.2+response*3.0);
             }
             float halo = exp(-d/(size*2.2))*0.022;
             if (behavior >= 0.8) halo += exp(-d/(size*4.0))*pulse*0.11;
@@ -133,15 +133,58 @@ float3 lightGates(float2 uv, constant WorldUniforms &u) {
         float core = exp(-pow(distance/width,2));
         float glow = exp(-distance/0.055)*0.3 + exp(-distance/0.2)*0.055;
         float3 hue = mix(primary,secondary,0.5+0.5*sin(depth*4+q.y*0.8));
-        float excitation = 0.8+spectrum(depth,u)*0.75;
-        color += (hue*glow*4 + mix(hue,float3(1),0.72)*core*2)*fade*excitation;
+        float response = spectrum(depth,u);
+        float excitation = 0.65+response*1.25+u.motion.z*0.45;
+        color += (hue*glow*(3.2+u.sound.x*2.4) + mix(hue,float3(1),0.72)*core*2)*fade*excitation;
     }
     // Dim converging road light describes forward travel without covering the opening.
     float horizonGlow = exp(-length(p)*3.5);
-    color += mix(primary,secondary,0.5)*horizonGlow*(0.025+u.motion.w*0.035);
+    color += mix(primary,secondary,0.5)*horizonGlow*(0.025+u.motion.w*0.11+u.motion.z*0.08);
     return color;
 }
+// Twilight: a slowly breathing horizon with cloud banks moving at different depths.
+float3 twilightSky(float2 uv, constant WorldUniforms &u) {
+    float t = u.viewport.z;
+    float aspect = u.viewport.x / u.viewport.y;
+    float2 p = float2((uv.x-0.5)*aspect, uv.y);
+    float horizon = 0.51 + 0.016*sin(p.x*5.0+t*0.36);
+    float distance = p.y-horizon;
+    float3 midnight = float3(0.007,0.012,0.055);
+    float3 violet = float3(0.105,0.035,0.18);
+    float3 rose = float3(0.49,0.12,0.22);
+    float3 amber = float3(0.95,0.37,0.11);
+    float3 color = mix(midnight,violet,smoothstep(0.02,0.43,p.y));
+    float warmth = saturate(0.35+u.character.x*0.25+u.sound.y*0.28+u.motion.w*0.24);
+    color = mix(color,rose,smoothstep(0.23,0.51,p.y)*(0.5+warmth*0.42));
+    float glow = exp(-pow(distance/0.115,2.0));
+    float shimmer = 0.75 + u.sound.x*0.55 + u.motion.w*0.38 + u.motion.z*0.32;
+    color += amber*glow*(0.22+warmth*0.28)*shimmer;
+    float sunDistance = length(float2(p.x*0.8,distance*1.3));
+    color += mix(rose,amber,0.62)*exp(-sunDistance*sunDistance/0.045)*0.16*shimmer;
+    // Three horizontal noise fields make layered clouds without a repeating shape.
+    float movement = 0.09+u.character.x*0.08;
+    float farNoise = field(float3(p.x*5.5-t*movement,p.y*15.0,2.7));
+    float middleNoise = field(float3(p.x*8.0+t*movement*1.4,p.y*21.0,8.3));
+    float nearNoise = field(float3(p.x*12.0-t*movement*1.9,p.y*27.0,14.6));
+    float farBand = exp(-pow((p.y-0.34-farNoise*0.055)/0.075,2.0));
+    float middleBand = exp(-pow((p.y-0.46-middleNoise*0.045)/0.062,2.0));
+    float nearBand = exp(-pow((p.y-0.61-nearNoise*0.045)/0.08,2.0));
+    float farCloud = farBand*smoothstep(0.42,0.7,farNoise);
+    float middleCloud = middleBand*smoothstep(0.38,0.72,middleNoise);
+    float nearCloud = nearBand*smoothstep(0.37,0.7,nearNoise);
+    color = mix(color,float3(0.11,0.035,0.16),farCloud*0.48);
+    color = mix(color,float3(0.25,0.07,0.16),middleCloud*0.62);
+    color = mix(color,float3(0.035,0.025,0.09),nearCloud*0.78);
+    float cloudEdge = max(middleBand*smoothstep(0.57,0.77,middleNoise),
+                          nearBand*smoothstep(0.56,0.76,nearNoise));
+    color += amber*cloudEdge*glow*(0.08+u.sound.z*0.14)*shimmer;
+    color *= 1.0-smoothstep(0.72,1.0,p.y)*0.72;
+    float3 artwork = mix(u.primary.rgb,u.secondary.rgb,0.5);
+    color += artwork*(glow*0.07+farCloud*0.035);
+    return max(color,0.0);
+}
 fragment float4 visualWorldFragment(Raster in [[stage_in]], constant WorldUniforms &u [[buffer(0)]]) {
+    if (u.viewport.w > 3.5) return float4(twilightSky(in.uv,u),1);
     if (u.viewport.w > 2.5) return float4(nightSky(in.uv,u),1);
     if (u.viewport.w > 1.5) return float4(lightGates(in.uv,u),1);
     float2 resolution = u.viewport.xy;
@@ -159,13 +202,13 @@ fragment float4 visualWorldFragment(Raster in [[stage_in]], constant WorldUnifor
     float gradient = saturate(0.5+p.x*0.38+p.y*0.28);
     float3 surroundingLight = mix(primary,secondary,gradient);
     surroundingLight = mix(surroundingLight,u.accent.rgb,pow(gradient,4.0)*0.22);
-    color += surroundingLight * halo * (0.17 + u.sound.y*0.035);
+    color += surroundingLight * halo * (0.12 + u.sound.y*0.12 + u.motion.w*0.09);
     float3 atmosphere = color;
     if (r < radius) {
         float z = sqrt(max(radius*radius-dot(p,p),0.0));
         float3 normal = float3(p,z) / radius;
         float facing = normal.z;
-        float angle = t * 0.3 + u.layout.x;
+        float angle = t * (0.24+u.character.x*0.12) + u.layout.x;
         float3 surface = turn(float3(p,z),angle);
         float3 lightDirection = normalize(float3(-0.6,0.8,1.2));
         float diffuse = max(0.0,dot(normal,lightDirection));
@@ -199,9 +242,9 @@ fragment float4 visualWorldFragment(Raster in [[stage_in]], constant WorldUnifor
             photon *= smoothstep(0.67,0.94,seed) * envelope;
             float shimmer = 0.3 + 0.7*pow(0.5+0.5*sin(t*(1+seed*3)+seed*41),3.0);
             float3 hue = mix(primary,secondary,smoothstep(0.2,0.85,density));
-            float light = cloud*(0.12+u.motion.w*0.18)
-                        + filament*(0.18+excitation*0.8)
-                        + photon*shimmer*(3+u.sound.z*10);
+            float light = cloud*(0.10+u.motion.w*0.24)
+                        + filament*(0.14+excitation*0.8)
+                        + photon*shimmer*(2.2+u.sound.z*12+u.motion.z*3);
             emission += transmittance * (hue*light + accent*photon*shimmer*1.8) * step * 2.1;
             transmittance *= exp(-cloud*step*(1.4+u.material.x));
         }
