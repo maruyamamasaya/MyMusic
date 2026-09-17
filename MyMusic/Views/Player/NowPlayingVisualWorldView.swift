@@ -154,9 +154,7 @@ struct NowPlayingVisualWorldView: View {
                                    seed: player.visualWorldSeed, drumAndBass: values?.drumAndBass ?? 0.5,
                                    electronic: values?.electronic ?? 0.5, piano: values?.piano ?? 0.5,
                                    tempo: values?.tempo ?? 100)
-                motion.advance(date: date, level: Double(player.spatialSnapshot.level),
-                               width: Double(player.spatialSnapshot.width),
-                               balance: Double(player.spatialSnapshot.balance), speed: speed)
+                motion.advance(date: date, level: Double(player.spatialSnapshot.level), speed: speed)
             }
         }
     }
@@ -181,11 +179,11 @@ struct NowPlayingVisualWorldView: View {
         u.viewport = SIMD4(1, 1, Float(simulation.clock), themeIndex)
         u.motion = SIMD4(Float(simulation.displacement), Float(simulation.opening),
                          Float(simulation.excitation), Float(simulation.memory))
-        u.sound = SIMD4(Float(simulation.bass), Float(simulation.mid), Float(simulation.treble), Float(motion.width))
+        u.sound = SIMD4(Float(simulation.bass), Float(simulation.mid), Float(simulation.treble), 0)
         func unit(_ value: Double?) -> Float { Float(VisualWorldDynamics.unit(value ?? 0.5)) }
         u.character = SIMD4(unit(values?.energy), unit(values?.aggressive), unit(values?.ambient), unit(values?.bright))
         u.material = SIMD4(unit(values?.dark), unit(values?.electronic), unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
-        u.spatial = SIMD4(Float(motion.balance), Float(simulation.beat), 0, 0)
+        u.spatial = SIMD4(0, Float(simulation.beat), 0, 0)
         for i in 0..<4 {
             let value = sin((player.visualWorldSeed + Double(i) * 7) * 127.1 + 311.7) * 43758.5453
             u.layout[i] = Float((value - floor(value)) * 2 * .pi)
