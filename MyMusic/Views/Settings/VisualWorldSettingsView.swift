@@ -15,6 +15,7 @@ struct VisualWorldSettingsView: View {
                                 .frame(width: 28)
                                 .foregroundStyle(style == .twilight
                                     ? Color(red: 1, green: 0.61, blue: 0.39)
+                                    : style == .plasmaSpark ? Color(red: 0.53, green: 0.78, blue: 1)
                                     : ThemePalette.resolve(style.themePalette).accent)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(style.title).foregroundStyle(.primary)
@@ -45,6 +46,8 @@ struct VisualWorldSettingsView: View {
         case .lightGates: "waveform.path"
         case .nightSky: "moon.stars"
         case .twilight: "sun.horizon.fill"
+        case .plasmaSpark: "bolt.fill"
+        case .visualizer: "waveform"
         }
     }
 }

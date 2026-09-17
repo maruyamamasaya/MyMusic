@@ -20,6 +20,18 @@ nonisolated struct VisualWorldUniforms: Equatable {
     var band3 = SIMD4<Float>(repeating: 0)
     var band4 = SIMD4<Float>(repeating: 0)
     var band5 = SIMD4<Float>(repeating: 0)
+    var wave0 = SIMD4<Float>(repeating: 0)
+    var wave1 = SIMD4<Float>(repeating: 0)
+    var wave2 = SIMD4<Float>(repeating: 0)
+    var wave3 = SIMD4<Float>(repeating: 0)
+    var wave4 = SIMD4<Float>(repeating: 0)
+    var wave5 = SIMD4<Float>(repeating: 0)
+    var wave6 = SIMD4<Float>(repeating: 0)
+    var wave7 = SIMD4<Float>(repeating: 0)
+    var wave8 = SIMD4<Float>(repeating: 0)
+    var wave9 = SIMD4<Float>(repeating: 0)
+    var wave10 = SIMD4<Float>(repeating: 0)
+    var wave11 = SIMD4<Float>(repeating: 0)
 }
 
 struct VisualWorldMetalView: UIViewRepresentable {

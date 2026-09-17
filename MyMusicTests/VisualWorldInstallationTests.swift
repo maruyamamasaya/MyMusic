@@ -26,6 +26,7 @@ final class VisualWorldInstallationTests: XCTestCase {
 
     func testOppositePhaseStereoDoesNotCancel() {
         XCTAssertEqual(tone(1_000).mid, tone(1_000, inverted: true).mid, accuracy: 0.000_01)
+        XCTAssertGreaterThan(tone(1_000, inverted: true).waveform.map { abs($0) }.max() ?? 0, 0.2)
     }
 
     func testSampleRatesAndSilence() {
@@ -36,6 +37,7 @@ final class VisualWorldInstallationTests: XCTestCase {
         let silent = tone(0)
         XCTAssertEqual(silent.bands, Array(repeating: 0, count: 24))
         XCTAssertEqual(silent.tonalConfidence, 0)
+        XCTAssertEqual(silent.waveform, Array(repeating: 0, count: 48))
     }
 
     func testMailboxDropsOverflowAndHonorsDisable() throws {
@@ -123,5 +125,30 @@ final class VisualWorldInstallationTests: XCTestCase {
         XCTAssertEqual(simulation.bass, 0)
         XCTAssertEqual(simulation.treble, 0)
         XCTAssertEqual(simulation.displacement, 0)
+        XCTAssertEqual(simulation.beat, 0)
+        XCTAssertTrue(simulation.waveform.allSatisfy { $0 == 0 })
+    }
+
+    func testBeatAndWaveformDecayAfterPlaybackStops() {
+        var simulation = VisualWorldSimulation()
+        var audio = VisualWorldAudioFrame()
+        audio.bass = 0.7
+        audio.flux = 0.35
+        audio.waveform[8] = 0.8
+        audio.capturedAt = ProcessInfo.processInfo.systemUptime
+        let start = Date()
+        simulation.advance(date: start, audio: audio, playing: true,
+                           energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+        simulation.advance(date: start.addingTimeInterval(1.0/30), audio: audio, playing: true,
+                           energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+        XCTAssertGreaterThan(simulation.beat, 0.5)
+        XCTAssertGreaterThan(simulation.waveform[8], 0.1)
+        for frame in 2...90 {
+            simulation.advance(date: start.addingTimeInterval(Double(frame)/30),
+                               audio: .silent, playing: false,
+                               energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+        }
+        XCTAssertLessThan(simulation.beat, 0.01)
+        XCTAssertLessThan(abs(simulation.waveform[8]), 0.01)
     }
 }

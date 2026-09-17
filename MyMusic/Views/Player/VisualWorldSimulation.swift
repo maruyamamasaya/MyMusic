@@ -14,8 +14,12 @@ nonisolated struct VisualWorldSimulation {
     var mid = 0.0
     var treble = 0.0
     var bands = [Float](repeating: 0, count: 24)
+    var waveform = [Float](repeating: 0, count: 48)
+    var beat = 0.0
     private var accumulated = 0.0
     private var cooldown = 0.0
+    private var beatCooldown = 0.0
+    private var fluxBaseline = 0.0
     private var polarity = 1.0
     private var lastDate: Date?
     private var silentDuration = 0.0
@@ -47,6 +51,19 @@ nonisolated struct VisualWorldSimulation {
             let target = active && i < audio.bands.count ? unit(Double(audio.bands[i])) : 0
             bands[i] = Float(smooth(Double(bands[i]), target, 0.5))
         }
+        for i in 0..<waveform.count {
+            let sample = active && i < audio.waveform.count && audio.waveform[i].isFinite
+                ? min(1, max(-1, Double(audio.waveform[i]))) : 0
+            waveform[i] = Float(Double(waveform[i]) + (sample-Double(waveform[i]))*(1-exp(-dt/0.09)))
+        }
+        beatCooldown = max(0, beatCooldown-dt)
+        let threshold = max(0.055,fluxBaseline*1.7)
+        beat *= exp(-dt/0.24)
+        if active && beatCooldown == 0 && flux > threshold && (low > 0.1 || flux > 0.2) {
+            beat = min(1,0.35+flux*2.2+low*0.3)
+            beatCooldown = 0.2
+        }
+        fluxBaseline += (flux-fluxBaseline)*(1-exp(-dt/1.2))
         confidence = smooth(confidence, active ? unit(Double(audio.tonalConfidence)) : 0, 0.7)
         tonalHeight = smooth(tonalHeight, active ? unit(Double(audio.tonalHeight)) : 0.5, 1.2)
         silentDuration = playing ? 0 : silentDuration + dt

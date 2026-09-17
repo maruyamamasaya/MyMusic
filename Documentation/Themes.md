@@ -69,8 +69,8 @@
 
 ## 再生中アート画面の例外
 
-Visual Worldの4種類は設定 → デザイン → 再生中のビジュアルで選択し、画面テーマと独立して保存する。旧Living Aurora由来の設定はPhoton Sphereへ統合する。
+Visual Worldの5種類は設定 → デザイン → 再生中のビジュアルで選択し、画面テーマと独立して保存する。旧Living Aurora由来の設定はPhoton Sphereへ統合する。
 
-「薄明」は青紫から桃色・琥珀色へ変わる空、速度の異なる雲の層と地平線の光を描く。曲のenergyと再生音で雲の速度、空の暖かさ、地平線の光量が変わる。Photon Sphereは固定外形のまま内部の光を強める。Pulse Neonはゲートの発光、Blue Cosmosは星雲と瞬く星が音へより強く応答する。常時点灯の星は音で一斉に点滅させない。Metalが利用できない場合はCanvasで各表現を描く。
+「薄明」は画面の約8割を青い夜空にして、下側に暖色の地平線と速度の異なる雲を描く。Blue Cosmosと同じ方式の星を約7〜8割の密度と控えめな輝度で散らす。曲のenergyと再生音で雲の速度、空の暖かさ、地平線の光量が変わる。Photon Sphereは固定外形のまま内部の光を強め、外側に微小な光子と衛星球を滑らかに不規則な経路で動かす。Plasma Sparkは暗い空間に蛇行する3色の電流、走る電荷、流れる火花を重ねる。Pulse Neonは5種類のゲート形状を通過ごとに切り替え、発光が音へ応答する。VisualizerはPCM由来Waveform、FFT24帯域Spectrum、Particleを3層に重ね、曲の特徴量・音域・beatで形と光を変える。Pulse Neonは5種類のゲート形状を通過ごとに切り替え、発光が音へ応答する。Blue Cosmosは星雲と瞬く星が音へより強く応答する。常時点灯の星は音で一斉に点滅させない。Metalが利用できない場合はCanvasで各表現を描く。
 
 通常のテーマ背景は上記の静的描画を維持する。再生中画面から切り替えるVisual Worldだけは最大30fpsで描く。色はArtworkの代表色と種類ごとのfallback、動きはTrack Featuresと再生音の表示専用値から作る。現行の描画は[Photon Sphere](NowPlayingVisualWorld-PhotonSphere.md)、操作は`NowPlayingVisualWorldView`を参照。

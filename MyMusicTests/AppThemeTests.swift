@@ -34,6 +34,10 @@ final class AppThemeTests: XCTestCase {
         XCTAssertEqual(SettingsStore(defaults: defaults).theme, .simpleDark)
         settings.setVisualWorldStyle(.twilight)
         XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .twilight)
+        settings.setVisualWorldStyle(.plasmaSpark)
+        XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .plasmaSpark)
+        settings.setVisualWorldStyle(.visualizer)
+        XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .visualizer)
     }
 
     func testLegacyAuroraVisualWorldMigratesToPhotonSphere() throws {
@@ -44,7 +48,7 @@ final class AppThemeTests: XCTestCase {
         defaults.set("living-aurora", forKey: "appearance.visualWorldStyle")
         XCTAssertEqual(SettingsStore(defaults: defaults).visualWorldStyle, .photonSphere)
         XCTAssertEqual(defaults.string(forKey: "appearance.visualWorldStyle"), "simple-dark")
-        XCTAssertEqual(VisualWorldStyle.allCases.count, 4)
+        XCTAssertEqual(VisualWorldStyle.allCases.count, 6)
     }
 
     func testThemeSelectionRendersForEveryThemeAndAccessibilitySize() throws {

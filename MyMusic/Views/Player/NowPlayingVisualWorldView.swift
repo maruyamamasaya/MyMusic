@@ -44,10 +44,8 @@ struct NowPlayingVisualWorldView: View {
                 .accessibilityHint("1回タップで再生または一時停止、2回タップでいいねを切り替えます")
                 .accessibilityAction(named: "再生または一時停止") { togglePlayback() }
                 .accessibilityAction(named: "いいねを切り替え") { toggleFavorite() }
-            VStack(spacing: 14) {
+            VStack {
                 Spacer(minLength: 0)
-                identity
-                    .allowsHitTesting(false)
                 VisualWorldController()
             }
             .padding(.horizontal, 20)
@@ -113,9 +111,15 @@ struct NowPlayingVisualWorldView: View {
     private var visualBackground: some View {
         let palette = ThemePalette.resolve(style.themePalette)
         let primary = artworkColors.map { color($0.primary) }
-            ?? (style == .twilight ? Color(red: 0.63, green: 0.28, blue: 0.52) : (style == .photonSphere ? .indigo : palette.light))
+            ?? (style == .twilight ? Color(red: 0.63, green: 0.28, blue: 0.52)
+                : style == .plasmaSpark ? Color(red: 0.38, green: 0.24, blue: 0.9)
+                : style == .visualizer ? Color(red: 0.12, green: 0.68, blue: 0.92)
+                : style == .photonSphere ? .indigo : palette.light)
         let secondary = artworkColors.map { color($0.secondary) }
-            ?? (style == .twilight ? Color(red: 1, green: 0.54, blue: 0.31) : palette.accent)
+            ?? (style == .twilight ? Color(red: 1, green: 0.54, blue: 0.31)
+                : style == .plasmaSpark ? Color(red: 0.2, green: 0.78, blue: 1)
+                : style == .visualizer ? Color(red: 0.69, green: 0.34, blue: 0.96)
+                : palette.accent)
         let energy = values?.energy ?? 0.5
         let speed = energy * 0.55 + min((values?.tempo ?? 100) / 180, 1) * 0.3 + (1 - (values?.calm ?? 0.5)) * 0.15
         return TimelineView(.animation(minimumInterval: frameInterval,
@@ -128,8 +132,14 @@ struct NowPlayingVisualWorldView: View {
                                          onFailure: { metalUnavailable = true })
                 } else {
                     VisualWorldScene(style: style, primary: primary, secondary: secondary,
-                                     motion: motion, energy: energy, ambient: values?.ambient ?? 0.5,
+                                     motion: motion, worldSeed: player.visualWorldSeed,
+                                     energy: energy, ambient: values?.ambient ?? 0.5,
                                      brightness: values?.bright ?? 0.5,
+                                     aggressive: values?.aggressive ?? 0.5,
+                                     electronic: values?.electronic ?? 0.5,
+                                     bands: simulation.bands, waveform: simulation.waveform,
+                                     bass: simulation.bass, mid: simulation.mid,
+                                     treble: simulation.treble, beat: simulation.beat,
                                      subdued: reduceTransparency || contrast == .increased)
                 }
                 LinearGradient(stops: [.init(color: .clear, location: 0.76),
@@ -165,6 +175,8 @@ struct NowPlayingVisualWorldView: View {
         case .lightGates: 2
         case .nightSky: 3
         case .twilight: 4
+        case .plasmaSpark: 5
+        case .visualizer: 6
         }
         u.viewport = SIMD4(1, 1, Float(simulation.clock), themeIndex)
         u.motion = SIMD4(Float(simulation.displacement), Float(simulation.opening),
@@ -173,7 +185,7 @@ struct NowPlayingVisualWorldView: View {
         func unit(_ value: Double?) -> Float { Float(VisualWorldDynamics.unit(value ?? 0.5)) }
         u.character = SIMD4(unit(values?.energy), unit(values?.aggressive), unit(values?.ambient), unit(values?.bright))
         u.material = SIMD4(unit(values?.dark), unit(values?.electronic), unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
-        u.spatial = SIMD4(Float(motion.balance), 0, 0, 0)
+        u.spatial = SIMD4(Float(motion.balance), Float(simulation.beat), 0, 0)
         for i in 0..<4 {
             let value = sin((player.visualWorldSeed + Double(i) * 7) * 127.1 + 311.7) * 43758.5453
             u.layout[i] = Float((value - floor(value)) * 2 * .pi)
@@ -186,25 +198,14 @@ struct NowPlayingVisualWorldView: View {
         }
         u.band0 = band(0); u.band1 = band(4); u.band2 = band(8)
         u.band3 = band(12); u.band4 = band(16); u.band5 = band(20)
-        return u
-    }
-
-    private var identity: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(player.currentTrack?.title ?? "未再生")
-                    .font(.headline)
-                    .lineLimit(2)
-                Text(player.currentTrack?.artistName ?? "")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
+        func wave(_ offset: Int) -> SIMD4<Float> {
+            SIMD4(simulation.waveform[offset], simulation.waveform[offset+1],
+                  simulation.waveform[offset+2], simulation.waveform[offset+3])
         }
-        .padding(12)
-        .background(.black.opacity(0.48), in: RoundedRectangle(cornerRadius: 16))
-        .foregroundStyle(.white)
+        u.wave0 = wave(0); u.wave1 = wave(4); u.wave2 = wave(8); u.wave3 = wave(12)
+        u.wave4 = wave(16); u.wave5 = wave(20); u.wave6 = wave(24); u.wave7 = wave(28)
+        u.wave8 = wave(32); u.wave9 = wave(36); u.wave10 = wave(40); u.wave11 = wave(44)
+        return u
     }
 
     private func color(_ rgb: VisualWorldRGB) -> Color {

@@ -13,29 +13,45 @@ struct VisualWorldController: View {
     }
 
     var body: some View {
-        HStack(spacing: 3) {
-            AlbumArtworkView(artworkIdentifier: track?.artworkIdentifier)
-                .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .accessibilityHidden(true)
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                AlbumArtworkView(artworkIdentifier: track?.artworkIdentifier)
+                    .frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(track?.title ?? "未再生")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                    Text(track?.artistName ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            control("前の曲", symbol: "backward.end.fill",
-                    enabled: player.hasPrevious && !player.isLoading, action: player.previous)
-            control(player.isPlaying ? "一時停止" : "再生",
-                    symbol: player.isPlaying ? "pause.fill" : "play.fill",
-                    enabled: track != nil && !player.isLoading, action: player.togglePlayPause)
-            control("次の曲", symbol: "forward.end.fill",
-                    enabled: player.hasNext && !player.isLoading, action: player.next)
-            control(isFavorite ? "いいねを取り消す" : "いいね",
-                    symbol: isFavorite ? "heart.fill" : "heart",
-                    enabled: canRate, action: toggleFavorite)
-                .foregroundStyle(isFavorite ? Color.pink : Color.white)
-            control("グッド", symbol: preference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup",
-                    enabled: canRate, action: increasePreference)
-                .accessibilityValue(preference > 0 ? "\(preference)" : "未評価")
+            HStack(spacing: 3) {
+                control("前の曲", symbol: "backward.end.fill",
+                        enabled: player.hasPrevious && !player.isLoading, action: player.previous)
+                control(player.isPlaying ? "一時停止" : "再生",
+                        symbol: player.isPlaying ? "pause.fill" : "play.fill",
+                        enabled: track != nil && !player.isLoading, action: player.togglePlayPause)
+                control("次の曲", symbol: "forward.end.fill",
+                        enabled: player.hasNext && !player.isLoading, action: player.next)
+                control(isFavorite ? "いいねを取り消す" : "いいね",
+                        symbol: isFavorite ? "heart.fill" : "heart",
+                        enabled: canRate, action: toggleFavorite)
+                    .foregroundStyle(isFavorite ? Color.pink : Color.white)
+                control("グッド", symbol: preference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup",
+                        enabled: canRate, action: increasePreference)
+                    .accessibilityValue(preference > 0 ? "\(preference)" : "未評価")
+            }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
         .overlay {
             RoundedRectangle(cornerRadius: 18)

@@ -5,6 +5,8 @@ import Synchronization
 
 nonisolated struct VisualWorldAudioFrame: Sendable {
     var bands: [Float] = Array(repeating: 0, count: 24)
+    /// Signed peak from 48 consecutive windows of the current PCM frame.
+    var waveform: [Float] = Array(repeating: 0, count: 48)
     var bass: Float = 0
     var mid: Float = 0
     var treble: Float = 0
@@ -115,6 +117,17 @@ nonisolated final class VisualWorldSpectrumAnalyzer {
         }
         var frame = VisualWorldAudioFrame()
         frame.capturedAt = timestamp; frame.generation = generation
+        for point in 0..<frame.waveform.count {
+            let start = count - size + point * size / frame.waveform.count
+            let end = count - size + (point + 1) * size / frame.waveform.count
+            var peak: Float = 0
+            for index in start..<end {
+                let l = left[index], r = right[index]
+                if l.isFinite && abs(l) > abs(peak) { peak = l }
+                if r.isFinite && abs(r) > abs(peak) { peak = r }
+            }
+            frame.waveform[point] = min(1, max(-1, peak))
+        }
         var low: Float = 0, middle: Float = 0, high: Float = 0
         var total: Float = 0
         for bin in 1..<size / 2 {
