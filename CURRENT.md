@@ -31,7 +31,7 @@ updated: 2026-09-17
 
 - Pulse Neonの再生中ビジュアルは、交差梁・ダイヤ・六角形・山形・段付きフレームの5形を曲ごとのseedとゲートの周回から選ぶ。各ゲートは奥で消えている間だけ次の形へ変わる。Vespera（iPhone 17e）へのDebug実機ビルド・インストール・起動は成功。実機での連続再生時の見た目と熱・電力は手動確認対象。
 
-- 再生中Visual WorldにVisualizerを追加。背景のPCM由来48点Waveform、主役の24バンドFFT Spectrum、疎なParticleを重ねる。低中高域と短いbeat包絡、曲のenergy／ambient／bright／aggressive／electronicおよびArtwork色に反応する。MetalとCanvasに対応。
+- 再生中Visual WorldにVisualizerを追加。背景のPCM由来48点Waveform、主役の24バンドFFT Spectrum、疎なParticleを重ねる。低中高域と短いbeat包絡、曲のenergy／ambient／bright／aggressive／electronicおよびArtwork色に反応する。MetalとCanvasに対応。2026-09-18にVespera（iPhone 17e）へDebug実機ビルド・インストール・起動した。実際の再生曲での見た目と長時間の熱・電力は手動確認対象。
 
 - Visual Worldの球体を短辺約90%の固定サイズへ拡大し、音による膨張・収縮と急な回転を停止。内部粒子を維持し、Artworkの主色／副色／accentで周辺光を増強。Pulse Neonは交差する発光チューブのゲートを通過するワープ表現へ分岐。Blue Cosmosは夜空を維持。Metal／Canvas対応、Simulator buildとGPU描画確認成功。
 

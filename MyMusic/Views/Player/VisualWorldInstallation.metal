@@ -369,7 +369,7 @@ float3 musicVisualizer(float2 uv, constant WorldUniforms &u) {
     for (int y=-1; y<=1; ++y) for (int x=-1; x<=1; ++x) {
         float2 key = cell+float2(x,y);
         float seed = random3(float3(key,u.tonal.z+73));
-        if (seed < (u.tonal.w > 0.5 ? 0.82 : 0.72)) continue;
+        if (seed < (u.tonal.w > 0.5 ? 0.94 : 0.9)) continue;
         float2 center = key+float2(random3(float3(key,17)),random3(float3(key,43)));
         center += float2(sin(t*(0.35+seed)+seed*13)*0.18,
                          cos(t*(0.26+seed*0.3)+seed*29)*0.16);
@@ -377,8 +377,8 @@ float3 musicVisualizer(float2 uv, constant WorldUniforms &u) {
         float dotLight = exp(-dot(delta,delta)*45.0);
         float halo = exp(-dot(delta,delta)*5.5);
         float twinkle = 0.35+0.65*pow(0.5+0.5*sin(t*(1.2+seed)+seed*37),2.0);
-        float3 hue = mix(cyan,accent,seed);
-        color += hue*(dotLight*0.37+halo*0.025)*twinkle
+        float3 hue = mix(cyan,accent,random3(float3(key,91)));
+        color += hue*(dotLight*0.18+halo*0.008)*twinkle
                  *(0.5+ambient*0.5+u.sound.z*0.5+beat*(0.7+aggressive*0.5));
     }
     return max(color,0.0);
