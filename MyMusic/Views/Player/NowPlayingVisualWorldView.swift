@@ -150,9 +150,7 @@ struct NowPlayingVisualWorldView: View {
                 guard isAnimating else { return }
                 simulation.advance(date: date, audio: player.visualAudioFrame, playing: player.isPlaying,
                                    energy: energy, aggressive: values?.aggressive ?? 0.5,
-                                   calm: values?.calm ?? 0.5, ambient: values?.ambient ?? 0.5,
-                                   seed: player.visualWorldSeed, drumAndBass: values?.drumAndBass ?? 0.5,
-                                   electronic: values?.electronic ?? 0.5, piano: values?.piano ?? 0.5,
+                                   ambient: values?.ambient ?? 0.5, piano: values?.piano ?? 0.5,
                                    tempo: values?.tempo ?? 100)
                 motion.advance(date: date, level: Double(player.spatialSnapshot.level), speed: speed)
             }
@@ -177,17 +175,14 @@ struct NowPlayingVisualWorldView: View {
         case .visualizer: 6
         }
         u.viewport = SIMD4(1, 1, Float(simulation.clock), themeIndex)
-        u.motion = SIMD4(Float(simulation.displacement), Float(simulation.opening),
-                         Float(simulation.excitation), Float(simulation.memory))
+        u.motion = SIMD4(0, 0, Float(simulation.excitation), Float(simulation.memory))
         u.sound = SIMD4(Float(simulation.bass), Float(simulation.mid), Float(simulation.treble), 0)
         func unit(_ value: Double?) -> Float { Float(VisualWorldDynamics.unit(value ?? 0.5)) }
         u.character = SIMD4(unit(values?.energy), unit(values?.aggressive), unit(values?.ambient), unit(values?.bright))
         u.material = SIMD4(unit(values?.dark), unit(values?.electronic), unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
         u.spatial = SIMD4(0, Float(simulation.beat), 0, 0)
-        for i in 0..<4 {
-            let value = sin((player.visualWorldSeed + Double(i) * 7) * 127.1 + 311.7) * 43758.5453
-            u.layout[i] = Float((value - floor(value)) * 2 * .pi)
-        }
+        let value = sin(player.visualWorldSeed * 127.1 + 311.7) * 43758.5453
+        u.layout.x = Float((value - floor(value)) * 2 * .pi)
         u.tonal = SIMD4(Float(simulation.tonalHeight), Float(simulation.confidence), Float(player.visualWorldSeed), 0)
         u.primary = vector(primary); u.secondary = vector(secondary)
         u.accent = artworkColors.map { vector(color($0.accent)) } ?? (u.primary * 0.35 + u.secondary * 0.65)

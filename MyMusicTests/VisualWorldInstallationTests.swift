@@ -88,29 +88,29 @@ final class VisualWorldInstallationTests: XCTestCase {
         XCTAssertEqual(reads, 1)
     }
 
-    func testStrongMotionIsBoundedAndHasFiniteTail() {
+    func testStrongSoundHasBoundedPresentationAndFiniteTail() {
         var simulation = VisualWorldSimulation()
         let start = Date()
         var audio = tone(80)
         for i in 0..<900 {
             audio.capturedAt = ProcessInfo.processInfo.systemUptime
             simulation.advance(date: start.addingTimeInterval(Double(i) / 30), audio: audio, playing: true,
-                               energy: 1, aggressive: 1, calm: 0, ambient: 1, seed: 42)
-            XCTAssertTrue(simulation.displacement.isFinite)
-            XCTAssertLessThanOrEqual(abs(simulation.displacement), 1.5)
+                               energy: 1, aggressive: 1, ambient: 1)
+            XCTAssertTrue(simulation.memory.isFinite)
+            XCTAssertTrue((0...1).contains(simulation.memory))
         }
-        XCTAssertGreaterThan(abs(simulation.displacement), 0.5)
+        XCTAssertGreaterThan(simulation.memory, 0.2)
         let time = simulation.clock
         simulation.suspend()
         simulation.advance(date: start.addingTimeInterval(500), audio: audio, playing: true,
-                           energy: 1, aggressive: 1, calm: 0, ambient: 1, seed: 42)
+                           energy: 1, aggressive: 1, ambient: 1)
         XCTAssertEqual(simulation.clock, time)
         for i in 1...360 {
             simulation.advance(date: start.addingTimeInterval(500 + Double(i) / 30), audio: .silent, playing: false,
-                               energy: 1, aggressive: 1, calm: 0, ambient: 1, seed: 42)
+                               energy: 1, aggressive: 1, ambient: 1)
         }
         XCTAssertTrue(simulation.resting)
-        XCTAssertLessThan(abs(simulation.displacement), 0.01)
+        XCTAssertLessThan(simulation.memory, 0.1)
     }
 
     func testStaleAndMalformedSamplesDoNotExciteWorld() {
@@ -120,11 +120,11 @@ final class VisualWorldInstallationTests: XCTestCase {
         audio.capturedAt = 0
         for i in 0..<90 {
             simulation.advance(date: Date(timeIntervalSinceReferenceDate: Double(i) / 30), audio: audio,
-                               playing: true, energy: .nan, aggressive: .infinity, calm: 0, ambient: 0, seed: 1)
+                               playing: true, energy: .nan, aggressive: .infinity, ambient: 0)
         }
         XCTAssertEqual(simulation.bass, 0)
         XCTAssertEqual(simulation.treble, 0)
-        XCTAssertEqual(simulation.displacement, 0)
+        XCTAssertEqual(simulation.memory, 0)
         XCTAssertEqual(simulation.beat, 0)
         XCTAssertTrue(simulation.waveform.allSatisfy { $0 == 0 })
     }
@@ -138,15 +138,15 @@ final class VisualWorldInstallationTests: XCTestCase {
         audio.capturedAt = ProcessInfo.processInfo.systemUptime
         let start = Date()
         simulation.advance(date: start, audio: audio, playing: true,
-                           energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+                           energy: 0.5, aggressive: 0.5, ambient: 0.5)
         simulation.advance(date: start.addingTimeInterval(1.0/30), audio: audio, playing: true,
-                           energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+                           energy: 0.5, aggressive: 0.5, ambient: 0.5)
         XCTAssertGreaterThan(simulation.beat, 0.5)
         XCTAssertGreaterThan(simulation.waveform[8], 0.1)
         for frame in 2...90 {
             simulation.advance(date: start.addingTimeInterval(Double(frame)/30),
                                audio: .silent, playing: false,
-                               energy: 0.5, aggressive: 0.5, calm: 0.5, ambient: 0.5, seed: 1)
+                               energy: 0.5, aggressive: 0.5, ambient: 0.5)
         }
         XCTAssertLessThan(simulation.beat, 0.01)
         XCTAssertLessThan(abs(simulation.waveform[8]), 0.01)

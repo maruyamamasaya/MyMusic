@@ -159,10 +159,8 @@ final class VisualWorldMetalRenderer: NSObject, MTKViewDelegate {
             frame.primary = old.primary + (frame.primary - old.primary) * blend
             frame.secondary = old.secondary + (frame.secondary - old.secondary) * blend
             frame.accent = old.accent + (frame.accent - old.accent) * blend
-            for i in 0..<4 {
-                let difference = (frame.layout[i] - old.layout[i]).remainder(dividingBy: 2 * .pi)
-                frame.layout[i] = old.layout[i] + difference * blend
-            }
+            let difference = (frame.layout.x - old.layout.x).remainder(dividingBy: 2 * .pi)
+            frame.layout.x = old.layout.x + difference * blend
         }
         displayed = frame
         frame.viewport.x = Float(size.width); frame.viewport.y = Float(size.height)

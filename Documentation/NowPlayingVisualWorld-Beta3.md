@@ -6,13 +6,13 @@ implementation: beta-3-initial
 
 # Visual World — Beta 3 / Installation Art Direction
 
-> 造形の方向はユーザー指示で撤回し、[Photon Sphere](NowPlayingVisualWorld-PhotonSphere.md)へ変更。以下の幾何構造・枠面・弧は現在の画面には存在しない。音声解析・操作・負荷制御は引き継ぐ。
+> 造形と操作の方向は後続の変更で撤回された。現行仕様は[再生中のビジュアル](NowPlayingVisualWorld.md)を参照する。以下の幾何構造・枠面・弧、背景操作によるコントローラーは現在の画面には存在しない。音声解析と負荷制御の設計判断は引き継ぐ。
 
 ## 0. この文書の位置づけ
 
 **音楽が力となり、光と物質が時間をかけて応答する、巨大な空間作品。iPhoneはその空間を覗く窓である。**
 
-ユーザーの「Installation Art Direction」と添付「Art Direction Redesign」を統合した設計案。現在の[Beta 2仕様](NowPlayingVisualWorld.md)と実コードを調査したうえで、作品の構成と実装方針を定める。本文のクラス名、数値、時間、予算は実装前の提案・調整開始値であり、実測結果や完成を表さない。以下に設計目標と初回実装の対応を記録する。設計中の数値を実測値と混同しない。
+ユーザーの「Installation Art Direction」と添付「Art Direction Redesign」を統合した設計案。当時の[Beta 2仕様](NowPlayingVisualWorld-Beta2.md)と実コードを調査したうえで、作品の構成と実装方針を定める。本文のクラス名、数値、時間、予算は実装前の提案・調整開始値であり、実測結果や完成を表さない。以下に設計目標と初回実装の対応を記録する。設計中の数値を実測値と混同しない。
 
 鑑賞体験の優先順位は **音楽再生の安定 → 意図した操作 → 空間の構成と光 → 装飾の密度**。視覚の負荷によって音源の品質、EQ、音量補正、キュー、再生履歴を変更しない。テーマの保存ID、通常再生画面、作業用画面も既存の役割を保つ。
 

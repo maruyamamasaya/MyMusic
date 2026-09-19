@@ -1,49 +1,39 @@
-# 再生中 Visual World — Beta 2 設計
+---
+status: active
+updated: 2026-09-19
+---
 
-> 現在の造形は[Photon Sphere](NowPlayingVisualWorld-PhotonSphere.md)。Metal／Canvasとも光の球体ひとつへ変更。本書のBeta 2操作方式を維持し、旧描画仕様は履歴として残します。
+# 再生中のビジュアル（Visual World）現行仕様
 
-## 目的
+## 画面と操作
 
-現行の標準再生中画面を残し、選択中のテーマと曲のジャケットに由来する「アート画面」を同じシート内に追加する。右上の「完了」は両画面の切り替えボタンへ置き換える。音源、キュー、再生履歴、既存の再生機能と設定の意味は変えない。作業用再生画面は別画面として維持する。
+通常の再生中画面とアート画面は同じシート内にあり、右上のボタンで切り替える。作業用再生画面は別画面。アート画面左上のメニュー、または設定 → デザイン → 再生中のビジュアルで描画種類を選ぶ。選択は両画面で共有し、アプリ全体のテーマとは独立して保存・バックアップする。
 
-## 画面
+アート画面の下部には小さなArtwork、曲名、アーティスト名、前へ・再生／一時停止・次へ・いいね・グッドをまとめたバーを常時表示する。バー以外の領域は1回タップで再生／一時停止、2回タップでいいねを切り替える。両タップは排他的に判定する。曲の詳細操作は通常画面へ切り替えて行う。背景スワイプ、長押し、隠れたコントローラー、詳細パネルは現行実装にない。
 
-- 全面は黒を基調とし、現在の `AppTheme` の光の方向と形を引き継ぐ。ジャケットから抽出した色は低輝度の拡散光に用い、テーマごとの形と黒背景に組み合わせる。シンプルダークも黒い余白を残した控えめな光にする。
-- 曲の `energy`、`calm`、`ambient`、`bright`、`tempo` がある場合、光の密度、速度、広がりを決める。欠損値は中立値とし、解析済みであるかのような表示をしない。
-- 再生中の出力タップから取得するレベルは光の明滅に用いる。ステレオの左右差は光の重心、左右チャンネルの差分は横方向の広がりに用いる。モノラルまたは取得不能時は中央寄せにする。これらは表示専用で、音声の処理やファイル形式を変更しない。
-- 常時表示する情報は左側の小さなジャケット、曲名、アーティスト名に絞る。文字は暗い面で保護し、Dynamic Typeで欠けないようにする。
-- 現行画面では右上に「アート画面へ」の切り替えボタンを置く。アート画面では同じ位置に「通常画面へ」の細いアイコンを低い視覚強度で置く。どちらもVoiceOverには明示名を付ける。シートの下方向スワイプで閉じる。
+## 選択できる描画
 
-## 参考と今回の表現
+| 表示名 | 保存ID | 描画 |
+| --- | --- | --- |
+| Photon Sphere | `simple-dark` | 固定外形の光の球、内部粒子と光、外周の微小な光子と衛星球。詳細は[Photon Sphere](NowPlayingVisualWorld-PhotonSphere.md) |
+| Pulse Neon | `pulse-neon` | 奥から手前へ進む光のゲート。交差梁、ダイヤ、六角形、山形、段付きフレームの5形 |
+| Blue Cosmos | `blue-cosmos` | 青い夜空、星雲、緩やかに漂い明滅する星 |
+| 薄明 | `twilight` | 画面上部約8割の青い夜空、少なく暗い星、下側の暖色の地平線と雲 |
+| Plasma Spark | `plasma-spark` | 蛇行する紫・シアン・ローズの電流、走る電荷、火花。詳細は[Plasma Spark](NowPlayingVisualWorld-PlasmaSpark.md) |
+| Visualizer | `visualizer` | PCMの48点波形、FFTの24帯域バー、流れる粒子。詳細は[Visualizer](NowPlayingVisualWorld-Visualizer.md) |
 
-- [Lusion / KAOS Logo Generator](https://v2.lusion.co/work/kaos-logo-generator/): 音の特徴を連続的な形へ対応させる考え方を参照。
-- [Lusion / Particle Love](https://v2.lusion.co/work/particle-love/): 粒子群にまとまりと流れを持たせる方向を参照。
-- [Active Theory / The Field](https://medium.com/active-theory/the-field-bbe924426d7f): 空間に配置した粒子・筆致と、控えめな情報表示の組み合わせを参照。
+旧`living-aurora`のビジュアル選択と、独立設定のない旧Living Auroraテーマ由来の初期値はPhoton Sphereへ読み替える。既存の画面テーマ自体は変更しない。
 
-上記の制作記事を調査した。コードやアセットは流用しない。SwiftUI Canvasで独自に構成する。Auroraは画面を横切る光の帯、Neonは遠近感のある幾何学、Cosmosは回転する軌道と粒子、シンプルダークは控えめな帯とする。拡散光だけでなく、輪郭、細い発光、手前と奥の速度差を持たせる。背景はテーマの黒を保ち、暗転は曲情報付近に絞る。
+## 入力と描画の境界
 
-ジャケットの平均色を廃止し、縮小画像の色相群から彩度を考慮した代表色と副色を抽出する。音は平滑化した音量、左右バランス、幅と、短期的な音量上昇によるアクセントへ対応させる。このアクセントはビート検出・周波数分析ではない。既存の32本のspectrumLevelsも周波数帯として解釈しない。
+`SettingsStore`が種類を所有する。曲の特徴量は`TrackFeatureStore`、再生中の音声解析結果とセッションseedは`PlayerStore`から受け取る。Artworkの代表色・副色・accentは`VisualWorldPaletteService`が抽出する。音声解析は既存の出力tapを共有し、表示用に24帯域、低・中・高域、flux、音程感、48点波形を生成する。`VisualWorldSimulation`が表示用の動きと余韻を管理し、`VisualWorldMetalView`と`VisualWorldInstallation.metal`が通常描画する。Metal初期化失敗時は`VisualWorldScene`のCanvas描画へ切り替える。ビジュアルのために音源、EQ、再生queue、永続化JSONを変更しない。旧来の32区間`spectrumLevels`は周波数帯域として扱わない。
 
-## 操作
+前面・scene active・再生状態・アクセシビリティ・熱状態に応じて描画と追加解析を制御する。通常は最大30fps、低電力時20fps、thermal serious時15fps、critical時は静止する。Reduce Motion、透明度低減、コントラスト増加でも静止表示とする。一時停止後の動きは有限の余韻を残し、約10秒以内に休止する。GPU未完了frameは最大2件で、待ちによって再生やMainActorを塞がない。
 
-| 入力 | 動作 |
-| --- | --- |
-| 背景をタップ（連続タップを含む） | 小さなコントローラーを表示。再生やお気に入りは変えない |
-| 背景を右／左へスワイプ | コントローラーの次／前を薄く強調して表示。曲は変えない |
-| 背景を0.85秒長押し（移動許容18pt） | 小さく左右に揺れ、軽い触覚とともに詳細操作を表示 |
-| コントローラーのボタンをタップ | 再生／停止、前／次、お気に入りなどを実行 |
-| 詳細の再生バーを調整 | Sliderでプレビューし、指を離したときにseek |
+## 検証状態と履歴
 
-長押しとスワイプとタップはexclusiveなgestureにまとめ、背景から再生APIを呼ばない。長押し後の横移動でseekする旧操作は廃止。通常のコントローラーは前／再生／次／詳細を44pt以上のタップ領域で表示し、詳細では既存のshuffle、repeat、Good／Bad、飽きた、あとで聴く、Playlist、Queue、EQ、音声情報、曲別調整へ入れる。閉じる操作は明示ボタンとし、自動で隠して操作中の指の位置を変えない。VoiceOverにも「操作を表示」を用意する。
+現行構成のSimulator buildと、一部の実機Debug導入は[CURRENT.md](../CURRENT.md)に記録している。6種類すべてについて実機での連続表示、熱・電力、VoiceOver、Dynamic Typeの最終確認は未完了。
 
-## 所有とデータフロー
+[Beta 2](NowPlayingVisualWorld-Beta2.md)と[Beta 3の旧造形案](NowPlayingVisualWorld-Beta3.md)は履歴であり、現行操作・造形の仕様ではない。設計上の採用理由は[ADR-0006](../decisions/ADR-0006-visual-world-rendering.md)を参照する。
 
-`AudioPlayerService` の既存タップで出力レベルとステレオ幅を計算し、`PlayerStore` に表示専用の値を渡す。`TrackFeatureStore` は既存のインポート値だけを提供する。ジャケットの代表色は専用service actorで抽出する。表示専用のDynamicsが平滑化と時間を管理し、Canvasが描画、Controllerが明示操作を所有する。永続化、JSON、Watch通信に値を追加しない。
-
-## 描画とアクセシビリティ
-
-再生画面が前面かつsceneがactiveで再生中の間だけ最大30fps（低電力時20fps）で描画する。別sheet表示中も停止する。時間は累積差分で管理し、復帰時に大きく飛ばさない。平滑化したレベルを形状・速度・発光へ反映する。画面を閉じたら描画負荷を止める。Reduce Motionでは動きと揺れを止め、透明度低減・コントラスト増加では低輝度の静止表現にする。操作はVoiceOverから明示的なラベルとボタンでも実行できる。
-
-## Beta 検証
-
-４テーマ、ジャケットあり／なし、特徴量あり／なし、モノラル／ステレオ、一時停止、曲切替、長押しとスワイプの競合、シートの閉じ方を確認する。Swift buildと既存の再生フローの回帰確認後、実機で光量、発熱、操作認識を調整する。
+6種類の構成比較と実機での評価項目は[作品レビュー](NowPlayingVisualWorld-Review.md)を参照する。
