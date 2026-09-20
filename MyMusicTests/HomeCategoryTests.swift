@@ -2,11 +2,11 @@ import XCTest
 @testable import MyMusic
 
 final class HomeCategoryTests: XCTestCase {
-    func testActivityContainsAnalyticsAndMusicHistoryTiles() throws {
+    func testActivityContainsAnalyticsMusicHistoryAndTrendsTiles() throws {
         let activity = try XCTUnwrap(HomeCategory.all.first { $0.id == .activity })
 
-        XCTAssertEqual(activity.items.map(\.destination), [.analytics, .musicHistory])
-        XCTAssertEqual(activity.items.map(\.title), ["再生分析", "音楽史"])
+        XCTAssertEqual(activity.items.map(\.destination), [.analytics, .musicHistory, .recentMusicTrends])
+        XCTAssertEqual(activity.items.map(\.title), ["再生分析", "音楽史", "最近の音楽傾向"])
     }
 
     func testListenLaterTileFollowsDiscoveryPlay() throws {
@@ -34,7 +34,7 @@ final class HomeCategoryTests: XCTestCase {
         )
         XCTAssertEqual(
             activity.items.map(\.localBackgroundImageName),
-            ["activity-analytics", "activity-music-history"]
+            ["activity-analytics", "activity-music-history", nil]
         )
     }
 

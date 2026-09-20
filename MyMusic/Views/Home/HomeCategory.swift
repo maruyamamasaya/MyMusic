@@ -62,7 +62,8 @@ struct HomeCategory: Identifiable, Hashable {
             systemImage: "chart.bar.xaxis",
             items: [
                 HomeCategoryItem(title: "再生分析", description: "履歴、再生回数、よく聴く曲をまとめて表示", systemImage: "chart.xyaxis.line", destination: .analytics),
-                HomeCategoryItem(title: "音楽史", description: "年・月・日の記録から聴いてきた音楽を振り返る", systemImage: "calendar.badge.clock", destination: .musicHistory)
+                HomeCategoryItem(title: "音楽史", description: "年・月・日の記録から聴いてきた音楽を振り返る", systemImage: "calendar.badge.clock", destination: .musicHistory),
+                HomeCategoryItem(title: "最近の音楽傾向", description: "聴く音楽の変化を時系列で見る", systemImage: "waveform.path.ecg", destination: .recentMusicTrends)
             ]
         )
     ]
@@ -105,6 +106,7 @@ enum HomeDestination: Hashable {
     case composers
     case analytics
     case musicHistory
+    case recentMusicTrends
 
     var localBackgroundImageName: String? {
         switch self {

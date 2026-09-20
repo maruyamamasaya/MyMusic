@@ -140,6 +140,8 @@ struct HomeDestinationView: View {
             AnalyticsView()
         case .musicHistory:
             MusicHistoryView()
+        case .recentMusicTrends:
+            RecentMusicTrendsView()
         case .workPlaylists:
             WorkPlaylistView(createsNavigationStack: false)
         case .workSizePlay:
