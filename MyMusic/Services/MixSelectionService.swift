@@ -65,7 +65,7 @@ struct MixSelectionService {
         })
     }
 
-    private func ranked(
+    func ranked(
         _ candidates: [Track], weights: [Track.ID: Double], now: Date, calendar: Calendar
     ) -> [Track] {
         let day = calendar.startOfDay(for: now)

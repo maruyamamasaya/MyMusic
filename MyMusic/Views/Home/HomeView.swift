@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var playlistTracks: [Playlist.ID: [Track]] = [:]
     @State private var playlistArtworkIdentifiers: [Playlist.ID: String] = [:]
     @State private var mixQueues: [MixKind: [Track]] = [:]
+    @State private var deepDiveOptions: [DeepDiveKind: [DeepDiveOption]] = [:]
+    @State private var showsDeepDive = false
     @State private var mixDay: Date?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
@@ -70,7 +72,11 @@ struct HomeView: View {
                                     onPlay: playPlaylist
                                 )
                             }
-                            HomeMixSection(queues: mixQueues, onPlay: playMix)
+                            HomeMixSection(
+                                queues: mixQueues,
+                                onPlay: playMix,
+                                onOpenDeepDive: openDeepDive
+                            )
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("ステーション").font(.title3.bold())
                                 StationEntryView()
@@ -125,6 +131,9 @@ struct HomeView: View {
                     .onDisappear {
                         highlightStore.resetRandomSelection()
                     }
+            }
+            .sheet(isPresented: $showsDeepDive) {
+                DeepDiveSelectionView(options: deepDiveOptions, onPlay: playDeepDive)
             }
             .task(id: playlistStore.homeOrderingRevision) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
@@ -205,6 +214,28 @@ struct HomeView: View {
 
     private func playMix(_ kind: MixKind) {
         guard let tracks = mixQueues[kind], !tracks.isEmpty else { return }
+        playMixQueue(tracks)
+    }
+
+    private func playDeepDive(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        playMixQueue(tracks)
+    }
+
+    private func openDeepDive() {
+        let now = Date()
+        let candidates = libraryStore.tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
+        let weights = playbackHistoryStore.automaticSelectionWeights(for: candidates, now: now)
+        deepDiveOptions = DeepDiveSelectionService().options(
+            from: candidates,
+            histories: playbackHistoryStore.entries,
+            weights: weights,
+            now: now
+        )
+        showsDeepDive = true
+    }
+
+    private func playMixQueue(_ tracks: [Track]) {
         playerStore.setShuffleEnabled(false)
         playerStore.playQueue(
             tracks,
@@ -787,6 +818,7 @@ private struct HomeWorkSection: View {
 private struct HomeMixSection: View {
     let queues: [MixKind: [Track]]
     let onPlay: (MixKind) -> Void
+    let onOpenDeepDive: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -813,6 +845,10 @@ private struct HomeMixSection: View {
                             .disabled(tracks.isEmpty)
                             .opacity(tracks.isEmpty ? 0.55 : 1)
                         }
+                        Button(action: onOpenDeepDive) {
+                            HomeDeepDiveTile(width: width)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
                     .scrollTargetLayout()
@@ -822,6 +858,41 @@ private struct HomeMixSection: View {
             }
             .frame(height: 168)
         }
+    }
+}
+
+private struct HomeDeepDiveTile: View {
+    let width: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            LinearGradient(
+                colors: [Color(red: 0.13, green: 0.38, blue: 0.43), Color(red: 0.05, green: 0.12, blue: 0.22)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            VStack(alignment: .leading, spacing: 0) {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+                Spacer()
+                Text("Deep Dive").font(.headline)
+                Text("Artist・Albumから未発見の曲へ")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(2)
+                    .padding(.top, 3)
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+        }
+        .frame(width: width, height: 168, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("ArtistまたはAlbumを選んで低再生曲を再生")
     }
 }
 
