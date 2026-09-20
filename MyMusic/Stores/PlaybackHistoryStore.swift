@@ -10,6 +10,7 @@ final class PlaybackHistoryStore {
     private static let highlightNonSkipMinimumListeningTime: TimeInterval = 5
     private(set) var entries: [Track.ID: PlaybackHistory] = [:]
     private(set) var homePresentationRevision = 0
+    private(set) var todayPlaybackRevision = 0
     private(set) var isLoaded = false
     private(set) var errorMessage: String?
 
@@ -146,6 +147,7 @@ final class PlaybackHistoryStore {
         if event.isEarlySkip { summary.earlySkipCount += 1 }
         entry.dailySummaries[dayKey] = summary
         entries[trackID] = entry
+        todayPlaybackRevision &+= 1
         persist(entry)
     }
 

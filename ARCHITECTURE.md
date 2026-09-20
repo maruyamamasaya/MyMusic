@@ -187,6 +187,7 @@ music root recursive scan
 
 ### Search, favorites, playlists, history
 
+- ホームのMIXは`HomeView`がLibrary・Playback History・Track Preferenceのrevisionとローカル日付変更時に候補snapshotを作り、`MixSelectionService`が3種類の一時キューを構成する。順位計算は3種類で共有し、既存の自動選曲weightと通常シャッフル適格性を使う。先頭Trackをタイルのアートワークと再生開始曲に共用する。キューは保存せず、PlayerStoreへ通常再生として渡す。
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。専用tag管理画面の名称変更・削除は全Playlistをmemory上で一括更新して1 snapshotとして保存し、割り当ては既存`setTags`境界へ合流する。曲の追加先選択画面のtag filterはpresentation stateとしてUserDefaultsへregular／work別に保存し、存在しないtagになった場合は解除する。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。

@@ -26,6 +26,9 @@ struct HomeView: View {
     @State private var workPlaylists: [Playlist] = []
     @State private var playlistTracks: [Playlist.ID: [Track]] = [:]
     @State private var playlistArtworkIdentifiers: [Playlist.ID: String] = [:]
+    @State private var mixQueues: [MixKind: [Track]] = [:]
+    @State private var mixDay: Date?
+    @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
 
     var isActive = true
@@ -67,6 +70,7 @@ struct HomeView: View {
                                     onPlay: playPlaylist
                                 )
                             }
+                            HomeMixSection(queues: mixQueues, onPlay: playMix)
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("ステーション").font(.title3.bold())
                                 StationEntryView()
@@ -97,6 +101,18 @@ struct HomeView: View {
             }
             .themeScreen()
             .navigationTitle("ホーム")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text(todayPlaybackSummary.compactText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .accessibilityLabel("本日の再生回数 \(todayPlaybackSummary.playCount)回、再生時間 \(todayPlaybackSummary.compactDuration)")
+                }
+            }
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
             }
@@ -119,25 +135,36 @@ struct HomeView: View {
                 guard isActive else { return }
                 refreshDestinationPresentations(rotatingRepresentatives: destinationPresentations.isEmpty)
                 refreshHighlightArtwork(rotating: highlightArtworkIdentifier != nil)
+                refreshMixes()
+                refreshTodayPlaybackSummary()
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }
                     refreshDestinationPresentations(rotatingRepresentatives: true)
                     refreshHighlightArtwork(rotating: true)
+                    if let mixDay, !Calendar.current.isDate(mixDay, inSameDayAs: Date()) {
+                        refreshMixes()
+                        refreshTodayPlaybackSummary()
+                    }
                 }
             }
             .onChange(of: libraryStore.homePresentationRevision) {
                 refreshDestinationPresentations()
                 refreshHighlightArtwork()
                 refreshPlaylistPresentations()
+                refreshMixes()
             }
             .onChange(of: playbackHistoryStore.homePresentationRevision) {
                 refreshDestinationPresentations()
                 refreshHighlightArtwork()
+                refreshMixes()
+                refreshTodayPlaybackSummary()
             }
+            .onChange(of: playbackHistoryStore.todayPlaybackRevision) { refreshTodayPlaybackSummary() }
             .onChange(of: trackPreferenceStore.homePresentationRevision) {
                 refreshDestinationPresentations()
                 refreshHighlightArtwork()
+                refreshMixes()
             }
             .onChange(of: favoriteStore.homePresentationRevision) { refreshDestinationPresentations() }
             .onChange(of: playlistStore.homeContentRevision) { refreshPlaylistPresentations() }
@@ -173,6 +200,38 @@ struct HomeView: View {
             presentationMode: playlist.kind == .work ? .workSize : .standard,
             startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
+    }
+
+    private func playMix(_ kind: MixKind) {
+        guard let tracks = mixQueues[kind], !tracks.isEmpty else { return }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
+            presentationMode: .standard,
+            startContext: PlaybackStartContext(kind: .manual, source: .home)
+        )
+    }
+
+    private func refreshMixes() {
+        guard isActive else { return }
+        let now = Date()
+        let candidates = libraryStore.tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
+        let weights = playbackHistoryStore.automaticSelectionWeights(for: candidates, now: now)
+        let queues = MixSelectionService().allQueues(
+            from: candidates,
+            histories: playbackHistoryStore.entries,
+            preferences: trackPreferenceStore.entries,
+            weights: weights,
+            now: now
+        )
+        mixDay = Calendar.current.startOfDay(for: now)
+        if mixQueues != queues { mixQueues = queues }
+    }
+
+    private func refreshTodayPlaybackSummary() {
+        let summary = TodayPlaybackSummaryService().summary(from: playbackHistoryStore.entries)
+        if todayPlaybackSummary != summary { todayPlaybackSummary = summary }
     }
 
     private func artworkIdentifier(for destination: HomeDestination) -> String? {
@@ -721,6 +780,92 @@ private struct HomeWorkSection: View {
         }
         let contentWidth = availableWidth - (horizontalPadding * 2) - nextTilePeek
         return min(180, max(132, (contentWidth - spacing * (visibleTileCount - 1)) / visibleTileCount))
+    }
+}
+
+private struct HomeMixSection: View {
+    let queues: [MixKind: [Track]]
+    let onPlay: (MixKind) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("MIX").font(.title3.bold())
+                Text("今のあなたに合わせた再生")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+
+            GeometryReader { proxy in
+                let width = min(180, max(132, (proxy.size.width - 32 - 28 - 12) / 2))
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(MixKind.allCases) { kind in
+                            let tracks = queues[kind] ?? []
+                            Button { onPlay(kind) } label: {
+                                HomeMixTile(kind: kind, firstTrack: tracks.first, count: tracks.count, width: width)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(tracks.isEmpty)
+                            .opacity(tracks.isEmpty ? 0.55 : 1)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            }
+            .frame(height: 168)
+        }
+    }
+}
+
+private struct HomeMixTile: View {
+    let kind: MixKind
+    let firstTrack: Track?
+    let count: Int
+    let width: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let artworkIdentifier = firstTrack?.artworkIdentifier {
+                HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
+            } else {
+                LinearGradient(
+                    colors: [Color(red: 0.31, green: 0.28, blue: 0.54), Color(red: 0.08, green: 0.10, blue: 0.18)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            LinearGradient(
+                colors: [.black.opacity(0.18), .black.opacity(0.38), .black.opacity(0.88)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            VStack(alignment: .leading, spacing: 0) {
+                Image(systemName: kind.systemImage)
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+                Spacer()
+                Text(kind.title).font(.headline).lineLimit(2)
+                Text(count == 0 ? "対象の曲がありません" : "\(count)曲 · \(kind.subtitle)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(2)
+                    .padding(.top, 3)
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+        }
+        .frame(width: width, height: 168, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(count == 0 ? "再生できる曲がありません" : "先頭の曲からMIXを再生")
     }
 }
 
