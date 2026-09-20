@@ -32,6 +32,8 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 ## Composition と画面構成
 
+音楽史トップの「今日の音楽史」は`MusicHistoryView`から読み込み時に`MusicHistoryCardService`を呼び、`MusicHistoryCardCandidate`を表示する。Serviceは現在LibraryのTrackとPlayback Eventを日・月・曲・Artist単位に一度索引化し、12種の独立した候補生成関数へ渡す。カード集計は`Task.detached`でMainActor外へ送り、キャンセル済みの結果は表示へ適用しない。候補は成立条件、優先度、score、主役Trackの重複で選択し、同じ入力と日付では順序が安定する。再生ボタンはPlayerStoreへ渡す。既存の`MusicHistoryService`、`MusicHistoryDiscoveryService`、`MusicHistoryMemoryService`は従来の年表示と記憶の構築を継続する。追加の永続化はない。
+
 `MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Settings の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。HighlightはHomeの「マイミュージック」タイル列左端から同じHome NavigationStack内へ遷移する。
 
 「あとで聴く」は通常Playlistから独立した一時リストとする。`NowPlayingView` → `ListenLaterStore` → `ListenLaterPersistenceService`で追加時のTrack ID・再生回数・追加日時を保存する。`RootView`は`PlaybackHistoryStore.homePresentationRevision`の更新を受け、現在の再生回数が追加時より大きい項目を`ListenLaterStore`で削除する。判定は既存`PlayerStore`の再生カウント条件（実聴30秒または曲長50%）を正とし、別の完走判定を増やさない。一覧から作った再生queueは開始時snapshotのため、その後リストから自動削除されても再生中queueを変更しない。

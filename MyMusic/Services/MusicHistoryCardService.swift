@@ -1,11 +1,11 @@
 import Foundation
 
-enum MusicHistoryCardType: String, CaseIterable {
+enum MusicHistoryCardType: String, CaseIterable, Sendable {
     case yearAgo, monthTrack, newTrack, newArtist, rediscovered, longTerm
     case recurring, night, shuffleDiscovery, busiestDay, monthSound, monthAlbum
 }
 
-struct MusicHistoryCardCandidate: Identifiable {
+struct MusicHistoryCardCandidate: Identifiable, Sendable {
     let type: MusicHistoryCardType
     let title: String
     let subtitle: String
@@ -22,7 +22,6 @@ struct MusicHistoryCardCandidate: Identifiable {
 }
 
 /// Read-only, per-refresh index. All date buckets use the caller's calendar.
-@MainActor
 final class MusicHistoryCardService {
     private struct Entry {
         let track: Track

@@ -42,6 +42,18 @@ final class MusicHistoryCardServiceTests: XCTestCase {
         )
     }
 
+    private func feature(_ track: Track, calm: Double) -> TrackFeature {
+        let identity = TrackFeatureSourceIdentity(relativePath: track.title, fileSize: 1,
+                                                  duration: 180, modificationDate: nil,
+                                                  contentHash: nil, title: nil, artist: nil, album: nil)
+        let values = TrackFeatureValues(tempo: nil, energy: nil, piano: nil, ambient: nil,
+                                        electronic: nil, drumAndBass: nil, aggressive: nil,
+                                        calm: calm, bright: nil, dark: nil, vocal: nil,
+                                        instrumental: nil, additional: nil)
+        return TrackFeature(trackID: track.id, sourceIdentity: identity, analysisVersion: 1,
+                            analyzedAt: date(2026, 9, 1), importedAt: date(2026, 9, 1), values: values)
+    }
+
     func testInsufficientHistoryAndMissingLibraryAreHidden() {
         let song = track("One")
         let event = history(song, [date(2026, 9, 20)])
@@ -123,5 +135,46 @@ final class MusicHistoryCardServiceTests: XCTestCase {
         let histories = songs.map { history($0, [date(2026, 9, 1), date(2026, 9, 2)]) }
         let result = cards(songs, histories, now: date(2026, 9, 20))
         XCTAssertFalse(result.contains { $0.type == .monthSound })
+    }
+
+    func testRecurringMonthsWithoutRecentPlayAndLongTermWithRecentPlay() {
+        let recurring = track("Recurring")
+        let longTerm = track("LongTerm")
+        let result = cards([recurring, longTerm], [
+            history(recurring, [date(2026, 1, 10), date(2026, 2, 10), date(2026, 3, 10),
+                                date(2026, 4, 10), date(2026, 5, 10), date(2026, 6, 10)]),
+            history(longTerm, [date(2025, 12, 10), date(2026, 1, 10), date(2026, 2, 10),
+                               date(2026, 3, 10), date(2026, 4, 10), date(2026, 5, 10),
+                               date(2026, 6, 10), date(2026, 7, 10), date(2026, 8, 10), date(2026, 9, 19)])
+        ], now: date(2026, 9, 20))
+        XCTAssertEqual(result.first { $0.type == .recurring }?.mainTrack?.id, recurring.id)
+        XCTAssertEqual(result.first { $0.type == .longTerm }?.mainTrack?.id, longTerm.id)
+    }
+
+    func testNightWindowExcludesFiveOClockAndTieIsStable() {
+        let morning = track("Morning")
+        let first = track("First")
+        let second = track("Second")
+        let histories = [
+            history(morning, (1...5).map { date(2026, 8, $0, 5) }),
+            history(first, [date(2026, 9, 1), date(2026, 9, 2)]),
+            history(second, [date(2026, 9, 1), date(2026, 9, 2)])
+        ]
+        let one = cards([morning, first, second], histories, now: date(2026, 9, 20))
+        let two = cards([morning, first, second], histories, now: date(2026, 9, 20))
+        XCTAssertFalse(one.contains { $0.type == .night })
+        XCTAssertEqual(one.map(\.id), two.map(\.id))
+    }
+
+    func testMonthSoundUsesRelativeFeaturesAndSkipsUnfeaturedTracks() {
+        let current = (0..<5).map { track("Current\($0)") }
+        let baseline = (0..<5).map { track("Baseline\($0)") }
+        let all = current + baseline
+        let features = Dictionary(uniqueKeysWithValues: all.map { song in
+            (song.id, feature(song, calm: current.contains(where: { $0.id == song.id }) ? 0.9 : 0.1))
+        })
+        let result = cards(all, current.map { history($0, [date(2026, 9, 1), date(2026, 9, 2)]) },
+                           now: date(2026, 9, 20), features: features)
+        XCTAssertTrue(result.contains { $0.type == .monthSound && $0.subtitle.contains("Calm") })
     }
 }

@@ -299,18 +299,27 @@ struct MusicHistoryView: View {
             preferenceEntries: trackPreferenceStore.entries,
             playlists: []
         )
+        let now = Date()
         snapshot = MusicHistoryService().makeSnapshot(
             playbackMonths: analytics.playbackMonths,
             historyEntries: playbackHistoryStore.entries,
-            now: Date()
+            now: now
         )
+        let tracks = libraryStore.unfilteredTracks
+        let histories = playbackHistoryStore.entries
+        let preferences = trackPreferenceStore.entries
         let features = Dictionary(uniqueKeysWithValues: trackFeatureStore.exportedFeatures.map { ($0.trackID, $0) })
-        cards = MusicHistoryCardService().makeCards(
-            tracks: libraryStore.unfilteredTracks,
-            historyEntries: playbackHistoryStore.entries,
-            preferences: trackPreferenceStore.entries,
-            features: features
-        )
+        let generatedCards = await Task.detached(priority: .userInitiated) {
+            MusicHistoryCardService().makeCards(
+                tracks: tracks,
+                historyEntries: histories,
+                preferences: preferences,
+                features: features,
+                now: now
+            )
+        }.value
+        guard !Task.isCancelled else { return }
+        cards = generatedCards
         normalizeSelectedYear()
         hasLoadedSnapshot = true
     }
