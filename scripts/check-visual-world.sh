@@ -28,7 +28,6 @@ xcrun swiftc -module-cache-path "$task_dir/module-cache" \
     MyMusic/Views/Player/VisualWorldDynamics.swift \
     MyMusic/Views/Player/VisualWorldSimulation.swift \
     MyMusic/Views/Player/PlasmaSparkPattern.swift \
-    MyMusic/Views/Player/VisualizerRipplePattern.swift \
     "$task_dir/VisualWorldDynamicsTests.swift" "$task_dir/VisualWorldInstallationTests.swift" \
     "$task_dir/main.swift" -o "$task_dir/tests"
 "$task_dir/tests"

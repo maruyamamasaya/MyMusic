@@ -6,6 +6,7 @@ struct WorldUniforms {
     float4 primary, secondary, accent;
     float4 material, layout, spatial, burst;
     float4 plasma0, plasma1, plasma2, plasma3, plasma4;
+    float4 plasmaBranch0, plasmaBranch1, plasmaBranch2, plasmaBranch3, plasmaBranch4;
     float4 band0, band1, band2, band3, band4, band5;
     float4 wave0, wave1, wave2, wave3, wave4, wave5;
     float4 wave6, wave7, wave8, wave9, wave10, wave11;
@@ -247,7 +248,7 @@ float3 twilightSky(float2 uv, constant WorldUniforms &u) {
     color += starField(uv,u,0.55,0.6)*(1-smoothstep(0.74,0.84,p.y));
     return max(color,0.0);
 }
-// The nine vertices are selected from twenty authored silhouettes on the CPU.
+// The nine main vertices and two short forks come from 24 authored silhouettes.
 float3 plasmaSpark(float2 uv, constant WorldUniforms &u) {
     float3 color = float3(0.0005,0.001,0.006);
     float age = u.burst.x;
@@ -281,270 +282,113 @@ float3 plasmaSpark(float2 uv, constant WorldUniforms &u) {
     float3 rose = float3(1.0,0.12,0.55);
     float3 hue = mix(violet,cyan,saturate(along*0.8+0.1));
     hue = mix(hue,rose,0.27*smoothstep(0.4,0.95,along));
-    float width = kind == 0 ? 0.0037 : kind == 1 ? 0.0026 : 0.0016;
+    float width = kind == 0 ? 0.0015 : kind == 1 ? 0.0011 : 0.00075;
     float d2 = distance*distance;
-    float aura = exp(-d2/0.0036);
-    float ion = exp(-d2/(width*width*32.0));
+    float aura = exp(-d2/0.0008);
+    float ion = exp(-d2/(width*width*18.0));
     float core = exp(-d2/(width*width));
-    color += hue*(aura*0.095+ion*0.73)*light;
-    color += float3(1,0.96,1)*core*2.9*light;
+    color += hue*(aura*0.035+ion*0.55)*light;
+    color += float3(1,0.97,1)*core*2.7*light;
     // The air only catches light during the initial flash.
     color += hue*exp(-dot(p-nearest,p-nearest)/0.026)*light*0.018;
     if (kind == 0) color += hue*exp(-dot(p-points[4]*float2(aspect,1),p-points[4]*float2(aspect,1))/0.1)*strength*exp(-age*35)*0.075;
-    if (kind == 2 && age < 0.18) {
-        float2 base = points[5]*float2(aspect,1);
-        float2 tangent = normalize((points[6]-points[4])*float2(aspect,1));
-        float2 side = float2(-tangent.y,tangent.x);
-        float2 tip = base+tangent*0.035+side*0.067;
-        float2 branch = tip-base;
-        float t = saturate(dot(p-base,branch)/dot(branch,branch));
-        float d = length(p-base-branch*t);
-        float branchLight = strength*exp(-age*21)*smoothstep(0.025,0.065,age);
-        color += rose*exp(-d*d/0.00009)*branchLight*0.31;
-        color += float3(1)*exp(-d*d/0.000003)*branchLight*0.7;
+    if (age < 0.25) {
+        float2 forks[10] = {u.plasmaBranch0.xy,u.plasmaBranch0.zw,
+                           u.plasmaBranch1.xy,u.plasmaBranch1.zw,
+                           u.plasmaBranch2.xy,u.plasmaBranch2.zw,
+                           u.plasmaBranch3.xy,u.plasmaBranch3.zw,
+                           u.plasmaBranch4.xy,u.plasmaBranch4.zw};
+        for (int branchIndex=0; branchIndex<2; ++branchIndex) {
+            float response = branchIndex == 0 ? strength : max(max(mid,treble),strength*0.55);
+            if (response < 0.12) continue;
+            float branchDistance = 2;
+            for (int segment=0; segment<4; ++segment) {
+                float2 a = forks[branchIndex*5+segment]*float2(aspect,1);
+                float2 b = forks[branchIndex*5+segment+1]*float2(aspect,1);
+                float2 delta = b-a;
+                float t = saturate(dot(p-a,delta)/max(dot(delta,delta),0.000001));
+                branchDistance = min(branchDistance,length(p-a-delta*t));
+            }
+            float branchLight = response*exp(-age*10.0)*smoothstep(0.026,0.07,age);
+            float bd2 = branchDistance*branchDistance;
+            float3 branchHue = branchIndex == 0 ? cyan : rose;
+            color += branchHue*exp(-bd2/0.000018)*branchLight*0.55;
+            color += float3(1)*exp(-bd2/0.0000007)*branchLight*1.1;
+        }
     }
-    int sparks = u.tonal.w > 0.5 ? 3 : 6;
-    for (int i=0; i<sparks; ++i) {
+    // Photon Sphere's small colored halo and white core, carried close to the
+    // discharge. Only every fourth charge breaks away as a fast spark.
+    int charges = u.tonal.w > 0.5 ? 7 : 12;
+    for (int i=0; i<charges; ++i) {
         float key = float(i)+u.spatial.z*11;
         int pointIndex = 1+(i*5)%7;
-        float2 point = points[pointIndex]*float2(aspect,1);
-        point += float2(random3(float3(key,7,3))-0.5,random3(float3(key,17,9))-0.5)*age*0.18;
+        if (float(pointIndex)/8.0 > progress+0.1) continue;
+        float seed = random3(float3(key,u.tonal.z,73));
+        float2 tangent = normalize((points[pointIndex+1]-points[pointIndex-1])*float2(aspect,1));
+        float2 normal = float2(-tangent.y,tangent.x);
+        float2 point = points[pointIndex]*float2(aspect,1)
+                     +normal*(seed-0.5)*0.035;
+        float phase = seed*6.2831853+age*(9.0+seed*7.0);
+        point += float2(cos(phase),sin(phase))*(0.005+seed*0.008);
+        bool flying = i%4 == 0;
+        if (flying) point += float2(random3(float3(key,7,3))-0.5,
+                                     random3(float3(key,17,9))-0.5)*age*0.40;
         float d2 = dot(p-point,p-point);
-        float sparkLight = strength*exp(-age*19);
-        color += mix(cyan,rose,float(i%2))*exp(-d2/0.00008)*sparkLight*0.23;
-        color += float3(1)*exp(-d2/0.000003)*sparkLight*0.8;
+        float shimmer = 0.25+0.75*pow(0.5+0.5*sin(age*(12.0+seed*8.0)+seed*41.0),3.0);
+        float sparkLight = strength*exp(-age*(flying ? 14.0 : 18.0))*shimmer;
+        float radius = 0.0012+seed*0.0018;
+        float3 tint = mix(violet,cyan,seed);
+        if (i%5 == 0) tint = rose;
+        color += tint*exp(-d2/(radius*radius*14.0))*sparkLight*0.12;
+        color += mix(tint,float3(1),0.62)*exp(-d2/(radius*radius))*sparkLight*0.88;
     }
     return max(color,0.0);
 }
-// Eight deliberately different attack silhouettes, selected once per burst.
-float3 visualizerRipple(float2 uv, constant WorldUniforms &u,
-                        float3 cyan, float3 violet, float3 accent) {
-    float age = u.burst.x;
-    if (age >= 0.9) return float3(0);
-    float bass = u.burst.y, mid = u.burst.z, high = u.burst.w;
-    float power = max(bass,max(mid,high))*pow(1.0-age/0.9,1.5);
-    if (power < 0.015) return float3(0);
-    int variant = int(u.spatial.w+0.5);
-    float aspect = u.viewport.x/u.viewport.y;
-    float2 center = variant == 6 ? float2(u.spatial.z - 2.0*floor(u.spatial.z*0.5) < 0.5 ? -0.08 : 1.08,0.45)
-                  : variant == 4 ? float2(0.5,0.7)
-                  : variant == 7 ? float2(0.67,0.33) : float2(0.5,0.43);
-    float2 delta = (uv-center)*float2(aspect,1);
-    float r = length(delta);
-    float theta = atan2(delta.y,delta.x);
-    float radius = 0.025+age*(variant == 6 ? 0.86 : 0.69);
-    float band = 0;
-    if (variant == 0) band = exp(-pow((r-radius)/0.013,2.0));
-    else if (variant == 1) {
-        float ellipse = length(delta*float2(0.7,1.4));
-        band = exp(-pow((ellipse-radius)/0.016,2.0));
-    } else if (variant == 2) {
-        float fragments = pow(max(0.0,sin(theta*9.0+u.spatial.z*2.1)),2.0);
-        band = exp(-pow((r-radius)/0.011,2.0))*fragments;
-    } else if (variant == 3) {
-        float2 second = (uv-float2(0.18,0.62))*float2(aspect,1);
-        band = exp(-pow((r-radius)/0.015,2.0))
-             + exp(-pow((length(second)-radius*0.91)/0.014,2.0))*0.75;
-        band *= 0.7+0.3*cos((r-length(second))*45.0);
-    } else if (variant == 4) {
-        float spokes = pow(max(0.0,cos(theta*14.0+u.spatial.z)),10.0);
-        band = spokes*exp(-pow((r-radius)/0.085,2.0));
-    } else if (variant == 5) {
-        float liquid = r+sin(theta*5.0+age*7.0)*0.025+sin(theta*11.0-age*4.0)*0.009;
-        band = exp(-pow((liquid-radius)/0.015,2.0));
-    } else if (variant == 6) {
-        float front = abs(delta.x)-radius;
-        band = exp(-pow(front/0.025,2.0))
-             * (0.4+0.6*exp(-pow(delta.y/0.52,2.0)));
-    } else {
-        float warped = r+sin(theta*4.0+age*5.0)*0.05;
-        band = exp(-pow((warped-radius)/0.035,2.0))
-             * (0.65+0.35*sin(theta*7.0+age*9.0));
-    }
-    float3 hue = bass >= mid && bass >= high ? cyan : mid >= high ? violet : accent;
-    float atmosphere = exp(-pow((r-radius)/0.075,2.0))*0.045;
-    return hue*(band*0.27+atmosphere)*power;
-}
-// The PCM waveform is a luminous body behind the 24-band spectrum. Seeded
-// microphotons follow its energy without changing their identities each frame.
+// The same microphoton layer used by Photon Sphere surrounds the visualizer.
+float3 spherePhotons(float2 p, constant WorldUniforms &u);
+
 float3 musicVisualizer(float2 uv, constant WorldUniforms &u) {
-    float beat = saturate(u.spatial.y);
-    float energy = saturate(u.character.x);
-    float ambient = saturate(u.character.z);
-    float brightness = saturate(u.character.w);
-    float aggressive = saturate(u.character.y);
-    float electronic = saturate(u.material.y);
+    float bass = saturate(u.sound.x);
+    float mid = saturate(u.sound.y);
+    float high = saturate(u.sound.z);
     float t = u.viewport.z*4.0;
-    float drive = saturate(u.sound.x*0.32+u.sound.y*0.38+u.sound.z*0.18
-                           +beat*0.55+u.motion.z*0.28);
-    float3 cyan = mix(float3(0.015,0.45,0.78),max(u.primary.rgb,float3(0.025)),0.42);
-    float3 violet = mix(float3(0.36,0.14,0.9),max(u.secondary.rgb,float3(0.025)),0.5);
-    float3 accent = mix(float3(0.94,0.25,0.52),max(u.accent.rgb,float3(0.025)),0.38);
-    float3 color = float3(0.001,0.003,0.013)*(1.0+brightness*0.5);
-    float spatialBreath = sin(uv.x*12.0-u.viewport.z*1.5)*0.5+0.5;
-    color += mix(cyan,violet,saturate(uv.y))*exp(-pow((uv.y-0.43)/0.37,2.0))
-             *(0.012+drive*0.055+u.sound.x*0.025)*(0.72+spatialBreath*0.28);
-    float burstAge = u.burst.x;
-    float bassBurst = u.burst.y;
-    float midBurst = u.burst.z;
-    float highBurst = u.burst.w;
-    float aspect = u.viewport.x/u.viewport.y;
-    color += visualizerRipple(uv,u,cyan,violet,accent);
+    float position = saturate(uv.x)*47.0;
+    int index = clamp(int(position),0,46);
+    float fraction = smoothstep(0.0,1.0,fract(position));
+    float sample = mix(waveformSample(index,u),waveformSample(index+1,u),fraction);
+    // Low notes move the line broadly, mids add a smaller undulation, and
+    // highs give its edge a fine tremor. This remains one continuous trace.
+    float waveY = 0.5 + sample*0.075
+                + bass*0.068*sin(uv.x*12.566-t*0.8)
+                + mid*0.027*sin(uv.x*43.982-t*1.35)
+                + high*0.010*sin(uv.x*119.38-t*2.0);
+    float d = abs(uv.y-waveY);
+    float3 cyan = max(u.primary.rgb,float3(0.025));
+    float3 violet = max(u.secondary.rgb,float3(0.025));
+    float3 rose = max(u.accent.rgb,float3(0.025));
+    float3 hue = (cyan*(0.15+bass)+violet*(0.15+mid)+rose*(0.1+high))
+                 /(0.4+bass+mid+high);
+    float light = 0.35+0.75*max(bass,max(mid,high));
+    float3 color = float3(0.0005,0.001,0.004);
+    color += hue*exp(-d*d/0.00050)*0.12*light;
+    color += hue*exp(-d*d/0.000035)*0.44*light;
+    color += mix(hue,float3(1),0.86)*exp(-d*d/0.0000025)*1.6*light;
 
-    // Three falloff scales make the actual PCM trace read as light, not a thin
-    // graph line. The brightest core remains narrow enough to reveal its shape.
-    {
-        float position = saturate(uv.x)*47.0;
-        int index = clamp(int(position),0,46);
-        float fraction = smoothstep(0.0,1.0,fract(position));
-        float sample = mix(waveformSample(index,u),waveformSample(index+1,u),fraction);
-        float amplitude = 0.12+ambient*0.022+u.sound.x*0.042+beat*0.05;
-        float waveY = 0.43+sample*amplitude;
-        float d = abs(uv.y-waveY);
-        float width = 0.00135+drive*0.00115;
-        float waveCore = exp(-d*d/(width*width));
-        float waveSheath = exp(-d*d/0.00011);
-        float waveGlow = exp(-d*d/0.0023);
-        float3 waveHue = mix(cyan,violet,0.5+sample*0.36);
-        float waveLight = 0.42+drive*0.72+abs(sample)*0.27;
-        color += waveHue*(waveSheath*0.42+waveGlow*0.075)*waveLight;
-        color += mix(waveHue,float3(1),0.84)*waveCore*1.55*waveLight;
-        float fiberOffset = 0.008+drive*0.01;
-        float fibers = exp(-pow((d-fiberOffset)/(0.0018+drive*0.001),2.0));
-        color += waveHue*fibers*drive*0.11;
-        float echo = abs(uv.y-(0.51-sample*amplitude*0.54));
-        color += violet*exp(-echo*echo/0.00016)*(0.045+ambient*0.04+beat*0.08);
+    float age = u.burst.x;
+    if (age < 0.8) {
+        float power = max(u.burst.y,max(u.burst.z,u.burst.w));
+        float2 delta = (uv-float2(0.5,0.5))*u.viewport.xy/u.viewport.y;
+        float radius = 0.02+age*(u.burst.y >= u.burst.z && u.burst.y >= u.burst.w ? 0.56 : 0.43);
+        float ring = exp(-pow((length(delta)-radius)/0.012,2.0));
+        color += hue*ring*power*pow(1.0-age/0.8,2.0)*0.28;
     }
-
-    // The spectrum grows out of the waveform. Each range has its own mass and
-    // motion, so the 24 emitters read as one field rather than an EQ row.
-    float barPosition = uv.x*24.0;
-    if (barPosition >= 0.0 && barPosition < 24.0) {
-      for (int neighbor=-1; neighbor<=1; ++neighbor) {
-        int index = int(barPosition)+neighbor;
-        if (index < 0 || index >= 24) continue;
-        float frequency = (float(index)+0.5)/24.0;
-        float response = spectrum(frequency,u);
-        float rangeBoost = frequency < 0.33 ? u.sound.x*0.14
-                         : frequency < 0.7 ? u.sound.y*0.12 : u.sound.z*0.14;
-        float centerX = (float(index)+0.5)/24.0;
-        float samplePosition = centerX*47.0;
-        int sampleIndex = clamp(int(samplePosition),0,46);
-        float waveValue = mix(waveformSample(sampleIndex,u),waveformSample(sampleIndex+1,u),fract(samplePosition));
-        float sourceY = 0.43+waveValue*(0.12+ambient*0.022+u.sound.x*0.042+beat*0.05);
-        float lowRange = 1.0-smoothstep(0.22,0.42,frequency);
-        float highRange = smoothstep(0.64,0.84,frequency);
-        float reach = (0.08+pow(saturate(response+rangeBoost),0.8)*(0.19+energy*0.13))
-                      *(1.0+lowRange*0.27-highRange*0.22);
-        float direction = index % 2 == 0 ? -1.0 : 1.0;
-        float progress = saturate((uv.y-sourceY)*direction/max(reach,0.01));
-        float sweep = sin(progress*4.5-t*(0.42+frequency*0.55)+float(index)*0.63)
-                      *(0.006+u.sound.y*0.014)*(1.0-lowRange)*progress;
-        float axis = centerX+sweep;
-        float spread = (0.28+lowRange*0.38-highRange*0.16+electronic*0.07)/24.0;
-        float taper = mix(1.0,0.18,progress);
-        float filament = exp(-pow((uv.x-axis)/max(spread*taper,0.001),2.0));
-        float body = smoothstep(-0.015,0.025,progress)*(1.0-smoothstep(0.82,1.08,progress));
-        body *= step(0.0,(uv.y-sourceY)*direction)*step(abs(uv.y-sourceY),reach);
-        float tip = exp(-pow((progress-0.93)/(0.08+lowRange*0.08),2.0))*filament*body;
-        float glow = exp(-pow((uv.x-axis)/(spread*3.2),2.0))
-                   *exp(-pow((progress-0.55)/0.55,2.0))*body;
-        float3 hue = frequency < 0.52 ? mix(cyan,violet,frequency/0.52)
-                                      : mix(violet,accent,(frequency-0.52)/0.48);
-        float intensity = (0.18+response*0.66)*(0.58+brightness*0.3+drive*0.32);
-        color += hue*(body*filament*(0.18+lowRange*0.22)+tip*0.54+glow*0.11)*intensity;
-        color += float3(1)*tip*(0.07+aggressive*0.06+beat*0.16)*response;
-      }
-    }
-
-    // Seeded carriers share an accelerating flow. A damped impulse scatters
-    // them at attacks while a soft wave attraction bends their trajectories.
-    float column = uv.x*32.0+t*0.013;
-    int cell = int(floor(column));
-    for (int offset=-1; offset<=1; ++offset) {
-        float key = float(cell+offset);
-        float seed = random3(float3(key,u.tonal.z,73));
-        if (seed < (u.tonal.w > 0.5 ? 0.58 : 0.30)) continue;
-        float family = random3(float3(key,u.tonal.z,119));
-        float localTime = t*(0.72+seed*0.65);
-        float flow = localTime*0.012+sin(localTime*0.31+key)*0.009;
-        float impulse = burstAge < 0.9 ? exp(-burstAge*(family < 0.32 ? 3.0 : 5.5))
-                        *max(bassBurst,max(midBurst,highBurst)) : 0.0;
-        float photonX = (key+random3(float3(key,u.tonal.z,17)))/32.0
-                      -flow/32.0
-                      +sin(localTime*(0.26+seed*0.2)+key)*0.008
-                      +cos(seed*23.0+key)*impulse*(family > 0.68 ? 0.055 : 0.022);
-        if (photonX < -0.02 || photonX > 1.02) continue;
-        float position = saturate(photonX)*47.0;
-        int index = clamp(int(position),0,46);
-        float sample = mix(waveformSample(index,u),waveformSample(index+1,u),fract(position));
-        float waveY = 0.43+sample*(0.12+ambient*0.022+u.sound.x*0.042+beat*0.05);
-        float freeY = 0.08+random3(float3(key,u.tonal.z,43))*0.84;
-        float capture = (family < 0.32 ? 0.12 : family < 0.7 ? 0.53 : 0.27)+drive*0.14;
-        float orbit = sin(localTime*(0.19+seed*0.27)+key*1.7)*0.047
-                    +sin(localTime*(0.43+seed*0.24)+key*0.9)*0.02;
-        float magnetic = sin(photonX*18.0-localTime*0.57+key)*0.023
-                         *(family < 0.32 ? 0.35 : 1.0);
-        float scatter = sin(seed*31.0+key*1.7)*impulse
-                        *(family > 0.68 ? 0.18 : 0.075);
-        float photonY = mix(freeY,waveY,capture)+orbit+magnetic+scatter;
-        float2 delta = (uv-float2(photonX,photonY))*u.viewport.xy/u.viewport.y;
-        float d2 = dot(delta,delta);
-        float size = family < 0.32 ? 0.0017+u.sound.x*0.00085
-                   : family < 0.7 ? 0.00125+u.sound.y*0.0004
-                   : 0.0007+u.sound.z*0.0003;
-        float core = exp(-d2/(size*size));
-        float halo = exp(-d2/(size*size*40.0));
-        float3 hue = mix(cyan,accent,random3(float3(key,u.tonal.z,91)));
-        float light = 0.25+drive*0.33+impulse*0.43
-                      +(family < 0.32 ? u.sound.x : family < 0.7 ? u.sound.y : u.sound.z)*0.33;
-        color += hue*halo*0.16*light;
-        color += mix(hue,float3(1),0.78)*core*1.7*light;
-    }
-    // One bounded burst follows each detected peak. Stable seeds give particles
-    // different depths and launch sites while the recorded age drives the flight.
-    if (burstAge < 0.95) {
-        float fade = pow(1.0-burstAge/0.95,1.4);
-        int count = u.tonal.w > 0.5 ? 12 : 24;
-        for (int i=0; i<count; ++i) {
-            float3 key = float3(float(i),u.tonal.z,u.spatial.z);
-            float seed = random3(key+11);
-            int layer = i % 3;
-            float strength = layer == 0 ? bassBurst : layer == 1 ? midBurst : highBurst;
-            if (strength < 0.08) continue;
-            int site = i % 5;
-            float bandX = (float(i)+0.5)/24.0;
-            float bandLevel = spectrum((float(i)+0.5)/24.0,u);
-            float samplePosition = bandX*47.0;
-            int sampleIndex = clamp(int(samplePosition),0,46);
-            float waveValue = mix(waveformSample(sampleIndex,u),waveformSample(sampleIndex+1,u),fract(samplePosition));
-            float2 origin = site == 0 ? float2(bandX,0.43+waveValue*(0.12+ambient*0.022+u.sound.x*0.042+beat*0.05))
-                          : site == 1 ? float2(bandX,0.79-bandLevel*0.27)
-                          : site == 2 ? float2(-0.01,0.20+seed*0.6)
-                          : site == 3 ? float2(1.01,0.12+seed*0.7)
-                                      : float2(bandX,0.94);
-            float angle = random3(key+29)*6.2831853;
-            float depth = 0.45+random3(key+47)*1.15;
-            float speed = (layer == 0 ? 0.30 : layer == 1 ? 0.51 : 0.77)*depth;
-            float2 direction = float2(cos(angle),sin(angle));
-            float2 point = origin+direction*speed*burstAge/float2(aspect,1);
-            point += float2(0,-0.035*burstAge*burstAge);
-            float2 delta = (uv-point)*float2(aspect,1);
-            float d2 = dot(delta,delta);
-            float size = (layer == 0 ? 0.006 : layer == 1 ? 0.0037 : 0.0021)*depth;
-            if (d2 > size*size*100.0) continue;
-            float core = exp(-d2/(size*size));
-            float halo = exp(-d2/(size*size*20.0));
-            float3 hue = layer == 0 ? cyan : layer == 1 ? violet : accent;
-            float light = strength*fade*(0.55+bandLevel*0.45);
-            color += hue*halo*0.22*light;
-            color += mix(hue,float3(1),0.72)*core*1.7*light;
-        }
-    }
+    float2 p = (uv-float2(0.5,0.5))*u.viewport.xy/min(u.viewport.x,u.viewport.y)*2.0;
+    p.y = -p.y;
+    color += spherePhotons(p,u);
     return max(color,0.0);
 }
 // Stable per-track seeds vary each orbit's phase, speed and wobble without frame-to-frame jumps.
-float3 sphereSatellites(float2 p, constant WorldUniforms &u) {
+float3 spherePhotons(float2 p, constant WorldUniforms &u) {
     float t = u.viewport.z;
     float r = length(p);
     float3 color = 0;
@@ -568,6 +412,13 @@ float3 sphereSatellites(float2 p, constant WorldUniforms &u) {
         float3 hue = mix(u.primary.rgb,u.secondary.rgb,seed);
         color += mix(hue,float3(1),0.45)*light*shimmer*(0.8+u.sound.z*1.4);
     }
+    return color;
+}
+float3 sphereSatellites(float2 p, constant WorldUniforms &u) {
+    float t = u.viewport.z;
+    float r = length(p);
+    float3 color = spherePhotons(p,u);
+    if (r < 0.72 || r > 1.38) return color;
     int satellites = u.tonal.w > 0.5 ? 2 : 3;
     for (int i=0; i<satellites; ++i) {
         float seed = random3(float3(float(i)+113,u.tonal.z,31));

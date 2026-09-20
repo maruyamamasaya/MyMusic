@@ -90,8 +90,7 @@ final class PlayerStore {
     private var isCompletingCustomEnd = false
     private var lastPositionPersistenceDate = Date.distantPast
     private let periodicPositionPersistenceInterval: TimeInterval = 7
-    private var watchConnectivityService: WatchConnectivityServicing?
-    private weak var watchPreferenceStore: TrackPreferenceStore?
+    @ObservationIgnored private var watchCoordinator: WatchPlaybackCoordinator?
 
     init(
         audioPlayer: AudioPlayerServicing? = nil,
@@ -138,33 +137,27 @@ final class PlayerStore {
     }
 
     func connectWatch(using service: WatchConnectivityServicing, preferenceStore: TrackPreferenceStore, libraryStore: LibraryStore) {
-        watchConnectivityService = service
-        watchPreferenceStore = preferenceStore
-        service.commandHandler = { [weak self] command in
-            guard let self else { return }
-            switch command {
-            case .play: self.resume()
-            case .pause: self.pause()
-            case .togglePlayPause: self.togglePlayPause()
-            case .next: self.next()
-            case .previous: self.previous()
-            case .toggleFavorite:
-                if let trackID = self.currentTrack?.id { preferenceStore.toggleFavorite(trackID: trackID) }
-            case .increasePlaybackPreference:
-                if let trackID = self.currentTrack?.id { preferenceStore.increasePlaybackPreference(for: trackID) }
-            case .decreasePlaybackPreference:
-                if let trackID = self.currentTrack?.id { preferenceStore.decreasePlaybackPreference(for: trackID) }
-            case .requestArtwork: break
-            case .requestState: break
+        watchCoordinator = WatchPlaybackCoordinator(
+            service: service,
+            preferenceStore: preferenceStore,
+            libraryStore: libraryStore,
+            playbackCommand: { [weak self] command in
+                guard let self else { return }
+                switch command {
+                case .play: self.resume()
+                case .pause: self.pause()
+                case .togglePlayPause: self.togglePlayPause()
+                case .next: self.next()
+                case .previous: self.previous()
+                case .toggleFavorite, .increasePlaybackPreference, .decreasePlaybackPreference,
+                     .requestArtwork, .requestState: break
+                }
+            },
+            shuffleCommand: { [weak self] kind, tracks, preferenceStore in
+                guard let self else { return "iPhoneでMyMusicを開いてください" }
+                return await self.startRemoteShuffle(kind, tracks: tracks, preferenceStore: preferenceStore)
             }
-        }
-        service.shuffleHandler = { [weak self, weak libraryStore] kind in
-            guard let self, let libraryStore else { return "iPhoneでMyMusicを開いてください" }
-            return await self.startRemoteShuffle(kind, tracks: libraryStore.tracks, preferenceStore: preferenceStore)
-        }
-        service.stateProvider = { [weak self] in self?.watchPlaybackState ?? .empty }
-        preferenceStore.stateChangeHandler = { [weak self] in self?.publishWatchState() }
-        service.activate()
+        )
         publishWatchState()
     }
 
@@ -192,26 +185,12 @@ final class PlayerStore {
         return errorMessage == nil && isPlaying ? nil : "再生を開始できませんでした"
     }
 
-    private var watchPlaybackState: WatchPlaybackState {
-        WatchPlaybackState(
-            trackID: currentTrack?.id,
-            title: currentTrack?.title ?? "",
-            artist: currentTrack?.artistName ?? "",
-            album: currentTrack?.albumTitle ?? "",
+    private func publishWatchState() {
+        watchCoordinator?.updateState(
+            track: currentTrack,
             isPlaying: isPlaying,
             currentTime: currentTime,
-            duration: duration,
-            isFavorite: currentTrack.map { watchPreferenceStore?.isFavorite(trackID: $0.id) ?? false } ?? false,
-            playbackPreference: currentTrack.map { watchPreferenceStore?.playbackPreference(for: $0.id) ?? 0 } ?? 0,
-            hasArtwork: currentTrack?.artworkIdentifier != nil,
-            artworkIdentifier: currentTrack?.artworkIdentifier
-        )
-    }
-
-    private func publishWatchState() {
-        watchConnectivityService?.publish(
-            watchPlaybackState,
-            artworkIdentifier: currentTrack?.artworkIdentifier
+            duration: duration
         )
     }
 

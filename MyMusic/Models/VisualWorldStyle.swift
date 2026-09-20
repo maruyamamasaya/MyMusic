@@ -41,7 +41,7 @@ enum VisualWorldStyle: String, CaseIterable, Identifiable, Codable {
         case .nightSky: "星が瞬く夜空"
         case .twilight: "雲と光がゆっくり移ろう空"
         case .plasmaSpark: "音に走る一瞬の稲妻"
-        case .visualizer: "波形・スペクトラム・粒子"
+        case .visualizer: "一本の波形・光子・波紋"
         }
     }
 

@@ -1,9 +1,20 @@
 ---
 status: active
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # 再生中のビジュアル（Visual World）現行仕様
+
+## 最新状況（2026-09-20）
+
+この文書は**現在の作業ツリーにある6種類の実装**をまとめたもの。直近のVisualizer／Plasma Sparkの変更は未コミットで、正式リリース版を示すものではない。旧Beta資料より、この文書と実装コードを現行状態として扱う。
+
+- **実装**：6種類を選択でき、選択は画面テーマとは独立して保存・バックアップされる。通常描画はMetal、初期化失敗時はCanvasへ切り替わる。
+- **直近の変更**：Plasma Sparkはピーク時だけ現れる細い主放電と、画面端まで届く最大2本の枝に変更。Visualizerは中央の一本の48点PCM波形、Photon Sphereと共通の微小光子、短い円形波紋に整理した。旧Visualizerのバー、フィラメント、多種類の波紋、独立粒子バーストは描画しない。
+- **確認済み**：Visual Worldのロジックテスト14件、iOS Simulator build、Vespera向けDebug実機build・install・launchが成功。Canvasの390×844画像で静穏・低域・中域・高域の波形とPlasmaの枝を目視確認し、静穏時に見えた横長の光の帯は修正後の画像で消失した。
+- **未確認**：6種類を同じ実音源で連続鑑賞した実機評価、今回のiPhone上のMetal描画画像、長時間の熱・電力、VoiceOver／Dynamic Type。CometのWatch Appは同じ実機buildに埋め込まれたが、今回の直接installはCoreDeviceServiceの初期化タイムアウトで未完了。Watchはビジュアル描画の対象画面ではない。
+
+変更と検証の詳細は[2026-09-20の作業記録](../sessions/2026-09-20-visual-world-refinement.md)を参照する。
 
 ## 画面と操作
 
@@ -19,8 +30,8 @@ updated: 2026-09-19
 | Pulse Neon | `pulse-neon` | 奥から手前へ進む光のゲート。交差梁、ダイヤ、六角形、山形、段付きフレームの5形 |
 | Blue Cosmos | `blue-cosmos` | 青い夜空、星雲、緩やかに漂い明滅する星 |
 | 薄明 | `twilight` | 画面上部約8割の青い夜空、少なく暗い星、下側の暖色の地平線と雲 |
-| Plasma Spark | `plasma-spark` | ピークで一瞬走る一本の白熱放電、紫・シアン・ローズのGlowと火花。詳細は[Plasma Spark](NowPlayingVisualWorld-PlasmaSpark.md) |
-| Visualizer | `visualizer` | 全幅の48点発光波形、24帯域の光の噴出口、8種の波紋と空間を動くフォトン。詳細は[Visualizer](NowPlayingVisualWorld-Visualizer.md) |
+| Plasma Spark | `plasma-spark` | 24構図から選ぶ細い白熱放電、画面端まで伸びる枝、紫・シアン・ローズのGlowと微小光子。詳細は[Plasma Spark](NowPlayingVisualWorld-PlasmaSpark.md) |
+| Visualizer | `visualizer` | 中央の一本の48点波形、Photon Sphereと共通の微小光子、短い円形波紋。詳細は[Visualizer](NowPlayingVisualWorld-Visualizer.md) |
 
 旧`living-aurora`のビジュアル選択と、独立設定のない旧Living Auroraテーマ由来の初期値はPhoton Sphereへ読み替える。既存の画面テーマ自体は変更しない。
 
@@ -32,7 +43,7 @@ updated: 2026-09-19
 
 ## 検証状態と履歴
 
-現行構成のSimulator buildと、一部の実機Debug導入は[CURRENT.md](../CURRENT.md)に記録している。6種類すべてについて実機での連続表示、熱・電力、VoiceOver、Dynamic Typeの最終確認は未完了。
+最新の検証・導入結果はこの文書の「最新状況」と[CURRENT.md](../CURRENT.md)に記録している。実機での6種類の連続表示、熱・電力、VoiceOver、Dynamic Typeの最終確認は未完了。
 
 [Beta 2](NowPlayingVisualWorld-Beta2.md)と[Beta 3の旧造形案](NowPlayingVisualWorld-Beta3.md)は履歴であり、現行操作・造形の仕様ではない。設計上の採用理由は[ADR-0006](../decisions/ADR-0006-visual-world-rendering.md)を参照する。
 

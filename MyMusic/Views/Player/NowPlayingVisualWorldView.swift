@@ -199,13 +199,18 @@ struct NowPlayingVisualWorldView: View {
             u.plasma0 = packed[0]; u.plasma1 = packed[1]
             u.plasma2 = packed[2]; u.plasma3 = packed[3]
             u.plasma4 = SIMD4(Float(points[8].x), Float(points[8].y), 0, 0)
+            let forks = PlasmaSparkPattern.branches(seed: player.visualWorldSeed,
+                                                     serial: simulation.burstSerial,
+                                                     mid: simulation.burstMid).flatMap { $0 }
+            func packFork(_ offset: Int) -> SIMD4<Float> {
+                SIMD4(Float(forks[offset].x), Float(forks[offset].y),
+                      Float(forks[offset+1].x), Float(forks[offset+1].y))
+            }
+            u.plasmaBranch0 = packFork(0); u.plasmaBranch1 = packFork(2)
+            u.plasmaBranch2 = packFork(4); u.plasmaBranch3 = packFork(6)
+            u.plasmaBranch4 = packFork(8)
         }
         u.spatial.z = Float(simulation.burstSerial)
-        if style == .visualizer {
-            u.spatial.w = Float(VisualizerRipplePattern.index(
-                bass: simulation.burstBass, mid: simulation.burstMid,
-                treble: simulation.burstTreble, serial: simulation.burstSerial))
-        }
         let value = sin(player.visualWorldSeed * 127.1 + 311.7) * 43758.5453
         u.layout.x = Float((value - floor(value)) * 2 * .pi)
         u.tonal = SIMD4(Float(simulation.tonalHeight), Float(simulation.confidence), Float(player.visualWorldSeed), 0)

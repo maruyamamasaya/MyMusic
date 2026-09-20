@@ -4,18 +4,8 @@ import XCTest
 @testable import MyMusic
 
 final class VisualWorldInstallationTests: XCTestCase {
-    func testVisualizerRippleFamiliesRespondToFrequencyAndCycle() {
-        let bass = (0..<3).map { VisualizerRipplePattern.index(bass: 0.8, mid: 0.2, treble: 0.1, serial: $0) }
-        let mid = (0..<3).map { VisualizerRipplePattern.index(bass: 0.1, mid: 0.8, treble: 0.2, serial: $0) }
-        let high = (0..<2).map { VisualizerRipplePattern.index(bass: 0.1, mid: 0.2, treble: 0.8, serial: $0) }
-        XCTAssertEqual(Set(bass), Set([0, 1, 6]))
-        XCTAssertEqual(Set(mid), Set([3, 5, 7]))
-        XCTAssertEqual(Set(high), Set([2, 4]))
-        XCTAssertEqual(Set(bass + mid + high).count, VisualizerRipplePattern.count)
-    }
-
     func testPlasmaTemplatesAreDistinctAndReachOppositeEdges() {
-        XCTAssertEqual(PlasmaSparkPattern.designs.count, 20)
+        XCTAssertEqual(PlasmaSparkPattern.designs.count, 24)
         var signatures = Set<String>()
         for design in PlasmaSparkPattern.designs {
             let start = design.start, end = design.end
@@ -25,17 +15,33 @@ final class VisualWorldInstallationTests: XCTestCase {
             XCTAssertEqual(design.bends.count, 7)
             signatures.insert("\(start)-\(end)-\(design.bends)")
         }
-        XCTAssertEqual(signatures.count, 20)
+        XCTAssertEqual(signatures.count, 24)
     }
 
     func testPlasmaCycleVisitsEveryDesignAndKeepsEndpoints() {
-        let routes = (0..<20).map { PlasmaSparkPattern.points(seed: 0.0, serial: $0, mid: 0.5) }
-        XCTAssertEqual(Set(routes.map { "\($0[0])-\($0[8])" }).count, 20)
+        let routes = (0..<24).map { PlasmaSparkPattern.points(seed: 0.0, serial: $0, mid: 0.5) }
+        XCTAssertEqual(Set(routes.map { "\($0[0])-\($0[8])" }).count, 24)
         for route in routes {
             XCTAssertEqual(route.count, 9)
             XCTAssertTrue(route.allSatisfy { $0.x.isFinite && $0.y.isFinite })
         }
-        XCTAssertEqual(PlasmaSparkPattern.points(seed: 0, serial: 20, mid: 0.5), routes[0])
+        XCTAssertEqual(PlasmaSparkPattern.points(seed: 0, serial: 24, mid: 0.5), routes[0])
+    }
+
+    func testPlasmaBranchesStayAttachedAndReachAnEdge() {
+        for serial in 0..<24 {
+            let main = PlasmaSparkPattern.points(seed: 0, serial: serial, mid: 0.5)
+            let branches = PlasmaSparkPattern.branches(seed: 0, serial: serial, mid: 0.5)
+            XCTAssertEqual(branches.count, 2)
+            for branch in branches {
+                XCTAssertEqual(branch.count, 5)
+                XCTAssertTrue(main.contains(branch[0]))
+                let tip = branch[4]
+                XCTAssertTrue(abs(tip.x) < 0.0001 || abs(tip.x-1) < 0.0001 ||
+                              abs(tip.y) < 0.0001 || abs(tip.y-1) < 0.0001)
+                XCTAssertTrue(branch.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+            }
+        }
     }
 
     private func tone(_ hz: Double, rate: Double = 48_000, inverted: Bool = false,
