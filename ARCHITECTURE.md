@@ -44,6 +44,8 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 Homeの「マイミュージック」左端にあるHighlightタイルとライブラリ／アクティビティタイルは、`MyMusic/Resources/HomeTileImages/`に所定のベース名で置かれたローカル画像をbuild resourceとして任意に読み込む。Highlight画像がない場合は通常再生対象からランダムに選んだArtworkを装飾として表示し、再生queueや先頭曲には接続しない。ライブラリ／アクティビティ画像がない、またはdecodeできない場合は、`HomeItemTile`が従来のdestination別グラデーションをそのまま表示する。ローカル画像は永続化データではなく、build時だけアプリbundleへ取り込まれる任意assetである。
 
+Homeのタイトル行右側は`TodayPlaybackSummaryService`がロード済み`PlaybackHistoryStore.entries`からローカル日付の`dailySummaries.playCount`と同日開始の終了済み`playbackEvents.listenedSeconds`を集計したsnapshotを表示する。開始時の`homePresentationRevision`、終了時の`todayPlaybackRevision`、日付変更時に更新し、Viewに履歴集計ロジックを置かない。
+
 HomeとPlaylistで共有するステーション入口カードは、`MyMusic/Resources/HomeTileImages/station-background.*`を同じく任意のbuild resourceとして読み込む。画像がない、またはdecodeできない場合は、`StationEntryView`が従来のグラデーションを表示する。
 
 Homeの「作業用BGM再生」は即時再生ではなく、ジャンルで「作業用BGM」と明示した対象を曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別に閲覧する入口とする。各一覧は対象内検索を持ち、曲の再生は`PlayerStore`へ`.workSize` presentationを指定して専用playerへ接続する。
