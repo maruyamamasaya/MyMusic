@@ -28,6 +28,15 @@ nonisolated struct VisualWorldSimulation {
 
     mutating func suspend() { lastDate = nil }
 
+    mutating func resetTrackEvents() {
+        burstAge = 2
+        burstSerial = 0
+        accumulated = 0
+        cooldown = 0
+        beatCooldown = 0
+        beat = 0
+    }
+
     mutating func advance(date: Date, audio: VisualWorldAudioFrame, playing: Bool,
                           energy: Double, aggressive: Double, ambient: Double,
                           piano: Double = 0.5, tempo: Double = 100) {

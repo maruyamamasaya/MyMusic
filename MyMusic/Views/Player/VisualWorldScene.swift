@@ -7,11 +7,12 @@ struct VisualWorldScene: View {
     let secondary: Color
     let motion: VisualWorldDynamics
     var worldSeed = 0.0
-    var energy = 0.5
-    var ambient = 0.5
-    var brightness = 0.5
-    var aggressive = 0.5
-    var electronic = 0.5
+    var profile = TrackVisualProfile()
+    private var energy: Double { Double(profile.energy) }
+    private var ambient: Double { Double(profile.atmospheric) }
+    private var brightness: Double { Double(profile.brightness) }
+    private var aggressive: Double { Double(profile.aggression) }
+    private var electronic: Double { Double(profile.rhythmicity) }
     var bands = [Float](repeating: 0, count: 24)
     var waveform = [Float](repeating: 0, count: 48)
     var bass = 0.0
@@ -65,11 +66,11 @@ struct VisualWorldScene: View {
             var sphereContext = context
             sphereContext.clip(to: sphere)
             sphereContext.blendMode = .plusLighter
-            for index in 0..<160 {
+            for index in 0..<Int(120 + profile.density * 40) {
                 let seed = Double(index) * 2.399963
-                let z = 1 - 2 * (Double(index)+0.5)/160
+                let z = 1 - 2 * (Double(index)+0.5)/Double(Int(120 + profile.density * 40))
                 let radial = sqrt(max(0,1-z*z))
-                let angle = seed + motion.time * 0.3
+                let angle = seed + motion.time * 0.3 * Double(profile.motionSpeed)
                 let x = radial*cos(angle), depth = radial*sin(angle)
                 let point = CGPoint(x: center.x+x*radius*0.94, y: center.y+z*radius*0.94)
                 let dotRadius = 0.5 + (depth+1)*0.65
@@ -91,17 +92,17 @@ struct VisualWorldScene: View {
             return value - floor(value)
         }
         context.blendMode = .plusLighter
-        for i in 0..<16 {
+        for i in 0..<Int(12 + profile.density * 4) {
             let value = seed(i, 3)
             let time = motion.time
-            let phase = value*2*Double.pi + time*(0.26+seed(i, 51)*0.26)*(i % 3 == 0 ? -1 : 1)
+            let phase = value*2*Double.pi + time*Double(profile.motionSpeed)*(0.26+seed(i, 51)*0.26)*(i % 3 == 0 ? -1 : 1)
                 + sin(time*(0.16+value*0.12)+value*21)*0.24
                 + sin(time*(0.38+value*0.2)+value*33)*0.08
             let point = CGPoint(x: center.x + unit*(cos(phase)*(0.84+value*0.1)
                 + sin(time*(0.43+value*0.23)+value*17)*0.035),
                                 y: center.y + unit*(sin(phase)*(0.98+value*0.14)
                 + cos(time*(0.29+value*0.18)+value*39)*0.06))
-            let radius = unit*(0.0025+seed(i, 87)*0.0032)
+            let radius = unit*(0.0025+seed(i, 87)*0.0032)*(1.25-Double(profile.trebleWeight)*0.5)
             let shimmer = 0.25+0.75*pow(0.5+0.5*sin(time*(1.2+value*4)+value*41),3)
             let color = i.isMultiple(of: 2) ? primary : secondary
             let dot = Path(ellipseIn: CGRect(x: point.x-radius, y: point.y-radius,
@@ -123,7 +124,7 @@ struct VisualWorldScene: View {
         for i in 0..<3 {
             let value = seed(i, 113)
             let time = motion.time
-            let phase = value*2*Double.pi + time*(0.25+value*0.2)*(i == 1 ? -1 : 1)
+            let phase = value*2*Double.pi + time*Double(profile.motionSpeed)*(0.25+value*0.2)*(i == 1 ? -1 : 1)
                 + sin(time*(0.18+value*0.14)+value*12)*0.3
                 + sin(time*(0.42+value*0.17)+value*26)*0.1
             let point = CGPoint(x: center.x + unit*(cos(phase)*(0.82+value*0.12)
@@ -155,8 +156,8 @@ struct VisualWorldScene: View {
             let fraction = position-Double(index)
             let sample = index+1 < waveform.count
                 ? Double(waveform[index])*(1-fraction)+Double(waveform[index+1])*fraction : 0
-            return height*(0.5+sample*0.075
-                + bass*0.068*sin(x*12.566-time*0.8)
+            return height*(0.5+sample*(0.06+Double(profile.calmness)*0.035)
+                + bass*(0.045+Double(profile.bassWeight)*0.046)*sin(x*12.566-time*0.8)
                 + mid*0.027*sin(x*43.982-time*1.35)
                 + treble*0.010*sin(x*119.38-time*2))
         }
@@ -175,7 +176,7 @@ struct VisualWorldScene: View {
 
         if burstAge < 0.8 {
             let power = max(burstBass,burstMid,burstTreble)
-            let radius = height*(0.02+burstAge*(burstBass >= burstMid && burstBass >= burstTreble ? 0.56 : 0.43))
+            let radius = height*(0.02+burstAge*(burstBass >= burstMid && burstBass >= burstTreble ? 0.43+Double(profile.bassWeight)*0.23 : 0.43))
             let center = CGPoint(x: width*0.5,y: height*0.5)
             var ripple = Path()
             for step in 0...96 {
@@ -194,6 +195,9 @@ struct VisualWorldScene: View {
     private func plasmaSpark(context: inout GraphicsContext, size: CGSize) {
         context.opacity = subdued ? 0.4 : 1
         guard burstAge < 0.43 else { return }
+        let chance = min(1, max(0, 0.25 + aggressive*0.45 + energy*0.2 - Double(profile.calmness)*0.15))
+        let raw = sin(Double(burstSerial)*73.19 + worldSeed*0.17)*43758.5453
+        guard raw-floor(raw) <= chance else { return }
         let strength = max(burstBass, burstMid, burstTreble)
         guard strength >= 0.12 else { return }
         let kind = burstBass >= burstMid && burstBass >= burstTreble ? 0
@@ -203,8 +207,8 @@ struct VisualWorldScene: View {
         let height = Double(size.height)
         let flash = (1-exp(-burstAge/0.008))
             * exp(-burstAge*(kind == 0 ? 10 : kind == 1 ? 12 : 16))
-        let light = min(1, strength * flash)
-        let progress = min(1, burstAge / 0.052)
+        let light = min(1, strength * flash * (0.65+Double(profile.turbulence)*0.4))
+        let progress = min(1, burstAge / (0.07-0.025*Double(profile.motionSpeed)))
         let full = progress * 8
         var line = Path()
         line.move(to: points[0])
@@ -290,7 +294,7 @@ struct VisualWorldScene: View {
         let unit = min(size.width,size.height)*0.5
         let center = CGPoint(x: size.width*0.5, y: size.height*0.43)
         for index in 0..<8 {
-            let phase = (Double(index)+0.5)/8-motion.time*0.32
+            let phase = (Double(index)+0.5)/8-motion.time*0.32*Double(profile.motionSpeed)
             let depth = phase-floor(phase)
             let scale = unit/(0.3+depth*9)
             let opacity = min(1, min(depth/0.07,1)*min((1-depth)/0.16,1)*(0.62+motion.level*0.75))
@@ -365,7 +369,7 @@ struct VisualWorldScene: View {
 
         for layer in 0..<3 {
             let baseline = size.height * (0.52 + Double(layer) * 0.13)
-            let drift = motion.time * (0.5 + energy*0.55 + Double(layer) * 0.45)
+            let drift = motion.time * Double(profile.motionSpeed) * (0.5 + energy*0.55 + Double(layer) * 0.45)
             let amplitude = size.height * (0.018 + Double(layer) * 0.008)
             var cloud = Path()
             cloud.move(to: CGPoint(x: 0, y: baseline))
@@ -408,7 +412,7 @@ struct VisualWorldScene: View {
             return n-floor(n)
         }
         context.blendMode = .plusLighter
-        for i in 0..<200 {
+        for i in 0..<Int(160 + profile.density * 40) {
             if skyFraction < 1 && random(Double(i)+311) < 0.25 { continue }
             let seed = random(Double(i))
             let depth = random(Double(i)+227)
@@ -417,8 +421,8 @@ struct VisualWorldScene: View {
             let driftRadius = 0.002+depth*0.006
             let driftX = sin(motion.time*rate+driftPhase)*driftRadius
             let driftY = cos(motion.time*rate*0.73+driftPhase*1.7)*driftRadius
-            let x = (random(Double(i)+41) + motion.time*0.0008 + driftX + 1).truncatingRemainder(dividingBy: 1)
-            let y = random(Double(i)+97) + driftY
+            let x = (random(Double(i)+41+worldSeed) + motion.time*0.0008*Double(profile.motionSpeed) + driftX + 1).truncatingRemainder(dividingBy: 1)
+            let y = random(Double(i)+97+worldSeed) + driftY
             let sizeSeed = random(Double(i)+53)
             let sizeMix = min(max((sizeSeed-0.82)/0.18,0),1)
             let largerStar = sizeMix*sizeMix*(3-2*sizeMix)

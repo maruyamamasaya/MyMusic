@@ -39,7 +39,7 @@ final class PlayerStore {
     private(set) var spectrumLevels: [Float] = Array(repeating: 0, count: 32)
     private(set) var spatialSnapshot = AudioSpatialSnapshot.silent
     private(set) var visualAudioFrame = VisualWorldAudioFrame.silent
-    private(set) var visualWorldSeed = Double.random(in: 0...1_000)
+    private(set) var visualWorldSeed = 0.0
 
     func setVisualAnalysisEnabled(_ enabled: Bool) {
         (audioPlayer as? VisualWorldAudioControlling)?.setVisualAnalysisEnabled(enabled)
@@ -64,6 +64,7 @@ final class PlayerStore {
     private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
     private let playbackHistoryStore: PlaybackHistoryStore
+    private let historyCoordinator: PlaybackHistoryCoordinator
     private let nowPlayingService: NowPlayingServicing
     private let remoteCommandService: RemoteCommandServicing
     private let audioInformationService: AudioInformationServicing?
@@ -102,8 +103,10 @@ final class PlayerStore {
         normalizationMetadataProvider: @escaping (Track.ID) async -> TrackNormalizationMetadata? = { _ in nil }
     ) {
         let resolvedPlayer = audioPlayer ?? AudioPlayerService()
+        let resolvedHistory = playbackHistoryStore ?? PlaybackHistoryStore()
         self.audioPlayer = resolvedPlayer
-        self.playbackHistoryStore = playbackHistoryStore ?? PlaybackHistoryStore()
+        self.playbackHistoryStore = resolvedHistory
+        self.historyCoordinator = PlaybackHistoryCoordinator(store: resolvedHistory)
         self.nowPlayingService = nowPlayingService ?? NowPlayingService()
         self.remoteCommandService = remoteCommandService ?? RemoteCommandService()
         self.audioInformationService = audioInformationService
@@ -548,6 +551,7 @@ final class PlayerStore {
         let track = queue[index]
         currentIndex = index
         currentTrack = track
+        visualWorldSeed = TrackVisualSeed.value(for: track.id)
         currentPlaybackStartContext = startContext
         loadAudioInformation(for: track)
         resetPlaybackSession()
@@ -707,7 +711,6 @@ final class PlayerStore {
     private func handle(_ event: AudioPlaybackEvent) {
         switch event {
         case let .ready(duration):
-            visualWorldSeed = Double.random(in: 0...1_000)
             self.duration = duration
             isLoading = false
             nowPlayingService.updateDuration(duration, elapsedTime: currentTime, isPlaying: isPlaying)
@@ -864,7 +867,7 @@ final class PlayerStore {
         flushPlaybackHistoryDuration(force: false)
         let threshold = playbackCountThresholdOverride ?? min(30, duration * 0.5)
         guard !hasCountedCurrentPlay, threshold > 0, listenedTime >= threshold, let currentTrack else { return }
-        playbackHistoryStore.recordPlaybackCompleted(trackID: currentTrack.id)
+        historyCoordinator.recordPlaybackCompleted(trackID: currentTrack.id)
         hasCountedCurrentPlay = true
     }
 

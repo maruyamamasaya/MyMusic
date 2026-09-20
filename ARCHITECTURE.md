@@ -58,6 +58,8 @@ Visual Worldの描画種類は`SettingsStore.visualWorldStyle`が所有し、`ap
 
 `PlayerStore`は表示用解析の有効／無効と再生sessionのseedを所有する。Viewは前面・scene・accessibility・再生状態に応じて解析購読を切り替える。Simulationは音域、短期の励起、残光と余韻を表示状態だけへ積分する。Blue Cosmosでは最大3層の星空と低周波の星雲へ分岐する。薄明は同じ星の生成方式を低密度・低輝度で共有し、青い夜空を約8割、暖色の地平線を下側へ限定する。Pulse Neonは最大10本分のゲート（低品質6）の発光チューブと透視投影へ分岐する。ゲートは5形から曲のseedと周回数で選び、遠端で消えている時だけ形を更新する。Photon SphereのMetalは固定サイズの単一球体の交差と内部の有界volume sampling（通常18／低品質10 step）、発光粒子・陰影・halo・bloom、および種を固定した最大16光子と3微小衛星球を描く。外周光子は複数の周期を重ねた連続軌道で動かす。Plasma SparkはSimulationのピーク時刻・低中高域強度・発生回数から24個の固定テンプレートを巡回し、端から端へ届く一本の経路と最大2本の画面端まで届く枝をMetal／Canvasで共有する。細い白熱放電とPhoton Sphereに近い微小光子・飛散粒子を有界の計算で描く。静かな間は暗い背景だけとなる。Visualizerは同じ解析frame内でPCMを48区間の符号付きピークへ要約してWaveformとする。MetalとCanvasは中央の一本の白い芯と淡い色の光を持つ波形を描き、低中高域それぞれ異なる周期と振幅で揺らす。微小光子はPhoton Sphereと同じ描画を共有し、beat時は一つの短い円形波紋だけを描く。GPUの未完了frameは最大2とする。フレーム間隔と解像度を低電力・thermal状態で下げる。Metal初期化不能時は`VisualWorldScene` Canvasを使う。
 
+`TrackVisualProfile`は`TrackFeatureValues`を描画向けに正規化し、`NowPlayingVisualWorldView`で曲変更時に更新・時間補間する。描画はこのProfileと`VisualWorldSimulation`の平滑化済みリアルタイム音響値を組み合わせる。曲ID由来の`TrackVisualSeed`は再生ごとに同じ配置を与える。
+
 `VisualWorldPaletteService` actorは縮小Artworkから主色／副色／accentと占有率を取得し、無彩色画像も扱う。曲切り替えの姿勢・色はRendererで補間する。`VisualWorldController`は曲名・アーティスト・小さなArtworkと操作を一つのバーにまとめ、前へ・再生／一時停止・次へを`PlayerStore`、いいね・グッドを`TrackPreferenceStore`へ接続する。アート画面のボタン以外の全域は排他的な1回／2回タップで再生／一時停止といいねを実行する。詳細パネルは表示せず、通常画面への切り替えを使う。非表示／sheet／scene非activeでは描画と追加解析を休止、一時停止時は約10秒以内の有限の慣性を残す。現行仕様は[再生中のビジュアル](Documentation/NowPlayingVisualWorld.md)、描画分離の採用理由は[ADR-0006](decisions/ADR-0006-visual-world-rendering.md)。
 
 ## 主要データフロー
@@ -131,7 +133,7 @@ PlaybackControlsView / playable Views
   → AVAudioEngine → transition mixer → normalization gain → AVAudioUnitEQ → output
 ```
 
-`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。再生セッション中の総再生時間、開始日時、開始文脈はPlayerStore内の軽量な一時状態として保持し、曲変更・停止・自然終了時に実聴秒数、完走率、skip／完走を単一の`PlaybackEvent`へ確定します。同じセッションの終了通知は一度だけ確定し、lifecycle境界は途中時間をflushするだけです。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
+`PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。再生回数の確定時だけ`PlaybackHistoryCoordinator`を同期経由し、他の履歴記録・選曲判断・Playback Contextは引き続きPlayerStoreが扱います。再生セッション中の総再生時間、開始日時、開始文脈はPlayerStore内の軽量な一時状態として保持し、曲変更・停止・自然終了時に実聴秒数、完走率、skip／完走を単一の`PlaybackEvent`へ確定します。同じセッションの終了通知は一度だけ確定し、lifecycle境界は途中時間をflushするだけです。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
 
 `HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierはこれらのDestination snapshotと分離し、表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
 

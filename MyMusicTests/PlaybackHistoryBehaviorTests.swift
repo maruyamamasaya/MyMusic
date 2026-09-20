@@ -112,6 +112,74 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(historyStore.repeatPlaybackCount(for: second.id), 1)
     }
 
+    func testTrackEndKeepsQueueAtLastTrackForRepeatOffAndWrapsForRepeatAll() async throws {
+        let first = makeTrack("First")
+        let last = makeTrack("Last")
+        for repeatsAll in [false, true] {
+            let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+            let player = PlaybackHistoryAudioPlayerSpy()
+            let store = makePlayerStore(player: player, history: history)
+            await history.loadIfNeeded()
+            store.playQueue([first, last], startingAt: 1)
+            try await waitUntil { store.isPlaying }
+            if repeatsAll { store.cycleRepeatMode() }
+
+            player.send(.ended)
+            if repeatsAll { try await waitUntil { store.currentTrack?.id == first.id && store.isPlaying } }
+
+            XCTAssertEqual(store.queue.map(\.id), [first.id, last.id])
+            XCTAssertEqual(store.currentIndex, repeatsAll ? 0 : 1)
+            XCTAssertEqual(store.currentTrack?.id, repeatsAll ? first.id : last.id)
+            XCTAssertEqual(store.isPlaying, repeatsAll)
+            XCTAssertEqual(player.playedTrackIDs, repeatsAll ? [last.id, first.id] : [last.id])
+            XCTAssertEqual(history.entries[last.id]?.playbackEvents.last?.endKind, .natural)
+        }
+    }
+
+    func testTrackEndRepeatsCurrentTrackForRepeatOne() async throws {
+        let first = makeTrack("First")
+        let second = makeTrack("Second")
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let store = makePlayerStore(player: player, history: history)
+        await history.loadIfNeeded()
+        store.playQueue([first, second], startingAt: 0)
+        try await waitUntil { store.isPlaying }
+        store.cycleRepeatMode()
+        store.cycleRepeatMode()
+
+        player.send(.ended)
+        try await waitUntil { player.playedTrackIDs.count == 2 && store.isPlaying }
+
+        XCTAssertEqual(store.queue.map(\.id), [first.id, second.id])
+        XCTAssertEqual(store.currentIndex, 0)
+        XCTAssertEqual(store.currentTrack?.id, first.id)
+        XCTAssertEqual(player.playedTrackIDs, [first.id, first.id])
+        XCTAssertEqual(history.entries[first.id]?.playbackEvents.last?.endKind, .natural)
+    }
+
+    func testShuffleKeepsCurrentTrackAndNextUsesPlaybackOrderWithoutWatch() async throws {
+        let tracks = [makeTrack("First"), makeTrack("Second"), makeTrack("Third")]
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let store = makePlayerStore(player: player, history: history)
+        await history.loadIfNeeded()
+        store.playQueue(tracks, startingAt: 1)
+        try await waitUntil { store.isPlaying }
+
+        store.setShuffleEnabled(true)
+        XCTAssertEqual(store.currentTrack?.id, tracks[1].id)
+        XCTAssertEqual(store.currentIndex, 1)
+        XCTAssertEqual(store.playbackOrder.first, 1)
+        XCTAssertEqual(Set(store.playbackOrder), Set(tracks.indices))
+
+        let expectedNextIndex = try XCTUnwrap(store.playbackOrder.dropFirst().first)
+        store.next()
+        try await waitUntil { store.currentIndex == expectedNextIndex && store.isPlaying }
+        XCTAssertEqual(store.currentTrack?.id, tracks[expectedNextIndex].id)
+        XCTAssertEqual(player.playedTrackIDs, [tracks[1].id, tracks[expectedNextIndex].id])
+    }
+
     func testPlaybackEventClassificationAndDailySummaryCounters() async throws {
         let trackID = UUID()
         let store = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
@@ -266,6 +334,18 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         )
     }
 
+    private func makePlayerStore(player: PlaybackHistoryAudioPlayerSpy, history: PlaybackHistoryStore) -> PlayerStore {
+        PlayerStore(
+            audioPlayer: player,
+            playbackHistoryStore: history,
+            nowPlayingService: PlaybackHistoryNowPlayingSpy(),
+            remoteCommandService: PlaybackHistoryRemoteCommandSpy(),
+            trackPlaybackAdjustmentStore: TrackPlaybackAdjustmentStore(
+                persistence: PlaybackHistoryAdjustmentPersistence()
+            )
+        )
+    }
+
     private func waitUntil(_ condition: @escaping @MainActor () async -> Bool) async throws {
         for _ in 0..<100 {
             if await condition() { return }
@@ -300,8 +380,10 @@ private actor PlaybackHistoryAdjustmentPersistence: TrackPlaybackAdjustmentPersi
 @MainActor
 private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, PlaybackTransitionAudioControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
+    private(set) var playedTrackIDs: [Track.ID] = []
 
     func play(_ track: Track) async throws {
+        playedTrackIDs.append(track.id)
         eventHandler?(.ready(duration: track.duration))
         eventHandler?(.playingChanged(true))
     }

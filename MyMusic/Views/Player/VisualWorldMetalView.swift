@@ -13,6 +13,8 @@ nonisolated struct VisualWorldUniforms: Equatable {
     var accent = SIMD4<Float>(0.4, 0.9, 1, 1)
     var material = SIMD4<Float>(0.5, 0.5, 0.5, 0.6)
     var layout = SIMD4<Float>(0, 1, 2, 3)
+    var profileA = SIMD4<Float>(repeating: 0.5)
+    var profileB = SIMD4<Float>(repeating: 1)
     var spatial = SIMD4<Float>(repeating: 0)
     var burst = SIMD4<Float>(2, 0, 0, 0)
     var plasma0 = SIMD4<Float>(repeating: 0)

@@ -15,6 +15,9 @@ struct NowPlayingVisualWorldView: View {
     @State private var artworkColors: VisualWorldArtworkColors?
     @State private var motion = VisualWorldDynamics()
     @State private var simulation = VisualWorldSimulation()
+    @State private var profile = TrackVisualProfile()
+    @State private var targetProfile = TrackVisualProfile()
+    @State private var profileDate: Date?
     @State private var metalUnavailable = false
     @State private var thermal = ProcessInfo.processInfo.thermalState
     @State private var thermalRecovery: Task<Void, Never>?
@@ -57,6 +60,10 @@ struct NowPlayingVisualWorldView: View {
             let colors = await VisualWorldPaletteService.shared.colors(for: identifier)
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.8)) { artworkColors = colors }
+        }
+        .onChange(of: player.currentTrack?.id) { _, _ in simulation.resetTrackEvents() }
+        .onChange(of: values, initial: true) { _, next in
+            targetProfile = TrackVisualProfile.make(from: next)
         }
         .onChange(of: isAnimating) { _, _ in motion.suspend(); simulation.suspend() }
         .onChange(of: analysisEnabled, initial: true) { _, enabled in player.setVisualAnalysisEnabled(enabled) }
@@ -120,8 +127,8 @@ struct NowPlayingVisualWorldView: View {
                 : style == .plasmaSpark ? Color(red: 0.2, green: 0.78, blue: 1)
                 : style == .visualizer ? Color(red: 0.69, green: 0.34, blue: 0.96)
                 : palette.accent)
-        let energy = values?.energy ?? 0.5
-        let speed = energy * 0.55 + min((values?.tempo ?? 100) / 180, 1) * 0.3 + (1 - (values?.calm ?? 0.5)) * 0.15
+        let energy = Double(profile.energy)
+        let speed = Double(profile.motionSpeed) * 0.65
         return TimelineView(.animation(minimumInterval: frameInterval,
                                        paused: !isAnimating)) { timeline in
             ZStack {
@@ -133,10 +140,7 @@ struct NowPlayingVisualWorldView: View {
                 } else {
                     VisualWorldScene(style: style, primary: primary, secondary: secondary,
                                      motion: motion, worldSeed: player.visualWorldSeed,
-                                     energy: energy, ambient: values?.ambient ?? 0.5,
-                                     brightness: values?.bright ?? 0.5,
-                                     aggressive: values?.aggressive ?? 0.5,
-                                     electronic: values?.electronic ?? 0.5,
+                                     profile: profile,
                                      bands: simulation.bands, waveform: simulation.waveform,
                                      bass: simulation.bass, mid: simulation.mid,
                                      treble: simulation.treble, beat: simulation.beat,
@@ -153,9 +157,13 @@ struct NowPlayingVisualWorldView: View {
             }
             .onChange(of: timeline.date) { _, date in
                 guard isAnimating else { return }
+                if let profileDate {
+                    profile = profile.approaching(targetProfile, dt: date.timeIntervalSince(profileDate))
+                }
+                profileDate = date
                 simulation.advance(date: date, audio: player.visualAudioFrame, playing: player.isPlaying,
-                                   energy: energy, aggressive: values?.aggressive ?? 0.5,
-                                   ambient: values?.ambient ?? 0.5, piano: values?.piano ?? 0.5,
+                                   energy: energy, aggressive: Double(profile.aggression),
+                                   ambient: Double(profile.atmospheric), piano: values?.piano ?? 0.5,
                                    tempo: values?.tempo ?? 100)
                 motion.advance(date: date, level: Double(player.spatialSnapshot.level), speed: speed)
             }
@@ -183,8 +191,10 @@ struct NowPlayingVisualWorldView: View {
         u.motion = SIMD4(0, 0, Float(simulation.excitation), Float(simulation.memory))
         u.sound = SIMD4(Float(simulation.bass), Float(simulation.mid), Float(simulation.treble), 0)
         func unit(_ value: Double?) -> Float { Float(VisualWorldDynamics.unit(value ?? 0.5)) }
-        u.character = SIMD4(unit(values?.energy), unit(values?.aggressive), unit(values?.ambient), unit(values?.bright))
-        u.material = SIMD4(unit(values?.dark), unit(values?.electronic), unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
+        u.character = SIMD4(profile.energy, profile.aggression, profile.atmospheric, profile.brightness)
+        u.material = SIMD4(unit(values?.dark), profile.rhythmicity, unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
+        u.profileA = SIMD4(profile.bassWeight, profile.trebleWeight, profile.calmness, profile.rhythmicity)
+        u.profileB = SIMD4(profile.motionSpeed, profile.density, profile.glow, profile.turbulence)
         u.spatial = SIMD4(0, Float(simulation.beat), 0, 0)
         u.burst = SIMD4(Float(simulation.burstAge), Float(simulation.burstBass),
                         Float(simulation.burstMid), Float(simulation.burstTreble))

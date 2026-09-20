@@ -4,7 +4,7 @@ using namespace metal;
 struct WorldUniforms {
     float4 viewport, motion, sound, character, tonal;
     float4 primary, secondary, accent;
-    float4 material, layout, spatial, burst;
+    float4 material, layout, profileA, profileB, spatial, burst;
     float4 plasma0, plasma1, plasma2, plasma3, plasma4;
     float4 plasmaBranch0, plasmaBranch1, plasmaBranch2, plasmaBranch3, plasmaBranch4;
     float4 band0, band1, band2, band3, band4, band5;
@@ -51,7 +51,7 @@ float3 starField(float2 uv, constant WorldUniforms &u, float intensity, float co
     float aspect = u.viewport.x / u.viewport.y;
     float2 p = (uv - 0.5) * float2(aspect, 1);
     float t = u.viewport.z;
-    float2 drift = float2(t * (0.002 + u.character.x * 0.002), sin(t * 0.08) * 0.009);
+    float2 drift = float2(t * (0.002 + u.character.x * 0.002)*u.profileB.x, sin(t * 0.08*u.profileB.x) * 0.009);
     float3 color = 0;
     int layers = u.tonal.w > 0.5 ? 2 : 3;
     for (int layer = 0; layer < layers; ++layer) {
@@ -63,9 +63,9 @@ float3 starField(float2 uv, constant WorldUniforms &u, float intensity, float co
         // Neighbour cells keep soft star halos continuous at cell boundaries.
         for (int y=-1; y<=1; ++y) for (int x=-1; x<=1; ++x) {
             float2 offset = float2(x,y);
-            float3 key = float3(cell + offset, depth * 19 + 5);
+            float3 key = float3(cell + offset + float2(u.tonal.z*0.013,u.tonal.z*0.021), depth * 19 + 5);
             float seed = random3(key);
-            if (seed < 0.73 + depth * 0.045 + (intensity < 1 ? 0.06 : 0)) continue;
+            if (seed < 0.73 + depth * 0.045 + (1.0-u.profileB.y)*0.12 + (intensity < 1 ? 0.06 : 0)) continue;
             float2 center = float2(random3(key+17),random3(key+37));
             float driftPhase = random3(key+239)*6.283;
             float driftRate = (0.18+random3(key+251)*0.12)*(1+depth*0.18);
@@ -113,7 +113,7 @@ float3 nightSky(float2 uv, constant WorldUniforms &u) {
     float aspect = u.viewport.x / u.viewport.y;
     float2 p = (uv - 0.5) * float2(aspect, 1);
     float t = u.viewport.z;
-    float2 drift = float2(t * (0.002 + u.character.x * 0.002), sin(t * 0.08) * 0.009);
+    float2 drift = float2(t * (0.002 + u.character.x * 0.002)*u.profileB.x, sin(t * 0.08*u.profileB.x) * 0.009);
     float3 blue = float3(0.055, 0.18, 0.65);
     float3 tint = mix(blue, mix(u.primary.rgb,u.secondary.rgb,0.5), 0.32);
     float cloud = field(float3(p * 4 + drift, 7.2));
@@ -121,7 +121,7 @@ float3 nightSky(float2 uv, constant WorldUniforms &u) {
     float lane = exp(-pow((p.x + p.y * 0.46 + (cloud-0.5)*0.24) * 4.5, 2));
     float haze = lane * pow(cloud * 0.7 + detail * 0.3, 2.2);
     float3 color = float3(0.0006,0.0012,0.004);
-    color += tint * haze * (0.08 + u.sound.x * 0.16 + u.motion.w * 0.11);
+    color += tint * haze * (0.08 + u.sound.x * (0.12+u.profileA.x*0.08) + u.motion.w * 0.11) * (0.8+u.profileA.z*0.4);
     color += starField(uv,u,1,0);
     return color;
 }
@@ -180,7 +180,7 @@ float3 lightGates(float2 uv, constant WorldUniforms &u) {
     float3 primary = max(u.primary.rgb,float3(0.015));
     float3 secondary = max(u.secondary.rgb,float3(0.015));
     float3 color = primary*0.002;
-    float travel = u.viewport.z * 0.32;
+    float travel = u.viewport.z * 0.32 * u.profileB.x;
     int count = u.tonal.w > 0.5 ? 6 : 10;
     for (int i=0; i<count; ++i) {
         float gatePhase = (float(i)+0.5)/float(count)-travel;
@@ -191,13 +191,13 @@ float3 lightGates(float2 uv, constant WorldUniforms &u) {
         float shapeSeed = random3(float3(float(i)+17,floor(gatePhase),u.tonal.z+41));
         int pattern = (int(shapeSeed*5.0)+i)%5;
         float distance = gateShapeDistance(q,pattern);
-        float width = max(0.008,1.1/(u.viewport.y*scale));
+        float width = max(0.008,(1.3-u.profileA.y*0.4)/(u.viewport.y*scale));
         float core = exp(-pow(distance/width,2));
         float glow = exp(-distance/0.055)*0.3 + exp(-distance/0.2)*0.055;
         float3 hue = mix(primary,secondary,0.5+0.5*sin(depth*4+q.y*0.8));
         float response = spectrum(depth,u);
         float excitation = 0.65+response*1.25+u.motion.z*0.45;
-        color += (hue*glow*(3.2+u.sound.x*2.4) + mix(hue,float3(1),0.72)*core*2)*fade*excitation;
+        color += (hue*glow*(3.2+u.sound.x*2.4)*u.profileB.z + mix(hue,float3(1),0.72)*core*2)*fade*excitation;
     }
     // Dim converging road light describes forward travel without covering the opening.
     float horizonGlow = exp(-length(p)*3.5);
@@ -209,7 +209,7 @@ float3 twilightSky(float2 uv, constant WorldUniforms &u) {
     float t = u.viewport.z;
     float aspect = u.viewport.x / u.viewport.y;
     float2 p = float2((uv.x-0.5)*aspect, uv.y);
-    float horizon = 0.79 + 0.009*sin(p.x*5.0+t*0.36);
+    float horizon = 0.79 + 0.009*sin(p.x*5.0+t*0.36*u.profileB.x);
     float distance = p.y-horizon;
     float3 midnight = float3(0.003,0.012,0.065);
     float3 deepBlue = float3(0.015,0.045,0.16);
@@ -221,12 +221,12 @@ float3 twilightSky(float2 uv, constant WorldUniforms &u) {
     float warmth = saturate(0.35+u.character.x*0.25+u.sound.y*0.28+u.motion.w*0.24);
     color = mix(color,rose,smoothstep(0.75,0.88,p.y)*(0.24+warmth*0.32));
     float glow = exp(-pow(distance/0.047,2.0));
-    float shimmer = 0.75 + u.sound.x*0.55 + u.motion.w*0.38 + u.motion.z*0.32;
+    float shimmer = 0.75 + u.sound.x*(0.35+u.profileA.x*0.4) + u.motion.w*0.38 + u.motion.z*0.32;
     color += amber*glow*(0.12+warmth*0.18)*shimmer;
     float sunDistance = length(float2(p.x*0.8,distance*1.3));
     color += mix(rose,amber,0.62)*exp(-sunDistance*sunDistance/0.025)*0.1*shimmer;
     // Three horizontal noise fields make layered clouds without a repeating shape.
-    float movement = 0.09+u.character.x*0.08;
+    float movement = (0.09+u.character.x*0.08)*u.profileB.x;
     float farNoise = field(float3(p.x*5.5-t*movement,p.y*15.0,2.7));
     float middleNoise = field(float3(p.x*8.0+t*movement*1.4,p.y*21.0,8.3));
     float nearNoise = field(float3(p.x*12.0-t*movement*1.9,p.y*27.0,14.6));
@@ -253,6 +253,9 @@ float3 plasmaSpark(float2 uv, constant WorldUniforms &u) {
     float3 color = float3(0.0005,0.001,0.006);
     float age = u.burst.x;
     if (age >= 0.43) return color;
+    float chance = saturate(0.25 + u.character.y*0.45 + u.character.x*0.2 - u.profileA.z*0.15);
+    float eventSeed = fract(sin(u.spatial.z*73.19 + u.tonal.z*0.17)*43758.5453);
+    if (eventSeed > chance) return color;
     float bass = u.burst.y, mid = u.burst.z, treble = u.burst.w;
     float strength = max(bass,max(mid,treble));
     if (strength < 0.12) return color;
@@ -273,10 +276,10 @@ float3 plasmaSpark(float2 uv, constant WorldUniforms &u) {
         float d = length(p-candidate);
         if (d < distance) { distance=d; along=(float(i)+t)/8.0; nearest=candidate; }
     }
-    float progress = saturate(age/0.052);
+    float progress = saturate(age/(0.07-0.025*u.profileB.x));
     float reveal = 1-smoothstep(progress-0.08,progress+0.015,along);
     float flash = smoothstep(0,0.012,age)*exp(-age*(kind == 0 ? 10.0 : kind == 1 ? 12.0 : 16.0));
-    float light = strength*flash*reveal;
+    float light = strength*flash*reveal*(0.65+u.profileB.w*0.4);
     float3 violet = float3(0.38,0.08,0.9);
     float3 cyan = float3(0.04,0.7,1.0);
     float3 rose = float3(1.0,0.12,0.55);
@@ -309,7 +312,7 @@ float3 plasmaSpark(float2 uv, constant WorldUniforms &u) {
                 float t = saturate(dot(p-a,delta)/max(dot(delta,delta),0.000001));
                 branchDistance = min(branchDistance,length(p-a-delta*t));
             }
-            float branchLight = response*exp(-age*10.0)*smoothstep(0.026,0.07,age);
+            float branchLight = response*exp(-age*(7.0+u.profileB.x*3.0))*smoothstep(0.026,0.07,age);
             float bd2 = branchDistance*branchDistance;
             float3 branchHue = branchIndex == 0 ? cyan : rose;
             color += branchHue*exp(-bd2/0.000018)*branchLight*0.55;
@@ -358,10 +361,10 @@ float3 musicVisualizer(float2 uv, constant WorldUniforms &u) {
     float sample = mix(waveformSample(index,u),waveformSample(index+1,u),fraction);
     // Low notes move the line broadly, mids add a smaller undulation, and
     // highs give its edge a fine tremor. This remains one continuous trace.
-    float waveY = 0.5 + sample*0.075
-                + bass*0.068*sin(uv.x*12.566-t*0.8)
+    float waveY = 0.5 + sample*(0.06+u.profileA.z*0.035)
+                + bass*(0.045+u.profileA.x*0.046)*sin(uv.x*12.566-t*0.8)
                 + mid*0.027*sin(uv.x*43.982-t*1.35)
-                + high*0.010*sin(uv.x*119.38-t*2.0);
+                + high*(0.006+u.profileA.y*0.009)*sin(uv.x*119.38-t*2.0);
     float d = abs(uv.y-waveY);
     float3 cyan = max(u.primary.rgb,float3(0.025));
     float3 violet = max(u.secondary.rgb,float3(0.025));
@@ -378,7 +381,7 @@ float3 musicVisualizer(float2 uv, constant WorldUniforms &u) {
     if (age < 0.8) {
         float power = max(u.burst.y,max(u.burst.z,u.burst.w));
         float2 delta = (uv-float2(0.5,0.5))*u.viewport.xy/u.viewport.y;
-        float radius = 0.02+age*(u.burst.y >= u.burst.z && u.burst.y >= u.burst.w ? 0.56 : 0.43);
+        float radius = 0.02+age*(u.burst.y >= u.burst.z && u.burst.y >= u.burst.w ? 0.43+u.profileA.x*0.23 : 0.43);
         float ring = exp(-pow((length(delta)-radius)/0.012,2.0));
         color += hue*ring*power*pow(1.0-age/0.8,2.0)*0.28;
     }
@@ -393,10 +396,10 @@ float3 spherePhotons(float2 p, constant WorldUniforms &u) {
     float r = length(p);
     float3 color = 0;
     if (r < 0.72 || r > 1.38) return color;
-    int photons = u.tonal.w > 0.5 ? 9 : 16;
+    int photons = u.tonal.w > 0.5 ? 9 : int(12.0+u.profileB.y*4.0);
     for (int i=0; i<photons; ++i) {
         float seed = random3(float3(float(i)+3,u.tonal.z,23));
-        float speed = 0.26+random3(float3(float(i)+51,u.tonal.z,17))*0.26;
+        float speed = (0.26+random3(float3(float(i)+51,u.tonal.z,17))*0.26)*u.profileB.x;
         float direction = (i % 3 == 0) ? -1 : 1;
         float phase = seed*6.2831853+t*speed*direction
                     +sin(t*(0.16+seed*0.12)+seed*21)*0.24
@@ -406,7 +409,7 @@ float3 spherePhotons(float2 p, constant WorldUniforms &u) {
                                sin(phase)*(0.98+seed*0.14)
                                    +cos(t*(0.29+seed*0.18)+seed*39)*0.06);
         float d = length(p-center);
-        float size = 0.0025+random3(float3(float(i)+87,u.tonal.z,9))*0.0032;
+        float size = (0.0025+random3(float3(float(i)+87,u.tonal.z,9))*0.0032)*(1.25-u.profileA.y*0.5+u.profileA.x*0.15);
         float shimmer = 0.25+0.75*pow(0.5+0.5*sin(t*(1.2+seed*4)+seed*41),3);
         float light = exp(-d*d/(size*size)) + exp(-d*d/(size*size*12))*0.08;
         float3 hue = mix(u.primary.rgb,u.secondary.rgb,seed);
@@ -470,7 +473,7 @@ fragment float4 visualWorldFragment(Raster in [[stage_in]], constant WorldUnifor
         float z = sqrt(max(radius*radius-dot(p,p),0.0));
         float3 normal = float3(p,z) / radius;
         float facing = normal.z;
-        float angle = t * (0.24+u.character.x*0.12) + u.layout.x;
+        float angle = t * (0.24+u.character.x*0.12)*u.profileB.x + u.layout.x;
         float3 surface = turn(float3(p,z),angle);
         float3 lightDirection = normalize(float3(-0.6,0.8,1.2));
         float diffuse = max(0.0,dot(normal,lightDirection));
@@ -500,7 +503,7 @@ fragment float4 visualWorldFragment(Raster in [[stage_in]], constant WorldUnifor
             float3 cell = floor(cellPosition);
             float seed = random3(cell);
             float3 center = float3(random3(cell+9),random3(cell+23),random3(cell+41));
-            float photon = exp(-dot(fract(cellPosition)-center,fract(cellPosition)-center)*180);
+            float photon = exp(-dot(fract(cellPosition)-center,fract(cellPosition)-center)*(140+u.profileA.y*80));
             photon *= smoothstep(0.67,0.94,seed) * envelope;
             float shimmer = 0.3 + 0.7*pow(0.5+0.5*sin(t*(1+seed*3)+seed*41),3.0);
             float3 hue = mix(primary,secondary,smoothstep(0.2,0.85,density));

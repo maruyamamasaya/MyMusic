@@ -19,6 +19,8 @@ updated: 2026-09-20
 
 ### テーマ Beta
 
+- Track Visual Profile Betaとして、既存Track Featureを描画向けの共通特性へ変換し、約1秒で補間する。6つのVisual Worldが各自の速度・密度・光・形へ反映し、瞬間の反応には既存の平滑化した音響解析を使う。曲IDから再現可能なseedを生成する。実音源での6種類比較と長時間の熱・電力は未確認。
+
 - 再生中のVisual Worldは設定 → デザイン → 再生中のビジュアルと、アート画面左上のメニューから6種類を個別に選べる。両方とも同じ選択を保存する。アプリのテーマ変更とは独立し、旧Aurora Sphere選択とLiving Auroraテーマ由来の初期値はPhoton Sphereへ統合する。App外バックアップにも選択を含める。Photon Sphereの外側には内部粒子に近い小さな光子と、滑らかで不規則な経路を進む微小な衛星球を描く。Plasma Sparkは24種類の設計済み経路から音のピークごとに一本を選び、画面の端から反対側の端へ細い白熱の稲妻状放電を走らせる。紫・シアン・ローズのGlow、最大2本の画面端まで伸びる繊細な枝、Photon Sphereに近い微小光子と少数の飛散粒子を伴ってすぐ消える。「薄明」は画面の約8割を青い夜空とし、Blue Cosmosより少なく暗い星を散らし、低い暖色の地平線と雲を描く。Visualizerは中央で左右端を結ぶ一本の48点発光波形を主軸に、低中高域それぞれ異なる周期の揺れを加える。ピーク時は短い円形波紋を一つ描き、微小光子はPhoton Sphereと同じ描画を共有する。球体は固定外形のまま内部の光、Neonはゲートの発光、Cosmosは星雲と一部の星、薄明は空の暖かさと地平線の光が曲の特徴量・再生音で変わる。Metal／Canvas両方に対応する。
 
 - アート画面下部は曲名・アーティスト・小さなジャケットと、前へ・再生／一時停止・次へ・いいね（お気に入り）・グッド（再生頻度を増やす）の5操作を一つのコンパクトなバーに統合する。従来の詳細操作、背景タップ／スワイプ／長押しでのコントローラー表示は一旦非表示。通常の再生画面から他の操作を利用できる。
@@ -137,6 +139,7 @@ updated: 2026-09-20
 - **音量ノーマライズ**: Mac Analyzerが全曲のIntegrated LUFS / True Peakと控えめな固定ゲインを算出し、特徴量JSON経由でiPhoneへ渡す。-17〜-11 LUFSは無補正、最大±4 dB、-1 dBTP ceiling。設定は初期OFFで、音源変更・動的圧縮は行わない。
 - **1曲ごとの再生履歴リセット**: 分析の「よく再生している曲」を長押し、確認後にその曲の再生回数・日時履歴だけを削除できる。お気に入りや評価、シャッフル除外は保持し、全曲一括リセットは持たない。
 - **Playback History 拡張**: 再生履歴は初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保持する。再生中はPlayerStore内で軽量に集計し、曲変更・停止・一定間隔・background移行でまとめて保存する。日別集計は再生された日のみ保持し、直近7日／30日は保存値ではなく集計から算出する。
+- **履歴記録の最小分離**: 再生回数が閾値に到達した時の`recordPlaybackCompleted`だけを`PlaybackHistoryCoordinator`経由で同期記録する。判定、他の履歴記録、選曲判断、Playback ContextはPlayerStoreに残す。
   - ハイライト入口の再生は、実聴5秒未満でユーザーが離脱した場合だけ分析上のSkipとする。5秒以上では`endKind = user_skipped`を操作事実として保持しつつ、Skip／Early Skip集計から除外する。
   - Playback Event Foundationは開始／終了日時、実聴秒数、完走率、skip／完走、開始種別／入口、終了理由をセッション終了時に1件へ確定する。early skipの基礎定義は`wasSkipped && listenedSeconds <= 30`。日別集計は完走、skip、early skip件数も保持し、候補判定、Overplay、Preference Drift、選曲補正は後続M2〜M4で利用する。
   - 通常運用の正本は `Application Support/MyMusic/playback-history.sqlite3`。旧JSONは変更せず永久migration backupへatomic copyし、transaction importと全項目read-back検証後だけ`verified`へ切り替える。通常更新は対象曲と正規化した子レコードだけをtransaction更新する。

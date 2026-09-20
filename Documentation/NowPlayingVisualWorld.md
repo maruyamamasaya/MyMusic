@@ -10,8 +10,10 @@ updated: 2026-09-20
 この文書は**現在の作業ツリーにある6種類の実装**をまとめたもの。直近のVisualizer／Plasma Sparkの変更は未コミットで、正式リリース版を示すものではない。旧Beta資料より、この文書と実装コードを現行状態として扱う。
 
 - **実装**：6種類を選択でき、選択は画面テーマとは独立して保存・バックアップされる。通常描画はMetal、初期化失敗時はCanvasへ切り替わる。
+- **Track Visual Profile Beta**：Track Featureから描画専用のenergy、低域／高域傾向、リズム性、空間性、攻撃性、穏やかさ、明るさを曲変更時に生成し、描画中は約1秒の時定数で補間する。MetalとCanvasの各Visual Worldで速度、密度、光、変形、Plasma Sparkの発生率への反映を変える。瞬間の振幅、beat、波形は従来どおり平滑化したAudio Analysisを使う。曲ID由来のseedは再生ごとに再現する。低域／高域は現行Track Featureに実測値がないため弱い傾向値とし、瞬間の低中高域の正本は再生音とする。
 - **直近の変更**：Plasma Sparkはピーク時だけ現れる細い主放電と、画面端まで届く最大2本の枝に変更。Visualizerは中央の一本の48点PCM波形、Photon Sphereと共通の微小光子、短い円形波紋に整理した。旧Visualizerのバー、フィラメント、多種類の波紋、独立粒子バーストは描画しない。
 - **確認済み**：Visual Worldのロジックテスト14件、iOS Simulator build、Vespera向けDebug実機build・install・launchが成功。Canvasの390×844画像で静穏・低域・中域・高域の波形とPlasmaの枝を目視確認し、静穏時に見えた横長の光の帯は修正後の画像で消失した。
+- **Track Visual Profileの未確認**：異なる実音源を使った6種類の実機比較と、長時間の熱・電力。曲切替時のseed由来の個別配置は現在も切り替わるため、配置の完全なクロスフェードは今後の課題。
 - **未確認**：6種類を同じ実音源で連続鑑賞した実機評価、今回のiPhone上のMetal描画画像、長時間の熱・電力、VoiceOver／Dynamic Type。CometのWatch Appは同じ実機buildに埋め込まれたが、今回の直接installはCoreDeviceServiceの初期化タイムアウトで未完了。Watchはビジュアル描画の対象画面ではない。
 
 変更と検証の詳細は[2026-09-20の作業記録](../sessions/2026-09-20-visual-world-refinement.md)を参照する。
