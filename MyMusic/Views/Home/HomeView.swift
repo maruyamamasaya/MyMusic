@@ -112,6 +112,7 @@ struct HomeView: View {
                         .minimumScaleFactor(0.8)
                         .accessibilityLabel("本日の再生回数 \(todayPlaybackSummary.playCount)回、再生時間 \(todayPlaybackSummary.compactDuration)")
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination)
