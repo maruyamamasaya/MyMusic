@@ -54,6 +54,7 @@ updated: 2026-09-20
 
 - Watch接続のcommand routingと状態生成・通知を`WatchPlaybackCoordinator`へ分離した。再生・Queue・Shuffle実処理とWatchConnectivity通信・Artwork転送の既存所有者は維持する。接続と実機間通信の手動回帰確認は引き続き必要。
 - 2026-09-20のVisualizer／Plasma Spark更新版はVesperaへのDebug実機build・install・launchに成功。埋め込みWatch Appもbuild成功したが、Cometへの直接installはCoreDeviceService初期化タイムアウトで失敗し、今回のWatch導入は未完了。
+- 2026-09-20にT（iPhone 13）の既存`maruyamatomoka.MyMusic`をTeam `HNCTDS53YZ`で再署名し、Watchを含めないDebug buildをinstall・launchした。T側で新しい開発者プロファイルを信頼後に起動成功。今回のprofile期限は2026-09-27であり、更新時には再署名が必要。projectの通常署名設定は復元済み。
 - 2026-09-19に現行の未コミット変更を含むDebug実機buildをVesperaへinstallし、ロック解除後のlaunchに成功した。同じbuildに埋め込まれた`MyMusicWatch.app`をCometへ直接install・launchした。初回のWatch接続はネットワークトンネルtimeoutだったが、再試行で成功した。WatchとiPhoneの画面操作・実機間通信の確認は引き続き必要。
 - 2026-09-14にVespera（iPhone 17e）向けDebug実機build、install、launchが成功した。`MyMusicWatch.app`はiPhone Appの`Watch/`へ埋め込まれ、Xcodeのembedded binary validationまで成功している。続いてComet（Apple Watch SE）への直接install、インストール一覧でのBundle ID確認、launchも成功した。iPhoneとの実機間通信と画面操作は引き続き手動確認対象とする。
 - 2026-09-13のVespera／Comet実機デプロイは署名で停止していた。deploy scriptの全targetへの`-sdk iphoneos`強制を除去し、既存自動署名のprofile更新を許可した時点では、Xcodeが`No Accounts`とWatch profile不足を返していた。署名問題と両端末へのデプロイは2026-09-14に解消した。
