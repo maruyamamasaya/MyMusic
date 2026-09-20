@@ -85,10 +85,7 @@ struct MixSelectionService {
     ) -> [Track] {
         switch kind {
         case .favorites:
-            return Array(sorted.filter {
-                let preference = preferences[$0.id]
-                return preference?.favorite == true || (preference?.playbackPreference ?? 0) > 0
-            }.prefix(Self.maximumCount))
+            return Array(sorted.filter { isFavorite($0, preferences: preferences) }.prefix(Self.maximumCount))
         case .rediscovery:
             let cutoff = calendar.date(byAdding: .day, value: -60, to: now) ?? now
             return Array(sorted.filter {
@@ -98,20 +95,21 @@ struct MixSelectionService {
         case .daily:
             let recentCutoff = calendar.date(byAdding: .day, value: -30, to: now) ?? now
             let oldCutoff = calendar.date(byAdding: .day, value: -60, to: now) ?? now
+            let favoriteFrontIDs = Set(sorted.lazy.filter {
+                isFavorite($0, preferences: preferences)
+            }.prefix(Self.maximumCount).map(\.id))
+            let dailyCandidates = sorted.filter { !favoriteFrontIDs.contains($0.id) }
             let groups: [[Track]] = [
-                sorted.filter {
+                dailyCandidates.filter {
                     guard let history = histories[$0.id] else { return false }
                     return history.playCount >= 2 && (history.lastPlayedAt ?? .distantPast) >= recentCutoff
                 },
-                sorted.filter {
-                    let preference = preferences[$0.id]
-                    return preference?.favorite == true || (preference?.playbackPreference ?? 0) > 0
-                },
-                sorted.filter { (histories[$0.id]?.playCount ?? 0) <= 1 },
-                sorted.filter {
+                dailyCandidates.filter { (histories[$0.id]?.playCount ?? 0) <= 1 },
+                dailyCandidates.filter {
                     guard let history = histories[$0.id], let lastPlayedAt = history.lastPlayedAt else { return false }
                     return history.playCount >= 3 && lastPlayedAt < oldCutoff
-                }
+                },
+                dailyCandidates.filter { isFavorite($0, preferences: preferences) }
             ]
             var result: [Track] = []
             var seen: Set<Track.ID> = []
@@ -132,11 +130,19 @@ struct MixSelectionService {
                 }
                 if !added { break }
             }
-            for track in sorted where result.count < Self.maximumCount {
+            for track in dailyCandidates where result.count < Self.maximumCount {
                 if seen.insert(track.id).inserted { result.append(track) }
+            }
+            for track in sorted where result.count < Self.maximumCount && favoriteFrontIDs.contains(track.id) {
+                result.append(track)
             }
             return result
         }
+    }
+
+    private func isFavorite(_ track: Track, preferences: [Track.ID: TrackPreference]) -> Bool {
+        let preference = preferences[track.id]
+        return preference?.favorite == true || (preference?.playbackPreference ?? 0) > 0
     }
 
     private func drawKey(for id: Track.ID, day: Date, weight: Double) -> Double {

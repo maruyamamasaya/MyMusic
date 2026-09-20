@@ -24,9 +24,40 @@ final class MixSelectionServiceTests: XCTestCase {
                                      preferences: preferences, weights: [:], now: now)
         let all = selector.allQueues(from: tracks, histories: histories,
                                      preferences: preferences, weights: [:], now: now)
-        XCTAssertEqual(first.map(\.id), [recent.id, favorite.id, new.id, old.id])
+        XCTAssertEqual(first.map(\.id), [recent.id, new.id, old.id, favorite.id])
         XCTAssertEqual(first.map(\.id), second.map(\.id))
         XCTAssertEqual(first.map(\.id), all[.daily]?.map(\.id))
+    }
+
+    func testDailyMixAvoidsFavoritesFrontWhenOtherTracksCanFillQueue() {
+        let favorites = (0..<25).map { track("Favorite \($0)") }
+        let others = (0..<30).map { track("Other \($0)") }
+        let preferences = Dictionary(uniqueKeysWithValues: favorites.map {
+            ($0.id, TrackPreference(trackID: $0.id, playbackPreference: 1, favorite: true))
+        })
+
+        let queues = selector.allQueues(from: favorites + others, histories: [:],
+                                        preferences: preferences, weights: [:], now: now)
+        let dailyIDs = Set((queues[.daily] ?? []).map(\.id))
+        let favoriteIDs = Set((queues[.favorites] ?? []).map(\.id))
+        XCTAssertEqual(dailyIDs.count, 25)
+        XCTAssertTrue(dailyIDs.isDisjoint(with: favoriteIDs))
+    }
+
+    func testDailyMixFillsFromFavoritesFrontWhenOtherTracksAreInsufficient() {
+        let favorites = (0..<25).map { track("Favorite \($0)") }
+        let others = (0..<5).map { track("Other \($0)") }
+        let preferences = Dictionary(uniqueKeysWithValues: favorites.map {
+            ($0.id, TrackPreference(trackID: $0.id, playbackPreference: 1, favorite: true))
+        })
+
+        let queues = selector.allQueues(from: favorites + others, histories: [:],
+                                        preferences: preferences, weights: [:], now: now)
+        let dailyIDs = Set((queues[.daily] ?? []).map(\.id))
+        let favoriteIDs = Set((queues[.favorites] ?? []).map(\.id))
+        XCTAssertEqual(dailyIDs.count, 25)
+        XCTAssertTrue(Set(others.map(\.id)).isSubset(of: dailyIDs))
+        XCTAssertEqual(dailyIDs.intersection(favoriteIDs).count, 20)
     }
 
     func testRediscoveryRequiresRepeatedPastListeningAndSixtyDaysAway() {

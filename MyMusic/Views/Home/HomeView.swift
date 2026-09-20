@@ -802,7 +802,9 @@ private struct HomeMixSection: View {
                 let width = min(180, max(132, (proxy.size.width - 32 - 28 - 12) / 2))
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 12) {
-                        ForEach(MixKind.allCases) { kind in
+                        ForEach(MixKind.allCases.filter { kind in
+                            kind != .rediscovery || !(queues[kind] ?? []).isEmpty
+                        }) { kind in
                             let tracks = queues[kind] ?? []
                             Button { onPlay(kind) } label: {
                                 HomeMixTile(kind: kind, firstTrack: tracks.first, count: tracks.count, width: width)
