@@ -26,4 +26,10 @@ After: 時刻event → 同じ判定 → Coordinatorが同じHistory Storeを同�
 - 実音源、background復帰、Watch実機通信、Visual Worldの実機描画は未確認。
 - XCTestDevicesのUUID folderは開始前・終了時とも0。test端末の作成0、削除0、残容量12KB。
 
-次の候補は再生開始記録または聴取時間記録の依存確認。今回は進めない。
+将来再開する場合の候補は、再生開始記録または聴取時間記録の依存確認。今回は進めない。
+
+## Phase 1の終了判断
+
+Watch接続と履歴記録1件に必要な境界を作り、Before／AfterのBuild・TestがGreenの状態で一区切りとする。現在の再生挙動を保ったまま追加分離して得られる利益は小さいため、未完了として急いで続けるのではなく、意図的に止める。Queue／Shuffle／Repeat、Playback Context、再生sessionはPlayerStoreに残す。
+
+将来はCrossfade、Smart Queue、Auto DJ、Mood Station、AirPlay、Visualizer連動などで責務が増えた場合、またはテスト可能性や修正範囲が悪化した場合に再検討する。候補はHistory記録の段階的拡張、VisualAudioBridge、PlaybackQueueController、最後にPlaybackSessionController。ファイルサイズだけでは再開しない。再開時も1責務ずつ、同じCharacterization Testを変更前後に実行してBuild／TestのGreenを保つ。

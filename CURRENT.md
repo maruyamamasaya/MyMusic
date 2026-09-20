@@ -15,6 +15,13 @@ updated: 2026-09-20
 
 この方針を採った経緯は [ADR-0002](decisions/ADR-0002-baseline-and-beta-delivery.md)、利用者向け機能説明は [README.md](README.md) を参照してください。
 
+## PlayerStore Refactoring
+
+- **状態:** Phase 1完了。Watch接続を`WatchPlaybackCoordinator`へ分離し、`PlaybackHistoryCoordinator`に再生回数の確定記録だけの境界を設けた。
+- **検証:** 再生のCharacterization Testを強化し、変更前後でiOS／埋め込みWatch Simulator Buildと全Testが成功。
+- **保留:** PlaybackSessionController、PlaybackQueueController、VisualAudioBridge、Historyの追加分離。
+- **方針:** 現時点では追加分離しない。将来の機能追加で境界が必要になった時だけ1責務ずつ再検討する。詳細は[ARCHITECTURE.md](ARCHITECTURE.md#playerstoreの段階的な責務分離)を参照。
+
 ## 実装済み
 
 ### テーマ Beta

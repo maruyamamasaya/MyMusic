@@ -4,7 +4,10 @@ struct MusicHistoryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
+    @Environment(TrackFeatureStore.self) private var trackFeatureStore
+    @Environment(PlayerStore.self) private var playerStore
     @State private var snapshot = MusicHistorySnapshot.empty
+    @State private var cards: [MusicHistoryCardCandidate] = []
     @State private var selectedYear: Int?
     @State private var hasLoadedSnapshot = false
 
@@ -20,7 +23,10 @@ struct MusicHistoryView: View {
             playbackEventCount: playbackHistoryStore.entries.values.reduce(0) {
                 $0 + $1.playbackEvents.count
             },
-            libraryTrackCount: libraryStore.unfilteredTracks.count
+            libraryTrackCount: libraryStore.unfilteredTracks.count,
+            featureIsLoaded: trackFeatureStore.isLoaded,
+            featureCount: trackFeatureStore.storedFeatureCount,
+            day: Calendar.current.startOfDay(for: Date())
         )
     }
 
@@ -66,6 +72,10 @@ struct MusicHistoryView: View {
                     }
                 }
 
+                if year.id == snapshot.years.first?.id, !cards.isEmpty {
+                    cardsSection
+                }
+
                 summarySection(year)
                 artistsSection(year)
                 tracksSection(year)
@@ -82,6 +92,20 @@ struct MusicHistoryView: View {
                 moreHistorySection(year)
             }
             .padding(.vertical, 16)
+        }
+    }
+
+    private var cardsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            MusicHistorySectionHeader(title: "今日の音楽史", subtitle: "いま振り返りたい、あなたの音楽の記憶")
+            ForEach(cards) { card in
+                MusicHistoryStoryCard(card: card) {
+                    guard let track = card.mainTrack,
+                          libraryStore.unfilteredTracks.contains(where: { $0.id == track.id }) else { return }
+                    playerStore.play(track)
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -280,6 +304,13 @@ struct MusicHistoryView: View {
             historyEntries: playbackHistoryStore.entries,
             now: Date()
         )
+        let features = Dictionary(uniqueKeysWithValues: trackFeatureStore.exportedFeatures.map { ($0.trackID, $0) })
+        cards = MusicHistoryCardService().makeCards(
+            tracks: libraryStore.unfilteredTracks,
+            historyEntries: playbackHistoryStore.entries,
+            preferences: trackPreferenceStore.entries,
+            features: features
+        )
         normalizeSelectedYear()
         hasLoadedSnapshot = true
     }
@@ -301,6 +332,9 @@ private struct MusicHistoryDataRevision: Hashable {
     let historyEntryCount: Int
     let playbackEventCount: Int
     let libraryTrackCount: Int
+    let featureIsLoaded: Bool
+    let featureCount: Int
+    let day: Date
 }
 
 private struct MusicHistoryDestinationRow: View {
