@@ -1,6 +1,7 @@
 .DS_Store
 xcuserdata/
 DerivedData/
+/build/
 
 # Generated music analysis exports, including named variants.
 music_features*.json

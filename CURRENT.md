@@ -19,7 +19,7 @@ updated: 2026-09-18
 
 ### テーマ Beta
 
-- 再生中のVisual Worldは設定 → デザイン → 再生中のビジュアルと、アート画面左上のメニューから6種類を個別に選べる。両方とも同じ選択を保存する。アプリのテーマ変更とは独立し、旧Aurora Sphere選択とLiving Auroraテーマ由来の初期値はPhoton Sphereへ統合する。App外バックアップにも選択を含める。Photon Sphereの外側には内部粒子に近い小さな光子と、滑らかで不規則な経路を進む微小な衛星球を描く。Plasma Sparkは紫・シアン・ローズの蛇行するプラズマ電流、線上を走る電荷、流れる火花を描き、曲の音で光量が変わる。「薄明」は画面の約8割を青い夜空とし、Blue Cosmosより少なく暗い星を散らし、低い暖色の地平線と雲を描く。球体は固定外形のまま内部の光、Neonはゲートの発光、Cosmosは星雲と一部の星、薄明は空の暖かさと地平線の光が曲の特徴量・再生音で変わる。Metal／Canvas両方に対応する。
+- 再生中のVisual Worldは設定 → デザイン → 再生中のビジュアルと、アート画面左上のメニューから6種類を個別に選べる。両方とも同じ選択を保存する。アプリのテーマ変更とは独立し、旧Aurora Sphere選択とLiving Auroraテーマ由来の初期値はPhoton Sphereへ統合する。App外バックアップにも選択を含める。Photon Sphereの外側には内部粒子に近い小さな光子と、滑らかで不規則な経路を進む微小な衛星球を描く。Plasma Sparkは20種類の設計済み経路から音のピークごとに一本を選び、画面の端から反対側の端へ白熱した稲妻状放電を走らせる。紫・シアン・ローズのGlow、短い枝と電荷粒子を伴ってすぐ消える。「薄明」は画面の約8割を青い夜空とし、Blue Cosmosより少なく暗い星を散らし、低い暖色の地平線と雲を描く。Visualizerは画面の左右端を結ぶ48点発光波形を主軸に、24帯域を波形から上下へ噴き出す光として重ねる。音のピークでは低中高域に応じた8種の波紋と、波形・帯域・画面端・下部からの粒子が現れる。seed固定の微小光子は低中高域別の粒子群として全画面を移動し、波形への緩い引力とアタック時の減衰散乱を受ける。球体は固定外形のまま内部の光、Neonはゲートの発光、Cosmosは星雲と一部の星、薄明は空の暖かさと地平線の光が曲の特徴量・再生音で変わる。Metal／Canvas両方に対応する。
 
 - アート画面下部は曲名・アーティスト・小さなジャケットと、前へ・再生／一時停止・次へ・いいね（お気に入り）・グッド（再生頻度を増やす）の5操作を一つのコンパクトなバーに統合する。従来の詳細操作、背景タップ／スワイプ／長押しでのコントローラー表示は一旦非表示。通常の再生画面から他の操作を利用できる。
 
@@ -28,6 +28,7 @@ updated: 2026-09-18
 - 6種類の造形、現行操作、解析・描画の境界は[再生中のビジュアル](Documentation/NowPlayingVisualWorld.md)を正とする。旧Beta 2の背景スワイプ・長押し・詳細パネル、およびBeta 3初期案の枠・膜・弧は現行画面に存在しない。変更履歴と検証結果は各`sessions/`に残す。
 
 - 2026-09-18までに現行6種類のSimulator buildを確認し、Visualizerを含む一部をVespera（iPhone 17e）へDebug導入・起動した。実際の再生曲での6種類すべての見た目、長時間の熱・電力、VoiceOver・Dynamic Typeは引き続き手動確認対象。
+- 2026-09-19にVisualizerの空間場更新を含むDebug実機buildをVesperaへinstall・launchした。実音源での最終的な見た目、長時間の熱・電力は未確認。
 
 - 設定 → テーマからシンプルダーク（先頭）／Living Aurora／Pulse Neon／Blue Cosmosを選択でき、選択は端末内へ保存しApp外バックアップへ含める。OS外観から独立した暗色の光・質感を画面背景と操作色へ反映する。黒背景用素材に合わせて全テーマの土台を純黒とし、装飾光を画面端へ配置する。Blue Cosmosは大小と明度差のある星空、Pulse Neonは細い光の幾何学ガラス面、Living Auroraは紫／シアン／青の重ねグラデーションを表示する。上部navigation barは黒から下端の透明へ変化するgradientとする。パラメータ、適用境界、アクセシビリティ方針は[Themes](Documentation/Themes.md)に集約する。実機の見た目・全操作回帰は未検証。
 
@@ -40,6 +41,7 @@ updated: 2026-09-18
 
 ### Apple Watch リモコン MVP
 
+- 2026-09-19に現行の未コミット変更を含むDebug実機buildをVesperaへinstallし、ロック解除後のlaunchに成功した。同じbuildに埋め込まれた`MyMusicWatch.app`をCometへ直接install・launchした。初回のWatch接続はネットワークトンネルtimeoutだったが、再試行で成功した。WatchとiPhoneの画面操作・実機間通信の確認は引き続き必要。
 - 2026-09-14にVespera（iPhone 17e）向けDebug実機build、install、launchが成功した。`MyMusicWatch.app`はiPhone Appの`Watch/`へ埋め込まれ、Xcodeのembedded binary validationまで成功している。続いてComet（Apple Watch SE）への直接install、インストール一覧でのBundle ID確認、launchも成功した。iPhoneとの実機間通信と画面操作は引き続き手動確認対象とする。
 - 2026-09-13のVespera／Comet実機デプロイは署名で停止していた。deploy scriptの全targetへの`-sdk iphoneos`強制を除去し、既存自動署名のprofile更新を許可した時点では、Xcodeが`No Accounts`とWatch profile不足を返していた。署名問題と両端末へのデプロイは2026-09-14に解消した。
 

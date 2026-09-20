@@ -13,6 +13,11 @@ nonisolated struct VisualWorldSimulation {
     var bands = [Float](repeating: 0, count: 24)
     var waveform = [Float](repeating: 0, count: 48)
     var beat = 0.0
+    var burstAge = 2.0
+    var burstBass = 0.0
+    var burstMid = 0.0
+    var burstTreble = 0.0
+    var burstSerial = 0
     private var accumulated = 0.0
     private var cooldown = 0.0
     private var beatCooldown = 0.0
@@ -52,11 +57,17 @@ nonisolated struct VisualWorldSimulation {
             waveform[i] = Float(Double(waveform[i]) + (sample-Double(waveform[i]))*(1-exp(-dt/0.09)))
         }
         beatCooldown = max(0, beatCooldown-dt)
+        burstAge = min(2, burstAge + dt)
         let threshold = max(0.055,fluxBaseline*1.7)
         beat *= exp(-dt/0.24)
         if active && beatCooldown == 0 && flux > threshold && (low > 0.1 || flux > 0.2) {
             beat = min(1,0.35+flux*2.2+low*0.3)
             beatCooldown = 0.2
+            burstAge = 0
+            burstBass = min(1, low * 1.2 + flux * 0.35)
+            burstMid = min(1, medium * 1.2 + flux * 0.3)
+            burstTreble = min(1, high * 1.25 + flux * 0.3)
+            burstSerial = (burstSerial + 1) % 1024
         }
         fluxBaseline += (flux-fluxBaseline)*(1-exp(-dt/1.2))
         confidence = smooth(confidence, active ? unit(Double(audio.tonalConfidence)) : 0, 0.7)

@@ -4,6 +4,40 @@ import XCTest
 @testable import MyMusic
 
 final class VisualWorldInstallationTests: XCTestCase {
+    func testVisualizerRippleFamiliesRespondToFrequencyAndCycle() {
+        let bass = (0..<3).map { VisualizerRipplePattern.index(bass: 0.8, mid: 0.2, treble: 0.1, serial: $0) }
+        let mid = (0..<3).map { VisualizerRipplePattern.index(bass: 0.1, mid: 0.8, treble: 0.2, serial: $0) }
+        let high = (0..<2).map { VisualizerRipplePattern.index(bass: 0.1, mid: 0.2, treble: 0.8, serial: $0) }
+        XCTAssertEqual(Set(bass), Set([0, 1, 6]))
+        XCTAssertEqual(Set(mid), Set([3, 5, 7]))
+        XCTAssertEqual(Set(high), Set([2, 4]))
+        XCTAssertEqual(Set(bass + mid + high).count, VisualizerRipplePattern.count)
+    }
+
+    func testPlasmaTemplatesAreDistinctAndReachOppositeEdges() {
+        XCTAssertEqual(PlasmaSparkPattern.designs.count, 20)
+        var signatures = Set<String>()
+        for design in PlasmaSparkPattern.designs {
+            let start = design.start, end = design.end
+            XCTAssertTrue(start.x == 0 || start.x == 1 || start.y == 0 || start.y == 1)
+            XCTAssertTrue(end.x == 0 || end.x == 1 || end.y == 0 || end.y == 1)
+            XCTAssertGreaterThan(hypot(end.x-start.x,end.y-start.y), 0.8)
+            XCTAssertEqual(design.bends.count, 7)
+            signatures.insert("\(start)-\(end)-\(design.bends)")
+        }
+        XCTAssertEqual(signatures.count, 20)
+    }
+
+    func testPlasmaCycleVisitsEveryDesignAndKeepsEndpoints() {
+        let routes = (0..<20).map { PlasmaSparkPattern.points(seed: 0.0, serial: $0, mid: 0.5) }
+        XCTAssertEqual(Set(routes.map { "\($0[0])-\($0[8])" }).count, 20)
+        for route in routes {
+            XCTAssertEqual(route.count, 9)
+            XCTAssertTrue(route.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+        }
+        XCTAssertEqual(PlasmaSparkPattern.points(seed: 0, serial: 20, mid: 0.5), routes[0])
+    }
+
     private func tone(_ hz: Double, rate: Double = 48_000, inverted: Bool = false,
                       analyzer: VisualWorldSpectrumAnalyzer = VisualWorldSpectrumAnalyzer()) -> VisualWorldAudioFrame {
         let left = (0..<2_048).map { Float(sin(Double($0) * hz * 2 * .pi / rate) * 0.4) }
@@ -142,6 +176,9 @@ final class VisualWorldInstallationTests: XCTestCase {
         simulation.advance(date: start.addingTimeInterval(1.0/30), audio: audio, playing: true,
                            energy: 0.5, aggressive: 0.5, ambient: 0.5)
         XCTAssertGreaterThan(simulation.beat, 0.5)
+        XCTAssertEqual(simulation.burstAge, 0)
+        XCTAssertGreaterThan(simulation.burstBass, 0.5)
+        XCTAssertEqual(simulation.burstSerial, 1)
         XCTAssertGreaterThan(simulation.waveform[8], 0.1)
         for frame in 2...90 {
             simulation.advance(date: start.addingTimeInterval(Double(frame)/30),
@@ -149,6 +186,20 @@ final class VisualWorldInstallationTests: XCTestCase {
                                energy: 0.5, aggressive: 0.5, ambient: 0.5)
         }
         XCTAssertLessThan(simulation.beat, 0.01)
+        XCTAssertGreaterThan(simulation.burstAge, 0.95)
         XCTAssertLessThan(abs(simulation.waveform[8]), 0.01)
+
+        var high = VisualWorldSimulation()
+        var highAudio = VisualWorldAudioFrame()
+        highAudio.treble = 0.8
+        highAudio.flux = 0.35
+        highAudio.capturedAt = ProcessInfo.processInfo.systemUptime
+        high.advance(date: start, audio: highAudio, playing: true,
+                     energy: 0.5, aggressive: 0.5, ambient: 0.5)
+        high.advance(date: start.addingTimeInterval(1.0/30), audio: highAudio, playing: true,
+                     energy: 0.5, aggressive: 0.5, ambient: 0.5)
+        XCTAssertEqual(high.burstAge, 0)
+        XCTAssertGreaterThan(high.burstTreble, high.burstBass)
+        XCTAssertGreaterThan(high.burstTreble, high.burstMid)
     }
 }

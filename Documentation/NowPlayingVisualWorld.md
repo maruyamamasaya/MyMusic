@@ -19,8 +19,8 @@ updated: 2026-09-19
 | Pulse Neon | `pulse-neon` | 奥から手前へ進む光のゲート。交差梁、ダイヤ、六角形、山形、段付きフレームの5形 |
 | Blue Cosmos | `blue-cosmos` | 青い夜空、星雲、緩やかに漂い明滅する星 |
 | 薄明 | `twilight` | 画面上部約8割の青い夜空、少なく暗い星、下側の暖色の地平線と雲 |
-| Plasma Spark | `plasma-spark` | 蛇行する紫・シアン・ローズの電流、走る電荷、火花。詳細は[Plasma Spark](NowPlayingVisualWorld-PlasmaSpark.md) |
-| Visualizer | `visualizer` | PCMの48点波形、FFTの24帯域バー、流れる粒子。詳細は[Visualizer](NowPlayingVisualWorld-Visualizer.md) |
+| Plasma Spark | `plasma-spark` | ピークで一瞬走る一本の白熱放電、紫・シアン・ローズのGlowと火花。詳細は[Plasma Spark](NowPlayingVisualWorld-PlasmaSpark.md) |
+| Visualizer | `visualizer` | 全幅の48点発光波形、24帯域の光の噴出口、8種の波紋と空間を動くフォトン。詳細は[Visualizer](NowPlayingVisualWorld-Visualizer.md) |
 
 旧`living-aurora`のビジュアル選択と、独立設定のない旧Living Auroraテーマ由来の初期値はPhoton Sphereへ読み替える。既存の画面テーマ自体は変更しない。
 

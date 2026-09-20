@@ -16,7 +16,7 @@ suite.addTest(VisualWorldInstallationTests.defaultTestSuite)
 suite.run()
 guard let result = suite.testRun else { fatalError("No test run") }
 print("TEST RESULT: \(result.executionCount) tests, \(result.totalFailureCount) failures")
-exit(result.totalFailureCount == 0 && result.executionCount == 11 ? 0 : 1)
+exit(result.totalFailureCount == 0 && result.executionCount == 14 ? 0 : 1)
 SWIFT
 xcrun swiftc -module-cache-path "$task_dir/module-cache" \
     -I "$platform_dir/usr/lib" -L "$platform_dir/usr/lib" \
@@ -27,6 +27,8 @@ xcrun swiftc -module-cache-path "$task_dir/module-cache" \
     MyMusic/Services/VisualWorldAudioAnalyzer.swift \
     MyMusic/Views/Player/VisualWorldDynamics.swift \
     MyMusic/Views/Player/VisualWorldSimulation.swift \
+    MyMusic/Views/Player/PlasmaSparkPattern.swift \
+    MyMusic/Views/Player/VisualizerRipplePattern.swift \
     "$task_dir/VisualWorldDynamicsTests.swift" "$task_dir/VisualWorldInstallationTests.swift" \
     "$task_dir/main.swift" -o "$task_dir/tests"
 "$task_dir/tests"

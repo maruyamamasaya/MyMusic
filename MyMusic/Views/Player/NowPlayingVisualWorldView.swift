@@ -140,6 +140,11 @@ struct NowPlayingVisualWorldView: View {
                                      bands: simulation.bands, waveform: simulation.waveform,
                                      bass: simulation.bass, mid: simulation.mid,
                                      treble: simulation.treble, beat: simulation.beat,
+                                     burstAge: simulation.burstAge,
+                                     burstBass: simulation.burstBass,
+                                     burstMid: simulation.burstMid,
+                                     burstTreble: simulation.burstTreble,
+                                     burstSerial: simulation.burstSerial,
                                      subdued: reduceTransparency || contrast == .increased)
                 }
                 LinearGradient(stops: [.init(color: .clear, location: 0.76),
@@ -181,6 +186,26 @@ struct NowPlayingVisualWorldView: View {
         u.character = SIMD4(unit(values?.energy), unit(values?.aggressive), unit(values?.ambient), unit(values?.bright))
         u.material = SIMD4(unit(values?.dark), unit(values?.electronic), unit(values?.piano), Float(artworkColors?.dominantShare ?? 0.6))
         u.spatial = SIMD4(0, Float(simulation.beat), 0, 0)
+        u.burst = SIMD4(Float(simulation.burstAge), Float(simulation.burstBass),
+                        Float(simulation.burstMid), Float(simulation.burstTreble))
+        if style == .plasmaSpark {
+            let points = PlasmaSparkPattern.points(seed: player.visualWorldSeed,
+                                                    serial: simulation.burstSerial,
+                                                    mid: simulation.burstMid)
+            let packed = stride(from: 0, to: 8, by: 2).map { index in
+                SIMD4(Float(points[index].x), Float(points[index].y),
+                      Float(points[index + 1].x), Float(points[index + 1].y))
+            }
+            u.plasma0 = packed[0]; u.plasma1 = packed[1]
+            u.plasma2 = packed[2]; u.plasma3 = packed[3]
+            u.plasma4 = SIMD4(Float(points[8].x), Float(points[8].y), 0, 0)
+        }
+        u.spatial.z = Float(simulation.burstSerial)
+        if style == .visualizer {
+            u.spatial.w = Float(VisualizerRipplePattern.index(
+                bass: simulation.burstBass, mid: simulation.burstMid,
+                treble: simulation.burstTreble, serial: simulation.burstSerial))
+        }
         let value = sin(player.visualWorldSeed * 127.1 + 311.7) * 43758.5453
         u.layout.x = Float((value - floor(value)) * 2 * .pi)
         u.tonal = SIMD4(Float(simulation.tonalHeight), Float(simulation.confidence), Float(player.visualWorldSeed), 0)

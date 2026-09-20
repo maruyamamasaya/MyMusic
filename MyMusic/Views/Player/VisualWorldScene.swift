@@ -18,6 +18,11 @@ struct VisualWorldScene: View {
     var mid = 0.0
     var treble = 0.0
     var beat = 0.0
+    var burstAge = 2.0
+    var burstBass = 0.0
+    var burstMid = 0.0
+    var burstTreble = 0.0
+    var burstSerial = 0
     var subdued = false
 
     var body: some View {
@@ -127,174 +132,289 @@ struct VisualWorldScene: View {
 
     private func visualizer(context: inout GraphicsContext, size: CGSize) {
         context.opacity = subdued ? 0.4 : 1
-        let cyan = primary
-        let violet = secondary
-        let accent = Color(red: 1, green: 0.34, blue: 0.57)
-        let background = Path(CGRect(origin: .zero, size: size))
-        context.fill(background, with: .radialGradient(
-            Gradient(colors: [cyan.opacity(0.035+ambient*0.025+beat*0.025), .black]),
-            center: CGPoint(x: size.width*0.5,y: size.height*0.52),
-            startRadius: 0, endRadius: size.height*0.6))
         context.blendMode = .plusLighter
-
-        // PCM waveform: the quiet rear layer stays readable behind the EQ bars.
-        if waveform.count >= 48 {
-            var trace = Path()
-            var echo = Path()
-            for i in 0..<48 {
-                let x = size.width*(0.06+Double(i)/47*0.88)
-                let sample = min(1,max(-1,Double(waveform[i])))
-                let amplitude = size.height*(0.065+ambient*0.045+beat*0.018)
-                let point = CGPoint(x: x,y: size.height*0.40+sample*amplitude)
-                let reflected = CGPoint(x: x,y: size.height*0.43-sample*amplitude*0.55)
-                if i == 0 {
-                    trace.move(to: point)
-                    echo.move(to: reflected)
-                } else {
-                    trace.addLine(to: point)
-                    echo.addLine(to: reflected)
-                }
-            }
-            let tint = GraphicsContext.Shading.linearGradient(
-                Gradient(colors: [cyan.opacity(0.4),violet.opacity(0.5)]),
-                startPoint: CGPoint(x: 0,y: size.height*0.4),
-                endPoint: CGPoint(x: size.width,y: size.height*0.4))
-            context.stroke(trace, with: tint, lineWidth: 1.6)
-            context.stroke(trace, with: .color(cyan.opacity(0.08+ambient*0.06)), lineWidth: 7)
-            context.stroke(echo, with: .color(violet.opacity(0.06+ambient*0.05)), lineWidth: 1)
-        }
-
-        let baseline = size.height*0.69
-        let width = size.width*0.84/24
-        for index in 0..<24 {
-            let response = index < bands.count ? min(1,max(0,Double(bands[index]))) : 0
-            let frequency = (Double(index)+0.5)/24
-            let range = frequency < 0.33 ? bass : frequency < 0.7 ? mid : treble
-            let height = size.height*(0.014+pow(min(1,response+range*0.12),0.82)*(0.22+energy*0.13))
-            let x = size.width*0.08+(Double(index)+0.5)*width
-            let barWidth = width*(0.38+electronic*0.12)
-            let rect = CGRect(x: x-barWidth/2,y: baseline-height,width: barWidth,height: height)
-            let hue = frequency < 0.5 ? cyan : frequency < 0.76 ? violet : accent
-            let intensity = 0.5+brightness*0.4+beat*0.25
-            context.fill(Path(roundedRect: rect.insetBy(dx: -2,dy: -2),cornerRadius: 3),
-                         with: .color(hue.opacity(0.035*intensity)))
-            context.fill(Path(roundedRect: rect,cornerRadius: min(3,barWidth*0.2)),
-                         with: .linearGradient(
-                            Gradient(colors: [hue.opacity(0.95*intensity),
-                                              hue.opacity(0.34*intensity)]),
-                            startPoint: CGPoint(x: x,y: rect.minY),
-                            endPoint: CGPoint(x: x,y: rect.maxY)))
-            let cap = Path(ellipseIn: CGRect(x: x-barWidth*0.44,y: rect.minY-1.5,
-                                             width: barWidth*0.88,height: 3))
-            context.fill(cap, with: .color(.white.opacity(min(1,0.3+aggressive*0.2+beat*0.3))))
-        }
-        var baselinePath = Path()
-        baselinePath.move(to: CGPoint(x: size.width*0.08,y: baseline))
-        baselinePath.addLine(to: CGPoint(x: size.width*0.92,y: baseline))
-        context.stroke(baselinePath, with: .color(cyan.opacity(0.06+beat*0.12)),lineWidth: 1)
-
+        let cyan = primary, violet = secondary
+        let accent = Color(red: 1, green: 0.34, blue: 0.57)
+        let drive = min(1,bass*0.32+mid*0.38+treble*0.18+beat*0.55)
+        let width = Double(size.width), height = Double(size.height)
+        let breath = Path(CGRect(origin: .zero, size: size))
+        context.fill(breath, with: .linearGradient(
+            Gradient(colors: [violet.opacity(0.018+drive*0.025),
+                              cyan.opacity(0.028+drive*0.06),
+                              violet.opacity(0.016+drive*0.03)]),
+            startPoint: CGPoint(x: 0,y: height*0.1),
+            endPoint: CGPoint(x: width,y: height*0.9)))
         func random(_ value: Double) -> Double {
             let raw = sin((value+worldSeed)*127.1+311.7)*43758.5453
             return raw-floor(raw)
         }
-        for index in 0..<72 {
+        func waveValue(_ x: Double) -> Double {
+            guard waveform.count >= 48 else { return 0 }
+            let position = min(max(x,0),1)*47
+            let i = min(Int(position),46)
+            return Double(waveform[i])*(1-(position-Double(i)))
+                + Double(waveform[i+1])*(position-Double(i))
+        }
+        let amplitude = height*(0.12+ambient*0.022+bass*0.042+beat*0.05)
+        if burstAge < 0.9 {
+            let variant = VisualizerRipplePattern.index(bass: burstBass, mid: burstMid,
+                                                        treble: burstTreble, serial: burstSerial)
+            let amount = max(burstBass,burstMid,burstTreble)*pow(1-burstAge/0.9,1.5)
+            let tint = burstBass >= burstMid && burstBass >= burstTreble ? cyan
+                : burstMid >= burstTreble ? violet : accent
+            let radius = height*(0.025+burstAge*(variant == 6 ? 0.86 : 0.69))
+            let center = CGPoint(x: width*(variant == 6 ? (burstSerial.isMultiple(of: 2) ? -0.08 : 1.08)
+                                  : variant == 7 ? 0.67 : 0.5),
+                                 y: height*(variant == 4 ? 0.7 : variant == 7 ? 0.33 : 0.43))
+            func ring(center: CGPoint, radius: Double, ellipse: Double = 1, fragments: Bool = false,
+                      liquid: Bool = false, distortion: Bool = false) {
+                var path = Path()
+                for step in 0...96 {
+                    let angle = Double(step)/96*2*Double.pi
+                    let visible = !fragments || sin(angle*9+Double(burstSerial)*2.1) > 0.13
+                    let variation = liquid ? sin(angle*5+burstAge*7)*height*0.025
+                        + sin(angle*11-burstAge*4)*height*0.009
+                        : distortion ? sin(angle*4+burstAge*5)*height*0.05 : 0
+                    let point = CGPoint(x: center.x+cos(angle)*(radius+variation)/ellipse,
+                                        y: center.y+sin(angle)*(radius+variation)*ellipse)
+                    if step == 0 || !visible { path.move(to: point) }
+                    else { path.addLine(to: point) }
+                }
+                context.stroke(path,with: .color(tint.opacity(amount*0.085)),lineWidth: height*0.042)
+                context.stroke(path,with: .color(tint.opacity(amount*0.28)),lineWidth: height*0.009)
+            }
+            switch variant {
+            case 1: ring(center: center,radius: radius,ellipse: 1.33)
+            case 2: ring(center: center,radius: radius,fragments: true)
+            case 3:
+                ring(center: center,radius: radius)
+                ring(center: CGPoint(x: width*0.18,y: height*0.62),radius: radius*0.91)
+            case 4:
+                for spoke in 0..<16 {
+                    let angle = Double(spoke)/16*2*Double.pi
+                    var ray = Path()
+                    ray.move(to: CGPoint(x: center.x+cos(angle)*radius*0.56,
+                                         y: center.y+sin(angle)*radius*0.56))
+                    ray.addLine(to: CGPoint(x: center.x+cos(angle)*radius*1.3,
+                                            y: center.y+sin(angle)*radius*1.3))
+                    context.stroke(ray,with: .color(tint.opacity(amount*0.25)),lineWidth: height*0.003)
+                }
+            case 5: ring(center: center,radius: radius,liquid: true)
+            case 6:
+                var front = Path()
+                let sign = center.x < 0 ? 1.0 : -1.0
+                for step in 0...32 {
+                    let y = height*Double(step)/32
+                    let x = center.x+sign*radius+sin(Double(step)*0.37+burstAge*9)*height*0.014
+                    if step == 0 { front.move(to: CGPoint(x: x,y: y)) }
+                    else { front.addLine(to: CGPoint(x: x,y: y)) }
+                }
+                context.stroke(front,with: .color(tint.opacity(amount*0.18)),lineWidth: height*0.032)
+                context.stroke(front,with: .color(tint.opacity(amount*0.32)),lineWidth: height*0.006)
+            case 7: ring(center: center,radius: radius,distortion: true)
+            default: ring(center: center,radius: radius)
+            }
+        }
+        var trace = Path(), echo = Path()
+        for i in 0..<48 {
+            let x = width*Double(i)/47
+            let sample = min(1,max(-1,Double(waveform[i])))
+            let point = CGPoint(x: x,y: height*0.43+sample*amplitude)
+            let shadow = CGPoint(x: x,y: height*0.51-sample*amplitude*0.54)
+            if i == 0 { trace.move(to: point); echo.move(to: shadow) }
+            else { trace.addLine(to: point); echo.addLine(to: shadow) }
+        }
+        let waveLight = 0.45+drive*0.55
+        context.stroke(trace,with: .color(cyan.opacity(0.05*waveLight)),lineWidth: 25+drive*17)
+        context.stroke(trace,with: .color(violet.opacity(0.17*waveLight)),lineWidth: 8+drive*7)
+        context.stroke(trace,with: .linearGradient(
+            Gradient(colors: [cyan,violet,accent]),startPoint: .zero,
+            endPoint: CGPoint(x: width,y: 0)),lineWidth: 3.1+drive*1.3)
+        context.stroke(trace,with: .color(.white.opacity(0.66*waveLight)),lineWidth: 1.3+drive*0.6)
+        context.stroke(echo,with: .color(violet.opacity(0.07+ambient*0.045+beat*0.08)),lineWidth: 1.3)
+        if drive > 0.08 {
+            for sign in [-1.0,1.0] {
+                var fiber = Path()
+                for i in 0..<48 {
+                    let x = width*Double(i)/47
+                    let y = height*0.43+Double(waveform[i])*amplitude+sign*height*(0.008+drive*0.01)
+                    if i == 0 { fiber.move(to: CGPoint(x: x,y: y)) }
+                    else { fiber.addLine(to: CGPoint(x: x,y: y)) }
+                }
+                context.stroke(fiber,with: .color(cyan.opacity(drive*0.08)),lineWidth: 1)
+            }
+        }
+        for index in 0..<24 {
+            let response = index < bands.count ? min(1,max(0,Double(bands[index]))) : 0
+            let frequency = (Double(index)+0.5)/24
+            let range = frequency < 0.33 ? bass : frequency < 0.7 ? mid : treble
+            let low = max(0,min(1,(0.42-frequency)/0.2))
+            let high = max(0,min(1,(frequency-0.64)/0.2))
+            let plumeHeight = height*(0.08+pow(min(1,response+range*0.14),0.8) *
+                                      (0.19+energy*0.13))*(1+low*0.27-high*0.22)
+            let x = width*(Double(index)+0.5)/24
+            let source = height*0.43+waveValue((Double(index)+0.5)/24)*amplitude
+            let direction = index.isMultiple(of: 2) ? -1.0 : 1.0
+            let top = source+direction*plumeHeight
+            let tint = frequency < 0.52 ? cyan : frequency < 0.76 ? violet : accent
+            let spread = width/24*(0.28+low*0.38-high*0.16+electronic*0.07)
+            let plume = Path(ellipseIn: CGRect(x: x-spread*1.6,y: top-height*0.025,
+                                               width: spread*3.2,height: height*0.05))
+            context.fill(plume,with: .radialGradient(
+                Gradient(colors: [tint.opacity((0.08+drive*0.1)*response),.clear]),
+                center: CGPoint(x: x,y: top),startRadius: 0,endRadius: spread*2.2))
+            var filament = Path()
+            filament.move(to: CGPoint(x: x,y: source))
+            filament.addQuadCurve(to: CGPoint(x: x,y: top),
+                                  control: CGPoint(x: x+sin(Double(index)*0.63-motion.time*2)
+                                                    * spread * (1-low) * 1.1,y: (source+top)*0.5))
+            let light = (0.18+response*0.66)*(0.58+brightness*0.3+drive*0.32)
+            context.stroke(filament,with: .color(tint.opacity(light*0.075)),
+                           lineWidth: spread*(1.1+low*0.5))
+            context.stroke(filament,with: .color(tint.opacity(light*0.43)),
+                           lineWidth: spread*(0.28+low*0.22))
+            context.stroke(filament,with: .color(.white.opacity(response*light*0.14)),lineWidth: 0.7)
+        }
+        for index in 0..<48 {
             let seed = random(Double(index)+7)
-            let drift = motion.time*(0.2+ambient*0.18)
-            let x = (random(Double(index)+19)+drift*0.04).truncatingRemainder(dividingBy: 1)*size.width
-            let y = (random(Double(index)+37)-drift*(0.04+seed*0.02)+100)
-                .truncatingRemainder(dividingBy: 1)*size.height
-            let radius = 0.5+seed*1.2
-            let pulse = 0.35+0.65*pow(0.5+0.5*sin(motion.time*(1.2+seed)+seed*37),2)
-            let particle = Path(ellipseIn: CGRect(x: x-radius,y: y-radius,
+            let family = random(Double(index)+113)
+            let velocity = 0.66+seed*0.8+(family > 0.68 ? treble*0.75 : bass*0.16)
+            let time = motion.time
+            let impulse = burstAge < 0.9 ? exp(-burstAge*(family < 0.32 ? 3 : 5.5)) *
+                max(burstBass,burstMid,burstTreble) : 0
+            let flow = time*0.013*velocity+sin(time*0.31+Double(index))*0.009
+            let x = (random(Double(index)+19)+flow
+                + cos(seed*23+Double(index))*impulse*(family > 0.68 ? 0.055 : 0.022))
+                .truncatingRemainder(dividingBy: 1)
+            let waveY = height*0.43+waveValue(x)*amplitude
+            let freeY = height*(0.08+random(Double(index)+37)*0.84)
+            let capture = (family < 0.32 ? 0.12 : family < 0.7 ? 0.53 : 0.27)+drive*0.14
+            let orbit = height*(sin(time*(0.19+seed*0.27)+Double(index)*1.7)*0.055
+                               + sin(time*(0.43+seed*0.24)+Double(index)*0.9)*0.022)
+            let magneticStrength = family < 0.32 ? 0.35 : 1.0
+            let magnetic = height*sin(x*18-time*0.57+Double(index))*0.023*magneticStrength
+            let scatterStrength = family > 0.68 ? 0.18 : 0.075
+            let scatter = height*sin(seed*31+Double(index)*1.7)*impulse*scatterStrength
+            let point = CGPoint(x: width*x,y: freeY*(1-capture)+waveY*capture+orbit+magnetic+scatter)
+            let radius = family < 0.32 ? 1.3+bass*0.7 : family < 0.7 ? 0.9+mid*0.35 : 0.55+treble*0.25
+            let tint = index.isMultiple(of: 3) ? accent : index.isMultiple(of: 2) ? cyan : violet
+            let amount = min(1,0.25+drive*0.33+impulse*0.43
+                + (family < 0.32 ? bass : family < 0.7 ? mid : treble)*0.33)
+            let core = Path(ellipseIn: CGRect(x: point.x-radius,y: point.y-radius,
+                                              width: radius*2,height: radius*2))
+            let halo = Path(ellipseIn: CGRect(x: point.x-radius*5,y: point.y-radius*5,
+                                              width: radius*10,height: radius*10))
+            context.fill(halo,with: .radialGradient(
+                Gradient(colors: [tint.opacity(amount*0.22),.clear]),
+                center: point,startRadius: 0,endRadius: radius*5))
+            context.fill(core,with: .color(.white.opacity(amount*0.75)))
+        }
+        if burstAge < 0.95 {
+            let fade = pow(1-burstAge/0.95,1.4)
+            for index in 0..<24 {
+                let layer = index % 3
+                let strength = layer == 0 ? burstBass : layer == 1 ? burstMid : burstTreble
+                guard strength >= 0.08 else { continue }
+                let key = Double(index)+Double(burstSerial)*31
+                let seed = random(key+11)
+                let bandX = (Double(index)+0.5)/24
+                let bandLevel = index < bands.count ? Double(bands[index]) : 0
+                let origin: CGPoint = switch index % 5 {
+                case 0: CGPoint(x: width*bandX,y: height*0.43+waveValue(bandX)*amplitude)
+                case 1: CGPoint(x: width*bandX,y: height*(0.79-bandLevel*0.27))
+                case 2: CGPoint(x: -width*0.01,y: height*(0.20+seed*0.6))
+                case 3: CGPoint(x: width*1.01,y: height*(0.12+seed*0.7))
+                default: CGPoint(x: width*bandX,y: height*0.94)
+                }
+                let angle = random(key+29)*2*Double.pi
+                let depth = 0.45+random(key+47)*1.15
+                let speed = (layer == 0 ? 0.30 : layer == 1 ? 0.51 : 0.77)*depth
+                let point = CGPoint(x: origin.x+cos(angle)*height*speed*burstAge,
+                                    y: origin.y+sin(angle)*height*speed*burstAge -
+                                        height*0.035*burstAge*burstAge)
+                let radius = height*(layer == 0 ? 0.006 : layer == 1 ? 0.0037 : 0.0021)*depth
+                let tint = layer == 0 ? cyan : layer == 1 ? violet : accent
+                let amount = min(1,strength*fade*(0.55+bandLevel*0.45))
+                let halo = Path(ellipseIn: CGRect(x: point.x-radius*4,y: point.y-radius*4,
+                                                  width: radius*8,height: radius*8))
+                let core = Path(ellipseIn: CGRect(x: point.x-radius,y: point.y-radius,
                                                   width: radius*2,height: radius*2))
-            let tint = index.isMultiple(of: 3) ? accent : (index.isMultiple(of: 2) ? cyan : violet)
-            context.fill(particle, with: .color(tint.opacity(
-                min(1,pulse*(0.28+ambient*0.18+treble*0.2+beat*(0.25+aggressive*0.2))))))
+                context.fill(halo,with: .radialGradient(
+                    Gradient(colors: [tint.opacity(amount*0.24),.clear]),
+                    center: point,startRadius: 0,endRadius: radius*4))
+                context.fill(core,with: .color(.white.opacity(amount*0.6)))
+            }
         }
     }
 
     private func plasmaSpark(context: inout GraphicsContext, size: CGSize) {
         context.opacity = subdued ? 0.4 : 1
-        let unit = size.height
-        let time = motion.time * 6
-        let activity = min(1, motion.level)
+        guard burstAge < 0.43 else { return }
+        let strength = max(burstBass, burstMid, burstTreble)
+        guard strength >= 0.12 else { return }
+        let kind = burstBass >= burstMid && burstBass >= burstTreble ? 0
+            : (burstMid >= burstTreble ? 1 : 2)
+        let points = PlasmaSparkPattern.points(seed: worldSeed, serial: burstSerial, mid: burstMid)
+            .map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+        let height = Double(size.height)
+        let flash = (1-exp(-burstAge/0.008))
+            * exp(-burstAge*(kind == 0 ? 10 : kind == 1 ? 12 : 16))
+        let light = min(1, strength * flash)
+        let progress = min(1, burstAge / 0.052)
+        let full = progress * 8
+        var line = Path()
+        line.move(to: points[0])
+        for index in 0..<8 {
+            guard Double(index) < full else { break }
+            let fraction = min(1, full-Double(index))
+            let start = points[index], end = points[index+1]
+            line.addLine(to: CGPoint(x: start.x+(end.x-start.x)*fraction,
+                                     y: start.y+(end.y-start.y)*fraction))
+        }
         let violet = Color(red: 0.43, green: 0.12, blue: 0.94)
         let cyan = Color(red: 0.08, green: 0.74, blue: 1)
         let rose = Color(red: 1, green: 0.13, blue: 0.55)
-        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
-        let background = Path(CGRect(origin: .zero, size: size))
-        context.fill(background, with: .radialGradient(
-            Gradient(colors: [primary.opacity(0.10), .black]),
-            center: center, startRadius: 0, endRadius: unit * 0.65))
         context.blendMode = .plusLighter
-
-        func position(_ current: Int, _ y: Double) -> CGPoint {
-            let n = Double(current)
-            let phase = time * (0.48+n*0.13)+n*2.1+worldSeed*0.7
-            let base = (n-1)*0.18+sin(time*0.23+n*2.5)*0.13
-            let bend = sin(y*8-phase)*0.09
-                + sin(y*17+phase*1.43+n*3)*0.035
-                + sin(y*32-phase*2.4+n)*0.012
-            return CGPoint(x: center.x+(base+bend)*unit,
-                           y: center.y+y*unit)
-        }
-
-        for current in 0..<3 {
-            let hue = current == 0 ? violet : current == 1 ? cyan : rose
-            var body = Path()
+        let ion = GraphicsContext.Shading.linearGradient(
+            Gradient(colors: [violet.opacity(light),cyan.opacity(light),rose.opacity(light*0.65)]),
+            startPoint: points[0], endPoint: points[8])
+        context.stroke(line, with: .color(violet.opacity(light*0.065)),
+                       style: StrokeStyle(lineWidth: height*0.11,lineCap: .round,lineJoin: .round))
+        context.stroke(line, with: ion,
+                       style: StrokeStyle(lineWidth: height*0.020,lineCap: .round,lineJoin: .round))
+        context.stroke(line, with: .color(.white.opacity(light)),
+                       style: StrokeStyle(lineWidth: height*(kind == 0 ? 0.0065 : kind == 1 ? 0.0045 : 0.0028),
+                                          lineCap: .round,lineJoin: .round))
+        if kind == 2 && burstAge < 0.18 && progress > 0.65 {
+            let base = points[5]
+            let dx = points[6].x-points[4].x, dy = points[6].y-points[4].y
+            let length = max(1,hypot(dx,dy))
+            let tip = CGPoint(x: base.x+dx/length*height*0.035-dy/length*height*0.067,
+                              y: base.y+dy/length*height*0.035+dx/length*height*0.067)
             var branch = Path()
-            for step in 0...80 {
-                let y = -0.53+Double(step)*1.06/80
-                let point = position(current,y)
-                if step == 0 { body.move(to: point) } else { body.addLine(to: point) }
-                let n = Double(current)
-                let window = pow(max(0,sin(y*5-time*(0.72+n*0.09)+n*2.2)),7)
-                let branchX = sin(y*15+time*1.2+n*4)*unit*0.13*window
-                let branchPoint = CGPoint(x: point.x+branchX,y: point.y)
-                if step == 0 { branch.move(to: branchPoint) }
-                else { branch.addLine(to: branchPoint) }
-            }
-            let intensity = 0.55+activity*0.35
-            context.stroke(body, with: .color(hue.opacity(0.035*intensity)),
-                           style: StrokeStyle(lineWidth: unit*0.24, lineCap: .round, lineJoin: .round))
-            context.stroke(body, with: .color(hue.opacity(0.14*intensity)),
-                           style: StrokeStyle(lineWidth: unit*0.07, lineCap: .round, lineJoin: .round))
-            context.stroke(body, with: .color(hue.opacity(0.72*intensity)),
-                           style: StrokeStyle(lineWidth: max(1,unit*0.005), lineCap: .round, lineJoin: .round))
-            context.stroke(branch, with: .color(hue.opacity(0.32*intensity)),
-                           style: StrokeStyle(lineWidth: max(1,unit*0.002), lineCap: .round))
-            for packet in 0..<5 {
-                let phase = Double(packet)/5+Double(current)*0.17-time*(0.075+Double(current)*0.014)
-                let y = (phase-floor(phase))*1.06-0.53
-                let point = position(current,y)
-                let radius = unit*(0.008+activity*0.004)
-                let glow = Path(ellipseIn: CGRect(x: point.x-radius*5,y: point.y-radius*5,
-                                                  width: radius*10,height: radius*10))
-                let core = Path(ellipseIn: CGRect(x: point.x-radius,y: point.y-radius,
-                                                  width: radius*2,height: radius*2))
-                context.fill(glow, with: .radialGradient(
-                    Gradient(colors: [hue.opacity(0.4),.clear]), center: point,
-                    startRadius: 0, endRadius: radius*5))
-                context.fill(core, with: .color(.white.opacity(0.85)))
-            }
+            branch.move(to: base); branch.addLine(to: tip)
+            let amount = min(1,strength*exp(-burstAge*21))
+            context.stroke(branch,with: .color(rose.opacity(amount*0.32)),lineWidth: height*0.010)
+            context.stroke(branch,with: .color(.white.opacity(amount*0.75)),lineWidth: height*0.002)
         }
-        func random(_ value: Double) -> Double {
-            let raw = sin(value*127.1+worldSeed*31.3)*43758.5453
-            return raw-floor(raw)
-        }
-        for index in 0..<100 {
-            let seed = random(Double(index)+11)
-            let life = time*(0.18+seed*0.1)+random(Double(index)+29)*8
-            let phase = life-floor(life)
-            let fade = sin(phase*Double.pi)
-            let x = random(Double(index)+43)*size.width + (seed-0.5)*phase*unit*0.08
-            let y = size.height*(1-(random(Double(index)+67)+phase*0.6)
-                .truncatingRemainder(dividingBy: 1))
-            let radius = 0.5+random(Double(index)+83)*1.3
-            let dot = Path(ellipseIn: CGRect(x: x-radius,y: y-radius,
-                                            width: radius*2,height: radius*2))
-            let hue = index.isMultiple(of: 2) ? cyan : rose
-            context.fill(dot, with: .color(hue.opacity(fade*(0.28+activity*0.45))))
+        for index in 0..<6 {
+            let vertex = 1+(index*5)%7
+            guard Double(vertex)/8 <= progress else { continue }
+            let source = points[vertex]
+            let drift = burstAge*height*0.18
+            let phase = Double(index*37+burstSerial*11)
+            let point = CGPoint(x: source.x+sin(phase)*drift*0.5,
+                                y: source.y+cos(phase*1.7)*drift*0.5)
+            let amount = min(1,strength*exp(-burstAge*19))
+            let radius = height*0.0018
+            let halo = Path(ellipseIn: CGRect(x: point.x-radius*5,y: point.y-radius*5,
+                                              width: radius*10,height: radius*10))
+            let core = Path(ellipseIn: CGRect(x: point.x-radius,y: point.y-radius,
+                                              width: radius*2,height: radius*2))
+            context.fill(halo,with: .radialGradient(
+                Gradient(colors: [(index.isMultiple(of: 2) ? cyan : rose).opacity(amount*0.24),.clear]),
+                center: point,startRadius: 0,endRadius: radius*5))
+            context.fill(core,with: .color(.white.opacity(amount*0.8)))
         }
     }
 
