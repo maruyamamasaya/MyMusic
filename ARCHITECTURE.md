@@ -32,7 +32,7 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 ## Composition と画面構成
 
-音楽史トップの「今日の音楽史」は`MusicHistoryView`から読み込み時に`MusicHistoryCardService`を呼び、`MusicHistoryCardCandidate`を表示する。Serviceは現在LibraryのTrackとPlayback Eventを日・月・曲・Artist単位に一度索引化し、12種の独立した候補生成関数へ渡す。カード集計は`Task.detached`でMainActor外へ送り、キャンセル済みの結果は表示へ適用しない。候補は成立条件、優先度、score、主役Trackの重複で選択し、同じ入力と日付では順序が安定する。再生ボタンはPlayerStoreへ渡す。既存の`MusicHistoryService`、`MusicHistoryDiscoveryService`、`MusicHistoryMemoryService`は従来の年表示と記憶の構築を継続する。追加の永続化はない。
+音楽史トップの「今日の音楽史」は`MusicHistoryView`から読み込み時に`MusicHistoryCardService`を呼び、`MusicHistoryCardCandidate`を表示する。Serviceは現在LibraryのTrackとPlayback Eventを日・月・曲・Artist単位に一度索引化し、12種の独立した候補生成関数へ渡す。カード集計は`Task.detached`でMainActor外へ送り、キャンセル済みの結果は表示へ適用しない。候補は成立条件、優先度、score、主役Trackの重複で選択し、同じ入力と日付では順序が安定する。Candidateは表示用Trackと再生候補の順序付きTrack IDを分けて持つ。カードタップ時は`MusicHistoryCardPlaybackService`が現在Libraryとファイルの可読性で再解決・重複排除し、最大10曲をPlayerStoreの通常Queueへ手動／History入口で渡す。曲が残らなければ再生状態は変更しない。既存の`MusicHistoryService`、`MusicHistoryDiscoveryService`、`MusicHistoryMemoryService`は従来の年表示と記憶の構築を継続する。追加の永続化はない。
 
 `MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Settings の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。HighlightはHomeの「マイミュージック」タイル列左端から同じHome NavigationStack内へ遷移する。
 

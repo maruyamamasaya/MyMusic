@@ -11,7 +11,10 @@ struct MusicHistoryCardCandidate: Identifiable, Sendable {
     let subtitle: String
     let priority: Int
     let score: Double
+    /// Artwork and copy remain tied to one representative track.
     let tracks: [Track]
+    /// Ordered candidates. Resolve against the current library at playback time.
+    let playbackTrackIDs: [Track.ID]
     let artistNames: [String]
     let albumTitle: String?
     let date: Date?
@@ -23,6 +26,7 @@ struct MusicHistoryCardCandidate: Identifiable, Sendable {
 
 /// Read-only, per-refresh index. All date buckets use the caller's calendar.
 final class MusicHistoryCardService {
+    private let playbackCandidateLimit = 30
     private struct Entry {
         let track: Track
         let event: PlaybackEvent
@@ -33,7 +37,6 @@ final class MusicHistoryCardService {
         var byArtist: [String: [Entry]] = [:]
         var byDay: [Date: [Entry]] = [:]
         var byMonth: [Date: [Entry]] = [:]
-        var entries: [Entry] = []
     }
 
     func makeCards(
@@ -53,14 +56,13 @@ final class MusicHistoryCardService {
                 let entry = Entry(track: track, event: event)
                 let day = calendar.startOfDay(for: event.endedAt)
                 let month = calendar.date(from: calendar.dateComponents([.year, .month], from: day)) ?? day
-                index.entries.append(entry)
                 index.byTrack[track.id, default: []].append(entry)
                 index.byArtist[track.artistName, default: []].append(entry)
                 index.byDay[day, default: []].append(entry)
                 index.byMonth[month, default: []].append(entry)
             }
         }
-        guard !index.entries.isEmpty else { return [] }
+        guard !index.byTrack.isEmpty else { return [] }
         let today = calendar.startOfDay(for: now)
         let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
         let nextDay = calendar.date(byAdding: .day, value: 1, to: today) ?? now
@@ -84,12 +86,56 @@ final class MusicHistoryCardService {
 
     private func card(_ type: MusicHistoryCardType, _ title: String, _ subtitle: String,
                       _ track: Track, priority: Int, score: Double, until: Date,
-                      tracks: [Track]? = nil, artistNames: [String] = [], album: String? = nil,
+                      tracks: [Track]? = nil, playbackTracks: [Track] = [],
+                      artistNames: [String] = [], album: String? = nil,
                       date: Date? = nil) -> MusicHistoryCardCandidate {
-        MusicHistoryCardCandidate(type: type, title: title, subtitle: subtitle,
+        var seen: Set<Track.ID> = [track.id]
+        var playbackTrackIDs = [track.id]
+        for candidate in playbackTracks {
+            if playbackTrackIDs.count == playbackCandidateLimit { break }
+            if seen.insert(candidate.id).inserted { playbackTrackIDs.append(candidate.id) }
+        }
+        return MusicHistoryCardCandidate(type: type, title: title, subtitle: subtitle,
                                   priority: priority, score: score, tracks: tracks ?? [track],
-                                  artistNames: artistNames, albumTitle: album, date: date,
+                                  playbackTrackIDs: playbackTrackIDs, artistNames: artistNames, albumTitle: album, date: date,
                                   validUntil: until)
+    }
+
+    /// The same source and ordering are used by every Music History card playback.
+    static let playbackStartContext = PlaybackStartContext(kind: .manual, source: .history)
+
+    func tracksForPlayback(
+        _ card: MusicHistoryCardCandidate,
+        availableTracks: [Track],
+        isPlayable: (Track) -> Bool
+    ) -> [Track] {
+        let available = Dictionary(uniqueKeysWithValues: availableTracks.map { ($0.id, $0) })
+        var seen: Set<Track.ID> = []
+        var resolved: [Track] = []
+        for id in card.playbackTrackIDs {
+            guard seen.insert(id).inserted, let track = available[id], isPlayable(track) else { continue }
+            resolved.append(track)
+            if resolved.count == 10 { break }
+        }
+        return resolved
+    }
+
+    private func withSharedQueue(_ candidates: [MusicHistoryCardCandidate]) -> [MusicHistoryCardCandidate] {
+        let ranked = candidates.sorted {
+            $0.score == $1.score ? $0.id < $1.id : $0.score > $1.score
+        }.compactMap(\.mainTrack).prefix(playbackCandidateLimit).map { $0 }
+        return candidates.map { candidate in
+            var seen: Set<Track.ID> = []
+            let ids = ([candidate.mainTrack].compactMap { $0 } + ranked).compactMap { track in
+                seen.insert(track.id).inserted ? track.id : nil
+            }.prefix(playbackCandidateLimit).map { $0 }
+            return MusicHistoryCardCandidate(
+                type: candidate.type, title: candidate.title, subtitle: candidate.subtitle,
+                priority: candidate.priority, score: candidate.score, tracks: candidate.tracks,
+                playbackTrackIDs: ids, artistNames: candidate.artistNames,
+                albumTitle: candidate.albumTitle, date: candidate.date, validUntil: candidate.validUntil
+            )
+        }
     }
 
     private func rankedTracks(_ entries: [Entry]) -> [(track: Track, count: Int)] {
@@ -100,35 +146,41 @@ final class MusicHistoryCardService {
 
     private func yearAgo(_ index: Index, today: Date, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
         guard let target = calendar.date(byAdding: .year, value: -1, to: today) else { return [] }
-        for distance in [0, 1, 3] {
-            let offsets = distance == 0 ? [0] : [-distance, distance]
-            let entries = offsets.compactMap { calendar.date(byAdding: .day, value: $0, to: target) }
-                .flatMap { index.byDay[$0] ?? [] }
-            if let top = rankedTracks(entries).first {
-                let tracks = Array(rankedTracks(entries).prefix(3).map(\.track))
-                let subtitle = distance == 0 ? "ちょうど1年前に聴いていた曲" : "1年前のこの頃に聴いていた曲"
-                return [card(.yearAgo, "1年前の今日", subtitle, top.track, priority: 100,
-                             score: Double(top.count) - Double(distance), until: nextDay, tracks: tracks, date: target)]
-            }
+        let rings = [[0], [-1, 1], [-2, 2, -3, 3]]
+        let rankedByRing = rings.map { offsets in
+            rankedTracks(offsets.compactMap { calendar.date(byAdding: .day, value: $0, to: target) }
+                .flatMap { index.byDay[$0] ?? [] })
         }
-        return []
+        guard let first = rankedByRing.firstIndex(where: { !$0.isEmpty }),
+              let top = rankedByRing[first].first else { return [] }
+        var seen: Set<Track.ID> = []
+        let playbackTracks = rankedByRing.flatMap { $0.map(\.track) }.filter { seen.insert($0.id).inserted }
+        let subtitle = first == 0 ? "ちょうど1年前に聴いていた曲" : "1年前のこの頃に聴いていた曲"
+        return [card(.yearAgo, "1年前の今日", subtitle, top.track, priority: 100,
+                     score: Double(top.count) - Double(first), until: nextDay,
+                     tracks: Array(playbackTracks.prefix(3)), playbackTracks: playbackTracks, date: target)]
     }
 
     private func monthTrack(_ entries: [Entry], nextMonth: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
         guard let top = rankedTracks(entries).first, top.count >= 2 else { return [] }
         let month = calendar.component(.month, from: entries[0].event.endedAt)
         return [card(.monthTrack, "\(month)月の1曲", "今月いちばん聴いている曲・\(top.count)回", top.track,
-                     priority: 80, score: Double(top.count), until: nextMonth)]
+                     priority: 80, score: Double(top.count), until: nextMonth,
+                     playbackTracks: rankedTracks(entries).map(\.track))]
     }
 
     private func newTracks(_ index: Index, monthEntries: [Entry], monthStart: Date, nextMonth: Date,
                            preferences: [Track.ID: TrackPreference]) -> [MusicHistoryCardCandidate] {
-        rankedTracks(monthEntries).prefix(8).compactMap { item in
+        let eligible = rankedTracks(monthEntries).filter { item in
             guard let first = index.byTrack[item.track.id]?.map(\.event.endedAt).min(), first >= monthStart,
                   item.count >= 2 || preferences[item.track.id]?.favorite == true || (preferences[item.track.id]?.playbackPreference ?? 0) > 0
-            else { return nil }
+            else { return false }
+            return true
+        }
+        return eligible.prefix(8).map { item in
             return card(.newTrack, "今月の新しい出会い", "今月初めて聴き、また戻ってきた曲", item.track,
-                        priority: 72, score: Double(item.count), until: nextMonth)
+                        priority: 72, score: Double(item.count), until: nextMonth,
+                        playbackTracks: eligible.map(\.track))
         }
     }
 
@@ -137,16 +189,17 @@ final class MusicHistoryCardService {
             guard let first = index.byArtist[name]?.map(\.event.endedAt).min(), first >= monthStart,
                   entries.count >= 3, Set(entries.map(\.track.id)).count >= 2 else { return nil }
             let unique = Set(entries.map(\.track.id)).count
-            return rankedTracks(entries).prefix(4).enumerated().map { offset, item in
+            let ranked = rankedTracks(entries)
+            return ranked.prefix(4).enumerated().map { offset, item in
                 card(.newArtist, "今月出会ったアーティスト", "\(name)の\(unique)曲を今月聴いています", item.track,
                         priority: 68, score: Double(entries.count + unique * 2) - Double(offset) * 0.01, until: nextMonth,
-                        artistNames: [name])
+                        playbackTracks: ranked.map(\.track), artistNames: [name])
             }
         }.flatMap { $0 }
     }
 
     private func rediscovered(_ index: Index, today: Date, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
-        index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
+        let candidates = index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
             let dates = entries.map(\.event.endedAt).sorted()
             guard dates.count >= 5, let last = dates.last,
                   let recentStart = calendar.date(byAdding: .day, value: -30, to: today), last >= recentStart,
@@ -158,10 +211,11 @@ final class MusicHistoryCardService {
             return card(.rediscovered, "また戻ってきた曲", "\(gap)日ぶりに再生しました", entries[0].track,
                         priority: 92, score: Double(gap) / 30 + Double(recentIndex), until: nextDay)
         }
+        return withSharedQueue(candidates)
     }
 
     private func longTerm(_ index: Index, today: Date, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
-        index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
+        let candidates = index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
             let dates = entries.map(\.event.endedAt)
             guard let first = dates.min(), let last = dates.max() else { return nil }
             let days = calendar.dateComponents([.day], from: first, to: today).day ?? 0
@@ -171,22 +225,24 @@ final class MusicHistoryCardService {
             return card(.longTerm, "長い付き合いの1曲", "初めて聴いてから\(days)日。今も聴いています", entries[0].track,
                         priority: 63, score: Double(months * 4) + Double(days) / 365, until: nextDay)
         }
+        return withSharedQueue(candidates)
     }
 
     private func recurring(_ index: Index, today: Date, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
         guard let start = calendar.date(byAdding: .month, value: -11,
                                         to: calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today) else { return [] }
-        return index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
+        let candidates = index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
             let recent = entries.filter { $0.event.endedAt >= start }
             let months = Set(recent.map { calendar.dateComponents([.year, .month], from: $0.event.endedAt) }).count
             guard months >= 4, recent.count >= 6 else { return nil }
             return card(.recurring, "何度も戻ってくる曲", "この1年で\(months)か月、この曲を聴いています", entries[0].track,
                         priority: 58, score: Double(months * 5 + min(recent.count, 12)), until: nextDay)
         }
+        return withSharedQueue(candidates)
     }
 
     private func night(_ index: Index, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
-        index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
+        let candidates = index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
             let count = entries.count { entry in
                 let hour = calendar.component(.hour, from: entry.event.endedAt)
                 return hour >= 22 || hour < 5
@@ -197,11 +253,12 @@ final class MusicHistoryCardService {
             return card(.night, "夜のあなたの1曲", "22時から朝5時前によく聴いています", entries[0].track,
                         priority: 55, score: ratio * 20 + Double(count), until: nextDay)
         }
+        return withSharedQueue(candidates)
     }
 
     private func shuffleDiscovery(_ index: Index, preferences: [Track.ID: TrackPreference], nextDay: Date) -> [MusicHistoryCardCandidate] {
         let automaticSources: Set<PlaybackStartSource> = [.shuffle, .station, .highlight]
-        return index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
+        let candidates = index.byTrack.values.compactMap { entries -> MusicHistoryCardCandidate? in
             let sorted = entries.sorted { $0.event.startedAt < $1.event.startedAt }
             guard let first = sorted.first,
                   first.event.startKind == .automatic,
@@ -213,6 +270,7 @@ final class MusicHistoryCardService {
             return card(.shuffleDiscovery, "Shuffleが教えてくれた曲", "最初は自動再生。今は自分で選んで聴いています", first.track,
                         priority: 73, score: Double(manual * 3 + sorted.count), until: nextDay)
         }
+        return withSharedQueue(candidates)
     }
 
     private func busiestDay(_ index: Index, today: Date, nextDay: Date, calendar: Calendar) -> [MusicHistoryCardCandidate] {
@@ -223,9 +281,11 @@ final class MusicHistoryCardService {
         let unique = Set(peak.value.map(\.track.id)).count
         guard unique >= 3 else { return [] }
         let label = peak.key.formatted(.dateTime.year().month().day().locale(Locale(identifier: "ja_JP")))
-        return rankedTracks(peak.value).prefix(4).enumerated().map { offset, item in
+        let ranked = rankedTracks(peak.value)
+        return ranked.prefix(4).enumerated().map { offset, item in
             card(.busiestDay, "一番音楽を聴いた日", "\(label)・\(peak.value.count)回・\(unique)曲", item.track,
-                 priority: 48, score: Double(peak.value.count) - Double(offset) * 0.01, until: nextDay, date: peak.key)
+                 priority: 48, score: Double(peak.value.count) - Double(offset) * 0.01, until: nextDay,
+                 playbackTracks: ranked.map(\.track), date: peak.key)
         }
     }
 
@@ -238,18 +298,32 @@ final class MusicHistoryCardService {
         guard featured.count >= 5, Set(featured.map { $0.0.id }).count >= 3 else { return [] }
         let libraryValues = tracks.compactMap { features[$0.id]?.values }
         guard libraryValues.count >= 5 else { return [] }
-        let trends = names.compactMap { key, label -> (String, Double)? in
+        let trends = names.compactMap { key, label -> (key: String, label: String, difference: Double)? in
             let current = featured.compactMap { $0.1.score(named: key) }.filter(\.isFinite)
             let baseline = libraryValues.compactMap { $0.score(named: key) }.filter(\.isFinite)
             guard current.count >= 5, baseline.count >= 5 else { return nil }
             let difference = current.reduce(0, +) / Double(current.count) - baseline.reduce(0, +) / Double(baseline.count)
-            return difference >= 0.08 ? (label, difference) : nil
-        }.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }
+            return difference >= 0.08 ? (key, label, difference) : nil
+        }.sorted { $0.difference == $1.difference ? $0.key < $1.key : $0.difference > $1.difference }
         guard !trends.isEmpty else { return [] }
-        let labels = trends.prefix(3).map(\.0)
-        return rankedTracks(entries.filter { features[$0.track.id] != nil }).prefix(6).enumerated().map { offset, item in
+        let labels = trends.prefix(3).map(\.label)
+        let monthlyRanked = rankedTracks(entries.filter { features[$0.track.id] != nil })
+        var scored: [(track: Track, score: Double)] = []
+        for item in monthlyRanked {
+            var fit = 0.0
+            for trend in trends.prefix(3) {
+                let rawValue = features[item.track.id]?.values.score(named: trend.key) ?? 0
+                let value = rawValue.isFinite ? rawValue : 0
+                fit += value * trend.difference
+            }
+            scored.append((item.track, fit + Double(item.count) * 0.001))
+        }
+        scored.sort { $0.score == $1.score ? $0.track.id.uuidString < $1.track.id.uuidString : $0.score > $1.score }
+        let playbackTracks = scored.map { $0.track }
+        return monthlyRanked.prefix(6).enumerated().map { offset, item in
             card(.monthSound, "今月の音", "今月は\(labels.joined(separator: "・"))寄りの曲を聴いています", item.track,
-                 priority: 52, score: trends[0].1 * 100 - Double(offset) * 0.01, until: nextMonth)
+                 priority: 52, score: trends[0].difference * 100 - Double(offset) * 0.01, until: nextMonth,
+                 playbackTracks: playbackTracks)
         }
     }
 
@@ -263,10 +337,11 @@ final class MusicHistoryCardService {
                   let album = entries.first?.track.albumTitle else { return nil }
             let libraryCount = tracks.count { albumKey($0) == key }
             let spread = Double(unique) / Double(max(libraryCount, 1))
-            return rankedTracks(entries).prefix(4).enumerated().map { offset, item in
+            let ranked = rankedTracks(entries)
+            return ranked.prefix(4).enumerated().map { offset, item in
                 card(.monthAlbum, "今月のAlbum", "\(album)から\(unique)曲を聴いています", item.track,
                      priority: 62, score: Double(entries.count + unique * 3) + spread * 5 - Double(offset) * 0.01,
-                     until: nextMonth, album: album)
+                     until: nextMonth, playbackTracks: ranked.map(\.track), album: album)
             }
         }.flatMap { $0 }
     }

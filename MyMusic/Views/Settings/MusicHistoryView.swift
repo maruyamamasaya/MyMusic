@@ -100,13 +100,25 @@ struct MusicHistoryView: View {
             MusicHistorySectionHeader(title: "今日の音楽史", subtitle: "いま振り返りたい、あなたの音楽の記憶")
             ForEach(cards) { card in
                 MusicHistoryStoryCard(card: card) {
-                    guard let track = card.mainTrack,
-                          libraryStore.unfilteredTracks.contains(where: { $0.id == track.id }) else { return }
-                    playerStore.play(track)
+                    play(card)
                 }
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    private func play(_ card: MusicHistoryCardCandidate) {
+        let tracks = MusicHistoryCardPlaybackService().tracksForPlayback(
+            card,
+            availableTracks: libraryStore.unfilteredTracks
+        )
+        guard !tracks.isEmpty else { return }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
+            startContext: MusicHistoryCardService.playbackStartContext
+        )
     }
 
     private func yearHeader(_ year: MusicHistorySnapshot.Year) -> some View {
