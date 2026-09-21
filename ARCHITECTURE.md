@@ -108,7 +108,7 @@ Library View → LibraryStore → FileImportService
                            → LibraryPersistenceService / TrackIdentityService
 ```
 
-`LibraryStore`は表示対象ライブラリを反映するとき、`WorkLibraryCatalogService`でジャンルに「作業用BGM」が指定された曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として同時に更新する。再生時間は分類に使わない。`WorkLibraryView`はこの派生catalogだけを読み、通常曲を専用一覧へ混在させない。
+`LibraryStore`は表示対象ライブラリを反映するとき、ジャンルに「作業用BGM」が指定された曲を通常のTrack / Album / Artist集合から除外する。同時に`WorkLibraryCatalogService`で全曲から対象曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として更新する。再生時間は分類に使わない。`WorkLibraryView`と作業用Playlistはこの派生catalogを読み、通常側と作業用側を相互に混在させない。
 
 `SongsView`の検索・filter・sortはTrack、Track Preference、Playback HistoryのMainActor上snapshotを取得し、`Task.detached`内のpureな`arrange`で一括処理する。requestには各Storeのrevisionを含め、処理中に条件や正本が変わった古い結果は反映しない。UIへは先頭100曲から段階表示し、一覧scrollで全件Viewを同時生成しない。filter／sortは表示と、その表示から開始するqueueだけへ適用し、Library、履歴、Preferenceの正本を変更しない。
 
@@ -124,9 +124,9 @@ complete同期は`LibraryScanCheckpointService`へ取得済み`Track`と取得�
 
 Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を件数上限なく逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。処理済みの正本はidentity registryとする。
 
-ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorが表示曲の抽出とAlbum / Artist / Genre / Composerの再構築をutility priorityで実行し、`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
+ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorは作業用BGMを除く通常曲にジャンル設定を適用してAlbum / Artist / Genre / Composerを再構築し、全曲から作業用catalogも構築する。`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
 
-「作業用BGM」は通常曲と作業用再生を分離する分類マーカーでもあるため、ライブラリに存在する場合はジャンル表示フィルターの固定ON項目とする。`LibraryStore`が保存済み設定、個別変更、全解除、プリセット適用の各入口で無効化を拒否し、UIは存在を示したまま解除操作を無効にする。
+「作業用BGM」は通常曲と作業用再生を分離する分類マーカーであり、通常ライブラリのジャンル表示フィルターには選択肢として出さない。作業用catalogは通常側の無効ジャンルやプリセットとは独立して維持する。
 
 ### Playback
 
@@ -192,6 +192,7 @@ music root recursive scan
 - ホームのMIXは`HomeView`がLibrary・Playback History・Track Preferenceのrevisionとローカル日付変更時に候補snapshotを作り、`MixSelectionService`がDaily／Rediscovery／My Favoritesの一時キューを構成する。順位計算は3種類で共有し、既存の自動選曲weightと通常シャッフル適格性を使う。Dailyは同じ順位で選ぶMy Favoritesの先頭25曲を後回しにして重複を抑え、他の候補が不足したときだけ補充する。Deep Diveはタイルを開くときに`DeepDiveSelectionService`が履歴の日別再生開始数とArtist／Album metadataから候補を作り、同じ適格性・weightの範囲で低再生曲を選ぶ。従来の3種は先頭Trackをタイルのアートワークと再生開始曲に共用する。キューは保存せず、PlayerStoreへ通常再生として渡す。
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
+- Mood Mixは`StationStore`の同じ候補snapshotから`MoodStationService`がCalm／Energy／Ambient／Electronicの単一特徴を選ぶ。既存のLibrary内percentile、有効範囲、0.72閾値、Overplay補正、Artist分散を共有し、選んだ特徴のキューを一時的にPlayerStoreへ渡す。永続化契約は変更しない。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。専用tag管理画面の名称変更・削除は全Playlistをmemory上で一括更新して1 snapshotとして保存し、割り当ては既存`setTags`境界へ合流する。曲の追加先選択画面のtag filterはpresentation stateとしてUserDefaultsへregular／work別に保存し、存在しないtagになった場合は解除する。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
 - `PlaybackHistoryStore` は再生回数、正式なPlayback Event、初回／最終再生日時、総再生時間、スキップ／完走、連続再生、リピート再生、manual / automatic、入口別、日別集計を保存する。曲Favoriteと`playbackPreference`の正本は`TrackPreferenceStore`であり、Historyの旧fieldはmigration互換用に限る。分析画面から1曲の履歴をリセットしてもPreferenceは変更しない。
 - `RecentMusicTrendsView` は`PlaybackHistoryStore`と`TrackFeatureStore`のロード済みsnapshotを`RecentMusicTrendsService`へ渡す。Serviceは直近1年の完了イベントと存在する0...1の特徴量だけで一時indexを作り、選択期間を6〜13個の時間bucketへ集計する。グラフに空のbucketを接続せず、3曲・5再生以上で表示する。前半・後半の比較は各5再生・3曲以上、説明に出す変化は平均差10ポイント以上とする。派生データは保存せず、期間切り替え時はindexのみをバックグラウンドで再集計する。

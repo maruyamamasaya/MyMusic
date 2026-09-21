@@ -30,8 +30,12 @@ final class LibraryStore {
     private(set) var genreDisplayPresets: [GenreDisplayPreset]
 
     var availableGenreOptions: [GenreDisplayOption] {
-        var options = allGenres.map { GenreDisplayOption(id: $0.name, name: $0.name) }
-        if allTracks.contains(where: { Self.genreNames(in: $0.genre).isEmpty }) {
+        var options = allGenres
+            .filter { $0.name != Track.workPlaybackGenre }
+            .map { GenreDisplayOption(id: $0.name, name: $0.name) }
+        if allTracks.contains(where: {
+            $0.isEligibleForRegularPlayback && Self.genreNames(in: $0.genre).isEmpty
+        }) {
             options.append(GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定"))
         }
         return options
@@ -272,6 +276,9 @@ final class LibraryStore {
         enabledGenreKeys(for: preset).intersection(availableGenreOptions.map(\.id)).count
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
+    func tracks(for playlistKind: PlaylistKind) -> [Track] {
+        playlistKind == .work ? workLibraryCatalog.tracks : tracks
+    }
     func tracks(for artist: Artist) -> [Track] {
         let artistTracks = resolvedTracks(for: artist.trackIDs)
         let albumOrder = Dictionary(uniqueKeysWithValues: artist.albumIDs.enumerated().map { ($0.element, $0.offset) })
@@ -398,7 +405,12 @@ final class LibraryStore {
         )
         guard folderIDs == libraryFolders.map(\.id) else { return }
         allTracks = completeLibrary.tracks
-        allGenres = completeLibrary.genres
+        let regularTrackIDs = Set(completeLibrary.tracks.lazy
+            .filter(\.isEligibleForRegularPlayback)
+            .map(\.id))
+        allGenres = completeLibrary.genres.filter { genre in
+            genre.trackIDs.contains(where: regularTrackIDs.contains)
+        }
         applyGenreFilter()
     }
     private func applyGenreFilter() {

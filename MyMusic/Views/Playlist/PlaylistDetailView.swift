@@ -25,7 +25,10 @@ struct PlaylistDetailView: View {
     private let exporter = MusicDataExportService()
     private let searchWorker = TrackSearchWorker()
     private var playlist: Playlist? { playlistStore.playlist(id: playlistID) }
-    private var tracks: [Track] { playlistStore.tracks(for: playlistID, in: libraryStore.tracks) }
+    private var tracks: [Track] {
+        guard let playlist else { return [] }
+        return playlistStore.tracks(for: playlistID, in: libraryStore.tracks(for: playlist.kind))
+    }
 
     var body: some View {
         List {
@@ -224,8 +227,8 @@ struct PlaylistDetailView: View {
     }
 
     private func synchronizeWithSearch() {
-        guard let definition = playlist?.searchDefinition else { return }
-        let tracks = libraryStore.tracks
+        guard let playlist, let definition = playlist.searchDefinition else { return }
+        let tracks = libraryStore.tracks(for: playlist.kind)
         let historyEntries = playbackHistoryStore.entries
         let preferenceEntries = trackPreferenceStore.entries
         searchSyncTask?.cancel()

@@ -35,6 +35,7 @@ final class StationStore {
     var availableFeatureCount: Int { candidates.count }
     var availableMoods: [StationMood] { service.availableMoods(in: candidates) }
     var availableSounds: [StationSound] { service.availableSounds(in: candidates) }
+    var availableMoodMixes: [MoodMixKind] { service.availableMixes(in: candidates) }
     var hasLibraryTracks: Bool { !libraryStore.tracks.isEmpty }
     var featureLoadError: String? { featureStore.errorMessage }
 
@@ -146,6 +147,29 @@ final class StationStore {
         playerStore.playQueue(
             tracks,
             startingAt: index,
+            startContext: PlaybackStartContext(kind: .manual, source: .station)
+        )
+        return true
+    }
+
+    func playMoodMix(_ kind: MoodMixKind) async -> Bool {
+        guard !isLoading else { return false }
+        let candidates = candidates
+        let service = service
+        let trackIDs = await Task.detached(priority: .userInitiated) {
+            var generator = SystemRandomNumberGenerator()
+            return service.makeMix(for: kind, candidates: candidates, using: &generator)
+        }.value
+        guard !Task.isCancelled else { return false }
+        let byID = Dictionary(libraryStore.tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let tracks = trackIDs.compactMap { byID[$0] }.filter {
+            historyStore.isEligibleForRegularShuffle($0) && featureStore.hasFeature($0.id)
+        }
+        guard !tracks.isEmpty else { return false }
+        playerStore.setShuffleEnabled(false)
+        playerStore.playQueue(
+            tracks,
+            startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: .station)
         )
         return true

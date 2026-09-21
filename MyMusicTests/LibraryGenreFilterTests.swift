@@ -34,9 +34,9 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.genres.flatMap(\.trackIDs), [rock.id])
     }
 
-    func testWorkPlaybackGenreExistsAsAlwaysEnabledAndCannotBeFilteredOut() async throws {
+    func testWorkPlaybackGenreIsSeparatedFromRegularLibraryAndGenreFilter() async throws {
         let ambient = makeTrack(title: "Ambient", genre: "Ambient")
-        let work = makeTrack(title: "Work", genre: Track.workPlaybackGenre)
+        let work = makeTrack(title: "Work", genre: "Focus; \(Track.workPlaybackGenre)")
         let folder = URL(fileURLWithPath: "/tmp/work-genre-filter-library")
         let suiteName = "LibraryGenreFilterTests-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -53,18 +53,21 @@ final class LibraryGenreFilterTests: XCTestCase {
         )
 
         await store.restoreAndLoadIfNeeded()
+        await store.waitForPendingGenreFilter()
 
-        XCTAssertTrue(store.availableGenreOptions.contains { $0.id == Track.workPlaybackGenre })
-        XCTAssertTrue(store.isGenreAlwaysEnabled(Track.workPlaybackGenre))
-        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
-
-        store.setGenre(Track.workPlaybackGenre, isEnabled: false)
-        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+        XCTAssertEqual(store.tracks.map(\.id), [ambient.id])
+        XCTAssertEqual(store.albums.flatMap(\.trackIDs), [ambient.id])
+        XCTAssertEqual(store.artists.flatMap(\.trackIDs), [ambient.id])
+        XCTAssertFalse(store.availableGenreOptions.contains { $0.id == Track.workPlaybackGenre })
+        XCTAssertFalse(store.availableGenreOptions.contains { $0.id == "Focus" })
+        XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
+        XCTAssertEqual(store.tracks(for: .work).map(\.id), [work.id])
+        XCTAssertEqual(store.tracks(for: .regular).map(\.id), [ambient.id])
 
         store.setEnabledGenres([])
-        try await waitUntil { store.tracks.map(\.id) == [work.id] }
-        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+        try await waitUntil { store.tracks.isEmpty }
         XCTAssertFalse(store.isGenreEnabled("Ambient"))
+        XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
 
         let preset = GenreDisplayPreset(
             id: UUID(),
@@ -73,8 +76,9 @@ final class LibraryGenreFilterTests: XCTestCase {
             includesUnassignedGenreSetting: true
         )
         store.applyGenreDisplayPreset(preset)
-        try await waitUntil { store.tracks.map(\.id) == [work.id] }
+        try await waitUntil { store.tracks.isEmpty }
         XCTAssertTrue(store.isGenreDisplayPresetActive(preset))
+        XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
     }
 
     private func waitUntil(

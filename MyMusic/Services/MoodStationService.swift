@@ -40,6 +40,36 @@ nonisolated struct MoodStationService: Sendable {
         }
     }
 
+    func availableMixes(in candidates: [StationCandidate]) -> [MoodMixKind] {
+        let distributions = distributions(for: candidates)
+        return MoodMixKind.allCases.filter { kind in
+            guard let distribution = distributions[kind.featureKey] else { return false }
+            return candidates.contains { candidate in
+                guard let value = validScore(kind.featureKey, in: candidate.values),
+                      let relative = percentile(of: value, in: distribution) else { return false }
+                return relative >= Self.selectionThreshold
+            }
+        }
+    }
+
+    func makeMix<R: RandomNumberGenerator>(
+        for kind: MoodMixKind,
+        candidates: [StationCandidate],
+        limit: Int = 25,
+        using generator: inout R
+    ) -> [Track.ID] {
+        var seen: Set<Track.ID> = []
+        let unique = candidates.filter { seen.insert($0.trackID).inserted }
+        guard let distribution = distributions(for: unique)[kind.featureKey] else { return [] }
+        let ranked = unique.compactMap { candidate -> (StationCandidate, Double)? in
+            guard let value = validScore(kind.featureKey, in: candidate.values),
+                  let relative = percentile(of: value, in: distribution),
+                  relative >= Self.selectionThreshold else { return nil }
+            return (candidate, relative * candidate.overplayFactor)
+        }
+        return selectedTrackIDs(from: ranked, limit: limit, using: &generator)
+    }
+
     func makeStation<R: RandomNumberGenerator>(
         answers: StationAnswers,
         candidates: [StationCandidate],
@@ -54,8 +84,19 @@ nonisolated struct MoodStationService: Sendable {
                   score >= Self.selectionThreshold else { return nil }
             return (candidate, score * candidate.overplayFactor)
         }
+        let selected = selectedTrackIDs(from: ranked.map { ($0.candidate, $0.score) },
+                                      limit: limit, using: &generator)
+        return MoodStation(
+            id: UUID(), answers: answers, trackIDs: selected,
+            analyzedTrackCount: unique.count, matchingTrackCount: ranked.count
+        )
+    }
+
+    private func selectedTrackIDs<R: RandomNumberGenerator>(
+        from ranked: [(StationCandidate, Double)], limit: Int, using generator: inout R
+    ) -> [Track.ID] {
         // Small jitter varies close matches without allowing unrelated tracks into the pool.
-        var remaining = ranked.map { ($0.candidate, $0.score + Double.random(in: 0...0.08, using: &generator)) }
+        var remaining = ranked.map { ($0.0, $0.1 + Double.random(in: 0...0.08, using: &generator)) }
             .sorted { $0.1 > $1.1 }
         var selected: [Track.ID] = []
         var artistCounts: [String: Int] = [:]
@@ -69,10 +110,7 @@ nonisolated struct MoodStationService: Sendable {
             artistCounts[candidate.artist, default: 0] += 1
             previousArtist = candidate.artist
         }
-        return MoodStation(
-            id: UUID(), answers: answers, trackIDs: selected,
-            analyzedTrackCount: unique.count, matchingTrackCount: ranked.count
-        )
+        return selected
 
         func adjusted(_ item: (StationCandidate, Double)) -> Double {
             guard !item.0.artist.isEmpty else { return item.1 }

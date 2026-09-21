@@ -14,8 +14,12 @@ struct AddSongsToPlaylistView: View {
         playlistStore.playlist(id: playlistID)
     }
 
+    private var sourceTracks: [Track] {
+        playlist.map { libraryStore.tracks(for: $0.kind) } ?? []
+    }
+
     private var tracks: [Track] {
-        libraryStore.tracks.filter {
+        sourceTracks.filter {
             guard playlist?.kind.accepts($0) == true else { return false }
             return searchText.isEmpty || $0.title.localizedCaseInsensitiveContains(searchText) ||
                 $0.artistName.localizedCaseInsensitiveContains(searchText) ||
@@ -47,7 +51,7 @@ struct AddSongsToPlaylistView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("\(selection.count)曲を追加") {
-                        playlistStore.addTracks(libraryStore.tracks.filter { selection.contains($0.id) }, to: playlistID)
+                        playlistStore.addTracks(sourceTracks.filter { selection.contains($0.id) }, to: playlistID)
                         dismiss()
                     }.disabled(selection.isEmpty)
                 }

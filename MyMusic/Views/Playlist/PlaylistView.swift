@@ -336,7 +336,7 @@ private struct PlaylistManagementView: View {
                 PlaylistTagSummary(tags: playlist.tags)
             }
             Spacer()
-            Text("\(playlistStore.tracks(for: playlist.id, in: libraryStore.tracks).count)曲")
+            Text("\(playlistStore.tracks(for: playlist.id, in: libraryStore.tracks(for: kind)).count)曲")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

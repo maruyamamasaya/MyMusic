@@ -86,6 +86,7 @@ actor GenreLibraryFilterService {
 
         for (index, track) in tracks.enumerated() {
             if index.isMultiple(of: 64) { try Task.checkCancellation() }
+            guard track.isEligibleForRegularPlayback else { continue }
             let genreNames = Self.genreNames(in: track.genre)
             let filterKeys = genreNames.isEmpty ? Set([unassignedGenreKey]) : genreNames
             if disabledGenreNames.isDisjoint(with: filterKeys) {
@@ -97,7 +98,7 @@ actor GenreLibraryFilterService {
         let library = MusicLibrary.build(from: visibleTracks)
         return LibraryPresentationSnapshot(
             library: library,
-            workLibraryCatalog: WorkLibraryCatalogService.build(from: library)
+            workLibraryCatalog: WorkLibraryCatalogService.build(from: tracks)
         )
     }
 

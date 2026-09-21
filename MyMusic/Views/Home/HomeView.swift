@@ -29,6 +29,7 @@ struct HomeView: View {
     @State private var mixQueues: [MixKind: [Track]] = [:]
     @State private var deepDiveOptions: [DeepDiveKind: [DeepDiveOption]] = [:]
     @State private var showsDeepDive = false
+    @State private var showsMoodMix = false
     @State private var mixDay: Date?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
@@ -75,7 +76,8 @@ struct HomeView: View {
                             HomeMixSection(
                                 queues: mixQueues,
                                 onPlay: playMix,
-                                onOpenDeepDive: openDeepDive
+                                onOpenDeepDive: openDeepDive,
+                                onOpenMoodMix: { showsMoodMix = true }
                             )
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("ステーション").font(.title3.bold())
@@ -134,6 +136,9 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showsDeepDive) {
                 DeepDiveSelectionView(options: deepDiveOptions, onPlay: playDeepDive)
+            }
+            .sheet(isPresented: $showsMoodMix) {
+                MoodMixSelectionView()
             }
             .task(id: playlistStore.homeOrderingRevision) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
@@ -198,7 +203,10 @@ struct HomeView: View {
     }
 
     private func playPlaylist(_ playlist: Playlist) {
-        let playlistTracks = playlistStore.tracks(for: playlist.id, in: libraryStore.tracks)
+        let playlistTracks = playlistStore.tracks(
+            for: playlist.id,
+            in: libraryStore.tracks(for: playlist.kind)
+        )
         let tracks = playlist.kind == .work
             ? playbackHistoryStore.workPlaybackTracks(from: playlistTracks)
             : playbackHistoryStore.preferenceWeightedShuffle(playlistTracks)
@@ -374,7 +382,7 @@ struct HomeView: View {
         case .recentTracks:
             playbackHistoryStore.recentTracks(from: libraryStore.tracks)
         case .workSizePlay:
-            libraryStore.tracks.filter(\.isEligibleForWorkPlayback)
+            libraryStore.workLibraryCatalog.tracks
         default:
             []
         }
@@ -419,10 +427,12 @@ struct HomeView: View {
     }
 
     private func refreshPlaylistPresentations() {
-        let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
         var resolvedTracks: [Playlist.ID: [Track]] = [:]
         var resolvedArtworkIdentifiers: [Playlist.ID: String] = [:]
         for playlist in playlistStore.playlists {
+            let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore
+                .tracks(for: playlist.kind)
+                .map { ($0.id, $0) })
             let tracks = playlist.trackIDs
                 .compactMap { tracksByID[$0] }
                 .filter(playlist.kind.accepts)
@@ -819,6 +829,7 @@ private struct HomeMixSection: View {
     let queues: [MixKind: [Track]]
     let onPlay: (MixKind) -> Void
     let onOpenDeepDive: () -> Void
+    let onOpenMoodMix: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -846,7 +857,31 @@ private struct HomeMixSection: View {
                             .opacity(tracks.isEmpty ? 0.55 : 1)
                         }
                         Button(action: onOpenDeepDive) {
-                            HomeDeepDiveTile(width: width)
+                            HomeSelectionMixTile(
+                                title: "Deep Dive",
+                                subtitle: "Artist・Albumから未発見の曲へ",
+                                systemImage: "square.stack.3d.up.fill",
+                                colors: [
+                                    Color(red: 0.13, green: 0.38, blue: 0.43),
+                                    Color(red: 0.05, green: 0.12, blue: 0.22)
+                                ],
+                                accessibilityHint: "ArtistまたはAlbumを選んで低再生曲を再生",
+                                width: width
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        Button(action: onOpenMoodMix) {
+                            HomeSelectionMixTile(
+                                title: "Mood Mix",
+                                subtitle: "Calm・Energyなどから再生",
+                                systemImage: "waveform.path",
+                                colors: [
+                                    Color(red: 0.45, green: 0.23, blue: 0.38),
+                                    Color(red: 0.13, green: 0.09, blue: 0.24)
+                                ],
+                                accessibilityHint: "Moodを選んで再生",
+                                width: width
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -861,24 +896,25 @@ private struct HomeMixSection: View {
     }
 }
 
-private struct HomeDeepDiveTile: View {
+private struct HomeSelectionMixTile: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let colors: [Color]
+    let accessibilityHint: String
     let width: CGFloat
 
     var body: some View {
         ZStack(alignment: .leading) {
-            LinearGradient(
-                colors: [Color(red: 0.13, green: 0.38, blue: 0.43), Color(red: 0.05, green: 0.12, blue: 0.22)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
             VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: "square.stack.3d.up.fill")
+                Image(systemName: systemImage)
                     .font(.title2.weight(.semibold))
                     .frame(width: 44, height: 44)
                     .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
                 Spacer()
-                Text("Deep Dive").font(.headline)
-                Text("Artist・Albumから未発見の曲へ")
+                Text(title).font(.headline)
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.76))
                     .lineLimit(2)
@@ -892,7 +928,7 @@ private struct HomeDeepDiveTile: View {
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.12), lineWidth: 0.5) }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
-        .accessibilityHint("ArtistまたはAlbumを選んで低再生曲を再生")
+        .accessibilityHint(accessibilityHint)
     }
 }
 

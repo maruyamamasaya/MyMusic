@@ -10,6 +10,30 @@ nonisolated enum StationSound: String, CaseIterable, Identifiable, Sendable {
     var id: Self { self }
 }
 
+nonisolated enum MoodMixKind: String, CaseIterable, Identifiable, Sendable {
+    case calm, energy, ambient, electronic
+
+    var id: Self { self }
+    var title: String { rawValue.capitalized }
+    var featureKey: String { rawValue }
+    var systemImage: String {
+        switch self {
+        case .calm: "wind"
+        case .energy: "bolt.fill"
+        case .ambient: "sparkles"
+        case .electronic: "waveform"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .calm: "穏やかな曲"
+        case .energy: "勢いのある曲"
+        case .ambient: "広がりのある音"
+        case .electronic: "電子的な音"
+        }
+    }
+}
+
 nonisolated struct StationAnswers: Equatable, Sendable {
     var mood: StationMood
     var sound: StationSound

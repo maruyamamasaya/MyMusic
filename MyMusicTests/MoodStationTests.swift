@@ -120,6 +120,41 @@ final class MoodStationServiceTests: XCTestCase {
         XCTAssertTrue(result.trackIDs.contains(overplayed.trackID))
     }
 
+    func testMoodMixSelectsOnlyTheRelativeHighEndOfItsFeature() {
+        let low = candidate(["calm": 0.1])
+        let middle = candidate(["calm": 0.5])
+        let upper = candidate(["calm": 0.8])
+        let high = candidate(["calm": 0.95])
+        let candidates = [low, middle, upper, high]
+        var generator = StationSeed(seed: 4)
+
+        XCTAssertEqual(service.availableMixes(in: candidates), [.calm])
+        XCTAssertEqual(service.makeMix(for: .calm, candidates: candidates, using: &generator), [high.trackID])
+    }
+
+    func testMoodMixRequiresUsefulRangeAndNeverTreatsMissingAsLow() {
+        let low = candidate(["ambient": 0.20, "electronic": 0.1])
+        let high = candidate(["ambient": 0.21, "electronic": 0.9])
+        let missing = candidate([:])
+        let candidates = [low, high, missing]
+        var generator = StationSeed(seed: 7)
+
+        XCTAssertEqual(service.availableMixes(in: candidates), [.electronic])
+        XCTAssertTrue(service.makeMix(for: .ambient, candidates: candidates, using: &generator).isEmpty)
+        XCTAssertEqual(service.makeMix(for: .electronic, candidates: candidates, using: &generator), [high.trackID])
+    }
+
+    func testMoodMixHonorsQueueLimitWithoutDuplicates() {
+        let candidates = (0..<50).map { candidate(["energy": Double($0) / 49]) }
+        var generator = StationSeed(seed: 9)
+        let result = service.makeMix(for: .energy, candidates: candidates + candidates,
+                                     limit: 5, using: &generator)
+
+        XCTAssertEqual(result.count, 5)
+        XCTAssertEqual(Set(result).count, 5)
+        XCTAssertTrue(Set(result).isSubset(of: Set(candidates.suffix(14).map(\.trackID))))
+    }
+
     private func candidate(_ values: [String: Double]) -> StationCandidate {
         StationCandidate(trackID: UUID(), artist: "Artist", values: stationValues(values))
     }
@@ -176,6 +211,17 @@ final class StationStoreIntegrationTests: XCTestCase {
         XCTAssertFalse(fixture.store.isLoading)
         XCTAssertTrue(fixture.store.hasLibraryTracks)
         XCTAssertEqual(fixture.store.availableFeatureCount, 0)
+    }
+
+    func testMoodMixStartsQueueWithOneSelection() async {
+        let fixture = StationFixture(featureCount: 3)
+        await fixture.store.prepare()
+
+        XCTAssertEqual(fixture.store.availableMoodMixes, [.electronic])
+        let didPlay = await fixture.store.playMoodMix(.electronic)
+        XCTAssertTrue(didPlay)
+        XCTAssertEqual(fixture.player.queue.map(\.id), [fixture.tracks[2].id])
+        XCTAssertFalse(fixture.player.isShuffleEnabled)
     }
 
     func testQuestionAndResultRenderForAccessibilityAndDarkMode() async throws {
