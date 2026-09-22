@@ -73,6 +73,7 @@ nonisolated struct MusicLibraryScanResult: Sendable {
 nonisolated struct LibraryPresentationSnapshot: Sendable {
     let library: MusicLibrary
     let workLibraryCatalog: WorkLibraryCatalog
+    let hiResLibraryCatalog: HiResLibraryCatalog
 }
 
 actor GenreLibraryFilterService {
@@ -98,7 +99,8 @@ actor GenreLibraryFilterService {
         let library = MusicLibrary.build(from: visibleTracks)
         return LibraryPresentationSnapshot(
             library: library,
-            workLibraryCatalog: WorkLibraryCatalogService.build(from: tracks)
+            workLibraryCatalog: WorkLibraryCatalogService.build(from: tracks),
+            hiResLibraryCatalog: HiResLibraryCatalogService.build(from: tracks)
         )
     }
 
@@ -339,6 +341,7 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
     }
 
     private func isSameSource(_ track: Track, fileSize: Int64?, modificationDate: Date?) -> Bool {
+        guard track.metadataRevision == MetadataService.currentMetadataRevision else { return false }
         guard let oldSize = track.fileSize,
               let oldDate = track.modificationDate,
               let fileSize,

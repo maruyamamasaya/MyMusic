@@ -21,6 +21,7 @@ MyMusicはFLAC、ALAC、WAV、AIFFをAVAudioFileでPCMへdecodeして再生す�
 - Hi-Res判定はJEITAのCD相当超過例に従い、lossless PCM系音源で、sample rateが44.1kHz以上・bit depthが16bit以上、かつsample rateが48kHz超またはbit depthが16bit超の場合とする。
 - 日本オーディオ協会の公式Hi-Res Audioロゴはライセンス対象のため使用せず、独自のテキストbadge「Hi-Res」を表示する。
 - upsamplingは情報を増やさないため、DACの最大rateではなく音源rateとの一致を優先する。
+- ジャンル項目「ハイレゾ」または同じHi-Res判定を満たすTrackは通常ライブラリから専用catalogへ分離する。作業用BGMと重複する場合は作業用分類を優先する。
 
 ## Consequences
 
@@ -30,3 +31,4 @@ MyMusicはFLAC、ALAC、WAV、AIFFをAVAudioFileでPCMへdecodeして再生す�
 - EQ、normalization、fadeを有効にした再生は引き続きPCM sample値を変更するため、UIでbit-perfectとは表示しない。
 - USB DACの実機名、対応rate、route change挙動は機器とiOSに依存するため、実機検証を継続する。
 - Tea ProではAudio Sessionの非アクティブ化とAVAudioEngine graph再構築を追加しても192kHz音源が44.1kHz出力のままであり、既存再生基盤へのリスクに対して効果がなかったため採用しない。直接PCM出力は現行backendを変更せず、分離したBetaでのみ検証する。
+- BetaのAudio Queue経路は、実音源とは別に希望rateの短い無音PCM queueを生成してUSB streamの再交渉を試す。これは機器依存の実験であり、実出力rateが一致するまでnative出力成功とは扱わない。

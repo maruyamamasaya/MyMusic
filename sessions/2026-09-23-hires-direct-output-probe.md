@@ -45,3 +45,12 @@
 - 300msの非同期解放待ちを含む版でも、曲の途中に次の異なるrateを選ぶ自動切替は成立しなかった。ユーザー判断により再生中のrate切替機能は撤回し、停止を明示的な出力session境界とする。
 - 再生中、切替準備中、file読込完了後は「音源を選んで再生」を無効化する。「停止」はAudio Queueを即時停止・破棄し、security scopeを閉じ、AVAudioSessionを非アクティブ化したまま維持する。次回の音源選択時に新しい希望rateでsessionとqueueを作る。
 - generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。XCTestは実行していない。手動方式のVespera向けDebug実機build、install、launchも成功。手動rate切替の実機確認は未実施。
+
+### 内蔵PCM準備と専用ライブラリ
+
+- Tea ProはApp再起動後にrateが変わり、初回streamが不安定、192kHzを採用した後に44.1／48kHzへ戻らないという追加実測があった。
+- 音源fixtureへ依存せず再交渉できるよう、44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ生成し、実曲前に最大2回だけ短いAudio Queueで流すrate準備を追加した。設定診断と専用画面から手動準備もできる。
+- Metadata scanをstream-level形式取得へ更新し、ALAC／AACをcontainer拡張子ではなくformat IDで識別し、sample rate、bit depth、channel、bit rateをTrack cacheへ保存する。metadata revision 2により旧cacheは次回scanで再抽出する。
+- ジャンル項目「ハイレゾ」または既存JEITA基準を満たすロスレス音源を通常ライブラリから分離し、ホームへ専用タイル、曲名／アルバム／アーティスト一覧、独立Audio Queue再生を追加した。作業用BGMとの重複は作業用を優先する。
+- generic iOS Simulator Debug build成功。iPhone 17e / iOS 26.5 Simulatorで分類と通常ライブラリ分離のXCTest 4件成功。XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除なし。
+- Tea Proでの初回接続と44.1／48／88.2／96／192kHz上下切替、専用一覧からの実音源再生は未検証。今回の変更はまだVesperaへdeployしていない。

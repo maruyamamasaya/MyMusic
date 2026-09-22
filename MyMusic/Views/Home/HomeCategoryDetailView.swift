@@ -146,6 +146,8 @@ struct HomeDestinationView: View {
             WorkPlaylistView(createsNavigationStack: false)
         case .workSizePlay:
             WorkLibraryView()
+        case .hiResLibrary:
+            HiResLibraryView()
         case .nowPlaying, .queue:
             EmptyView()
         }

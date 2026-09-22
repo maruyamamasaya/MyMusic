@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import CryptoKit
 import Foundation
 
@@ -7,7 +8,7 @@ protocol MetadataServicing: Sendable {
 }
 
 nonisolated final class MetadataService: MetadataServicing, Sendable {
-    nonisolated static let currentMetadataRevision = 1
+    nonisolated static let currentMetadataRevision = 2
 
     private let artworkService: ArtworkServicing
     private let identityService: TrackIdentityServicing
@@ -29,6 +30,7 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
         let duration = try await asset.load(.duration).seconds
         let commonMetadata = try await asset.load(.commonMetadata)
         let formatMetadata = try await asset.load(.metadata)
+        let audioFormat = await format(for: asset, url: fileURL)
         let metadata = commonMetadata + formatMetadata
 
         let title = await stringValue(for: .commonIdentifierTitle, in: metadata)
@@ -84,7 +86,7 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
             year: await yearValue(in: metadata),
             genre: genre,
             composer: composer,
-            audioFormat: format(for: fileURL),
+            audioFormat: audioFormat,
             metadataRevision: Self.currentMetadataRevision
         )
     }
@@ -163,7 +165,43 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
         return (relative.first, relative.count > 1 ? relative.last : nil)
     }
 
-    private func format(for url: URL) -> AudioFormat? {
+    private func format(for asset: AVURLAsset, url: URL) async -> AudioFormat? {
+        do {
+            guard let audioTrack = try await asset.loadTracks(withMediaType: .audio).first else {
+                return fallbackFormat(for: url)
+            }
+            let descriptions = try await audioTrack.load(.formatDescriptions)
+            let estimatedDataRate = try? await audioTrack.load(.estimatedDataRate)
+            guard let description = descriptions.first,
+                  let basic = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee,
+                  let codec = codec(for: basic.mFormatID, url: url) else {
+                return fallbackFormat(for: url)
+            }
+            return AudioFormat(
+                codec: codec,
+                bitRate: validBitRate(estimatedDataRate),
+                sampleRate: basic.mSampleRate > 0 ? basic.mSampleRate : nil,
+                bitDepth: bitDepth(for: basic),
+                channels: basic.mChannelsPerFrame > 0 ? Int(basic.mChannelsPerFrame) : nil
+            )
+        } catch {
+            return fallbackFormat(for: url)
+        }
+    }
+
+    private func codec(for formatID: AudioFormatID, url: URL) -> AudioFormat.Codec? {
+        switch formatID {
+        case kAudioFormatMPEG4AAC: .aac
+        case kAudioFormatAppleLossless: .alac
+        case kAudioFormatMPEGLayer3: .mp3
+        case kAudioFormatFLAC: .flac
+        case kAudioFormatLinearPCM:
+            url.pathExtension.lowercased().hasPrefix("aif") ? .aiff : .wav
+        default: fallbackFormat(for: url)?.codec
+        }
+    }
+
+    private func fallbackFormat(for url: URL) -> AudioFormat? {
         let codec: AudioFormat.Codec
         switch url.pathExtension.lowercased() {
         case "flac": codec = .flac
@@ -171,9 +209,26 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
         case "wav": codec = .wav
         case "aiff", "aif": codec = .aiff
         case "aac": codec = .aac
-        case "m4a": codec = .aac // The container may contain ALAC; exact stream inspection is future work.
+        case "m4a": codec = .aac
         default: return nil
         }
         return AudioFormat(codec: codec, bitRate: nil, sampleRate: nil, bitDepth: nil, channels: nil)
+    }
+
+    private func validBitRate(_ value: Float?) -> Int? {
+        guard let value, value.isFinite, value > 0 else { return nil }
+        return Int(value.rounded())
+    }
+
+    private func bitDepth(for description: AudioStreamBasicDescription) -> Int? {
+        if description.mBitsPerChannel > 0 { return Int(description.mBitsPerChannel) }
+        guard description.mFormatID == kAudioFormatAppleLossless else { return nil }
+        switch description.mFormatFlags {
+        case kAppleLosslessFormatFlag_16BitSourceData: return 16
+        case kAppleLosslessFormatFlag_20BitSourceData: return 20
+        case kAppleLosslessFormatFlag_24BitSourceData: return 24
+        case kAppleLosslessFormatFlag_32BitSourceData: return 32
+        default: return nil
+        }
     }
 }

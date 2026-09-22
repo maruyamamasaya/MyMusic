@@ -20,6 +20,7 @@ final class LibraryStore {
     private(set) var genres: [Genre] = []
     private(set) var composers: [Composer] = []
     private(set) var workLibraryCatalog = WorkLibraryCatalog.empty
+    private(set) var hiResLibraryCatalog = HiResLibraryCatalog.empty
     private(set) var libraryFolders: [LibraryFolder] = []
     private(set) var isLoading = false
     private(set) var scanFolderName: String?
@@ -31,7 +32,7 @@ final class LibraryStore {
 
     var availableGenreOptions: [GenreDisplayOption] {
         var options = allGenres
-            .filter { $0.name != Track.workPlaybackGenre }
+            .filter { $0.name != Track.workPlaybackGenre && $0.name != Track.hiResPlaybackGenre }
             .map { GenreDisplayOption(id: $0.name, name: $0.name) }
         if allTracks.contains(where: {
             $0.isEligibleForRegularPlayback && Self.genreNames(in: $0.genre).isEmpty
@@ -80,7 +81,7 @@ final class LibraryStore {
         self.syncService = LibrarySyncService(service: libraryService, persistence: libraryPersistence)
         self.userDefaults = userDefaults
         self.disabledGenreNames = Set(userDefaults.stringArray(forKey: Self.disabledGenresKey) ?? [])
-            .subtracting([Track.workPlaybackGenre])
+            .subtracting([Track.workPlaybackGenre, Track.hiResPlaybackGenre])
         self.genreDisplayPresets = userDefaults.data(forKey: Self.genrePresetsKey)
             .flatMap { try? JSONDecoder().decode([GenreDisplayPreset].self, from: $0) } ?? []
     }
@@ -470,6 +471,7 @@ final class LibraryStore {
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
         workLibraryCatalog = snapshot.workLibraryCatalog
+        hiResLibraryCatalog = snapshot.hiResLibraryCatalog
         homePresentationRevision &+= 1
     }
     private func resolvedTracks(for ids: [Track.ID]) -> [Track] {

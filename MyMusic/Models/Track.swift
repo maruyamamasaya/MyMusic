@@ -3,6 +3,7 @@ import Foundation
 nonisolated struct Track: Identifiable, Codable, Hashable, Sendable {
     nonisolated static let regularRandomMinimumDuration: TimeInterval = 30
     nonisolated static let workPlaybackGenre = "作業用BGM"
+    nonisolated static let hiResPlaybackGenre = "ハイレゾ"
 
     let id: UUID
     var title: String
@@ -31,8 +32,14 @@ nonisolated struct Track: Identifiable, Codable, Hashable, Sendable {
         normalizedGenreNames.contains(Self.workPlaybackGenre)
     }
 
-    nonisolated var isEligibleForRegularPlayback: Bool {
+    nonisolated var isEligibleForHiResPlayback: Bool {
         !isEligibleForWorkPlayback
+            && (normalizedGenreNames.contains(Self.hiResPlaybackGenre)
+                || audioFormat?.isHiResolution == true)
+    }
+
+    nonisolated var isEligibleForRegularPlayback: Bool {
+        !isEligibleForWorkPlayback && !isEligibleForHiResPlayback
     }
 
     nonisolated var isEligibleForRegularRandomPlayback: Bool {

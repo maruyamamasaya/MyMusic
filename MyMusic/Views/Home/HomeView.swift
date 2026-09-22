@@ -383,6 +383,8 @@ struct HomeView: View {
             playbackHistoryStore.recentTracks(from: libraryStore.tracks)
         case .workSizePlay:
             libraryStore.workLibraryCatalog.tracks
+        case .hiResLibrary:
+            libraryStore.hiResLibraryCatalog.tracks
         default:
             []
         }

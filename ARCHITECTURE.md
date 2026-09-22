@@ -108,11 +108,11 @@ Library View → LibraryStore → FileImportService
                            → LibraryPersistenceService / TrackIdentityService
 ```
 
-`LibraryStore`は表示対象ライブラリを反映するとき、ジャンルに「作業用BGM」が指定された曲を通常のTrack / Album / Artist集合から除外する。同時に`WorkLibraryCatalogService`で全曲から対象曲だけを抽出し、作業用のAlbum / Artist / Album Artist集合を`WorkLibraryCatalog`として更新する。再生時間は分類に使わない。`WorkLibraryView`と作業用Playlistはこの派生catalogを読み、通常側と作業用側を相互に混在させない。
+`LibraryStore`は表示対象ライブラリを反映するとき、ジャンルに「作業用BGM」が指定された曲と、ハイレゾ対象曲を通常のTrack / Album / Artist集合から除外する。同時に`WorkLibraryCatalogService`と`HiResLibraryCatalogService`で専用catalogを更新する。分類優先順位は作業用BGM、ハイレゾ、通常の順で、ハイレゾはジャンル項目「ハイレゾ」またはTrackへ保存したstream-level形式が既存JEITA基準を満たすロスレス音源を対象とする。`WorkLibraryView`と`HiResLibraryView`は各派生catalogを読み、通常側と専用側を相互に混在させない。
 
 `SongsView`の検索・filter・sortはTrack、Track Preference、Playback HistoryのMainActor上snapshotを取得し、`Task.detached`内のpureな`arrange`で一括処理する。requestには各Storeのrevisionを含め、処理中に条件や正本が変わった古い結果は反映しない。UIへは先頭100曲から段階表示し、一覧scrollで全件Viewを同時生成しない。filter／sortは表示と、その表示から開始するqueueだけへ適用し、Library、履歴、Preferenceの正本を変更しない。
 
-`LibraryStore`は完成した表示snapshotの反映時に、Track ID→Track、Album ID→Album、Artist ID→Artist、Track ID→Album／Artist IDのlookup indexも同時に再構築する。Album／Artist詳細や再生中画面の参照解決はこのindexを使い、呼び出しごとに全Track辞書を再生成したり全Album／Artistを走査したりしない。indexは派生memory stateであり永続化契約を増やさない。
+`LibraryStore`は完成した表示snapshotの反映時に、Track ID→Track、Album ID→Album、Artist ID→Artist、Track ID→Album／Artist IDのlookup indexも同時に再構築する。Album／Artist詳細や再生中画面の参照解決はこのindexを使い、呼び出しごとに全Track辞書を再生成したり全Album／Artistを走査したりしない。indexと専用catalogは派生memory stateであり永続化契約を増やさない。
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
 
@@ -126,9 +126,9 @@ complete同期は`LibraryScanCheckpointService`へ取得済み`Track`と取得�
 
 Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を件数上限なく逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。処理済みの正本はidentity registryとする。
 
-ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorは作業用BGMを除く通常曲にジャンル設定を適用してAlbum / Artist / Genre / Composerを再構築し、全曲から作業用catalogも構築する。`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
+ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorは作業用BGMとハイレゾ対象を除く通常曲にジャンル設定を適用してAlbum / Artist / Genre / Composerを再構築し、全曲から作業用catalogとハイレゾcatalogも構築する。`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
 
-「作業用BGM」は通常曲と作業用再生を分離する分類マーカーであり、通常ライブラリのジャンル表示フィルターには選択肢として出さない。作業用catalogは通常側の無効ジャンルやプリセットとは独立して維持する。
+「作業用BGM」と「ハイレゾ」は専用再生を分離する分類マーカーであり、通常ライブラリのジャンル表示フィルターには選択肢として出さない。各専用catalogは通常側の無効ジャンルやプリセットとは独立して維持する。
 
 ### Playback
 
@@ -145,17 +145,17 @@ PlaybackControlsView / playable Views
 
 USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample rateをAVAudioSessionの希望値として要求し、activation後の実`sampleRate`とroute名を`PlayerStore.audioInformation`へ返す。`AudioInformationView`は音源と出力を分離し、rate一致時はnative、不一致時はsample-rate conversionありと表示する。希望値はhardwareへのhintであり採用を保証しない。Tea Pro実機では192kHz音源に対して現行AVAudioEngine経路が44.1kHzを採用し、Onkyo HF Playerでは同じ接続と音源で192kHzを採用した。直接PCM出力を試す場合も現行再生基盤を置換せず、独立backendとして検証する。設定は既定ONでApp外backup対象とし、設計理由は[ADR-0007](decisions/ADR-0007-native-sample-rate-output.md)を参照する。
 
-Hi-Res直接出力診断は通常再生から分離した次の実験経路だけを持つ。
+Hi-Res直接出力Betaは通常再生から分離した次の実験経路だけを持つ。
 
 ```text
-HiResDirectOutputProbeView
+HiResDirectOutputProbeView / HiResLibraryView
   ├→ PlayerStore.stop（通常AVAudioEngineの完全停止だけ）
   → HiResDirectOutputProbeStore
   → HiResAudioQueueProbeService
   → Audio File Services → Audio Queue Services → USB DAC
 ```
 
-診断はFilesから選んだ1ファイルをsecurity-scoped accessで開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。一時停止だけでは通常AVAudioEngineが前回rateのI/Oを保持し得るため、ファイル選択後に`PlayerStore.stop()`で通常再生を完全停止する。再生中およびfile読込完了後は次音源の選択を無効化し、ユーザーが停止してAudio QueueとAudio Sessionを終了した後だけ次の音源を選べる手動方式とする。開始処理はsession非アクティブ化後に300ms待ってから希望rate設定、session再アクティブ化、新Audio Queue作成へ進む。cancelされたrequestのAudioFileとsecurity scopeが閉じるまで次requestを開始せず直列化する。非アクティブ化失敗は無視せず診断エラーとして表示する。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示するが、通常queueの再生、履歴、Now Playing、EQ、normalization、fade、Visualizer、background制御とは統合しない。まずTea Proで手動rate切替が成立するかを判定し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
+設定診断はFilesから選んだ1ファイル、専用ライブラリは登録folderのsecurity-scoped accessでTrackを開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。一時停止だけでは通常AVAudioEngineが前回rateのI/Oを保持し得るため、開始前に`PlayerStore.stop()`で通常再生を完全停止する。開始処理はsession非アクティブ化後に待機し、希望rateの16-bit stereo無音PCM Audio Queueを最大2回短時間開いてから実音源queueを作る。44.1／48／88.2／96／192kHzは同じ生成処理を音源なしの手動準備にも使う。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示するが、通常queueの再生、履歴、Now Playing、EQ、normalization、fade、Visualizer、background制御とは統合しない。Tea Proでrateの上げ下げと初回接続を実機確認し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
 
 #### PlayerStoreの段階的な責務分離
 

@@ -31,6 +31,22 @@ struct HiResDirectOutputProbeView: View {
                 }
             }
 
+            Section {
+                ForEach([44_100.0, 48_000, 88_200, 96_000, 192_000], id: \.self) { sampleRate in
+                    Button {
+                        playerStore.stop()
+                        store.prepare(sampleRate: sampleRate)
+                    } label: {
+                        Label(rate(sampleRate), systemImage: "waveform")
+                    }
+                    .disabled(store.hasActiveSession || store.state == .switching)
+                }
+            } header: {
+                Text("内蔵PCMで出力レート準備")
+            } footer: {
+                Text("音源ファイルを使わず、選んだレートの短い無音PCMを2段階で出力します。Tea Proの表示切替確認に使えます。")
+            }
+
             if store.hasActiveSession {
                 Section {
                     Text("別レートの音源へ切り替える場合は、先に停止してください。停止後にAudio Sessionを終了し、次の音源を選んだ時に新しいレートで開始します。")
@@ -59,6 +75,9 @@ struct HiResDirectOutputProbeView: View {
                         .foregroundStyle(.orange)
                 case .playing:
                     Label("再生中", systemImage: "play.circle.fill")
+                        .foregroundStyle(.green)
+                case .prepared:
+                    Label("出力レート準備完了", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 case .reachedEnd:
                     Label("読み込み完了", systemImage: "checkmark.circle")

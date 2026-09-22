@@ -11,6 +11,7 @@ struct HomeCategory: Identifiable, Hashable {
         case playback
         case myMusic
         case library
+        case hiRes
         case activity
     }
 
@@ -44,6 +45,15 @@ struct HomeCategory: Identifiable, Hashable {
                 HomeCategoryItem(title: "アーティスト", description: "アーティスト別に表示", systemImage: "music.mic", destination: .artists),
                 HomeCategoryItem(title: "ジャンル", description: "ジャンル別に表示", systemImage: "guitars", destination: .genres),
                 HomeCategoryItem(title: "作曲者", description: "作曲者別に表示", systemImage: "music.quarternote.3", destination: .composers)
+            ]
+        ),
+        HomeCategory(
+            id: .hiRes,
+            title: "ハイレゾ",
+            description: "高解像度のロスレス音源を専用出力で再生",
+            systemImage: "waveform.badge.magnifyingglass",
+            items: [
+                HomeCategoryItem(title: "ハイレゾ音源", description: "専用ライブラリとPCM直接出力 Beta", systemImage: "waveform.circle.fill", destination: .hiResLibrary)
             ]
         ),
         HomeCategory(
@@ -92,6 +102,7 @@ enum HomeDestination: Hashable {
     case selectiveRandomPlay
     case repeatPlay
     case workSizePlay
+    case hiResLibrary
     case workPlaylists
     case favorites
     case favoriteAlbums

@@ -15,6 +15,7 @@ struct HiResAudioQueueProbeSnapshot: Equatable, Sendable {
 enum HiResAudioQueueProbeEvent: Sendable {
     case started(HiResAudioQueueProbeSnapshot)
     case updated(HiResAudioQueueProbeSnapshot)
+    case prepared(HiResAudioQueueProbeSnapshot)
     case reachedEnd
     case failed(String)
 }
@@ -43,6 +44,7 @@ enum HiResAudioQueueProbeError: LocalizedError {
 protocol HiResAudioQueueProbeServicing: AnyObject {
     var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)? { get set }
     func play(url: URL) async throws
+    func prepare(sampleRate: Double) async throws
     func stop()
 }
 
@@ -50,10 +52,15 @@ protocol HiResAudioQueueProbeServicing: AnyObject {
 final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
     var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)?
 
+    private let fileImportService: FileImportServicing
     private var context: HiResAudioQueueProbeContext?
     private var accessedURL: URL?
     private var isAccessingSecurityScope = false
     private var refreshTask: Task<Void, Never>?
+
+    init(fileImportService: FileImportServicing? = nil) {
+        self.fileImportService = fileImportService ?? FileImportService()
+    }
 
     isolated deinit {
         refreshTask?.cancel()
@@ -63,7 +70,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
 
     func play(url: URL) async throws {
         stop()
-        beginFileAccess(url)
+        try beginFileAccess(url)
 
         do {
             var audioFile: AudioFileID?
@@ -165,6 +172,21 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         }
     }
 
+    func prepare(sampleRate: Double) async throws {
+        stop()
+        let hardwareRate = try await configureAudioSession(sourceSampleRate: sampleRate)
+        let session = AVAudioSession.sharedInstance()
+        let output = session.currentRoute.outputs.first
+        eventHandler?(.prepared(HiResAudioQueueProbeSnapshot(
+            fileName: "内蔵無音PCM",
+            sourceSampleRate: sampleRate,
+            sessionSampleRate: session.sampleRate > 0 ? session.sampleRate : nil,
+            queueHardwareSampleRate: hardwareRate,
+            outputName: output?.portName ?? "Unknown",
+            outputPortType: output?.portType.rawValue ?? "Unknown"
+        )))
+    }
+
     func stop() {
         refreshTask?.cancel()
         refreshTask = nil
@@ -175,21 +197,86 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         try? AVAudioSession.sharedInstance().setActive(false)
     }
 
-    private func configureAudioSession(sourceSampleRate: Double) async throws {
+    @discardableResult
+    private func configureAudioSession(sourceSampleRate: Double) async throws -> Double? {
+        guard sourceSampleRate.isFinite,
+              (8_000...768_000).contains(sourceSampleRate) else {
+            throw HiResAudioQueueProbeError.invalidFormat
+        }
         let session = AVAudioSession.sharedInstance()
         // A paused AVAudioEngine can keep the previous hardware rate alive. The
         // diagnostic stops normal playback before reaching here, so failure to
         // deactivate is actionable and must not be hidden.
-        try session.setActive(false)
-        // AudioQueueStop/Dispose and setActive(false) return synchronously, but
-        // USB hardware can still be releasing its previous stream. Without a
-        // short cancellation point, a mid-track selection can reactivate the
-        // session quickly enough to retain the first track's hardware rate.
-        try await Task.sleep(for: .milliseconds(300))
-        try Task.checkCancellation()
         try session.setCategory(.playback, mode: .default)
-        try session.setPreferredSampleRate(sourceSampleRate)
-        try session.setActive(true)
+        var hardwareRate: Double?
+        for attempt in 0..<2 {
+            try session.setActive(false)
+            // The first USB stream after a route opens is unreliable on the
+            // tested DAC. Always open two generated silent streams before the
+            // real queue, even if the first queue reports the requested rate.
+            try await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 160))
+            try Task.checkCancellation()
+            try session.setPreferredSampleRate(sourceSampleRate)
+            try session.setActive(true)
+            hardwareRate = try await primeSilentPCM(sampleRate: sourceSampleRate)
+        }
+        return hardwareRate
+    }
+
+    private func primeSilentPCM(sampleRate: Double) async throws -> Double? {
+        let channelCount: UInt32 = 2
+        let bytesPerSample: UInt32 = 2
+        let bytesPerFrame = channelCount * bytesPerSample
+        var format = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
+            mBytesPerPacket: bytesPerFrame,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: bytesPerFrame,
+            mChannelsPerFrame: channelCount,
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+        var queue: AudioQueueRef?
+        try checkAudioQueue(AudioQueueNewOutput(
+            &format,
+            hiResSilentQueueOutputCallback,
+            nil,
+            nil,
+            nil,
+            0,
+            &queue
+        ))
+        guard let queue else { throw HiResAudioQueueProbeError.invalidFormat }
+        defer {
+            AudioQueueStop(queue, true)
+            AudioQueueDispose(queue, true)
+        }
+
+        let frameCount = max(UInt32(sampleRate * 0.12), 1)
+        let byteCount = frameCount * bytesPerFrame
+        var buffer: AudioQueueBufferRef?
+        try checkAudioQueue(AudioQueueAllocateBuffer(queue, byteCount, &buffer))
+        guard let buffer else { throw HiResAudioQueueProbeError.emptyFile }
+        memset(buffer.pointee.mAudioData, 0, Int(byteCount))
+        buffer.pointee.mAudioDataByteSize = byteCount
+        try checkAudioQueue(AudioQueueEnqueueBuffer(queue, buffer, 0, nil))
+        var preparedFrames: UInt32 = 0
+        try checkAudioQueue(AudioQueuePrime(queue, 0, &preparedFrames))
+        try checkAudioQueue(AudioQueueStart(queue, nil))
+        try await Task.sleep(for: .milliseconds(90))
+        try Task.checkCancellation()
+
+        var hardwareRate: Float64 = 0
+        var propertySize = UInt32(MemoryLayout<Float64>.size)
+        let status = AudioQueueGetProperty(
+            queue,
+            kAudioQueueDeviceProperty_SampleRate,
+            &hardwareRate,
+            &propertySize
+        )
+        return status == noErr && hardwareRate > 0 ? hardwareRate : nil
     }
 
     private func publishSnapshot(fileName: String, sourceSampleRate: Double, started: Bool) {
@@ -289,9 +376,17 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         return min(max(quarterSecond, 1), byteLimited)
     }
 
-    private func beginFileAccess(_ url: URL) {
-        accessedURL = url
-        isAccessingSecurityScope = url.startAccessingSecurityScopedResource()
+    private func beginFileAccess(_ url: URL) throws {
+        let libraryFolders = (try? fileImportService.restoreLibraryFolders()) ?? []
+        let scopeURL = libraryFolders.first {
+            url.standardizedFileURL.pathComponents.starts(with: $0.standardizedFileURL.pathComponents)
+        } ?? url
+        let hasAccess = scopeURL.startAccessingSecurityScopedResource()
+        guard hasAccess || FileManager.default.isReadableFile(atPath: url.path) else {
+            throw FileImportServiceError.accessDenied
+        }
+        accessedURL = scopeURL
+        isAccessingSecurityScope = hasAccess
     }
 
     private func endFileAccess() {
@@ -327,6 +422,8 @@ private let hiResAudioQueueOutputCallback: AudioQueueOutputCallback = { userData
         .takeUnretainedValue()
     _ = context.fill(buffer)
 }
+
+private let hiResSilentQueueOutputCallback: AudioQueueOutputCallback = { _, _, _ in }
 
 private final class HiResAudioQueueProbeContext: @unchecked Sendable {
     let audioFile: AudioFileID

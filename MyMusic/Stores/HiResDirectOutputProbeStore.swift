@@ -8,6 +8,7 @@ final class HiResDirectOutputProbeStore {
         case idle
         case switching
         case playing
+        case prepared
         case reachedEnd
         case failed(String)
     }
@@ -52,6 +53,24 @@ final class HiResDirectOutputProbeStore {
         }
     }
 
+    func prepare(sampleRate: Double) {
+        guard !hasActiveSession else { return }
+        playbackTask?.cancel()
+        service.stop()
+        state = .switching
+        playbackTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await service.prepare(sampleRate: sampleRate)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                state = .failed(error.localizedDescription)
+            }
+        }
+    }
+
     func stop() {
         playbackTask?.cancel()
         playbackTask = nil
@@ -64,6 +83,9 @@ final class HiResDirectOutputProbeStore {
         case let .started(snapshot), let .updated(snapshot):
             self.snapshot = snapshot
             state = .playing
+        case let .prepared(snapshot):
+            self.snapshot = snapshot
+            state = .prepared
         case .reachedEnd:
             state = .reachedEnd
         case let .failed(message):
