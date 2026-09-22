@@ -18,7 +18,7 @@
 
 - generic iOS Simulator Debug build: `BUILD SUCCEEDED`。
 - hardware依存の仮説検証が目的で、音源fixtureもないためXCTestは実行していない。
-- 実機へのbuild、install、launchはこの作業時点では実行していない。
+- Vespera（iPhone 17e、UDID `00008150-000C54280E33401C`）向けDebug実機build、install、launch成功。project `MyMusic.xcodeproj`、scheme／product `MyMusic`、Bundle ID `maruyama.MyMusic`、Development Team `U29GY347DY`。
 
 ## 次の判定
 
