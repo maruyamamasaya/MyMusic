@@ -147,7 +147,7 @@ USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample r
 
 通常再生のアートワーク2面目`AudioInformationView`、3面目`TrackAdjustmentsView`、Highlightの曲情報sheetは、`TrackDetailPresentation`で既存Track metadata、AudioFormat、file identity、TrackFeatureを表示用の項目へ変換する。共通の`TrackDetailGridView`は通常再生のコンパクトなカード内表示を担当し、Highlightは同じ項目をListへ配置する。再生履歴はHighlight sheetとTrack Adjustmentsが`PlaybackHistoryStore`から直接参照する。この表示拡張は新しい永続化、file I/O、音源scan、解析処理を開始せず、再生engineにも依存しない。
 
-Hi-Res直接出力Betaは通常再生から分離した次の実験経路だけを持つ。
+「USB DAC 出力レート」は通常再生から分離した次のAudio Queue経路だけを持つ。
 
 ```text
 HiResDirectOutputProbeView / HiResLibraryView
@@ -157,7 +157,7 @@ HiResDirectOutputProbeView / HiResLibraryView
   → Audio File Services → Audio Queue Services → USB DAC
 ```
 
-設定診断はFilesから選んだ1ファイル、専用ライブラリは登録folderのsecurity-scoped accessでTrackを開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。一時停止だけでは通常AVAudioEngineが前回rateのI/Oを保持し得るため、開始前に`PlayerStore.stop()`で通常再生を完全停止する。開始処理はsession非アクティブ化後に待機し、希望rateの16-bit stereo無音PCM Audio Queueを最大2回短時間開いてから実音源queueを作る。44.1／48／88.2／96／192kHzは同じ生成処理を音源なしの手動準備にも使う。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示する。
+設定のオーディオ項目から開く「USB DAC 出力レート」はFilesから選んだ1ファイル、専用ライブラリは登録folderのsecurity-scoped accessでTrackを開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。一時停止だけでは通常AVAudioEngineが前回rateのI/Oを保持し得るため、開始前に`PlayerStore.stop()`で通常再生を完全停止する。開始処理はsession非アクティブ化後に待機し、希望rateの16-bit stereo無音PCM Audio Queueを最大2回短時間開いてから実音源queueを作る。44.1／48／88.2／96／192kHzは同じ生成処理を音源なしの手動準備にも使う。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示する。
 
 専用ライブラリからの再生はAudio Queueの実開始通知後にだけ履歴sessionを開き、開始元を`hi_res_library`として既存の`PlaybackHistoryStore`／SQLiteへ記録する。停止・曲置換・自然終了・失敗で1件の`PlaybackEvent`へ確定し、再生回数は通常PlayerStoreと同じ「自然終了、または30秒と曲長50%の短い方以上」の条件を使う。自然終了は曲長全体を実聴時間として扱う。これにより再生回数、総再生時間、最近の再生event、Analytics集計へ反映する一方、通常ライブラリの`tracks`を入力とするStation、行動分析による選曲、整理候補、shuffle、音響特徴量には流さない。Track Identityを持たない設定診断は履歴対象外である。通常queueの再生、Now Playing、remote command、EQ、normalization、fade、Visualizer、background制御とは統合しない。Tea Proでrateの上げ下げと初回接続を実機確認し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
 

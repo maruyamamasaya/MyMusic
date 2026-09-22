@@ -25,6 +25,12 @@ struct SettingsView: View {
                     Label("音源レート優先", systemImage: "waveform.badge.checkmark")
                 }
 
+                NavigationLink {
+                    HiResDirectOutputProbeView()
+                } label: {
+                    Label("USB DAC 出力レート", systemImage: "waveform.path.ecg.rectangle")
+                }
+
                 Toggle(isOn: volumeNormalizationBinding) {
                     Label("音量ノーマライズ", systemImage: "speaker.wave.2.bubble")
                 }
@@ -43,7 +49,7 @@ struct SettingsView: View {
             } header: {
                 Text("オーディオ")
             } footer: {
-                Text("音源レート優先はUSB DAC接続時に曲と同じサンプルレートをiOSへ要求します。実際の出力レートは再生中のオーディオ情報で確認できます。音量ノーマライズはMacで解析された音量情報を利用します。")
+                Text("音源レート優先はUSB DAC接続時に曲と同じサンプルレートをiOSへ要求します。USB DAC 出力レートでは、内蔵の無音PCMで44.1〜192 kHzの出力準備と確認ができます。音量ノーマライズはMacで解析された音量情報を利用します。")
             }
 
             Section {
@@ -73,12 +79,6 @@ struct SettingsView: View {
             }
 
             Section("Beta機能") {
-                NavigationLink {
-                    HiResDirectOutputProbeView()
-                } label: {
-                    Label("Hi-Res直接出力診断", systemImage: "waveform.path.ecg.rectangle")
-                }
-
                 NavigationLink {
                     TrackFeatureSettingsView()
                 } label: {

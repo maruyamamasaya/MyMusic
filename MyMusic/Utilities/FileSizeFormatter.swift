@@ -1,10 +1,9 @@
 import Foundation
 
-enum FileSizeFormatter {
-    private static let formatter: ByteCountFormatter = {
+nonisolated enum FileSizeFormatter {
+    static func string(from bytes: Int64) -> String {
         let value = ByteCountFormatter()
         value.countStyle = .file
-        return value
-    }()
-    static func string(from bytes: Int64) -> String { formatter.string(fromByteCount: bytes) }
+        return value.string(fromByteCount: bytes)
+    }
 }

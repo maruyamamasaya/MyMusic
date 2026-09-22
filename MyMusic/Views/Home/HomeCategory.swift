@@ -53,7 +53,7 @@ struct HomeCategory: Identifiable, Hashable {
             description: "高解像度のロスレス音源を専用出力で再生",
             systemImage: "waveform.badge.magnifyingglass",
             items: [
-                HomeCategoryItem(title: "ハイレゾ音源", description: "専用ライブラリとPCM直接出力 Beta", systemImage: "waveform.circle.fill", destination: .hiResLibrary)
+                HomeCategoryItem(title: "ハイレゾ音源", description: "専用ライブラリとUSB DAC出力", systemImage: "waveform.circle.fill", destination: .hiResLibrary)
             ]
         ),
         HomeCategory(

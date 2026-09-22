@@ -45,9 +45,9 @@ updated: 2026-09-23
 - 通常再生のアートワーク2面目「オーディオ情報」には曲メタデータとファイル情報、3面目「Track Adjustments」には曲／音源情報と音楽特徴・解析情報を追加した。既存Track／TrackFeature／Playback Historyを表示するだけで、画面表示時の再スキャンや新規解析は行わない。
 - 共通の表示項目生成XCTest 2件とgeneric iOS Simulator Debug buildが成功。実機での小画面、長いパス、Dynamic Typeの見た目は未確認。
 
-### Hi-Res直接出力診断 Beta
+### USB DAC 出力レート
 
-- `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生診断を追加した。設定 → Beta機能 → Hi-Res直接出力診断からFiles上の音源を選び、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先を確認できる。診断開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
+- `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生とUSB DAC出力レート準備を追加した。設定 → オーディオ → USB DAC 出力レートから、内蔵無音PCMによる44.1／48／88.2／96／192kHzの準備、Files上の音源選択、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先の確認ができる。開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
 - 44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ上で生成するrate準備を追加した。実曲の直前に最大2回の短いAudio Queueを開き、初回USB streamが希望rateを採用しないTea Proの挙動を再交渉する。設定診断とホームのハイレゾ専用画面から、音源ファイルなしでも各rateを手動準備できる。
 - Library scanでstream-level codec、sample rate、bit depth、channel、bit rateをTrackへ保存する。ジャンル項目「ハイレゾ」、または既存JEITA基準のHi-Res相当ロスレス音源を通常曲から除外し、ホームの「ハイレゾ」タイルから曲名／アルバム／アーティスト別に閲覧して独立Audio Queueで再生できる。分類優先順位は作業用BGM、ハイレゾ、通常の順。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。

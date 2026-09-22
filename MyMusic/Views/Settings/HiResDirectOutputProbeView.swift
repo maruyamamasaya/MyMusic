@@ -9,7 +9,7 @@ struct HiResDirectOutputProbeView: View {
     var body: some View {
         List {
             Section {
-                Text("既存プレイヤーとは独立したAudio Queue単曲再生です。通常再生を停止し、Tea ProをUSB接続してから192 kHz音源を選んでください。")
+                Text("USB DACを接続し、内蔵の無音PCMで出力レートを準備できます。音源を選ぶと、通常プレイヤーとは独立したAudio Queueで直接再生し、実際の出力レートを確認できます。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -42,9 +42,9 @@ struct HiResDirectOutputProbeView: View {
                     .disabled(store.hasActiveSession || store.state == .switching)
                 }
             } header: {
-                Text("内蔵PCMで出力レート準備")
+                Text("出力レートを準備")
             } footer: {
-                Text("音源ファイルを使わず、選んだレートの短い無音PCMを2段階で出力します。Tea Proの表示切替確認に使えます。")
+                Text("選んだレートの短い無音PCMを2段階で出力します。音源ファイルは不要です。準備後は下の現在の出力でAudio SessionとAudio Queueのレートを確認できます。")
             }
 
             if store.hasActiveSession {
@@ -56,7 +56,7 @@ struct HiResDirectOutputProbeView: View {
             }
 
             if let snapshot = store.snapshot {
-                Section("診断") {
+                Section("現在の出力") {
                     row("ファイル", snapshot.fileName)
                     row("音源レート", rate(snapshot.sourceSampleRate))
                     row("出力先", snapshot.outputName)
@@ -88,7 +88,7 @@ struct HiResDirectOutputProbeView: View {
             }
         }
         .themeScreen()
-        .navigationTitle("Hi-Res直接出力 Beta")
+        .navigationTitle("USB DAC 出力レート")
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(
             isPresented: $isImporting,

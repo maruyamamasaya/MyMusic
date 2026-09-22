@@ -64,3 +64,9 @@
 - generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。iPhone 17e / iOS 26.5 Simulatorで手動停止と自然終了のPlayback History XCTest 2件が成功した。
 - XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除はなかった。
 - Audio Queueが通知できない強制終了時の途中履歴flushと、専用再生のbackground制御はこのBetaの対象外。実機デプロイと実音源でのAnalytics表示確認は未実施。
+
+### 利用者向け名称と設定導線
+
+- 実機で内蔵無音PCMによるrate準備が成立したため、利用者向け名称を「Hi-Res直接出力 Beta／診断」から「USB DAC 出力レート」へ変更した。
+- 設定の「Beta機能」から「オーディオ」へ移し、44.1／48／88.2／96／192kHzの無音PCM準備、Files音源の直接再生、実出力rate確認を同じ画面で利用できるようにした。
+- 内部type名と独立Audio Queue backendは維持し、通常AVAudioEngineの再生経路は変更していない。
