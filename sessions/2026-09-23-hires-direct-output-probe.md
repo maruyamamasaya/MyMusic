@@ -33,3 +33,9 @@
 - 通常プレイヤーの一時停止は`AVAudioPlayerNode`だけを止め、`AVAudioEngine`自体は動作を続ける。これが共有AVAudioSessionの前回hardware rateを保持する可能性があるため、診断開始時に`PlayerStore.stop()`で通常engineを完全停止するようにした。
 - 診断Serviceが従来無視していた`AVAudioSession.setActive(false)`の失敗を呼び出し元へ返すようにした。Audio Queueを破棄し、session非アクティブ化、希望rate設定、再アクティブ化、新Audio Queue作成の順序を検証可能にした。
 - 修正版はgeneric iOS Simulator Debug buildで`BUILD SUCCEEDED`。XCTestは実行していない。Vespera向けDebug実機build、install、launchも成功。44.1↔192kHzのrate切替再確認は未実施。
+
+### 途中選曲を含む再追試
+
+- 通常AVAudioEngineを完全停止する修正版でも、再生途中に別rateの音源を選ぶと最初のhardware rateが維持された。Audio Queueの即時停止・破棄とAudio Sessionの再アクティブ化を同じ同期処理内で連続実行するだけでは、USB hardware側のstream解放完了を待てていないと判断した。
+- `play`をasync化し、旧queue破棄とsession非アクティブ化後に300msのcancel可能な待機を追加した。途中でさらに音源を選んだ場合は先行requestをcancelし、AudioFileとsecurity scopeのcleanup完了後に最新requestだけを開始する。
+- 切替待ち中は「出力レートを切替中」と表示し、停止操作で待機もcancelする。generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。XCTestは実行していない。Vesperaへのdeployと実機rate切替確認は未実施。

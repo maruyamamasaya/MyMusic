@@ -42,7 +42,7 @@ enum HiResAudioQueueProbeError: LocalizedError {
 @MainActor
 protocol HiResAudioQueueProbeServicing: AnyObject {
     var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)? { get set }
-    func play(url: URL) throws
+    func play(url: URL) async throws
     func stop()
 }
 
@@ -61,7 +61,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         endFileAccess()
     }
 
-    func play(url: URL) throws {
+    func play(url: URL) async throws {
         stop()
         beginFileAccess(url)
 
@@ -88,7 +88,13 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
                 throw HiResAudioQueueProbeError.invalidFormat
             }
 
-            try configureAudioSession(sourceSampleRate: format.mSampleRate)
+            do {
+                try await configureAudioSession(sourceSampleRate: format.mSampleRate)
+            } catch {
+                AudioFileClose(audioFile)
+                throw error
+            }
+            try Task.checkCancellation()
 
             let playbackContext = HiResAudioQueueProbeContext(
                 audioFile: audioFile,
@@ -166,12 +172,18 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         endFileAccess()
     }
 
-    private func configureAudioSession(sourceSampleRate: Double) throws {
+    private func configureAudioSession(sourceSampleRate: Double) async throws {
         let session = AVAudioSession.sharedInstance()
         // A paused AVAudioEngine can keep the previous hardware rate alive. The
         // diagnostic stops normal playback before reaching here, so failure to
         // deactivate is actionable and must not be hidden.
         try session.setActive(false)
+        // AudioQueueStop/Dispose and setActive(false) return synchronously, but
+        // USB hardware can still be releasing its previous stream. Without a
+        // short cancellation point, a mid-track selection can reactivate the
+        // session quickly enough to retain the first track's hardware rate.
+        try await Task.sleep(for: .milliseconds(300))
+        try Task.checkCancellation()
         try session.setCategory(.playback, mode: .default)
         try session.setPreferredSampleRate(sourceSampleRate)
         try session.setActive(true)

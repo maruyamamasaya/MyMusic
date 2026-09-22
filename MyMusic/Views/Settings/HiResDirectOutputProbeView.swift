@@ -45,6 +45,9 @@ struct HiResDirectOutputProbeView: View {
                 switch store.state {
                 case .idle:
                     Label("待機中", systemImage: "pause.circle")
+                case .switching:
+                    Label("出力レートを切替中", systemImage: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(.orange)
                 case .playing:
                     Label("再生中", systemImage: "play.circle.fill")
                         .foregroundStyle(.green)

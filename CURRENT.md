@@ -43,7 +43,7 @@ updated: 2026-09-23
 
 - `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生診断を追加した。設定 → Beta機能 → Hi-Res直接出力診断からFiles上の音源を選び、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先を確認できる。診断開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。
-- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で44.1→192kHzまたは192→44.1kHzへ曲を替えると初回rateが維持される問題を確認した。通常AVAudioEngineの完全停止とAudio Session非アクティブ化の厳密化を実装し、Vesperaへ再deploy済み。修正版でのrate切替再確認は未実施。
+- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で44.1→192kHzまたは192→44.1kHzへ曲の途中で替えると初回rateが維持される。通常AVAudioEngineの完全停止だけでは解消しなかったため、旧Audio Queue破棄とsession非アクティブ化後に300msの非同期解放待ちを設け、連続選択をcancel・直列化する修正版をbuild済み。Vesperaへのdeployと実機再確認は未実施。
 
 ### ホームの本日再生表示
 
