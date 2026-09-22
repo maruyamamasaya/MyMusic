@@ -53,4 +53,5 @@
 - Metadata scanをstream-level形式取得へ更新し、ALAC／AACをcontainer拡張子ではなくformat IDで識別し、sample rate、bit depth、channel、bit rateをTrack cacheへ保存する。metadata revision 2により旧cacheは次回scanで再抽出する。
 - ジャンル項目「ハイレゾ」または既存JEITA基準を満たすロスレス音源を通常ライブラリから分離し、ホームへ専用タイル、曲名／アルバム／アーティスト一覧、独立Audio Queue再生を追加した。作業用BGMとの重複は作業用を優先する。
 - generic iOS Simulator Debug build成功。iPhone 17e / iOS 26.5 Simulatorで分類と通常ライブラリ分離のXCTest 4件成功。XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除なし。
-- Tea Proでの初回接続と44.1／48／88.2／96／192kHz上下切替、専用一覧からの実音源再生は未検証。今回の変更はまだVesperaへdeployしていない。
+- Vespera（iPhone 17e、UDID `00008150-000C54280E33401C`）向けDebug実機build、install、launch成功。project `MyMusic.xcodeproj`、scheme／product `MyMusic`、Bundle ID `maruyama.MyMusic`、Development Team `U29GY347DY`。
+- Tea Proでの初回接続と44.1／48／88.2／96／192kHz上下切替、専用一覧からの実音源再生は未検証。

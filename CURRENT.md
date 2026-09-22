@@ -45,7 +45,7 @@ updated: 2026-09-23
 - 44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ上で生成するrate準備を追加した。実曲の直前に最大2回の短いAudio Queueを開き、初回USB streamが希望rateを採用しないTea Proの挙動を再交渉する。設定診断とホームのハイレゾ専用画面から、音源ファイルなしでも各rateを手動準備できる。
 - Library scanでstream-level codec、sample rate、bit depth、channel、bit rateをTrackへ保存する。ジャンル項目「ハイレゾ」、または既存JEITA基準のHi-Res相当ロスレス音源を通常曲から除外し、ホームの「ハイレゾ」タイルから曲名／アルバム／アーティスト別に閲覧して独立Audio Queueで再生できる。分類優先順位は作業用BGM、ハイレゾ、通常の順。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。
-- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
+- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功し、Vesperaへのbuild・install・launchも成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
 
 ### ホームの本日再生表示
 
