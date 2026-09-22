@@ -39,6 +39,12 @@ updated: 2026-09-23
 - lossless PCM系音源がJEITAのCD相当超過例を満たす場合、ライセンス対象の公式ロゴではなく独自テキストの「Hi-Res」badgeを表示する。CD相当losslessには「Lossless」を表示する。
 - 設定値はApp外backupへ含める。Simulatorの判定／永続化／カード描画test、generic iOS build、Vespera向け実機build・install・launchは成功。Khadas Tea ProをUSB接続した実機確認では、192kHz／24bit ALACに対してMyMusicは44.1kHz出力のままだった。同じ端末・接続・音源をOnkyo HF Playerで再生するとTea Proは192kHzを表示したため、現行AVAudioEngine再生経路に起因する。既存再生基盤へ影響させない独立backendのHi-Res Betaを別branchで検討する。
 
+### 再生中の詳細情報
+
+- ハイライトの曲情報sheetに、アルバムアーティスト、作曲者、年、ディスク／曲番号、音源仕様、再生回数・時間・完走／スキップ、主要な音楽特徴、ファイル情報を追加した。
+- 通常再生のアートワーク2面目「オーディオ情報」には曲メタデータとファイル情報、3面目「Track Adjustments」には曲／音源情報と音楽特徴・解析情報を追加した。既存Track／TrackFeature／Playback Historyを表示するだけで、画面表示時の再スキャンや新規解析は行わない。
+- 共通の表示項目生成XCTest 2件とgeneric iOS Simulator Debug buildが成功。実機での小画面、長いパス、Dynamic Typeの見た目は未確認。
+
 ### Hi-Res直接出力診断 Beta
 
 - `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生診断を追加した。設定 → Beta機能 → Hi-Res直接出力診断からFiles上の音源を選び、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先を確認できる。診断開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。

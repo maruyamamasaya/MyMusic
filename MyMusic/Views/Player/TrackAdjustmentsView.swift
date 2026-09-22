@@ -34,9 +34,18 @@ struct TrackAdjustmentsView: View {
                 .accessibilityHint("ダブルタップしてアートワークに戻る")
 
                 if let track {
+                    trackInformationSection(track)
+                    Divider()
                     playbackSection(track)
                     Divider()
                     normalizationSection(track)
+                    if let feature = featureStore.feature(for: track.id) {
+                        Divider()
+                        TrackDetailGridView(
+                            title: "音楽特徴・解析情報",
+                            items: TrackDetailPresentation.featureItems(for: feature)
+                        )
+                    }
                 } else {
                     ContentUnavailableView("再生中の曲がありません", systemImage: "music.note")
                 }
@@ -56,6 +65,26 @@ struct TrackAdjustmentsView: View {
             confirmedBoundary = nil
             guard let track else { return }
             _ = await adjustmentStore.load(for: track.id, duration: resolvedDuration(for: track))
+        }
+    }
+
+    private func trackInformationSection(_ track: Track) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track.title)
+                    .font(.subheadline.weight(.semibold))
+                Text(track.artistName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            TrackDetailGridView(
+                title: "曲の詳細",
+                items: TrackDetailPresentation.metadataItems(for: track)
+            )
+            TrackDetailGridView(
+                title: "音源",
+                items: TrackDetailPresentation.audioItems(for: track)
+            )
         }
     }
 

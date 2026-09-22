@@ -145,6 +145,8 @@ PlaybackControlsView / playable Views
 
 USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample rateをAVAudioSessionの希望値として要求し、activation後の実`sampleRate`とroute名を`PlayerStore.audioInformation`へ返す。`AudioInformationView`は音源と出力を分離し、rate一致時はnative、不一致時はsample-rate conversionありと表示する。希望値はhardwareへのhintであり採用を保証しない。Tea Pro実機では192kHz音源に対して現行AVAudioEngine経路が44.1kHzを採用し、Onkyo HF Playerでは同じ接続と音源で192kHzを採用した。直接PCM出力を試す場合も現行再生基盤を置換せず、独立backendとして検証する。設定は既定ONでApp外backup対象とし、設計理由は[ADR-0007](decisions/ADR-0007-native-sample-rate-output.md)を参照する。
 
+通常再生のアートワーク2面目`AudioInformationView`、3面目`TrackAdjustmentsView`、Highlightの曲情報sheetは、`TrackDetailPresentation`で既存Track metadata、AudioFormat、file identity、TrackFeatureを表示用の項目へ変換する。共通の`TrackDetailGridView`は通常再生のコンパクトなカード内表示を担当し、Highlightは同じ項目をListへ配置する。再生履歴はHighlight sheetとTrack Adjustmentsが`PlaybackHistoryStore`から直接参照する。この表示拡張は新しい永続化、file I/O、音源scan、解析処理を開始せず、再生engineにも依存しない。
+
 Hi-Res直接出力Betaは通常再生から分離した次の実験経路だけを持つ。
 
 ```text

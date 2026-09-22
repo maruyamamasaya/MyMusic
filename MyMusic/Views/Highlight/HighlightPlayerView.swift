@@ -407,6 +407,8 @@ private struct HighlightTrackInformationView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(TrackPreferenceStore.self) private var preferenceStore
     @Environment(PlaylistStore.self) private var playlistStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackFeatureStore.self) private var featureStore
     @Environment(\.dismiss) private var dismiss
 
     let track: Track
@@ -435,11 +437,51 @@ private struct HighlightTrackInformationView: View {
                 Section("曲情報") {
                     LabeledContent("曲名", value: track.title)
                     LabeledContent("アーティスト", value: track.artistName)
-                    if let albumTitle = track.albumTitle {
-                        LabeledContent("アルバム", value: albumTitle)
+                    ForEach(TrackDetailPresentation.metadataItems(for: track)) { item in
+                        LabeledContent(item.label, value: item.value)
                     }
-                    if let genre = track.genre { LabeledContent("ジャンル", value: genre) }
-                    LabeledContent("長さ", value: TimeFormatter.string(from: track.duration))
+                }
+
+                if !TrackDetailPresentation.audioItems(for: track).isEmpty {
+                    Section("音源") {
+                        ForEach(TrackDetailPresentation.audioItems(for: track)) { item in
+                            LabeledContent(item.label, value: item.value)
+                        }
+                    }
+                }
+
+                Section("再生履歴") {
+                    LabeledContent("再生回数", value: "\(playbackHistoryStore.playCount(for: track.id))回")
+                    LabeledContent(
+                        "総再生時間",
+                        value: detailedDuration(playbackHistoryStore.totalPlaybackDuration(for: track.id))
+                    )
+                    LabeledContent("完走回数", value: "\(playbackHistoryStore.fullPlaybackCount(for: track.id))回")
+                    LabeledContent("スキップ回数", value: "\(playbackHistoryStore.skipCount(for: track.id))回")
+                    LabeledContent("最終再生", value: detailedDate(playbackHistoryStore.lastPlayedAt(for: track.id)))
+                }
+
+                if let feature = featureStore.feature(for: track.id) {
+                    Section("音楽特徴") {
+                        ForEach(TrackDetailPresentation.featureItems(for: feature).prefix(7)) { item in
+                            LabeledContent(item.label, value: item.value)
+                        }
+                        NavigationLink("すべての音楽特徴を表示") {
+                            TrackFeatureDetailView(track: track)
+                        }
+                    }
+                }
+
+                Section("ファイル") {
+                    ForEach(TrackDetailPresentation.fileItems(for: track)) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(item.value)
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
 
                 Section("ライブラリ") {
@@ -478,6 +520,24 @@ private struct HighlightTrackInformationView: View {
                 }
             }
         }
+    }
+
+    private func detailedDuration(_ value: TimeInterval) -> String {
+        let seconds = max(Int(value.isFinite ? value : 0), 0)
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainder = seconds % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, remainder)
+            : String(format: "%d:%02d", minutes, remainder)
+    }
+
+    private func detailedDate(_ value: Date?) -> String {
+        guard let value else { return "未再生" }
+        return value.formatted(
+            Date.FormatStyle(date: .abbreviated, time: .shortened)
+                .locale(Locale(identifier: "ja_JP"))
+        )
     }
 }
 

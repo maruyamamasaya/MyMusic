@@ -32,6 +32,20 @@ struct AudioInformationView: View {
                     TrackFeatureBadgeView(track: track, feature: feature)
                 }
 
+                if let track {
+                    Rectangle()
+                        .fill(.white.opacity(0.14))
+                        .frame(height: 1)
+                    TrackDetailGridView(
+                        title: "曲の詳細",
+                        items: TrackDetailPresentation.metadataItems(for: track)
+                    )
+                    TrackDetailGridView(
+                        title: "ファイル",
+                        items: TrackDetailPresentation.fileItems(for: track)
+                    )
+                }
+
                 Button("Track Adjustmentsへ", action: onShowArtwork)
                     .font(.caption)
                     .foregroundStyle(.secondary)
