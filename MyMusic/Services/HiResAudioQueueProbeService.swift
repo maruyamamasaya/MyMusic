@@ -170,6 +170,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         refreshTask = nil
         disposePlayback()
         endFileAccess()
+        // Manual mode intentionally leaves the shared session inactive until
+        // the user selects the next file, giving the USB stream time to close.
+        try? AVAudioSession.sharedInstance().setActive(false)
     }
 
     private func configureAudioSession(sourceSampleRate: Double) async throws {

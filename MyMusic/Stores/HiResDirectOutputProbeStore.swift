@@ -25,9 +25,12 @@ final class HiResDirectOutputProbeStore {
         }
     }
 
-    var isPlaying: Bool { state == .playing || state == .switching }
+    var hasActiveSession: Bool {
+        state == .playing || state == .switching || state == .reachedEnd
+    }
 
     func play(url: URL) {
+        guard !hasActiveSession else { return }
         let previousTask = playbackTask
         previousTask?.cancel()
         service.stop()
@@ -64,6 +67,7 @@ final class HiResDirectOutputProbeStore {
         case .reachedEnd:
             state = .reachedEnd
         case let .failed(message):
+            service.stop()
             state = .failed(message)
         }
     }

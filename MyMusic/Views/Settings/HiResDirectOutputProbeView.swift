@@ -20,13 +20,22 @@ struct HiResDirectOutputProbeView: View {
                 } label: {
                     Label("音源を選んで再生", systemImage: "waveform.badge.plus")
                 }
+                .disabled(store.hasActiveSession)
 
-                if store.isPlaying {
+                if store.hasActiveSession {
                     Button(role: .destructive) {
                         store.stop()
                     } label: {
                         Label("停止", systemImage: "stop.fill")
                     }
+                }
+            }
+
+            if store.hasActiveSession {
+                Section {
+                    Text("別レートの音源へ切り替える場合は、先に停止してください。停止後にAudio Sessionを終了し、次の音源を選んだ時に新しいレートで開始します。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 
