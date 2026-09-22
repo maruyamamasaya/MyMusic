@@ -74,6 +74,12 @@ struct SettingsView: View {
 
             Section("Beta機能") {
                 NavigationLink {
+                    HiResDirectOutputProbeView()
+                } label: {
+                    Label("Hi-Res直接出力診断", systemImage: "waveform.path.ecg.rectangle")
+                }
+
+                NavigationLink {
                     TrackFeatureSettingsView()
                 } label: {
                     Label("音楽特徴量", systemImage: "waveform.badge.magnifyingglass")
