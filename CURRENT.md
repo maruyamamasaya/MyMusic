@@ -245,6 +245,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-13 のベリーショート曲自動選曲除外後、30秒境界、通常ランダム入口、Highlight共通候補、最近追加、ホーム代表Artworkの関連XCTest 12件とDebug test buildがiPhone 17 / iOS 26.5 Simulatorで成功。
 - 2026-09-21 の作業用BGM通常ライブラリ分離後、通常の曲・アルバム・アーティストからの除外と作業用catalog保持を確認するXCTest 2件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
 - 2026-09-23 のハイレゾ専用ライブラリ追加後、ジャンル指定、音源仕様判定、作業用優先、通常ライブラリ分離、専用catalogを確認するXCTest 4件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
+- 2026-09-23 のハイレゾ専用再生履歴追加後、手動停止と自然終了のPlayback History記録を確認するXCTest 2件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
 - 専用 lint 設定、CI/CD workflow はリポジトリ内で確認できない。Swift Package Manager依存はZIP書き出し専用のZIPFoundation 0.9.20だけを固定している。
 
 ## 既知の制約・未検証
@@ -261,7 +262,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
 - プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。色、階層、複数タグのAND／OR条件は未実装。
-- ハイレゾ専用Audio Queueは単曲Betaであり、通常queue、履歴、Now Playing、remote command、EQ、normalization、fade、Visualizer、background再生とは未統合。内蔵無音PCMによるrate再交渉がTea Proで上下両方向に成立するかも未確認。
+- ハイレゾ専用Audio Queueは単曲Betaであり、専用ライブラリからの再生だけをPlayback Historyへ`hi_res_library`起点で記録する。通常queue、Now Playing、remote command、EQ、normalization、fade、Visualizer、background制御とは未統合。ハイレゾ曲は通常ライブラリから分離したままなので、Station、行動分析による選曲、整理候補、シャッフル、音響特徴量の対象にはしない。設定のFiles診断再生はTrack Identityを持たないため履歴対象外。内蔵無音PCMによるrate再交渉がTea Proで上下両方向に成立するかも未確認。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。
 - 既存ライブラリキャッシュはそのままdecodeできる。Album Artistとstream-level audio formatを旧キャッシュへ補完するには一度「再スキャン」が必要で、metadata revisionにより旧Trackだけを一度再抽出する。
 

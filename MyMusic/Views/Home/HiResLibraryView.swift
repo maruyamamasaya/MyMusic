@@ -168,6 +168,7 @@ private struct HiResArtistListView: View {
 
 private struct HiResTrackCollectionView: View {
     @Environment(PlayerStore.self) private var playerStore
+    @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @State private var query = ""
 
     let title: String
@@ -204,7 +205,7 @@ private struct HiResTrackCollectionView: View {
                         PlayableTrackRowView(track: track) {
                             playerStore.stop()
                             outputStore.stop()
-                            outputStore.play(url: track.fileURL)
+                            outputStore.play(track: track, historyStore: playbackHistoryStore)
                         }
                     }
                 }

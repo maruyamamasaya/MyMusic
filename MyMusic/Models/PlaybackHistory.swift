@@ -21,6 +21,7 @@ nonisolated enum PlaybackStartSource: String, Codable, CaseIterable, Sendable {
     case search
     case shuffle
     case station
+    case hiResLibrary = "hi_res_library"
     case workLibrary
     case unknown
 }

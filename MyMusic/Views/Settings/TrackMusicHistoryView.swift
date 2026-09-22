@@ -155,6 +155,7 @@ private extension MusicHistoryTrackSummary {
         case .shuffle: return "シャッフル"
         case .station: return "ステーション"
         case .highlight: return "ハイライト"
+        case .hiResLibrary: return "Hi-Res"
         case .workLibrary: return "Work"
         case .unknown: return "不明"
         }

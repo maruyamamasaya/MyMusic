@@ -55,3 +55,12 @@
 - generic iOS Simulator Debug build成功。iPhone 17e / iOS 26.5 Simulatorで分類と通常ライブラリ分離のXCTest 4件成功。XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除なし。
 - Vespera（iPhone 17e、UDID `00008150-000C54280E33401C`）向けDebug実機build、install、launch成功。project `MyMusic.xcodeproj`、scheme／product `MyMusic`、Bundle ID `maruyama.MyMusic`、Development Team `U29GY347DY`。
 - Tea Proでの初回接続と44.1／48／88.2／96／192kHz上下切替、専用一覧からの実音源再生は未検証。
+
+### 専用再生のPlayback History連携
+
+- 専用ライブラリからAudio Queueで再生した実績を、既存の`PlaybackHistoryStore`／SQLiteへ開始元`hi_res_library`として記録するようにした。設定のFiles診断はTrack Identityがないため履歴対象外のままとした。
+- Audio Queueの実開始通知後にだけ履歴sessionを開始し、停止・曲置換・自然終了・失敗で`PlaybackEvent`を確定する。自然終了または30秒と曲長50%の短い方以上を再生回数へ加算し、実聴時間と完走／skipも既存Analyticsへ渡す。
+- ハイレゾ曲は通常ライブラリから分離したまま維持し、Station、行動分析による選曲、整理候補、shuffle、音響特徴量へは組み込まない。
+- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。iPhone 17e / iOS 26.5 Simulatorで手動停止と自然終了のPlayback History XCTest 2件が成功した。
+- XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除はなかった。
+- Audio Queueが通知できない強制終了時の途中履歴flushと、専用再生のbackground制御はこのBetaの対象外。実機デプロイと実音源でのAnalytics表示確認は未実施。
