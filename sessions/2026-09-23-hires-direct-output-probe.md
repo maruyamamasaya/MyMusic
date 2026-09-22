@@ -44,4 +44,4 @@
 
 - 300msの非同期解放待ちを含む版でも、曲の途中に次の異なるrateを選ぶ自動切替は成立しなかった。ユーザー判断により再生中のrate切替機能は撤回し、停止を明示的な出力session境界とする。
 - 再生中、切替準備中、file読込完了後は「音源を選んで再生」を無効化する。「停止」はAudio Queueを即時停止・破棄し、security scopeを閉じ、AVAudioSessionを非アクティブ化したまま維持する。次回の音源選択時に新しい希望rateでsessionとqueueを作る。
-- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。XCTestは実行していない。手動方式のVespera deployと実機確認は未実施。
+- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。XCTestは実行していない。手動方式のVespera向けDebug実機build、install、launchも成功。手動rate切替の実機確認は未実施。
