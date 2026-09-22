@@ -24,6 +24,8 @@ final class LibraryGenreFilterTests: XCTestCase {
         await store.restoreAndLoadIfNeeded()
         await store.waitForPendingGenreFilter()
         XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id])
+        XCTAssertEqual(store.album(containing: ambient.id)?.trackIDs, [ambient.id])
+        XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
 
         store.setEnabledGenres(["Ambient"])
         store.setEnabledGenres(["Rock"])
@@ -32,6 +34,10 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.albums.flatMap(\.trackIDs), [rock.id])
         XCTAssertEqual(store.artists.flatMap(\.trackIDs), [rock.id])
         XCTAssertEqual(store.genres.flatMap(\.trackIDs), [rock.id])
+        XCTAssertNil(store.album(containing: ambient.id))
+        XCTAssertNil(store.artist(containing: ambient.id))
+        XCTAssertEqual(store.album(containing: rock.id)?.trackIDs, [rock.id])
+        XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
     }
 
     func testWorkPlaybackGenreIsSeparatedFromRegularLibraryAndGenreFilter() async throws {

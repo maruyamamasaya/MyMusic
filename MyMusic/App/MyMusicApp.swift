@@ -57,7 +57,8 @@ struct MyMusicApp: App {
         _settingsStore = State(initialValue: SettingsStore(
             equalizerController: audioPlayer,
             playbackTransitionController: audioPlayer,
-            volumeNormalizationController: audioPlayer
+            volumeNormalizationController: audioPlayer,
+            sourceSampleRateController: audioPlayer
         ))
     }
 

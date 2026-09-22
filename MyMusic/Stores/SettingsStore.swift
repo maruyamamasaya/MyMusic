@@ -7,6 +7,7 @@ final class SettingsStore {
     private(set) var theme: AppTheme = .livingAurora
     private(set) var visualWorldStyle: VisualWorldStyle = .photonSphere
     private(set) var volumeNormalizationEnabled = false
+    private(set) var sourceSampleRateMatchingEnabled = true
     var gaplessPlaybackEnabled = true
 
     private(set) var equalizer: EqualizerSettings
@@ -15,21 +16,25 @@ final class SettingsStore {
     @ObservationIgnored private weak var equalizerController: EqualizerControlling?
     @ObservationIgnored private weak var playbackTransitionController: PlaybackTransitionControlling?
     @ObservationIgnored private weak var volumeNormalizationController: VolumeNormalizationControlling?
+    @ObservationIgnored private weak var sourceSampleRateController: SourceSampleRateControlling?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let equalizerKey = "equalizerSettings"
     @ObservationIgnored private let customPresetsKey = "customEqualizerPresets"
     @ObservationIgnored private let playbackTransitionKey = "playbackTransitionSettings"
     @ObservationIgnored private let volumeNormalizationKey = "volumeNormalizationEnabled"
+    @ObservationIgnored private let sourceSampleRateMatchingKey = "sourceSampleRateMatchingEnabled"
 
     init(
         equalizerController: EqualizerControlling? = nil,
         playbackTransitionController: PlaybackTransitionControlling? = nil,
         volumeNormalizationController: VolumeNormalizationControlling? = nil,
+        sourceSampleRateController: SourceSampleRateControlling? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.equalizerController = equalizerController
         self.playbackTransitionController = playbackTransitionController
         self.volumeNormalizationController = volumeNormalizationController
+        self.sourceSampleRateController = sourceSampleRateController
         self.defaults = defaults
         let selectedTheme = defaults.string(forKey: "appearance.theme").flatMap(AppTheme.init(rawValue:)) ?? .livingAurora
         theme = selectedTheme
@@ -41,6 +46,7 @@ final class SettingsStore {
             defaults.set(selectedVisualStyle.rawValue, forKey: "appearance.visualWorldStyle")
         }
         volumeNormalizationEnabled = defaults.bool(forKey: volumeNormalizationKey)
+        sourceSampleRateMatchingEnabled = defaults.object(forKey: sourceSampleRateMatchingKey) as? Bool ?? true
         if let data = defaults.data(forKey: equalizerKey),
            var saved = try? JSONDecoder().decode(EqualizerSettings.self, from: data) {
             saved.normalize()
@@ -64,6 +70,7 @@ final class SettingsStore {
         equalizerController?.applyEqualizer(equalizer)
         playbackTransitionController?.applyPlaybackTransition(playbackTransition)
         volumeNormalizationController?.setVolumeNormalizationEnabled(volumeNormalizationEnabled)
+        sourceSampleRateController?.setSourceSampleRateMatchingEnabled(sourceSampleRateMatchingEnabled)
     }
 
     func setTheme(_ theme: AppTheme) {
@@ -80,6 +87,12 @@ final class SettingsStore {
         volumeNormalizationEnabled = isEnabled
         volumeNormalizationController?.setVolumeNormalizationEnabled(isEnabled)
         defaults.set(isEnabled, forKey: volumeNormalizationKey)
+    }
+
+    func setSourceSampleRateMatchingEnabled(_ isEnabled: Bool) {
+        sourceSampleRateMatchingEnabled = isEnabled
+        sourceSampleRateController?.setSourceSampleRateMatchingEnabled(isEnabled)
+        defaults.set(isEnabled, forKey: sourceSampleRateMatchingKey)
     }
 
     func setEqualizerEnabled(_ isEnabled: Bool) {

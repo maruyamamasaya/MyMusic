@@ -413,11 +413,11 @@ private struct HighlightTrackInformationView: View {
     let onFullPlayback: () -> Void
 
     private var artist: Artist? {
-        libraryStore.artists.first { $0.trackIDs.contains(track.id) }
+        libraryStore.artist(containing: track.id)
     }
 
     private var album: Album? {
-        libraryStore.albums.first { $0.trackIDs.contains(track.id) }
+        libraryStore.album(containing: track.id)
     }
 
     var body: some View {

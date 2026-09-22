@@ -59,7 +59,7 @@ final class AudioInformationService: AudioInformationServicing {
 
             information.codec = Self.codecName(for: basicDescription.mFormatID)
             information.sampleRate = basicDescription.mSampleRate > 0 ? basicDescription.mSampleRate : nil
-            information.bitDepth = basicDescription.mBitsPerChannel > 0 ? Int(basicDescription.mBitsPerChannel) : nil
+            information.bitDepth = Self.bitDepth(for: basicDescription)
             information.bitRate = Self.validBitRate(estimatedDataRate)
             information.channels = basicDescription.mChannelsPerFrame > 0 ? Int(basicDescription.mChannelsPerFrame) : nil
         } catch {
@@ -90,6 +90,18 @@ final class AudioInformationService: AudioInformationServicing {
             let bytes = [24, 16, 8, 0].map { shift in UInt8((formatID >> shift) & 0xff) }
             let text = String(bytes: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return text.isEmpty ? "Unknown" : text
+        }
+    }
+
+    private nonisolated static func bitDepth(for description: AudioStreamBasicDescription) -> Int? {
+        if description.mBitsPerChannel > 0 { return Int(description.mBitsPerChannel) }
+        guard description.mFormatID == kAudioFormatAppleLossless else { return nil }
+        switch description.mFormatFlags {
+        case kAppleLosslessFormatFlag_16BitSourceData: return 16
+        case kAppleLosslessFormatFlag_20BitSourceData: return 20
+        case kAppleLosslessFormatFlag_24BitSourceData: return 24
+        case kAppleLosslessFormatFlag_32BitSourceData: return 32
+        default: return nil
         }
     }
 }

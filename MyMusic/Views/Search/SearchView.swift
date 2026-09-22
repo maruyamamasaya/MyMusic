@@ -118,8 +118,8 @@ struct SearchView: View {
             .task { updateSearch() }
             .onChange(of: query) { updateSearch() }
             .onChange(of: filter) { updateSearch() }
-            .onChange(of: libraryStore.tracks) { updateSearch() }
-            .onChange(of: playbackHistoryStore.entries) { updateSearch() }
+            .onChange(of: libraryStore.homePresentationRevision) { updateSearch() }
+            .onChange(of: playbackHistoryStore.homePresentationRevision) { updateSearch() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {

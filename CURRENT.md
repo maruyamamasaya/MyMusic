@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # MyMusic の現在状態
@@ -23,6 +23,13 @@ updated: 2026-09-21
 - **方針:** 現時点では追加分離しない。将来の機能追加で境界が必要になった時だけ1責務ずつ再検討する。詳細は[ARCHITECTURE.md](ARCHITECTURE.md#playerstoreの段階的な責務分離)を参照。
 
 ## 実装済み
+
+### USB DAC ネイティブレート出力 Beta
+
+- 設定「音源レート優先」を既定ONで追加。USB Audio routeでは再生音源のdecoded sample rateをAVAudioSessionへ希望値として渡し、再生開始、resume、DAC接続、route構成変更で適用する。希望値はiOS／機器が採用しない場合がある。
+- 通常／作業用の再生画面にあるオーディオ情報面で、音源のcodec・bit depth・sample rateと、実際の出力先・PCM rateを分離表示する。一致時は「ネイティブレート」、不一致時は「サンプルレート変換あり」と表示する。
+- lossless PCM系音源がJEITAのCD相当超過例を満たす場合、ライセンス対象の公式ロゴではなく独自テキストの「Hi-Res」badgeを表示する。CD相当losslessには「Lossless」を表示する。
+- 設定値はApp外backupへ含める。Simulatorの判定／永続化／カード描画test、generic iOS build、Vespera向け実機build・install・launchは成功。Khadas Tea Proを接続した実出力rate、44.1／48kHz系の曲切替、DAC抜き差し、background復帰の操作・聴感確認は引き続き手動確認対象。
 
 ### ホームの本日再生表示
 
@@ -69,6 +76,7 @@ updated: 2026-09-21
 
 ### Apple Watch リモコン MVP
 
+- Simulator buildの標準コマンドを`-destination 'generic/platform=iOS Simulator'`へ統一した。Watch用AppIconにはiPhoneと同じ1024×1024画像が設定済みであり、従来の失敗は`-sdk iphonesimulator`が埋め込みWatch targetにもiPhone SDKを強制していたことが原因。targetごとに`iphonesimulator`／`watchsimulator`を解決する構成でbuild成功を確認した。
 - Watch接続のcommand routingと状態生成・通知を`WatchPlaybackCoordinator`へ分離した。再生・Queue・Shuffle実処理とWatchConnectivity通信・Artwork転送の既存所有者は維持する。接続と実機間通信の手動回帰確認は引き続き必要。
 - 2026-09-20のVisualizer／Plasma Spark更新版はVesperaへのDebug実機build・install・launchに成功。埋め込みWatch Appもbuild成功したが、Cometへの直接installはCoreDeviceService初期化タイムアウトで失敗し、今回のWatch導入は未完了。
 - 2026-09-20にT（iPhone 13）の既存`maruyamatomoka.MyMusic`をTeam `HNCTDS53YZ`で再署名し、Watchを含めないDebug buildをinstall・launchした。T側で新しい開発者プロファイルを信頼後に起動成功。今回のprofile期限は2026-09-27であり、更新時には再署名が必要。projectの通常署名設定は復元済み。

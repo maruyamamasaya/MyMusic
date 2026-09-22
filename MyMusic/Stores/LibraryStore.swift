@@ -51,6 +51,7 @@ final class LibraryStore {
     private var librariesByFolderID: [String: MusicLibrary] = [:]
     private var allTracks: [Track] = []
     private var allGenres: [Genre] = []
+    private var lookupIndex = LibraryLookupIndex.empty
     private var disabledGenreNames: Set<String>
     private var hasRestoredFolder = false
     private let fileImportService: FileImportServicing
@@ -282,17 +283,20 @@ final class LibraryStore {
     func tracks(for artist: Artist) -> [Track] {
         let artistTracks = resolvedTracks(for: artist.trackIDs)
         let albumOrder = Dictionary(uniqueKeysWithValues: artist.albumIDs.enumerated().map { ($0.element, $0.offset) })
-        var albumByTrackID: [Track.ID: Album.ID] = [:]
-        for album in albums { for id in album.trackIDs where albumByTrackID[id] == nil { albumByTrackID[id] = album.id } }
         return artistTracks.sorted {
-            let lhs = albumByTrackID[$0.id].flatMap { albumOrder[$0] } ?? .max
-            let rhs = albumByTrackID[$1.id].flatMap { albumOrder[$0] } ?? .max
+            let lhs = lookupIndex.albumIDByTrackID[$0.id].flatMap { albumOrder[$0] } ?? .max
+            let rhs = lookupIndex.albumIDByTrackID[$1.id].flatMap { albumOrder[$0] } ?? .max
             return lhs != rhs ? lhs < rhs : Self.albumTrackOrder($0, $1)
         }
     }
     func albums(for artist: Artist) -> [Album] {
-        let byID = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
-        return artist.albumIDs.compactMap { byID[$0] }
+        artist.albumIDs.compactMap { lookupIndex.albumsByID[$0] }
+    }
+    func album(containing trackID: Track.ID) -> Album? {
+        lookupIndex.albumIDByTrackID[trackID].flatMap { lookupIndex.albumsByID[$0] }
+    }
+    func artist(containing trackID: Track.ID) -> Artist? {
+        lookupIndex.artistIDByTrackID[trackID].flatMap { lookupIndex.artistsByID[$0] }
     }
     func reportFolderImportFailure(_ error: Error) {
         guard (error as NSError).code != NSUserCancelledError else { return }
@@ -462,14 +466,15 @@ final class LibraryStore {
     }
     private func apply(_ snapshot: LibraryPresentationSnapshot) {
         let library = snapshot.library
+        lookupIndex = LibraryLookupIndex(library: library)
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
         workLibraryCatalog = snapshot.workLibraryCatalog
         homePresentationRevision &+= 1
     }
     private func resolvedTracks(for ids: [Track.ID]) -> [Track] {
-        let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }); var seen: Set<Track.ID> = []
-        return ids.compactMap { seen.insert($0).inserted ? byID[$0] : nil }
+        var seen: Set<Track.ID> = []
+        return ids.compactMap { seen.insert($0).inserted ? lookupIndex.tracksByID[$0] : nil }
     }
     private func normalized(_ urls: [URL]) -> [URL] {
         let unique = Dictionary(urls.map { ($0.resolvingSymlinksInPath().standardizedFileURL.path, $0) }, uniquingKeysWith: { first, _ in first })
@@ -492,5 +497,55 @@ final class LibraryStore {
             .split(whereSeparator: { $0 == ";" || $0 == "\0" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty })
+    }
+}
+
+private struct LibraryLookupIndex {
+    let tracksByID: [Track.ID: Track]
+    let albumsByID: [Album.ID: Album]
+    let artistsByID: [Artist.ID: Artist]
+    let albumIDByTrackID: [Track.ID: Album.ID]
+    let artistIDByTrackID: [Track.ID: Artist.ID]
+
+    static let empty = LibraryLookupIndex(
+        tracksByID: [:], albumsByID: [:], artistsByID: [:],
+        albumIDByTrackID: [:], artistIDByTrackID: [:]
+    )
+
+    init(library: MusicLibrary) {
+        tracksByID = Dictionary(
+            library.tracks.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        albumsByID = Dictionary(
+            library.albums.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        artistsByID = Dictionary(
+            library.artists.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        albumIDByTrackID = Dictionary(
+            library.albums.flatMap { album in album.trackIDs.map { ($0, album.id) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        artistIDByTrackID = Dictionary(
+            library.artists.flatMap { artist in artist.trackIDs.map { ($0, artist.id) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    private init(
+        tracksByID: [Track.ID: Track],
+        albumsByID: [Album.ID: Album],
+        artistsByID: [Artist.ID: Artist],
+        albumIDByTrackID: [Track.ID: Album.ID],
+        artistIDByTrackID: [Track.ID: Artist.ID]
+    ) {
+        self.tracksByID = tracksByID
+        self.albumsByID = albumsByID
+        self.artistsByID = artistsByID
+        self.albumIDByTrackID = albumIDByTrackID
+        self.artistIDByTrackID = artistIDByTrackID
     }
 }

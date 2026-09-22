@@ -158,7 +158,8 @@ final class TrackFeatureDisplayIntegrationTests: XCTestCase {
         let track = makeTrack()
         _ = try await store.import(data: json(entries: [entry(path: track.relativePath!)]), libraryTracks: [track])
         let information = AudioInformation(
-            codec: "FLAC", sampleRate: 96_000, bitDepth: 24, bitRate: 2_800_000, channels: 2
+            codec: "FLAC", sampleRate: 96_000, bitDepth: 24, bitRate: 2_800_000, channels: 2,
+            outputName: "Khadas Tea Pro", outputSampleRate: 96_000
         )
         // ScrollView is UIKit-backed; use a hosted view rather than ImageRenderer.
         let controller = UIHostingController(rootView:

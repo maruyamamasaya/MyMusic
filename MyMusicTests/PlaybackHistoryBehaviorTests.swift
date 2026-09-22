@@ -180,6 +180,38 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(player.playedTrackIDs, [tracks[1].id, tracks[expectedNextIndex].id])
     }
 
+    func testLargeQueueNavigationKeepsPlaybackPositionLookupInSync() async throws {
+        let tracks = (0..<10_000).map { makeTrack("Track \($0)") }
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let store = makePlayerStore(player: player, history: history)
+        await history.loadIfNeeded()
+
+        store.playQueue(tracks, startingAt: 9_998)
+        try await waitUntil { store.isPlaying }
+
+        XCTAssertTrue(store.hasPrevious)
+        XCTAssertTrue(store.hasNext)
+        store.next()
+        try await waitUntil { store.currentIndex == 9_999 && store.isPlaying }
+        XCTAssertTrue(store.hasPrevious)
+        XCTAssertFalse(store.hasNext)
+    }
+
+    func testRealtimeAudioMetricsAreEnabledOnlyWhenRequestedByThePlayerUI() {
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let store = makePlayerStore(player: player, history: history)
+
+        store.setRealtimeAudioMetricsEnabled(true)
+        XCTAssertTrue(player.realtimeAudioMetricsEnabled)
+
+        store.setRealtimeAudioMetricsEnabled(false)
+        XCTAssertFalse(player.realtimeAudioMetricsEnabled)
+        XCTAssertEqual(store.spectrumLevels, Array(repeating: 0, count: 32))
+        XCTAssertEqual(store.spatialSnapshot.level, 0)
+    }
+
     func testPlaybackEventClassificationAndDailySummaryCounters() async throws {
         let trackID = UUID()
         let store = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
@@ -378,9 +410,10 @@ private actor PlaybackHistoryAdjustmentPersistence: TrackPlaybackAdjustmentPersi
 }
 
 @MainActor
-private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, PlaybackTransitionAudioControlling {
+private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, PlaybackTransitionAudioControlling, RealtimeAudioMetricsControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     private(set) var playedTrackIDs: [Track.ID] = []
+    private(set) var realtimeAudioMetricsEnabled = false
 
     func play(_ track: Track) async throws {
         playedTrackIDs.append(track.id)
@@ -411,6 +444,7 @@ private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, Playbac
         transition: PlaybackTransitionReason
     ) async throws { seek(to: time) }
     func scheduleFadeOut(endingAt playbackTime: TimeInterval, reason: PlaybackTransitionReason) {}
+    func setRealtimeAudioMetricsEnabled(_ enabled: Bool) { realtimeAudioMetricsEnabled = enabled }
     func stop() {}
 
     func send(_ event: AudioPlaybackEvent) {

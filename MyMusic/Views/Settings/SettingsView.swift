@@ -21,6 +21,10 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle(isOn: sourceSampleRateMatchingBinding) {
+                    Label("音源レート優先", systemImage: "waveform.badge.checkmark")
+                }
+
                 Toggle(isOn: volumeNormalizationBinding) {
                     Label("音量ノーマライズ", systemImage: "speaker.wave.2.bubble")
                 }
@@ -39,7 +43,7 @@ struct SettingsView: View {
             } header: {
                 Text("オーディオ")
             } footer: {
-                Text("Macで解析された音量情報を利用して、極端に音量の異なる曲のみ補正します。")
+                Text("音源レート優先はUSB DAC接続時に曲と同じサンプルレートをiOSへ要求します。実際の出力レートは再生中のオーディオ情報で確認できます。音量ノーマライズはMacで解析された音量情報を利用します。")
             }
 
             Section {
@@ -93,6 +97,13 @@ struct SettingsView: View {
         Binding(
             get: { settingsStore.volumeNormalizationEnabled },
             set: { settingsStore.setVolumeNormalizationEnabled($0) }
+        )
+    }
+
+    private var sourceSampleRateMatchingBinding: Binding<Bool> {
+        Binding(
+            get: { settingsStore.sourceSampleRateMatchingEnabled },
+            set: { settingsStore.setSourceSampleRateMatchingEnabled($0) }
         )
     }
 }

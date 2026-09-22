@@ -2,7 +2,9 @@ import SwiftUI
 
 /// The second artwork panel. Advancing preserves the established tap interaction.
 struct AudioInformationView: View {
+    @Environment(PlayerStore.self) private var playerStore
     @Environment(TrackFeatureStore.self) private var featureStore
+    @Environment(\.scenePhase) private var scenePhase
     let track: Track?
     let information: AudioInformation
     let spectrumLevels: [Float]
@@ -10,7 +12,8 @@ struct AudioInformationView: View {
 
     private var hasDetails: Bool {
         information.codec != "Unknown" || information.bitRate != nil || information.sampleRate != nil ||
-        information.bitDepth != nil || information.channels != nil
+        information.bitDepth != nil || information.channels != nil || information.outputName != "Unknown" ||
+        information.outputSampleRate != nil
     }
 
     var body: some View {
@@ -53,24 +56,62 @@ struct AudioInformationView: View {
                 }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onAppear { updateRealtimeMetrics() }
+        .onChange(of: scenePhase) { _, _ in updateRealtimeMetrics() }
+        .onDisappear { playerStore.setRealtimeAudioMetricsEnabled(false) }
+    }
+
+    private func updateRealtimeMetrics() {
+        playerStore.setRealtimeAudioMetricsEnabled(scenePhase == .active)
     }
 
     private var audioDetails: some View {
         VStack(alignment: .leading, spacing: 13) {
-            Label("オーディオ情報", systemImage: "waveform")
-                .font(.headline)
+            HStack(spacing: 8) {
+                Label("オーディオ情報", systemImage: "waveform")
+                    .font(.headline)
+                Spacer(minLength: 0)
+                if information.isHiResolutionSource {
+                    badge("Hi-Res", color: .orange)
+                } else if information.isLosslessSource {
+                    badge("Lossless", color: .cyan)
+                }
+            }
 
             WaveformView(levels: spectrumLevels)
                 .frame(height: 128)
                 .accessibilityHidden(true)
 
             if hasDetails {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
-                    if information.codec != "Unknown" { row("形式・コーデック", information.codec) }
-                    if let bitRate = information.bitRate { row("ビットレート", "\(bitRate / 1_000) kbps") }
-                    if let sampleRate = information.sampleRate { row("サンプルレート", rate(sampleRate)) }
-                    if let bitDepth = information.bitDepth { row("ビット深度", "\(bitDepth) bit") }
-                    if let channels = information.channels { row("チャンネル", channelDescription(channels)) }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("音源")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
+                        if information.codec != "Unknown" { row("形式・コーデック", information.codec) }
+                        if let bitRate = information.bitRate { row("ビットレート", "\(bitRate / 1_000) kbps") }
+                        if let sampleRate = information.sampleRate { row("サンプルレート", rate(sampleRate)) }
+                        if let bitDepth = information.bitDepth { row("ビット深度", "\(bitDepth) bit") }
+                        if let channels = information.channels { row("チャンネル", channelDescription(channels)) }
+                    }
+
+                    Divider().overlay(.white.opacity(0.12))
+
+                    Text("出力")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
+                        if information.outputName != "Unknown" { row("出力先", information.outputName) }
+                        if let outputRate = information.outputSampleRate { row("PCMレート", rate(outputRate)) }
+                        switch information.sampleRatePath {
+                        case .native:
+                            statusRow("ネイティブレート", systemImage: "checkmark.circle.fill", color: .green)
+                        case .converted:
+                            statusRow("サンプルレート変換あり", systemImage: "arrow.triangle.2.circlepath", color: .orange)
+                        case .unknown:
+                            EmptyView()
+                        }
+                    }
                 }
                 .font(.subheadline)
                 .padding(.top, 2)
@@ -89,6 +130,24 @@ struct AudioInformationView: View {
             Text(label).foregroundStyle(.secondary)
             Text(value)
         }
+    }
+
+    private func statusRow(_ value: String, systemImage: String, color: Color) -> some View {
+        GridRow {
+            Text("信号経路").foregroundStyle(.secondary)
+            Label(value, systemImage: systemImage)
+                .foregroundStyle(color)
+        }
+    }
+
+    private func badge(_ title: String, color: Color) -> some View {
+        Text(title)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 6))
+            .accessibilityLabel(title == "Hi-Res" ? "ハイレゾ音源" : "ロスレス音源")
     }
 
     private func rate(_ value: Double) -> String {

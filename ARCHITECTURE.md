@@ -139,6 +139,8 @@ PlaybackControlsView / playable Views
 
 `PlayerStore` は `NowPlayingService` と `RemoteCommandService` を通じて MediaPlayer と同期し、`PlaybackHistoryStore` に再生実績を伝えます。再生回数の確定時だけ`PlaybackHistoryCoordinator`を同期経由し、他の履歴記録・選曲判断・Playback Contextは引き続きPlayerStoreが扱います。再生セッション中の総再生時間、開始日時、開始文脈はPlayerStore内の軽量な一時状態として保持し、曲変更・停止・自然終了時に実聴秒数、完走率、skip／完走を単一の`PlaybackEvent`へ確定します。同じセッションの終了通知は一度だけ確定し、lifecycle境界は途中時間をflushするだけです。`AudioPlayerService` が security-scoped file access、AVAudioSession、seek、fade、再生完了 event を所有します。Highlight は `HighlightPlayerStore` が候補・区間を調整しますが、実再生は同じ `PlayerStore` / `AudioPlayerService` を通ります。
 
+USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample rateをAVAudioSessionの希望値として要求し、activation後の実`sampleRate`とroute名を`PlayerStore.audioInformation`へ返す。`AudioInformationView`は音源と出力を分離し、rate一致時はnative、不一致時はsample-rate conversionありと表示する。希望値はhardwareへのhintであり採用を保証しない。設定は既定ONでApp外backup対象とし、設計理由は[ADR-0007](decisions/ADR-0007-native-sample-rate-output.md)を参照する。
+
 #### PlayerStoreの段階的な責務分離
 
 Phase 1は完了。`WatchPlaybackCoordinator`はWatch固有の接続・command・状態通知を担当し、`PlaybackHistoryCoordinator`は再生回数の確定記録1件だけを同期委譲する境界である。Queue／Shuffle／Repeat、再生session、Playback Context、Now Playing／Remote Command、Audio Information、曲別Start／End、Normalization、Visualizer用Audio Frameは現在もPlayerStoreが調整する。再生エンジンとAVAudioSessionの実操作は引き続き`AudioPlayerService`が所有する。追加分離は今すぐのTODOとせず、必要になるまでこの構成を維持する。

@@ -232,12 +232,12 @@ struct NowPlayingView: View {
 
     private var currentAlbum: Album? {
         guard let trackID = playerStore.currentTrack?.id else { return nil }
-        return libraryStore.albums.first { $0.trackIDs.contains(trackID) }
+        return libraryStore.album(containing: trackID)
     }
 
     private var currentArtist: Artist? {
         guard let trackID = playerStore.currentTrack?.id else { return nil }
-        return libraryStore.artists.first { $0.trackIDs.contains(trackID) }
+        return libraryStore.artist(containing: trackID)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

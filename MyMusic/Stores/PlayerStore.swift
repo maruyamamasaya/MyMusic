@@ -31,7 +31,14 @@ final class PlayerStore {
     private(set) var errorMessage: String?
     private(set) var queue: [Track] = []
     private(set) var currentIndex: Int?
-    private(set) var playbackOrder: [Int] = []
+    private(set) var playbackOrder: [Int] = [] {
+        didSet {
+            playbackOrderPositions = Dictionary(
+                playbackOrder.enumerated().map { ($0.element, $0.offset) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+    }
     private(set) var isShuffleEnabled = false
     private(set) var repeatMode: RepeatMode = .off
     private(set) var presentationMode: PlayerPresentationMode = .standard
@@ -46,6 +53,14 @@ final class PlayerStore {
         if !enabled { visualAudioFrame = .silent }
     }
 
+    func setRealtimeAudioMetricsEnabled(_ enabled: Bool) {
+        (audioPlayer as? RealtimeAudioMetricsControlling)?.setRealtimeAudioMetricsEnabled(enabled)
+        if !enabled {
+            spectrumLevels = Array(repeating: 0, count: 32)
+            spatialSnapshot = .silent
+        }
+    }
+
     var hasNext: Bool {
         guard currentPlaybackPosition != nil else { return false }
         return nextPlaybackPosition(wrapping: repeatMode == .all) != nil
@@ -58,7 +73,7 @@ final class PlayerStore {
 
     private var currentPlaybackPosition: Int? {
         guard let currentIndex else { return nil }
-        return playbackOrder.firstIndex(of: currentIndex)
+        return playbackOrderPositions[currentIndex]
     }
 
     private let previousRestartThreshold: TimeInterval = 3
@@ -91,6 +106,7 @@ final class PlayerStore {
     private var isCompletingCustomEnd = false
     private var lastPositionPersistenceDate = Date.distantPast
     private let periodicPositionPersistenceInterval: TimeInterval = 7
+    @ObservationIgnored private var playbackOrderPositions: [Int: Int] = [:]
     @ObservationIgnored private var watchCoordinator: WatchPlaybackCoordinator?
 
     init(
@@ -543,7 +559,7 @@ final class PlayerStore {
         startContext: PlaybackStartContext,
         outgoingEndKind: PlaybackEndKind = .other
     ) {
-        guard queue.indices.contains(index), playbackOrder.contains(index) else { return }
+        guard queue.indices.contains(index), playbackOrderPositions[index] != nil else { return }
         finalizeCurrentPlaybackSession(endKind: outgoingEndKind)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()
@@ -646,8 +662,12 @@ final class PlayerStore {
         audioInformation = .unknown
         guard let audioInformationService else { return }
         audioInformationTask = Task { [weak self] in
-            let information = await audioInformationService.information(for: track)
+            var information = await audioInformationService.information(for: track)
             guard !Task.isCancelled, self?.currentTrack?.id == track.id else { return }
+            if let current = self?.audioInformation, current.outputName != "Unknown" {
+                information.outputName = current.outputName
+                information.outputSampleRate = current.outputSampleRate
+            }
             self?.audioInformation = information
         }
     }
@@ -753,6 +773,9 @@ final class PlayerStore {
             wasPlayingBeforeInterruption = false
         case .oldAudioDeviceUnavailable:
             if isPlaying { pause() }
+        case let .outputChanged(name, sampleRate):
+            audioInformation.outputName = name
+            audioInformation.outputSampleRate = sampleRate
         }
     }
 

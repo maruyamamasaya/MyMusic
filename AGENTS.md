@@ -114,10 +114,16 @@ iOS / macOS プロジェクトの検証では、Mac のストレージ消費を�
 
 ```sh
 xcodebuild -project MyMusic.xcodeproj -scheme MyMusic \
-  -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+  -destination 'generic/platform=iOS Simulator' \
+  -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
 PYTHONPATH=analyzer python -m unittest discover -s analyzer/tests -v
 ```
+
+埋め込みWatch Appを含むため、Simulator buildでは`-sdk iphonesimulator`を使いません。
+この指定はWatch targetにもiPhone SDKを強制し、実在するWatch用`AppIcon`を適用不可として
+asset catalog errorにします。`-destination`指定により、iPhoneは`iphonesimulator`、
+Watchは`watchsimulator`をtargetごとに解決させます。
 
 Xcode を利用できない環境では、その制約と未検証範囲を明記します。
 

@@ -32,7 +32,8 @@
 - ミニプレイヤーと再生中画面
 - 再生中画面からアルバム／アーティスト詳細への移動
 - 長い曲名、アーティスト名、アルバム名の1行スクロール表示
-- オーディオ情報と簡易スペクトラム表示
+- オーディオ情報と簡易スペクトラム表示。音源／実出力sample rate、USB DAC名、native出力／変換あり、lossless／Hi-Res判定を確認可能
+- USB DAC接続時は既定で音源と同じsample rateをiOSへ要求。「設定」→「オーディオ」→「音源レート優先」で切替
 - 再生履歴、再生回数、再生傾向の記録
 - ロック画面／Control Centerの再生情報とリモート操作
 
@@ -303,11 +304,14 @@ Model / Apple Framework
 xcodebuild \
   -project MyMusic.xcodeproj \
   -scheme MyMusic \
-  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
+
+埋め込みWatch AppがtargetごとのSimulator SDKを選べるよう、`-sdk iphonesimulator`ではなく
+Simulator destinationを指定します。Watch用AppIconにはiPhoneと同じ1024×1024画像を設定済みです。
 
 継続開発を始めるときは [AGENTS.md](AGENTS.md) を入口に、
 [CURRENT.md](CURRENT.md) で現在状態、[ARCHITECTURE.md](ARCHITECTURE.md) で実装構成を確認してください。

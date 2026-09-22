@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 
 enum AudioPlaybackEvent {
     case ready(duration: TimeInterval)
@@ -10,6 +11,7 @@ enum AudioPlaybackEvent {
     case interruptionBegan
     case interruptionEnded(shouldResume: Bool)
     case oldAudioDeviceUnavailable
+    case outputChanged(name: String, sampleRate: Double?)
 }
 
 enum AudioPlayerServiceError: LocalizedError {
@@ -79,13 +81,27 @@ protocol SpatialAudioControlling: AnyObject {
 }
 
 @MainActor
+protocol RealtimeAudioMetricsControlling: AnyObject {
+    func setRealtimeAudioMetricsEnabled(_ enabled: Bool)
+}
+
+nonisolated private final class RealtimeAudioMetricsGate: @unchecked Sendable {
+    let enabled = Atomic<Bool>(false)
+}
+
+@MainActor
 protocol VolumeNormalizationControlling: AnyObject {
     func setVolumeNormalizationEnabled(_ isEnabled: Bool)
     func prepareVolumeNormalizationGain(decibels: Double?)
 }
 
 @MainActor
-final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, SpatialAudioControlling, VolumeNormalizationControlling, VisualWorldAudioControlling {
+protocol SourceSampleRateControlling: AnyObject {
+    func setSourceSampleRateMatchingEnabled(_ isEnabled: Bool)
+}
+
+@MainActor
+final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioControlling, PlaybackTransitionControlling, EqualizerControlling, SpatialAudioControlling, RealtimeAudioMetricsControlling, VolumeNormalizationControlling, SourceSampleRateControlling, VisualWorldAudioControlling {
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     var spectrumHandler: (([Float]) -> Void)?
     var spatialHandler: ((AudioSpatialSnapshot) -> Void)?
@@ -120,6 +136,9 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     private var preparedNormalizationGainDB = 0.0
     private var currentNormalizationGainDB = 0.0
     private var isSpectrumTapInstalled = false
+    private let realtimeAudioMetricsGate = RealtimeAudioMetricsGate()
+    private var isSourceSampleRateMatchingEnabled = true
+    private var isReconfiguringAudioSession = false
     private lazy var playbackTransitionService = PlaybackTransitionService { [weak self] volume in
         self?.transitionMixer.outputVolume = volume
     }
@@ -175,7 +194,6 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
                 throw AudioPlayerServiceError.fileUnavailable
             }
 
-            try configureAudioSession()
             let file: AVAudioFile
             do {
                 file = try AVAudioFile(forReading: track.fileURL)
@@ -183,6 +201,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
                 throw AudioPlayerServiceError.unsupportedFormat
             }
             audioFile = file
+            try configureAudioSession(sourceSampleRate: file.processingFormat.sampleRate)
             try configureGraph(for: file.processingFormat)
             let seconds = Double(file.length) / file.processingFormat.sampleRate
             let resolvedDuration = seconds.isFinite ? seconds : max(track.duration, 0)
@@ -232,8 +251,9 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
     }
 
     func resume() async throws {
-        guard audioFile != nil, let currentTrack else { return }
+        guard let audioFile, let currentTrack else { return }
         if !isAccessingSecurityScope { try beginFileAccess(for: currentTrack.fileURL) }
+        try configureAudioSession(sourceSampleRate: audioFile.processingFormat.sampleRate)
         if pausedFrame >= scheduledLength {
             schedule(from: 0)
             eventHandler?(.timeChanged(0))
@@ -337,6 +357,19 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
 
     func prepareVolumeNormalizationGain(decibels: Double?) {
         preparedNormalizationGainDB = VolumeNormalizationGain.clampedDecibels(decibels)
+    }
+
+    func setSourceSampleRateMatchingEnabled(_ isEnabled: Bool) {
+        isSourceSampleRateMatchingEnabled = isEnabled
+        guard let audioFile else {
+            publishCurrentOutput()
+            return
+        }
+        try? configureAudioSession(sourceSampleRate: audioFile.processingFormat.sampleRate)
+    }
+
+    func setRealtimeAudioMetricsEnabled(_ enabled: Bool) {
+        realtimeAudioMetricsGate.enabled.store(enabled, ordering: .releasing)
     }
 
     private func beginFileAccess(for fileURL: URL) throws {
@@ -506,8 +539,11 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         let mixer = engine.mainMixerNode
         if isSpectrumTapInstalled { mixer.removeTap(onBus: 0) }
         let visualMailbox = visualAnalysis.mailbox
+        let realtimeAudioMetricsGate = realtimeAudioMetricsGate
         mixer.installTap(onBus: 0, bufferSize: 2_048, format: nil) { [weak self] buffer, _ in
             visualMailbox.capture(buffer)
+            guard visualMailbox.enabled.load(ordering: .relaxed)
+                    || realtimeAudioMetricsGate.enabled.load(ordering: .relaxed) else { return }
             guard let channel = buffer.floatChannelData?.pointee else { return }
             let frameCount = Int(buffer.frameLength)
             guard frameCount > 0 else { return }
@@ -554,10 +590,29 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
 
     private static let silentSpectrum = Array(repeating: Float.zero, count: 32)
 
-    private func configureAudioSession() throws {
+    private func configureAudioSession(sourceSampleRate: Double) throws {
+        guard !isReconfiguringAudioSession else { return }
+        isReconfiguringAudioSession = true
+        defer { isReconfiguringAudioSession = false }
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
+        if isSourceSampleRateMatchingEnabled, usesExternalUSBAudio(session) {
+            try session.setPreferredSampleRate(sourceSampleRate)
+        }
         try session.setActive(true)
+        publishCurrentOutput(session)
+    }
+
+    private func usesExternalUSBAudio(_ session: AVAudioSession) -> Bool {
+        session.currentRoute.outputs.contains { $0.portType == .usbAudio }
+    }
+
+    private func publishCurrentOutput(_ session: AVAudioSession = .sharedInstance()) {
+        let names = session.currentRoute.outputs.map(\.portName).filter { !$0.isEmpty }
+        eventHandler?(.outputChanged(
+            name: names.isEmpty ? "Unknown" : names.joined(separator: ", "),
+            sampleRate: session.sampleRate > 0 ? session.sampleRate : nil
+        ))
     }
 
     private func observeAudioSession() {
@@ -597,8 +652,13 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
 
     private func handleRouteChange(reason rawReason: UInt?) {
         visualAnalysis.invalidate()
-        guard let rawReason,
-              AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable else { return }
-        eventHandler?(.oldAudioDeviceUnavailable)
+        let reason = rawReason.flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
+        if let audioFile,
+           reason == .newDeviceAvailable || reason == .routeConfigurationChange {
+            try? configureAudioSession(sourceSampleRate: audioFile.processingFormat.sampleRate)
+        } else {
+            publishCurrentOutput()
+        }
+        if reason == .oldDeviceUnavailable { eventHandler?(.oldAudioDeviceUnavailable) }
     }
 }
