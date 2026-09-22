@@ -70,3 +70,5 @@
 - 実機で内蔵無音PCMによるrate準備が成立したため、利用者向け名称を「Hi-Res直接出力 Beta／診断」から「USB DAC 出力レート」へ変更した。
 - 設定の「Beta機能」から「オーディオ」へ移し、44.1／48／88.2／96／192kHzの無音PCM準備、Files音源の直接再生、実出力rate確認を同じ画面で利用できるようにした。
 - 内部type名と独立Audio Queue backendは維持し、通常AVAudioEngineの再生経路は変更していない。
+- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。名称・設定導線変更のためXCTestは追加実行していない。
+- Vespera（iPhone 17e、UDID `00008150-000C54280E33401C`）向けDebug実機build、install、launch成功。project `MyMusic.xcodeproj`、scheme／product `MyMusic`、Bundle ID `maruyama.MyMusic`、Development Team `U29GY347DY`。
