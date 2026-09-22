@@ -22,7 +22,7 @@
 
 ## 次の判定
 
-1. Vesperaへ明示的にdeployする。
-2. 通常再生を停止し、Tea ProをUSB接続して同じ192kHz／24bit ALACを診断画面から再生する。
-3. 画面のAudio Queue rateとTea Pro本体表示がともに192kHzなら、停止、route変更、rate切替を確認してから製品用backendの設計へ進む。
-4. 44.1kHzのまま、再生不能、または不安定なら、このbranchを破棄して通常再生基盤を維持する。
+1. 初回はTea ProへBluetooth A2DPで接続され、音源192kHzに対してAVAudioSessionとAudio Queueはいずれも44.1kHzだった。ケーブル接続中でもrouteの`portType`が`BluetoothA2DPOutput`だったため、有線試験としては無効と判定した。
+2. Bluetoothを無効にしてTea Proを有線接続し直すと、routeの`portType`は`Headphones`、route名は`Tea Pro`となった。同じ192kHz／24bit ALACで音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致し、再生音も正常だった。
+3. Audio Queue経路でネイティブsample rate出力が成立する仮説は実機で確認できた。音質向上の印象は、Bluetooth codecと44.1kHzへのsample-rate conversionの両方を除いた結果である可能性があり、客観的な聴感比較ではない。
+4. 次段階では通常再生を置換せず、停止、route変更、44.1／48／88.2／96／192kHz切替を先に確認し、その後に製品用backendの範囲を設計する。

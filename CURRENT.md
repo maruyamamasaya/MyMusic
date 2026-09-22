@@ -43,7 +43,7 @@ updated: 2026-09-23
 
 - `codex/hires-direct-output-beta` branchに、既存の`PlayerStore`／`AudioPlayerService`へ接続しないAudio Queue Servicesの単曲再生診断を追加した。設定 → Beta機能 → Hi-Res直接出力診断からFiles上の音源を選び、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先を確認できる。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。
-- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Tea ProでAudio Queueと本体表示が192kHzになるかは未確認。失敗する場合はこのbranchを破棄し、通常再生基盤は変更しない。
+- generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。製品用backendへの統合は未着手で、通常再生基盤は変更していない。
 
 ### ホームの本日再生表示
 
