@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct HiResDirectOutputProbeView: View {
+    @Environment(PlayerStore.self) private var playerStore
     @State private var store = HiResDirectOutputProbeStore()
     @State private var isImporting = false
 
@@ -65,7 +66,13 @@ struct HiResDirectOutputProbeView: View {
         ) { result in
             switch result {
             case let .success(urls):
-                if let url = urls.first { store.play(url: url) }
+                if let url = urls.first {
+                    // Pause leaves AVAudioEngine active and can pin the USB DAC
+                    // to its previous hardware rate. This diagnostic requires a
+                    // full stop before it negotiates the selected file's rate.
+                    playerStore.stop()
+                    store.play(url: url)
+                }
             case let .failure(error):
                 store.stop()
                 store.state = .failed(error.localizedDescription)

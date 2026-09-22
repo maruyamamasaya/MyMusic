@@ -168,7 +168,10 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
 
     private func configureAudioSession(sourceSampleRate: Double) throws {
         let session = AVAudioSession.sharedInstance()
-        try? session.setActive(false)
+        // A paused AVAudioEngine can keep the previous hardware rate alive. The
+        // diagnostic stops normal playback before reaching here, so failure to
+        // deactivate is actionable and must not be hidden.
+        try session.setActive(false)
         try session.setCategory(.playback, mode: .default)
         try session.setPreferredSampleRate(sourceSampleRate)
         try session.setActive(true)

@@ -149,12 +149,13 @@ Hi-Res直接出力診断は通常再生から分離した次の実験経路だ�
 
 ```text
 HiResDirectOutputProbeView
+  ├→ PlayerStore.stop（通常AVAudioEngineの完全停止だけ）
   → HiResDirectOutputProbeStore
   → HiResAudioQueueProbeService
   → Audio File Services → Audio Queue Services → USB DAC
 ```
 
-診断はFilesから選んだ1ファイルをsecurity-scoped accessで開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示するが、`PlayerStore`、通常queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background制御とは接続しない。まずTea Proで192kHzが成立するかを判定し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
+診断はFilesから選んだ1ファイルをsecurity-scoped accessで開き、音源rateをAVAudioSessionへ要求してからAudio Queueへpacketを供給する。一時停止だけでは通常AVAudioEngineが前回rateのI/Oを保持し得るため、ファイル選択後に`PlayerStore.stop()`で通常再生を完全停止してからAudio Sessionを非アクティブ化する。非アクティブ化失敗は無視せず診断エラーとして表示する。音源rate、session実rate、`kAudioQueueDeviceProperty_SampleRate`、route名を表示するが、通常queueの再生、履歴、Now Playing、EQ、normalization、fade、Visualizer、background制御とは統合しない。まずTea Proでrate切替が成立するかを判定し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
 
 #### PlayerStoreの段階的な責務分離
 

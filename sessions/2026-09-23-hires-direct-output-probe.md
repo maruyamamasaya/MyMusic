@@ -26,3 +26,10 @@
 2. Bluetoothを無効にしてTea Proを有線接続し直すと、routeの`portType`は`Headphones`、route名は`Tea Pro`となった。同じ192kHz／24bit ALACで音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致し、再生音も正常だった。
 3. Audio Queue経路でネイティブsample rate出力が成立する仮説は実機で確認できた。音質向上の印象は、Bluetooth codecと44.1kHzへのsample-rate conversionの両方を除いた結果である可能性があり、客観的な聴感比較ではない。
 4. 次段階では通常再生を置換せず、停止、route変更、44.1／48／88.2／96／192kHz切替を先に確認し、その後に製品用backendの範囲を設計する。
+
+## レート切替の追試
+
+- 同じ有線接続中に44.1→192kHz、192→44.1kHzの順で診断音源を替えると、Audio SessionとAudio Queueが最初のhardware rateを維持する問題を確認した。音源rateと出力rateが不一致になるため、機器を傷める問題ではないがnative-rate出力にはならない。
+- 通常プレイヤーの一時停止は`AVAudioPlayerNode`だけを止め、`AVAudioEngine`自体は動作を続ける。これが共有AVAudioSessionの前回hardware rateを保持する可能性があるため、診断開始時に`PlayerStore.stop()`で通常engineを完全停止するようにした。
+- 診断Serviceが従来無視していた`AVAudioSession.setActive(false)`の失敗を呼び出し元へ返すようにした。Audio Queueを破棄し、session非アクティブ化、希望rate設定、再アクティブ化、新Audio Queue作成の順序を検証可能にした。
+- 修正版はgeneric iOS Simulator Debug buildで`BUILD SUCCEEDED`。XCTestは実行していない。Vesperaへの再deployと44.1↔192kHz実機再確認は未実施。
