@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # MyMusic の現在状態
@@ -37,7 +37,7 @@ updated: 2026-09-22
 - 設定「音源レート優先」を既定ONで追加。USB Audio routeでは再生音源のdecoded sample rateをAVAudioSessionへ希望値として渡し、再生開始、resume、DAC接続、route構成変更で適用する。希望値はiOS／機器が採用しない場合がある。
 - 通常／作業用の再生画面にあるオーディオ情報面で、音源のcodec・bit depth・sample rateと、実際の出力先・PCM rateを分離表示する。一致時は「ネイティブレート」、不一致時は「サンプルレート変換あり」と表示する。
 - lossless PCM系音源がJEITAのCD相当超過例を満たす場合、ライセンス対象の公式ロゴではなく独自テキストの「Hi-Res」badgeを表示する。CD相当losslessには「Lossless」を表示する。
-- 設定値はApp外backupへ含める。Simulatorの判定／永続化／カード描画test、generic iOS build、Vespera向け実機build・install・launchは成功。Khadas Tea Proを接続した実出力rate、44.1／48kHz系の曲切替、DAC抜き差し、background復帰の操作・聴感確認は引き続き手動確認対象。
+- 設定値はApp外backupへ含める。Simulatorの判定／永続化／カード描画test、generic iOS build、Vespera向け実機build・install・launchは成功。Khadas Tea ProをUSB接続した実機確認では、192kHz／24bit ALACに対してMyMusicは44.1kHz出力のままだった。同じ端末・接続・音源をOnkyo HF Playerで再生するとTea Proは192kHzを表示したため、現行AVAudioEngine再生経路に起因する。既存再生基盤へ影響させない独立backendのHi-Res Betaを別branchで検討する。
 
 ### ホームの本日再生表示
 

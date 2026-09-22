@@ -29,4 +29,4 @@ MyMusicはFLAC、ALAC、WAV、AIFFをAVAudioFileでPCMへdecodeして再生す�
 - 曲ごとに44.1kHz系と48kHz系が切り替わると、hardware再構成に伴う短い無音が生じる可能性がある。
 - EQ、normalization、fadeを有効にした再生は引き続きPCM sample値を変更するため、UIでbit-perfectとは表示しない。
 - USB DACの実機名、対応rate、route change挙動は機器とiOSに依存するため、実機検証を継続する。
-
+- Tea ProではAudio Sessionの非アクティブ化とAVAudioEngine graph再構築を追加しても192kHz音源が44.1kHz出力のままであり、既存再生基盤へのリスクに対して効果がなかったため採用しない。直接PCM出力は現行backendを変更せず、分離したBetaでのみ検証する。

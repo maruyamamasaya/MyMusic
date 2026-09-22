@@ -143,7 +143,7 @@ PlaybackControlsView / playable Views
 
 再生queueの正本は従来どおり`queue`と`playbackOrder`だが、`PlayerStore`はplayback order変更時にqueue index→order positionの派生indexを再構築する。0.5秒間隔の再生位置更新で評価される`hasNext`／`hasPrevious`はこのindexを使い、長いqueueを毎回線形走査しない。PCM tapはVisual World用mailboxへは従来どおりbounded copyを試みる一方、旧波形／空間メーターの計算とMainActor通知は`AudioInformationView`がactive、またはVisual World解析が有効な場合だけ行う。通常画面・backgroundではatomic gate後にreturnし、音声render経路を待たせない。
 
-USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample rateをAVAudioSessionの希望値として要求し、activation後の実`sampleRate`とroute名を`PlayerStore.audioInformation`へ返す。`AudioInformationView`は音源と出力を分離し、rate一致時はnative、不一致時はsample-rate conversionありと表示する。希望値はhardwareへのhintであり採用を保証しない。設定は既定ONでApp外backup対象とし、設計理由は[ADR-0007](decisions/ADR-0007-native-sample-rate-output.md)を参照する。
+USB Audio routeでは`AudioPlayerService`が音源のdecoded processing sample rateをAVAudioSessionの希望値として要求し、activation後の実`sampleRate`とroute名を`PlayerStore.audioInformation`へ返す。`AudioInformationView`は音源と出力を分離し、rate一致時はnative、不一致時はsample-rate conversionありと表示する。希望値はhardwareへのhintであり採用を保証しない。Tea Pro実機では192kHz音源に対して現行AVAudioEngine経路が44.1kHzを採用し、Onkyo HF Playerでは同じ接続と音源で192kHzを採用した。直接PCM出力を試す場合も現行再生基盤を置換せず、独立backendとして検証する。設定は既定ONでApp外backup対象とし、設計理由は[ADR-0007](decisions/ADR-0007-native-sample-rate-output.md)を参照する。
 
 #### PlayerStoreの段階的な責務分離
 
