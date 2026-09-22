@@ -22,6 +22,14 @@ updated: 2026-09-22
 - **保留:** PlaybackSessionController、PlaybackQueueController、VisualAudioBridge、Historyの追加分離。
 - **方針:** 現時点では追加分離しない。将来の機能追加で境界が必要になった時だけ1責務ずつ再検討する。詳細は[ARCHITECTURE.md](ARCHITECTURE.md#playerstoreの段階的な責務分離)を参照。
 
+## 大規模ライブラリ性能改善 Phase 1
+
+- 約10,000曲でのUI停滞候補を静的調査し、再生中の高頻度経路から全件走査を除去した。`PlayerStore`はqueue indexからplayback order上の位置を辞書で引き、再生バー更新に伴う`hasNext`／`hasPrevious`評価を曲数に依存しない処理にした。
+- `LibraryStore`は表示snapshot反映時にTrack／Album／ArtistのID索引を構築する。再生画面の現在Album／Artist解決とAlbum／Artist配下のTrack解決では、1万曲の辞書再生成や全Album／Artist走査を繰り返さない。
+- PCMの波形／空間メーター集計とMainActor通知は、オーディオ情報面またはVisual Worldが実際に表示・動作している時だけ行う。通常再生、mini player、background再生では音声tapを軽量なatomic gateで即時returnさせる。
+- 検索画面はPlayback Historyの巨大なDictionary自体を監視せず、検索結果に関係する軽量revisionを監視する。15秒ごとの総再生時間保存だけでは全履歴比較と再検索を起動しない。
+- generic iOS Simulator Debug build、10,000曲queue、既存queue遷移、Library索引、リアルタイム解析gateの対象XCTest 7件は成功。実機の10,000曲ライブラリでのInstruments計測、長時間再生、background／lock screen、検索・一覧の体感比較は未確認。
+
 ## 実装済み
 
 ### USB DAC ネイティブレート出力 Beta

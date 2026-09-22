@@ -120,6 +120,7 @@ struct SearchView: View {
             .onChange(of: filter) { updateSearch() }
             .onChange(of: libraryStore.homePresentationRevision) { updateSearch() }
             .onChange(of: playbackHistoryStore.homePresentationRevision) { updateSearch() }
+            .onChange(of: trackPreferenceStore.homePresentationRevision) { updateSearch() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
