@@ -8,7 +8,7 @@ protocol MetadataServicing: Sendable {
 }
 
 nonisolated final class MetadataService: MetadataServicing, Sendable {
-    nonisolated static let currentMetadataRevision = 2
+    nonisolated static let currentMetadataRevision = 3
 
     private let artworkService: ArtworkServicing
     private let identityService: TrackIdentityServicing
@@ -181,7 +181,7 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
                 codec: codec,
                 bitRate: validBitRate(estimatedDataRate),
                 sampleRate: basic.mSampleRate > 0 ? basic.mSampleRate : nil,
-                bitDepth: bitDepth(for: basic),
+                bitDepth: Self.bitDepth(for: basic),
                 channels: basic.mChannelsPerFrame > 0 ? Int(basic.mChannelsPerFrame) : nil
             )
         } catch {
@@ -220,9 +220,10 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
         return Int(value.rounded())
     }
 
-    private func bitDepth(for description: AudioStreamBasicDescription) -> Int? {
+    nonisolated static func bitDepth(for description: AudioStreamBasicDescription) -> Int? {
         if description.mBitsPerChannel > 0 { return Int(description.mBitsPerChannel) }
-        guard description.mFormatID == kAudioFormatAppleLossless else { return nil }
+        guard description.mFormatID == kAudioFormatAppleLossless ||
+              description.mFormatID == kAudioFormatFLAC else { return nil }
         switch description.mFormatFlags {
         case kAppleLosslessFormatFlag_16BitSourceData: return 16
         case kAppleLosslessFormatFlag_20BitSourceData: return 20

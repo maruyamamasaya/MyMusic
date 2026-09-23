@@ -262,6 +262,39 @@ final class TrackFirstSeenAtTests: XCTestCase {
         XCTAssertEqual(report.library.tracks.first?.title, "song.m4a")
     }
 
+    func testQuickScanReloadsMetadataFromAnOlderRevision() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "QuickScanMetadataRevision-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.flac")
+        try Data("audio".utf8).write(to: file)
+        let values = try file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let previous = Track(
+            id: StableTrackIdentifier.id(for: "song.flac"),
+            title: "Stale title", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.flac",
+            fileSize: values.fileSize.map(Int64.init),
+            modificationDate: values.contentModificationDate,
+            metadataRevision: MetadataService.currentMetadataRevision - 1
+        )
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(files: [file]),
+            metadataService: FirstSeenMetadataStub(),
+            identityService: FirstSeenIdentityStub()
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [previous], depth: .quick
+        )
+
+        XCTAssertEqual(report.library.tracks.first?.title, "song.flac")
+        XCTAssertEqual(
+            report.library.tracks.first?.metadataRevision,
+            MetadataService.currentMetadataRevision
+        )
+    }
+
     func testCompleteScanReloadsUnchangedMetadataAndReportsProgress() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "CompleteLibraryScan-\(UUID())", directoryHint: .isDirectory)

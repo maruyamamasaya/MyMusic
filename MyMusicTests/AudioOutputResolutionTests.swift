@@ -1,7 +1,34 @@
+import AudioToolbox
 import XCTest
 @testable import MyMusic
 
 final class AudioResolutionClassificationTests: XCTestCase {
+    func testMetadataBitDepthReadsFLACSourceDepthFromFormatFlags() {
+        let cases: [(AudioFormatFlags, Int)] = [
+            (kAppleLosslessFormatFlag_16BitSourceData, 16),
+            (kAppleLosslessFormatFlag_20BitSourceData, 20),
+            (kAppleLosslessFormatFlag_24BitSourceData, 24),
+            (kAppleLosslessFormatFlag_32BitSourceData, 32)
+        ]
+        for (flags, expectedDepth) in cases {
+            XCTAssertEqual(
+                MetadataService.bitDepth(for: format(.flac, flags: flags)),
+                expectedDepth
+            )
+        }
+        XCTAssertNil(MetadataService.bitDepth(for: format(.flac, flags: 0)))
+    }
+
+    func testMetadataBitDepthKeepsPCMAndALACBehavior() {
+        XCTAssertEqual(MetadataService.bitDepth(for: format(.pcm, bitsPerChannel: 24)), 24)
+        XCTAssertEqual(
+            MetadataService.bitDepth(
+                for: format(.alac, flags: kAppleLosslessFormatFlag_24BitSourceData)
+            ),
+            24
+        )
+    }
+
     func testHiResolutionUsesJEITACDQualityBoundaryForLosslessSources() {
         XCTAssertTrue(information(codec: "FLAC", rate: 96_000, depth: 24).isHiResolutionSource)
         XCTAssertTrue(information(codec: "ALAC", rate: 44_100, depth: 24).isHiResolutionSource)
@@ -33,6 +60,38 @@ final class AudioResolutionClassificationTests: XCTestCase {
             channels: 2,
             outputName: outputRate == nil ? "Unknown" : "USB DAC",
             outputSampleRate: outputRate
+        )
+    }
+
+    private enum TestFormat {
+        case flac
+        case alac
+        case pcm
+
+        var id: AudioFormatID {
+            switch self {
+            case .flac: kAudioFormatFLAC
+            case .alac: kAudioFormatAppleLossless
+            case .pcm: kAudioFormatLinearPCM
+            }
+        }
+    }
+
+    private func format(
+        _ format: TestFormat,
+        flags: AudioFormatFlags = 0,
+        bitsPerChannel: UInt32 = 0
+    ) -> AudioStreamBasicDescription {
+        AudioStreamBasicDescription(
+            mSampleRate: 96_000,
+            mFormatID: format.id,
+            mFormatFlags: flags,
+            mBytesPerPacket: 0,
+            mFramesPerPacket: 0,
+            mBytesPerFrame: 0,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: bitsPerChannel,
+            mReserved: 0
         )
     }
 }
