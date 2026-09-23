@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # MyMusic の現在状態
@@ -92,6 +92,7 @@ updated: 2026-09-23
 - generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功し、Vesperaへのbuild・install・launchも成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
 - 「USB DAC 出力レート」への名称変更と設定「オーディオ」への移動後も、generic iOS Simulator Debug buildとVesperaへのDebug build・install・launchが成功した。
 - ハイレゾ専用ライブラリに専用の「ハイレゾ再生中」画面を追加した。アートワークを反転すると音源／実出力／曲の詳細を確認でき、再生・一時停止、シーク、15秒移動、前後曲、専用queue、自然終了時の次曲再生をAudio Queue経路だけで操作する。既存EQはAVAudioEngine専用のため直接出力には適用せず、画面上で制約を明示して通常再生用設定への導線だけを提供する。
+- ハイレゾ専用ライブラリのトップ、曲、アルバム、アーティスト画面には、専用Audio Queueの再生中だけ下部ミニプレイヤーを表示する。アートワーク、曲名、アーティスト、進捗、再生／一時停止を確認・操作でき、曲情報部分のタップで専用Now Playingを再表示する。
 
 ### ホームの本日再生表示
 

@@ -1,0 +1,92 @@
+import SwiftUI
+
+struct HiResMiniPlayerView: View {
+    @Environment(\.appTheme) private var theme
+
+    let store: HiResDirectOutputProbeStore
+    let onOpen: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Button(action: onOpen) {
+                    HStack(spacing: 12) {
+                        AlbumArtworkView(artworkIdentifier: store.currentTrack?.artworkIdentifier)
+                            .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(store.currentTrack?.title ?? "未再生")
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Text(store.currentTrack?.artistName ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if store.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 44, height: 44)
+                } else {
+                    Button(
+                        store.isPlaying ? "一時停止" : "再生",
+                        systemImage: store.isPlaying ? "pause.fill" : "play.fill"
+                    ) {
+                        store.togglePlayPause()
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.title3)
+                    .buttonStyle(.plain)
+                    .frame(width: 44, height: 44)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+                .tint(.orange)
+                .scaleEffect(x: 1, y: 0.6, anchor: .center)
+                .accessibilityLabel("ハイレゾ再生位置")
+                .accessibilityValue("\(Int(progress * 100)) percent")
+        }
+        .background(ThemePalette.resolve(theme).surface)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private var progress: Double {
+        guard store.duration > 0 else { return 0 }
+        return min(max(store.currentTime / store.duration, 0), 1)
+    }
+}
+
+private struct HiResMiniPlayerInsetModifier: ViewModifier {
+    let store: HiResDirectOutputProbeStore
+    let onOpen: () -> Void
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            if store.currentTrack != nil, store.hasActiveSession {
+                HiResMiniPlayerView(store: store, onOpen: onOpen)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: store.currentTrack?.id)
+        .animation(.default, value: store.hasActiveSession)
+    }
+}
+
+extension View {
+    func hiResMiniPlayer(
+        store: HiResDirectOutputProbeStore,
+        onOpen: @escaping () -> Void
+    ) -> some View {
+        modifier(HiResMiniPlayerInsetModifier(store: store, onOpen: onOpen))
+    }
+}

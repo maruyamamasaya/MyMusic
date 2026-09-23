@@ -68,6 +68,9 @@ struct HiResLibraryView: View {
         .sheet(isPresented: $isNowPlayingPresented) {
             HiResNowPlayingView(store: outputStore)
         }
+        .hiResMiniPlayer(store: outputStore) {
+            isNowPlayingPresented = true
+        }
         .onDisappear { outputStore.stop() }
     }
 
@@ -166,6 +169,7 @@ private struct HiResAlbumListView: View {
         }
         .themeScreen()
         .navigationTitle("アルバム")
+        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }
 
@@ -189,6 +193,7 @@ private struct HiResArtistListView: View {
         }
         .themeScreen()
         .navigationTitle("アーティスト")
+        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }
 
@@ -248,5 +253,6 @@ private struct HiResTrackCollectionView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "曲名、アーティスト、アルバムを検索")
+        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }
