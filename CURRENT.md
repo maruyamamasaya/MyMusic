@@ -50,9 +50,11 @@ updated: 2026-09-23
 - `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生とUSB DAC出力レート準備を追加した。設定 → オーディオ → USB DAC 出力レートから、内蔵無音PCMによる44.1／48／88.2／96／192kHzの準備、Files上の音源選択、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先の確認ができる。開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
 - 44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ上で生成するrate準備を追加した。実曲の直前に最大2回の短いAudio Queueを開き、初回USB streamが希望rateを採用しないTea Proの挙動を再交渉する。設定診断とホームのハイレゾ専用画面から、音源ファイルなしでも各rateを手動準備できる。
 - Library scanでstream-level codec、sample rate、bit depth、channel、bit rateをTrackへ保存する。ジャンル項目「ハイレゾ」、または既存JEITA基準のHi-Res相当ロスレス音源を通常曲から除外し、ホームの「ハイレゾ」タイルから曲名／アルバム／アーティスト別に閲覧して独立Audio Queueで再生できる。分類優先順位は作業用BGM、ハイレゾ、通常の順。
+- ジャンル表示設定では、対象曲が存在する「作業用BGM」と「ハイレゾ」を通常ジャンルと分けた固定の専用分類として表示する。両方とも常に有効で解除やプリセット変更の対象外とし、通常ジャンルの選択数には含めない。音源仕様から自動判定されたHi-Res音源も「ハイレゾ」固定分類の表示対象とする。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。
 - generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功し、Vesperaへのbuild・install・launchも成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
 - 「USB DAC 出力レート」への名称変更と設定「オーディオ」への移動後も、generic iOS Simulator Debug buildとVesperaへのDebug build・install・launchが成功した。
+- ハイレゾ専用ライブラリに専用の「ハイレゾ再生中」画面を追加した。アートワークを反転すると音源／実出力／曲の詳細を確認でき、再生・一時停止、シーク、15秒移動、前後曲、専用queue、自然終了時の次曲再生をAudio Queue経路だけで操作する。既存EQはAVAudioEngine専用のため直接出力には適用せず、画面上で制約を明示して通常再生用設定への導線だけを提供する。
 
 ### ホームの本日再生表示
 
@@ -252,7 +254,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-09-13 のベリーショート曲自動選曲除外後、30秒境界、通常ランダム入口、Highlight共通候補、最近追加、ホーム代表Artworkの関連XCTest 12件とDebug test buildがiPhone 17 / iOS 26.5 Simulatorで成功。
 - 2026-09-21 の作業用BGM通常ライブラリ分離後、通常の曲・アルバム・アーティストからの除外と作業用catalog保持を確認するXCTest 2件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
 - 2026-09-23 のハイレゾ専用ライブラリ追加後、ジャンル指定、音源仕様判定、作業用優先、通常ライブラリ分離、専用catalogを確認するXCTest 4件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
-- 2026-09-23 のハイレゾ専用再生履歴追加後、手動停止と自然終了のPlayback History記録を確認するXCTest 2件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
+- 2026-09-23 のハイレゾ専用再生履歴／Now Playing追加後、手動停止、自然終了、一時停止時間の除外、専用queueの次曲移動を確認するXCTest 4件がiPhone 17e / iOS 26.5 Simulatorで成功し、generic iOS Debug buildも成功。
 - 専用 lint 設定、CI/CD workflow はリポジトリ内で確認できない。Swift Package Manager依存はZIP書き出し専用のZIPFoundation 0.9.20だけを固定している。
 
 ## 既知の制約・未検証
@@ -269,7 +271,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
 - プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。色、階層、複数タグのAND／OR条件は未実装。
-- ハイレゾ専用Audio Queueは単曲Betaであり、専用ライブラリからの再生だけをPlayback Historyへ`hi_res_library`起点で記録する。通常queue、Now Playing、remote command、EQ、normalization、fade、Visualizer、background制御とは未統合。ハイレゾ曲は通常ライブラリから分離したままなので、Station、行動分析による選曲、整理候補、シャッフル、音響特徴量の対象にはしない。設定のFiles診断再生はTrack Identityを持たないため履歴対象外。内蔵無音PCMによるrate再交渉がTea Proで上下両方向に成立するかも未確認。
+- ハイレゾ専用Audio Queueは専用Now Playingと順次再生queueを持ち、専用ライブラリからの再生だけをPlayback Historyへ`hi_res_library`起点で記録する。通常queue、remote command、EQ、normalization、fade、Visualizer、background制御とは未統合。ハイレゾ曲は通常ライブラリから分離したままなので、Station、行動分析による選曲、整理候補、シャッフル、音響特徴量の対象にはしない。設定のFiles診断再生はTrack Identityを持たないため履歴対象外。内蔵無音PCMによるrate再交渉がTea Proで上下両方向に成立するかも未確認。
 - Xcode の Deployment Target は 26.5。変更理由は今回確認した資料・履歴だけでは不明であり、明示依頼なしに変更しない。
 - 既存ライブラリキャッシュはそのままdecodeできる。Album Artistとstream-level audio formatを旧キャッシュへ補完するには一度「再スキャン」が必要で、metadata revisionにより旧Trackだけを一度再抽出する。
 

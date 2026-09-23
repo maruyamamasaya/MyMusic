@@ -47,6 +47,66 @@ final class HiResPlaybackHistoryTests: XCTestCase {
         XCTAssertEqual(history.entries[track.id]?.playbackEvents.last?.startSource, .hiResLibrary)
     }
 
+    func testPausedTimeIsExcludedFromPlaybackDuration() async {
+        let service = HiResAudioQueueServiceSpy()
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        await history.loadIfNeeded()
+        var currentDate = Date(timeIntervalSince1970: 3_000)
+        let store = HiResDirectOutputProbeStore(service: service, now: { currentDate })
+        let track = makeTrack(duration: 120)
+
+        store.play(track: track, historyStore: history)
+        await Task.yield()
+        service.send(.started(snapshot(for: track)))
+        currentDate = currentDate.addingTimeInterval(10)
+        store.togglePlayPause()
+        currentDate = currentDate.addingTimeInterval(100)
+        store.togglePlayPause()
+        currentDate = currentDate.addingTimeInterval(10)
+        store.stop()
+
+        XCTAssertEqual(service.pauseCount, 1)
+        XCTAssertEqual(service.resumeCount, 1)
+        XCTAssertEqual(history.totalPlaybackDuration(for: track.id), 20, accuracy: 0.001)
+    }
+
+    func testNextMovesThroughDedicatedQueue() async throws {
+        let service = HiResAudioQueueServiceSpy()
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        await history.loadIfNeeded()
+        let store = HiResDirectOutputProbeStore(service: service)
+        let first = makeTrack(duration: 120)
+        var second = makeTrack(duration: 180)
+        second = Track(
+            id: UUID(),
+            title: "Second Hi-Res Track",
+            artistName: second.artistName,
+            duration: second.duration,
+            fileURL: URL(fileURLWithPath: "/tmp/second-hires.m4a"),
+            audioFormat: second.audioFormat
+        )
+
+        store.play(track: first, queue: [first, second], historyStore: history)
+        await Task.yield()
+        service.send(.started(snapshot(for: first)))
+        store.next()
+        try await waitUntil { service.playedURLs.last == second.fileURL }
+
+        XCTAssertEqual(store.currentTrack?.id, second.id)
+        XCTAssertEqual(store.currentIndex, 1)
+        XCTAssertFalse(store.canGoNext)
+        XCTAssertTrue(store.canGoPrevious)
+        XCTAssertEqual(service.playedURLs.last, second.fileURL)
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async throws {
+        for _ in 0..<100 {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for the Hi-Res playback request.")
+    }
+
     private func makeTrack(duration: TimeInterval) -> Track {
         Track(
             id: UUID(),
@@ -79,9 +139,16 @@ final class HiResPlaybackHistoryTests: XCTestCase {
 @MainActor
 private final class HiResAudioQueueServiceSpy: HiResAudioQueueProbeServicing {
     var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)?
+    var playedURLs: [URL] = []
+    var pauseCount = 0
+    var resumeCount = 0
+    var seekTimes: [TimeInterval] = []
 
-    func play(url: URL) async throws {}
+    func play(url: URL) async throws { playedURLs.append(url) }
     func prepare(sampleRate: Double) async throws {}
+    func pause() throws { pauseCount += 1 }
+    func resume() throws { resumeCount += 1 }
+    func seek(to time: TimeInterval) throws { seekTimes.append(time) }
     func stop() {}
     func send(_ event: HiResAudioQueueProbeEvent) { eventHandler?(event) }
 }

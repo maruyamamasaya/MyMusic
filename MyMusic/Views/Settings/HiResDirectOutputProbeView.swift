@@ -76,6 +76,9 @@ struct HiResDirectOutputProbeView: View {
                 case .playing:
                     Label("再生中", systemImage: "play.circle.fill")
                         .foregroundStyle(.green)
+                case .paused:
+                    Label("一時停止中", systemImage: "pause.circle.fill")
+                        .foregroundStyle(.orange)
                 case .prepared:
                     Label("出力レート準備完了", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)

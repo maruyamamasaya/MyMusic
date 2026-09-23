@@ -8,6 +8,7 @@ final class HiResDirectOutputProbeStore {
         case idle
         case switching
         case playing
+        case paused
         case prepared
         case reachedEnd
         case failed(String)
@@ -17,8 +18,13 @@ final class HiResDirectOutputProbeStore {
     private let now: () -> Date
     private var playbackTask: Task<Void, Never>?
     private var historySession: HistorySession?
+    private var historyStore: PlaybackHistoryStore?
     var state: State = .idle
     var snapshot: HiResAudioQueueProbeSnapshot?
+    private(set) var currentTrack: Track?
+    private(set) var queue: [Track] = []
+    private(set) var currentIndex: Int?
+    private(set) var currentTime: TimeInterval = 0
 
     init(
         service: HiResAudioQueueProbeServicing? = nil,
@@ -33,7 +39,16 @@ final class HiResDirectOutputProbeStore {
     }
 
     var hasActiveSession: Bool {
-        state == .playing || state == .switching || state == .reachedEnd
+        state == .playing || state == .paused || state == .switching || state == .reachedEnd
+    }
+
+    var isPlaying: Bool { state == .playing }
+    var isLoading: Bool { state == .switching }
+    var duration: TimeInterval { max(currentTrack?.duration ?? 0, 0) }
+    var canGoPrevious: Bool { (currentIndex ?? 0) > 0 || currentTime > 0 }
+    var canGoNext: Bool {
+        guard let currentIndex else { return false }
+        return currentIndex + 1 < queue.count
     }
 
     func play(url: URL) {
@@ -41,14 +56,29 @@ final class HiResDirectOutputProbeStore {
     }
 
     func play(track: Track, historyStore: PlaybackHistoryStore) {
+        play(track: track, queue: [track], historyStore: historyStore)
+    }
+
+    func play(track: Track, queue tracks: [Track], historyStore: PlaybackHistoryStore) {
+        let normalizedQueue = normalizedQueue(tracks, including: track)
+        queue = normalizedQueue
+        currentIndex = normalizedQueue.firstIndex(where: { $0.id == track.id })
+        currentTrack = track
+        self.historyStore = historyStore
+        currentTime = 0
         startPlayback(
             url: track.fileURL,
-            historySession: HistorySession(track: track, store: historyStore)
+            historySession: HistorySession(track: track, store: historyStore),
+            replacingActiveSession: true
         )
     }
 
-    private func startPlayback(url: URL, historySession: HistorySession?) {
-        guard !hasActiveSession else { return }
+    private func startPlayback(
+        url: URL,
+        historySession: HistorySession?,
+        replacingActiveSession: Bool = false
+    ) {
+        guard replacingActiveSession || !hasActiveSession else { return }
         finalizeHistory(endKind: .userSkipped)
         self.historySession = historySession
         let previousTask = playbackTask
@@ -90,12 +120,83 @@ final class HiResDirectOutputProbeStore {
         }
     }
 
+    func togglePlayPause() {
+        switch state {
+        case .playing:
+            do {
+                try service.pause()
+                pauseHistory()
+                state = .paused
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+        case .paused:
+            do {
+                try service.resume()
+                resumeHistory()
+                state = .playing
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+        case .idle, .reachedEnd, .failed:
+            guard let currentTrack, let historyStore else { return }
+            play(track: currentTrack, queue: queue, historyStore: historyStore)
+        case .switching, .prepared:
+            break
+        }
+    }
+
+    func seek(to time: TimeInterval) {
+        guard state == .playing || state == .paused else { return }
+        let target = min(max(time.isFinite ? time : 0, 0), duration)
+        let wasPaused = state == .paused
+        do {
+            try service.seek(to: target)
+            if wasPaused { try service.pause() }
+            currentTime = target
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    func skip(by interval: TimeInterval) {
+        seek(to: currentTime + interval)
+    }
+
+    func previous() {
+        if currentTime > 3 {
+            seek(to: 0)
+            return
+        }
+        guard let currentIndex, currentIndex > 0 else { return }
+        playTrack(at: currentIndex - 1)
+    }
+
+    func next() {
+        guard let currentIndex, currentIndex + 1 < queue.count else { return }
+        playTrack(at: currentIndex + 1)
+    }
+
+    func playTrack(at index: Int) {
+        guard queue.indices.contains(index), let historyStore else { return }
+        let track = queue[index]
+        currentIndex = index
+        currentTrack = track
+        currentTime = 0
+        startPlayback(
+            url: track.fileURL,
+            historySession: HistorySession(track: track, store: historyStore),
+            replacingActiveSession: true
+        )
+    }
+
     func stop() {
         finalizeHistory(endKind: .userSkipped)
         playbackTask?.cancel()
         playbackTask = nil
         service.stop()
         state = .idle
+        currentTime = 0
     }
 
     private func handle(_ event: HiResAudioQueueProbeEvent) {
@@ -106,13 +207,23 @@ final class HiResDirectOutputProbeStore {
             startHistoryIfNeeded()
         case let .updated(snapshot):
             self.snapshot = snapshot
-            state = .playing
+            if state != .paused { state = .playing }
         case let .prepared(snapshot):
             self.snapshot = snapshot
             state = .prepared
+        case let .progress(time):
+            currentTime = min(max(time, 0), duration > 0 ? duration : time)
         case .reachedEnd:
             finalizeHistory(endKind: .natural)
-            state = .reachedEnd
+            currentTime = duration
+            if canGoNext {
+                next()
+            } else {
+                playbackTask?.cancel()
+                playbackTask = nil
+                service.stop()
+                state = .reachedEnd
+            }
         case let .failed(message):
             finalizeHistory(endKind: .other)
             service.stop()
@@ -124,6 +235,7 @@ final class HiResDirectOutputProbeStore {
         guard var session = historySession, session.startedAt == nil else { return }
         let startedAt = now()
         session.startedAt = startedAt
+        session.activeSince = startedAt
         historySession = session
         session.store.recordPlaybackStarted(
             trackID: session.track.id,
@@ -135,17 +247,17 @@ final class HiResDirectOutputProbeStore {
     }
 
     private func finalizeHistory(endKind: PlaybackEndKind) {
-        guard let session = historySession else { return }
+        guard var session = historySession else { return }
         historySession = nil
         guard let startedAt = session.startedAt else { return }
 
         let endedAt = now()
-        let elapsed = max(0, endedAt.timeIntervalSince(startedAt))
+        session.accumulate(until: endedAt)
         let duration = max(0, session.track.duration)
         let naturallyCompleted = endKind == .natural
         let listenedSeconds = naturallyCompleted && duration > 0
             ? duration
-            : min(elapsed, duration > 0 ? duration : elapsed)
+            : min(session.listenedSeconds, duration > 0 ? duration : session.listenedSeconds)
         let countThreshold = min(30, duration * 0.5)
         if naturallyCompleted || (countThreshold > 0 && listenedSeconds >= countThreshold) {
             session.store.recordPlaybackCompleted(trackID: session.track.id)
@@ -167,17 +279,45 @@ final class HiResDirectOutputProbeStore {
             endKind: endKind
         )
     }
+
+    private func pauseHistory() {
+        guard var session = historySession else { return }
+        session.accumulate(until: now())
+        historySession = session
+    }
+
+    private func resumeHistory() {
+        guard var session = historySession, session.startedAt != nil else { return }
+        session.activeSince = now()
+        historySession = session
+    }
+
+    private func normalizedQueue(_ tracks: [Track], including track: Track) -> [Track] {
+        var seen: Set<Track.ID> = []
+        var result = tracks.filter { seen.insert($0.id).inserted }
+        if seen.insert(track.id).inserted { result.append(track) }
+        return result
+    }
 }
 
 private struct HistorySession {
     let track: Track
     let store: PlaybackHistoryStore
     var startedAt: Date?
+    var activeSince: Date?
+    var listenedSeconds: TimeInterval = 0
     let context = PlaybackStartContext(kind: .manual, source: .hiResLibrary)
 
     init(track: Track, store: PlaybackHistoryStore, startedAt: Date? = nil) {
         self.track = track
         self.store = store
         self.startedAt = startedAt
+        activeSince = startedAt
+    }
+
+    mutating func accumulate(until date: Date) {
+        guard let activeSince else { return }
+        listenedSeconds += max(0, date.timeIntervalSince(activeSince))
+        self.activeSince = nil
     }
 }

@@ -72,3 +72,12 @@
 - 内部type名と独立Audio Queue backendは維持し、通常AVAudioEngineの再生経路は変更していない。
 - generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。名称・設定導線変更のためXCTestは追加実行していない。
 - Vespera（iPhone 17e、UDID `00008150-000C54280E33401C`）向けDebug実機build、install、launch成功。project `MyMusic.xcodeproj`、scheme／product `MyMusic`、Bundle ID `maruyama.MyMusic`、Development Team `U29GY347DY`。
+
+### ハイレゾ専用Now Playing
+
+- 専用ライブラリから曲を選ぶと「ハイレゾ再生中」を表示し、通常Now Playingに近いアートワーク、曲情報、お気に入り、あとで聴く、進捗、再生／一時停止、15秒移動、前後曲を提供する。
+- Audio Queueへpause／resume／seek／再生時刻取得／終了検知を追加し、選択した一覧を専用queueとして保持する。自然終了時は次曲へ進み、一時停止中の時間はPlayback Historyの実聴時間へ加算しない。
+- アートワークのタップで音源形式、sample rate、bit depth、実出力先、Audio Session rate、Audio Queue hardware rate、native／変換あり、曲metadataを表示する。
+- 既存EQは通常AVAudioEngineの`AVAudioUnitEQ`でありAudio Queue直接出力には作用しない。専用画面では非適用を明示し、通常再生用EQ設定への導線だけを置いた。
+- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。iPhone 17e / iOS 26.5 SimulatorでPlayback History、pause中の時間除外、専用queueの次曲移動を含むXCTest 4件が成功した。
+- XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除はなかった。実機デプロイとTea Proでの操作確認は未実施。

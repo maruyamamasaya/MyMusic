@@ -16,6 +16,7 @@ enum HiResAudioQueueProbeEvent: Sendable {
     case started(HiResAudioQueueProbeSnapshot)
     case updated(HiResAudioQueueProbeSnapshot)
     case prepared(HiResAudioQueueProbeSnapshot)
+    case progress(TimeInterval)
     case reachedEnd
     case failed(String)
 }
@@ -45,6 +46,9 @@ protocol HiResAudioQueueProbeServicing: AnyObject {
     var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)? { get set }
     func play(url: URL) async throws
     func prepare(sampleRate: Double) async throws
+    func pause() throws
+    func resume() throws
+    func seek(to time: TimeInterval) throws
     func stop()
 }
 
@@ -105,6 +109,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
 
             let playbackContext = HiResAudioQueueProbeContext(
                 audioFile: audioFile,
+                format: format,
                 eventHandler: { [weak self] event in
                     Task { @MainActor [weak self] in self?.eventHandler?(event) }
                 }
@@ -126,6 +131,12 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
             playbackContext.queue = queue
 
             do {
+                try checkAudioQueue(AudioQueueAddPropertyListener(
+                    queue,
+                    kAudioQueueProperty_IsRunning,
+                    hiResAudioQueueRunningPropertyCallback,
+                    Unmanaged.passUnretained(playbackContext).toOpaque()
+                ))
                 try copyMagicCookie(from: audioFile, to: queue)
                 let packetSize = try maximumPacketSize(for: audioFile)
                 let packetsPerBuffer = Self.packetsPerBuffer(
@@ -149,6 +160,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
                         &buffer
                     ))
                     guard let buffer else { continue }
+                    playbackContext.buffers.append(buffer)
                     if playbackContext.fill(buffer) { enqueuedBufferCount += 1 }
                 }
                 guard enqueuedBufferCount > 0 else {
@@ -158,9 +170,13 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
                 var preparedFrames: UInt32 = 0
                 try checkAudioQueue(AudioQueuePrime(queue, 0, &preparedFrames))
                 try checkAudioQueue(AudioQueueStart(queue, nil))
+                playbackContext.hasStarted.store(true, ordering: .releasing)
+                if playbackContext.reachedEOF.load(ordering: .acquiring) {
+                    AudioQueueStop(queue, false)
+                }
                 context = playbackContext
                 publishSnapshot(fileName: url.lastPathComponent, sourceSampleRate: format.mSampleRate, started: true)
-                scheduleSnapshotRefresh(fileName: url.lastPathComponent, sourceSampleRate: format.mSampleRate)
+                schedulePlaybackUpdates(fileName: url.lastPathComponent, sourceSampleRate: format.mSampleRate)
             } catch {
                 AudioQueueDispose(queue, true)
                 AudioFileClose(audioFile)
@@ -185,6 +201,45 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
             outputName: output?.portName ?? "Unknown",
             outputPortType: output?.portType.rawValue ?? "Unknown"
         )))
+    }
+
+    func pause() throws {
+        guard let queue = context?.queue else { return }
+        try checkAudioQueue(AudioQueuePause(queue))
+    }
+
+    func resume() throws {
+        guard let queue = context?.queue else { return }
+        try checkAudioQueue(AudioQueueStart(queue, nil))
+    }
+
+    func seek(to time: TimeInterval) throws {
+        guard let context, let queue = context.queue else { return }
+        let target = max(time.isFinite ? time : 0, 0)
+        context.reachedEOF.store(false, ordering: .releasing)
+        context.didReportEnd.store(false, ordering: .releasing)
+        context.hasStarted.store(false, ordering: .releasing)
+        try checkAudioQueue(AudioQueueStop(queue, true))
+        try checkAudioQueue(AudioQueueReset(queue))
+        context.currentPacket = context.packetOffset(for: target)
+        context.playbackOffset = target
+
+        var enqueuedBufferCount = 0
+        for buffer in context.buffers where context.fill(buffer) {
+            enqueuedBufferCount += 1
+        }
+        guard enqueuedBufferCount > 0 else {
+            eventHandler?(.reachedEnd)
+            return
+        }
+        var preparedFrames: UInt32 = 0
+        try checkAudioQueue(AudioQueuePrime(queue, 0, &preparedFrames))
+        try checkAudioQueue(AudioQueueStart(queue, nil))
+        context.hasStarted.store(true, ordering: .releasing)
+        if context.reachedEOF.load(ordering: .acquiring) {
+            AudioQueueStop(queue, false)
+        }
+        eventHandler?(.progress(target))
     }
 
     func stop() {
@@ -304,7 +359,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         eventHandler?(started ? .started(snapshot) : .updated(snapshot))
     }
 
-    private func scheduleSnapshotRefresh(fileName: String, sourceSampleRate: Double) {
+    private func schedulePlaybackUpdates(fileName: String, sourceSampleRate: Double) {
         refreshTask?.cancel()
         refreshTask = Task { @MainActor [weak self] in
             do {
@@ -315,10 +370,26 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
                     sourceSampleRate: sourceSampleRate,
                     started: false
                 )
+                while !Task.isCancelled {
+                    if let time = self?.playbackTime() {
+                        self?.eventHandler?(.progress(time))
+                    }
+                    try await Task.sleep(for: .milliseconds(250))
+                }
             } catch {
-                // Stopping or replacing the probe cancels this refresh.
+                // Stopping or replacing playback cancels these UI updates.
             }
         }
+    }
+
+    private func playbackTime() -> TimeInterval? {
+        guard let context, let queue = context.queue else { return nil }
+        var timestamp = AudioTimeStamp()
+        let status = AudioQueueGetCurrentTime(queue, nil, &timestamp, nil)
+        guard status == noErr,
+              timestamp.mFlags.contains(.sampleTimeValid),
+              context.sourceSampleRate > 0 else { return nil }
+        return context.playbackOffset + max(timestamp.mSampleTime, 0) / context.sourceSampleRate
     }
 
     private func copyMagicCookie(from audioFile: AudioFileID, to queue: AudioQueueRef) throws {
@@ -423,23 +494,70 @@ private let hiResAudioQueueOutputCallback: AudioQueueOutputCallback = { userData
     _ = context.fill(buffer)
 }
 
+private let hiResAudioQueueRunningPropertyCallback: AudioQueuePropertyListenerProc = { userData, queue, propertyID in
+    guard propertyID == kAudioQueueProperty_IsRunning, let userData else { return }
+    let context = Unmanaged<HiResAudioQueueProbeContext>
+        .fromOpaque(userData)
+        .takeUnretainedValue()
+    var isRunning: UInt32 = 0
+    var size = UInt32(MemoryLayout<UInt32>.size)
+    guard AudioQueueGetProperty(queue, propertyID, &isRunning, &size) == noErr,
+          isRunning == 0,
+          context.reachedEOF.load(ordering: .acquiring),
+          !context.isStopping.load(ordering: .acquiring),
+          context.didReportEnd.compareExchange(
+            expected: false,
+            desired: true,
+            ordering: .acquiringAndReleasing
+          ).exchanged else { return }
+    context.eventHandler(.reachedEnd)
+}
+
 private let hiResSilentQueueOutputCallback: AudioQueueOutputCallback = { _, _, _ in }
 
 private final class HiResAudioQueueProbeContext: @unchecked Sendable {
     let audioFile: AudioFileID
+    let sourceSampleRate: Double
+    let framesPerPacket: UInt32
+    let totalPacketCount: Int64
     let eventHandler: @Sendable (HiResAudioQueueProbeEvent) -> Void
     var queue: AudioQueueRef?
+    var buffers: [AudioQueueBufferRef] = []
     var packetsPerBuffer: UInt32 = 1
     var currentPacket: Int64 = 0
+    var playbackOffset: TimeInterval = 0
     let isStopping = Atomic<Bool>(false)
-    private var didReportEnd = false
+    let hasStarted = Atomic<Bool>(false)
+    let reachedEOF = Atomic<Bool>(false)
+    let didReportEnd = Atomic<Bool>(false)
 
     init(
         audioFile: AudioFileID,
+        format: AudioStreamBasicDescription,
         eventHandler: @escaping @Sendable (HiResAudioQueueProbeEvent) -> Void
     ) {
         self.audioFile = audioFile
+        sourceSampleRate = format.mSampleRate
+        framesPerPacket = format.mFramesPerPacket
+        var packetCount: Int64 = 0
+        var size = UInt32(MemoryLayout<Int64>.size)
+        if AudioFileGetProperty(
+            audioFile,
+            kAudioFilePropertyAudioDataPacketCount,
+            &size,
+            &packetCount
+        ) != noErr {
+            packetCount = 0
+        }
+        totalPacketCount = packetCount
         self.eventHandler = eventHandler
+    }
+
+    func packetOffset(for time: TimeInterval) -> Int64 {
+        guard sourceSampleRate > 0, framesPerPacket > 0 else { return 0 }
+        let packet = Int64(time * sourceSampleRate / Double(framesPerPacket))
+        guard totalPacketCount > 0 else { return max(packet, 0) }
+        return min(max(packet, 0), totalPacketCount - 1)
     }
 
     func fill(_ buffer: AudioQueueBufferRef) -> Bool {
@@ -460,9 +578,12 @@ private final class HiResAudioQueueProbeContext: @unchecked Sendable {
             return false
         }
         guard packetCount > 0 else {
-            if !didReportEnd {
-                didReportEnd = true
-                eventHandler(.reachedEnd)
+            if reachedEOF.compareExchange(
+                expected: false,
+                desired: true,
+                ordering: .acquiringAndReleasing
+            ).exchanged, hasStarted.load(ordering: .acquiring) {
+                AudioQueueStop(queue, false)
             }
             return false
         }

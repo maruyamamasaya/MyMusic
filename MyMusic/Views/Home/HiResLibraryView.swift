@@ -28,6 +28,7 @@ struct HiResLibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @State private var outputStore = HiResDirectOutputProbeStore()
+    @State private var isNowPlayingPresented = false
 
     private var catalog: HiResLibraryCatalog { libraryStore.hiResLibraryCatalog }
 
@@ -64,6 +65,9 @@ struct HiResLibraryView: View {
         .navigationDestination(for: HiResLibraryCategory.self) { category in
             destination(for: category)
         }
+        .sheet(isPresented: $isNowPlayingPresented) {
+            HiResNowPlayingView(store: outputStore)
+        }
         .onDisappear { outputStore.stop() }
     }
 
@@ -79,11 +83,24 @@ struct HiResLibraryView: View {
     private func destination(for category: HiResLibraryCategory) -> some View {
         switch category {
         case .songs:
-            HiResTrackCollectionView(title: "曲名", tracks: catalog.tracks, outputStore: outputStore)
+            HiResTrackCollectionView(
+                title: "曲名",
+                tracks: catalog.tracks,
+                outputStore: outputStore,
+                onPresentNowPlaying: { isNowPlayingPresented = true }
+            )
         case .albums:
-            HiResAlbumListView(catalog: catalog, outputStore: outputStore)
+            HiResAlbumListView(
+                catalog: catalog,
+                outputStore: outputStore,
+                onPresentNowPlaying: { isNowPlayingPresented = true }
+            )
         case .artists:
-            HiResArtistListView(catalog: catalog, outputStore: outputStore)
+            HiResArtistListView(
+                catalog: catalog,
+                outputStore: outputStore,
+                onPresentNowPlaying: { isNowPlayingPresented = true }
+            )
         }
     }
 
@@ -114,6 +131,11 @@ struct HiResLibraryView: View {
                 if outputStore.hasActiveSession {
                     Button("停止", role: .destructive) { outputStore.stop() }
                 }
+                if outputStore.currentTrack != nil {
+                    Button("再生中画面を表示", systemImage: "play.square.stack") {
+                        isNowPlayingPresented = true
+                    }
+                }
             }
         }
     }
@@ -127,6 +149,7 @@ struct HiResLibraryView: View {
 private struct HiResAlbumListView: View {
     let catalog: HiResLibraryCatalog
     let outputStore: HiResDirectOutputProbeStore
+    let onPresentNowPlaying: () -> Void
 
     var body: some View {
         List(catalog.albums) { album in
@@ -134,7 +157,8 @@ private struct HiResAlbumListView: View {
                 HiResTrackCollectionView(
                     title: album.title,
                     tracks: catalog.tracks(for: album.trackIDs),
-                    outputStore: outputStore
+                    outputStore: outputStore,
+                    onPresentNowPlaying: onPresentNowPlaying
                 )
             } label: {
                 Label(album.title, systemImage: "square.stack")
@@ -148,6 +172,7 @@ private struct HiResAlbumListView: View {
 private struct HiResArtistListView: View {
     let catalog: HiResLibraryCatalog
     let outputStore: HiResDirectOutputProbeStore
+    let onPresentNowPlaying: () -> Void
 
     var body: some View {
         List(catalog.artists) { artist in
@@ -155,7 +180,8 @@ private struct HiResArtistListView: View {
                 HiResTrackCollectionView(
                     title: artist.name,
                     tracks: catalog.tracks(for: artist.trackIDs),
-                    outputStore: outputStore
+                    outputStore: outputStore,
+                    onPresentNowPlaying: onPresentNowPlaying
                 )
             } label: {
                 Label(artist.name, systemImage: "music.mic")
@@ -174,6 +200,7 @@ private struct HiResTrackCollectionView: View {
     let title: String
     let tracks: [Track]
     let outputStore: HiResDirectOutputProbeStore
+    let onPresentNowPlaying: () -> Void
 
     private var filteredTracks: [Track] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -205,7 +232,12 @@ private struct HiResTrackCollectionView: View {
                         PlayableTrackRowView(track: track) {
                             playerStore.stop()
                             outputStore.stop()
-                            outputStore.play(track: track, historyStore: playbackHistoryStore)
+                            outputStore.play(
+                                track: track,
+                                queue: filteredTracks,
+                                historyStore: playbackHistoryStore
+                            )
+                            onPresentNowPlaying()
                         }
                     }
                 }
