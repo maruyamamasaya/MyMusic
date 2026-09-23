@@ -40,16 +40,30 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
     }
 
-    func testWorkPlaybackGenreIsSeparatedFromRegularLibraryAndGenreFilter() async throws {
+    func testDedicatedPlaybackGenresAreFixedOutsideRegularGenreFilter() async throws {
         let ambient = makeTrack(title: "Ambient", genre: "Ambient")
         let work = makeTrack(title: "Work", genre: "Focus; \(Track.workPlaybackGenre)")
+        let hiRes = makeTrack(
+            title: "Hi-Res",
+            genre: "Classical",
+            audioFormat: AudioFormat(
+                codec: .flac,
+                bitRate: nil,
+                sampleRate: 96_000,
+                bitDepth: 24,
+                channels: 2
+            )
+        )
         let folder = URL(fileURLWithPath: "/tmp/work-genre-filter-library")
         let suiteName = "LibraryGenreFilterTests-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set([Track.workPlaybackGenre], forKey: "library.disabledGenreNames")
+        defaults.set(
+            [Track.workPlaybackGenre, Track.hiResPlaybackGenre],
+            forKey: "library.disabledGenreNames"
+        )
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = LibraryStore(
-            service: GenreFilterLibraryService(tracks: [ambient, work]),
+            service: GenreFilterLibraryService(tracks: [ambient, work, hiRes]),
             fileImportService: GenreFilterFileImport(folders: [folder]),
             persistence: GenreFilterLibraryPersistence(),
             identityService: TrackIdentityService(
@@ -64,16 +78,28 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.tracks.map(\.id), [ambient.id])
         XCTAssertEqual(store.albums.flatMap(\.trackIDs), [ambient.id])
         XCTAssertEqual(store.artists.flatMap(\.trackIDs), [ambient.id])
-        XCTAssertFalse(store.availableGenreOptions.contains { $0.id == Track.workPlaybackGenre })
+        XCTAssertEqual(
+            store.fixedGenreOptions.map(\.id),
+            [Track.workPlaybackGenre, Track.hiResPlaybackGenre]
+        )
+        XCTAssertTrue(store.isGenreAlwaysEnabled(Track.workPlaybackGenre))
+        XCTAssertTrue(store.isGenreAlwaysEnabled(Track.hiResPlaybackGenre))
+        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+        XCTAssertTrue(store.isGenreEnabled(Track.hiResPlaybackGenre))
+        XCTAssertEqual(store.selectableGenreOptions.map(\.id), ["Ambient"])
         XCTAssertFalse(store.availableGenreOptions.contains { $0.id == "Focus" })
         XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
+        XCTAssertEqual(store.hiResLibraryCatalog.tracks.map(\.id), [hiRes.id])
         XCTAssertEqual(store.tracks(for: .work).map(\.id), [work.id])
         XCTAssertEqual(store.tracks(for: .regular).map(\.id), [ambient.id])
 
         store.setEnabledGenres([])
         try await waitUntil { store.tracks.isEmpty }
         XCTAssertFalse(store.isGenreEnabled("Ambient"))
+        XCTAssertTrue(store.isGenreEnabled(Track.workPlaybackGenre))
+        XCTAssertTrue(store.isGenreEnabled(Track.hiResPlaybackGenre))
         XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
+        XCTAssertEqual(store.hiResLibraryCatalog.tracks.map(\.id), [hiRes.id])
 
         let preset = GenreDisplayPreset(
             id: UUID(),
@@ -84,6 +110,7 @@ final class LibraryGenreFilterTests: XCTestCase {
         store.applyGenreDisplayPreset(preset)
         try await waitUntil { store.tracks.isEmpty }
         XCTAssertTrue(store.isGenreDisplayPresetActive(preset))
+        XCTAssertEqual(store.enabledGenreCount(for: preset), 0)
         XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
     }
 
@@ -102,7 +129,7 @@ final class LibraryGenreFilterTests: XCTestCase {
         }
     }
 
-    private func makeTrack(title: String, genre: String) -> Track {
+    private func makeTrack(title: String, genre: String, audioFormat: AudioFormat? = nil) -> Track {
         Track(
             id: UUID(),
             title: title,
@@ -110,7 +137,8 @@ final class LibraryGenreFilterTests: XCTestCase {
             albumTitle: "Album \(title)",
             duration: 180,
             fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"),
-            genre: genre
+            genre: genre,
+            audioFormat: audioFormat
         )
     }
 

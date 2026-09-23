@@ -31,6 +31,10 @@ final class LibraryStore {
     private(set) var genreDisplayPresets: [GenreDisplayPreset]
 
     var availableGenreOptions: [GenreDisplayOption] {
+        fixedGenreOptions + selectableGenreOptions
+    }
+
+    var selectableGenreOptions: [GenreDisplayOption] {
         var options = allGenres
             .filter { $0.name != Track.workPlaybackGenre && $0.name != Track.hiResPlaybackGenre }
             .map { GenreDisplayOption(id: $0.name, name: $0.name) }
@@ -38,6 +42,17 @@ final class LibraryStore {
             $0.isEligibleForRegularPlayback && Self.genreNames(in: $0.genre).isEmpty
         }) {
             options.append(GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定"))
+        }
+        return options
+    }
+
+    var fixedGenreOptions: [GenreDisplayOption] {
+        var options: [GenreDisplayOption] = []
+        if allTracks.contains(where: \.isEligibleForWorkPlayback) {
+            options.append(GenreDisplayOption(id: Track.workPlaybackGenre, name: Track.workPlaybackGenre))
+        }
+        if allTracks.contains(where: \.isEligibleForHiResPlayback) {
+            options.append(GenreDisplayOption(id: Track.hiResPlaybackGenre, name: Track.hiResPlaybackGenre))
         }
         return options
     }
@@ -158,7 +173,7 @@ final class LibraryStore {
         await identityService.fingerprints(for: allTracks.map(\.id))
     }
     func isGenreAlwaysEnabled(_ genreName: String) -> Bool {
-        genreName == Track.workPlaybackGenre
+        genreName == Track.workPlaybackGenre || genreName == Track.hiResPlaybackGenre
     }
     func isGenreEnabled(_ genreName: String) -> Bool {
         isGenreAlwaysEnabled(genreName) || !disabledGenreNames.contains(genreName)
@@ -174,19 +189,18 @@ final class LibraryStore {
         applyGenreFilter()
     }
     func setEnabledGenres(_ genreNames: Set<String>) {
-        disabledGenreNames = Set(availableGenreOptions.map(\.id))
-            .subtracting(genreNames.union([Track.workPlaybackGenre]))
+        disabledGenreNames = Set(selectableGenreOptions.map(\.id)).subtracting(genreNames)
         saveDisabledGenres()
         applyGenreFilter()
     }
     func showAllGenres() {
-        setEnabledGenres(Set(availableGenreOptions.map(\.id)))
+        setEnabledGenres(Set(selectableGenreOptions.map(\.id)))
     }
     var areAllGenresEnabled: Bool {
-        availableGenreOptions.allSatisfy { isGenreEnabled($0.id) }
+        selectableGenreOptions.allSatisfy { isGenreEnabled($0.id) }
     }
     func saveGenreDisplayPreset(named name: String) {
-        let enabledGenreNames = Set(availableGenreOptions.map(\.id).filter(isGenreEnabled))
+        let enabledGenreNames = Set(selectableGenreOptions.map(\.id).filter(isGenreEnabled))
         saveGenreDisplayPreset(named: name, enabledGenreNames: enabledGenreNames)
     }
     func saveGenreDisplayPreset(named name: String, enabledGenreNames: Set<String>) {
@@ -208,7 +222,7 @@ final class LibraryStore {
         saveGenreDisplayPresets()
     }
     func applyGenreDisplayPreset(_ preset: GenreDisplayPreset) {
-        disabledGenreNames = Set(availableGenreOptions.map(\.id))
+        disabledGenreNames = Set(selectableGenreOptions.map(\.id))
             .subtracting(enabledGenreKeys(for: preset).union(alwaysEnabledAvailableGenreNames))
         saveDisabledGenres()
         applyGenreFilter()
@@ -269,13 +283,13 @@ final class LibraryStore {
         return (added, updated)
     }
     func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
-        let availableKeys = Set(availableGenreOptions.map(\.id))
+        let availableKeys = Set(selectableGenreOptions.map(\.id))
         let currentEnabledKeys = availableKeys.filter(isGenreEnabled)
         let presetEnabledKeys = enabledGenreKeys(for: preset).intersection(availableKeys)
         return currentEnabledKeys == presetEnabledKeys
     }
     func enabledGenreCount(for preset: GenreDisplayPreset) -> Int {
-        enabledGenreKeys(for: preset).intersection(availableGenreOptions.map(\.id)).count
+        enabledGenreKeys(for: preset).intersection(selectableGenreOptions.map(\.id)).count
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
     func tracks(for playlistKind: PlaylistKind) -> [Track] {

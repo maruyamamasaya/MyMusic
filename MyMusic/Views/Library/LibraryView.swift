@@ -81,7 +81,7 @@ struct LibraryView: View {
                                 HStack {
                                     Label("ジャンルごとの表示", systemImage: "line.3.horizontal.decrease.circle")
                                     Spacer()
-                                    Text("\(enabledGenreCount)/\(libraryStore.availableGenreOptions.count)")
+                                    Text("\(enabledGenreCount)/\(libraryStore.selectableGenreOptions.count)")
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -160,7 +160,7 @@ struct LibraryView: View {
     }
 
     private var enabledGenreCount: Int {
-        libraryStore.availableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
+        libraryStore.selectableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
     }
 
     private var visibleLibraryFolders: ArraySlice<LibraryFolder> {

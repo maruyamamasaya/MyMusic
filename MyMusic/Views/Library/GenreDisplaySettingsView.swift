@@ -14,7 +14,7 @@ struct GenreDisplaySettingsView: View {
                 } label: {
                     SettingsSummaryRow(
                         title: "表示するジャンル",
-                        detail: "\(enabledGenreCount) / \(libraryStore.availableGenreOptions.count)",
+                        detail: "\(enabledGenreCount) / \(libraryStore.selectableGenreOptions.count)",
                         systemImage: "checklist"
                     )
                 }
@@ -107,7 +107,7 @@ struct GenreDisplaySettingsView: View {
     }
 
     private var enabledGenreCount: Int {
-        libraryStore.availableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
+        libraryStore.selectableGenreOptions.count { libraryStore.isGenreEnabled($0.id) }
     }
 
     private var appliedSetIsPresented: Binding<Bool> {
@@ -197,6 +197,29 @@ struct GenreSelectionEditorView: View {
                 }
             }
 
+            if !libraryStore.fixedGenreOptions.isEmpty {
+                Section {
+                    ForEach(libraryStore.fixedGenreOptions) { option in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.name)
+                                Text("専用ライブラリとして常に表示")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "lock.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(ThemePalette.resolve(appTheme).accent)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityValue("常に表示")
+                    }
+                } header: {
+                    Text("固定の専用分類")
+                }
+            }
+
             Section {
                 HStack(spacing: 12) {
                     Button {
@@ -221,23 +244,14 @@ struct GenreSelectionEditorView: View {
                 .controlSize(.regular)
                 .padding(.vertical, 4)
 
-                ForEach(libraryStore.availableGenreOptions) { option in
+                ForEach(libraryStore.selectableGenreOptions) { option in
                     Button {
                         toggle(option.id)
                     } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(option.name).foregroundStyle(.primary)
-                                if libraryStore.isGenreAlwaysEnabled(option.id) {
-                                    Text("常に表示")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            Text(option.name).foregroundStyle(.primary)
                             Spacer()
-                            Image(systemName: libraryStore.isGenreAlwaysEnabled(option.id)
-                                  ? "lock.circle.fill"
-                                  : selection.contains(option.id) ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: selection.contains(option.id) ? "checkmark.circle.fill" : "circle")
                                 .font(.title3)
                                 .foregroundStyle(
                                     selection.contains(option.id) ? ThemePalette.resolve(appTheme).accent : .secondary
@@ -246,16 +260,10 @@ struct GenreSelectionEditorView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(libraryStore.isGenreAlwaysEnabled(option.id))
                     .accessibilityValue(selection.contains(option.id) ? "表示" : "非表示")
-                    .accessibilityHint(
-                        libraryStore.isGenreAlwaysEnabled(option.id)
-                            ? "作業用の曲を分離するため常に表示されます"
-                            : ""
-                    )
                 }
             } header: {
-                Text("表示するジャンル（\(selection.count)件）")
+                Text("表示するジャンル（\(selectedSelectableCount)件）")
             }
         }
         .themeScreen()
@@ -283,7 +291,9 @@ struct GenreSelectionEditorView: View {
     }
 
     private var allIDs: Set<String> { Set(libraryStore.availableGenreOptions.map(\.id)) }
+    private var selectableIDs: Set<String> { Set(libraryStore.selectableGenreOptions.map(\.id)) }
     private var fixedIDs: Set<String> { Set(allIDs.filter(libraryStore.isGenreAlwaysEnabled)) }
+    private var selectedSelectableCount: Int { selection.intersection(selectableIDs).count }
     private var canSave: Bool {
         !needsName || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
