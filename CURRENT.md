@@ -59,6 +59,14 @@ updated: 2026-09-23
 - 画面の段階表示とは分離し、曲タップ時の再生queueと検索playlist保存には全検索結果を維持する。playlist対象件数は検索完了時に一度だけ集計し、SwiftUI body評価ごとの全件filterを除去した。
 - generic iOS Simulator Debug buildと、検索・Album Artist・曲一覧配置の対象XCTest 15件は成功。実機約10,000曲での検索入力latency、末尾までのscroll、peak memoryは未計測。
 
+## 大規模ライブラリ性能改善 Phase 6
+
+- cache復元時のTrack Identity登録は、cache内のsize／更新日時／duration／firstSeenAtだけを使う。音源ごとのresource values／file resource identifier再取得を廃止し、Identity registryの内容が変わらない通常起動ではJSONも書き直さない。
+- quick同期のdirectory列挙でsizeと更新日時も同時取得し、差分判定直前の全曲resource values再取得を通常経路から除去した。全ファイルの存在確認は追加・削除検出のため引き続き必要だが、未変更曲のAVFoundation metadata／Artwork再取得は行わない。
+- iCloud未download、file／directoryの一時読取失敗、AVFoundation metadata読取失敗では、直前のcacheにあるTrackを完成libraryへ残す。明示的に消えたファイルだけをlibraryから除外する。cacheまたは現在値のsize／更新日時が欠ける場合は「未変更」と断定せずmetadataを再取得する。
+- complete同期の再開checkpointを、10曲ごとの累積全件JSON再生成から100曲ごとの小さな追記へ変更した。2万曲時のcheckpoint encode／write量を二次的増加から線形へ戻し、再開時だけ最新entryへ1回compactする。旧単一JSON checkpointも読める。
+- generic iOS Simulator Debug buildと、quick同期／Identity復元／checkpoint batchingの対象XCTest 16件は成功。Vespera向けDebug実機build・installも成功したが、端末ロック中のため自動launchは未確認。約20,000曲でのcold launch、quick／complete同期時間、発熱、iCloud未download時の曲数維持は未計測。
+
 ## 実装済み
 
 ### USB DAC ネイティブレート出力 Beta
@@ -206,7 +214,7 @@ updated: 2026-09-23
 
 - **ホームHighlight入口と設定tab**: 下部5番目のHighlight tabをSettingsへ置き換え、ホームの「マイミュージック」タイル列の左端に既存タイルと同じ寸法のHighlightタイルを配置した。タイルは`highlight-background.*`を優先し、未配置時は通常再生対象のランダムArtwork、Artworkがない場合は専用グラデーションを表示する。背景選択はHighlightのqueue／先頭曲から分離する。ホーム右上の設定ボタンは撤去し、ホーム内容の上余白を8pt減らした。
 
-- **ライブラリ同期の診断・完全再取得**: Libraryの同期を、file size／更新日時による「クイック同期」と、全曲のmetadata／Artworkを読み直す「メタデータと画像を再取得」に分けた。完全再取得でもTrack Identity registryを使うためTrack UUID、firstSeenAt、再生履歴、Preference、Playlist等の紐付けを維持する。完全再取得は取得済みTrackを10分有効のcheckpointへbatch保存し、中断後はpath・size・更新日時・UUIDが一致する曲を再利用する。Library cache保存成功時だけcheckpointを削除する。同期中は現在folder、総曲数、完了数、残数を表示する。iCloud未取得、directory走査、file属性、metadata読取の失敗は黙って破棄せず、folder別の件数・代表path・NSError識別情報を完了時のpopupへ集約する。Artwork identifierはTrack UUIDと画像content hashから生成し、同一Trackの画像差し替えでもdisk／memory／SwiftUI表示cacheを更新する。
+- **ライブラリ同期の診断・完全再取得**: Libraryの同期を、file size／更新日時による「クイック同期」と、全曲のmetadata／Artworkを読み直す「メタデータと画像を再取得」に分けた。完全再取得でもTrack Identity registryを使うためTrack UUID、firstSeenAt、再生履歴、Preference、Playlist等の紐付けを維持する。完全再取得は取得済みTrackを10分有効の追記型checkpointへ100曲単位で保存し、中断後はpath・size・更新日時・UUIDが一致する曲を再利用する。Library cache保存成功時だけcheckpointを削除する。同期中は現在folder、総曲数、完了数、残数を表示する。iCloud未取得、directory走査、file属性、metadata読取の失敗は黙って破棄せず、既存Trackを保持しつつfolder別の件数・代表path・NSError識別情報を完了時のpopupへ集約する。Artwork identifierはTrack UUIDと画像content hashから生成し、同一Trackの画像差し替えでもdisk／memory／SwiftUI表示cacheを更新する。
 
 - **音楽史ランキング50位表示**: 年別の「この年のアーティスト」「よく聴いた曲」と、各月の「よく聴いた曲」「よく聴いたアーティスト」は概要のTOP5／TOP10を維持し、件数が続く場合は小さな「続きを見る」から最大50位の専用ランキングへ移動できる。曲は従来どおり曲ごとの音楽史へ遷移でき、月の「この頃を再生」は最大25曲のqueue上限を維持する。
 

@@ -151,6 +151,117 @@ final class TrackFirstSeenAtTests: XCTestCase {
         })
     }
 
+    func testQuickScanKeepsPreviouslyIndexedICloudPendingTrack() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "QuickScanPending-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let previous = Track(
+            id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: directory.appending(path: "pending.m4a"), relativePath: "pending.m4a",
+            fileSize: 1_024, modificationDate: .distantPast,
+            metadataRevision: MetadataService.currentMetadataRevision
+        )
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(
+                files: [], notices: [.iCloudDownloadPending(relativePath: "pending.m4a")]
+            ),
+            metadataService: FailingMetadataStub(),
+            identityService: FirstSeenIdentityStub()
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [previous], depth: .quick
+        )
+
+        XCTAssertEqual(report.library.tracks, [previous])
+        XCTAssertEqual(report.notices, [.iCloudDownloadPending(relativePath: "pending.m4a")])
+    }
+
+    func testQuickScanKeepsTracksBelowTemporarilyUnreadableDirectory() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "QuickScanUnreadableDirectory-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let previous = Track(
+            id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: directory.appending(path: "Album/song.m4a"), relativePath: "Album/song.m4a",
+            fileSize: 1_024, modificationDate: .distantPast,
+            metadataRevision: MetadataService.currentMetadataRevision
+        )
+        let notice = LibraryScanNotice.directoryReadFailed(
+            relativePath: "Album", detail: "temporarily unavailable"
+        )
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(files: [], notices: [notice]),
+            metadataService: FailingMetadataStub(),
+            identityService: FirstSeenIdentityStub()
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [previous], depth: .quick
+        )
+
+        XCTAssertEqual(report.library.tracks, [previous])
+        XCTAssertEqual(report.notices, [notice])
+    }
+
+    func testQuickScanKeepsPreviousTrackWhenMetadataReadTemporarilyFails() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "QuickScanMetadataFailure-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.m4a")
+        try Data("changed audio".utf8).write(to: file)
+        let previous = Track(
+            id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.m4a",
+            fileSize: nil, modificationDate: nil,
+            metadataRevision: MetadataService.currentMetadataRevision
+        )
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(files: [file]),
+            metadataService: FailingMetadataStub(),
+            identityService: FirstSeenIdentityStub()
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [previous], depth: .quick
+        )
+
+        XCTAssertEqual(report.library.tracks, [previous])
+        XCTAssertTrue(report.notices.contains { notice in
+            guard case .metadataReadFailed("song.m4a", _) = notice else { return false }
+            return true
+        })
+    }
+
+    func testQuickScanReloadsMetadataWhenCachedSourceAttributesAreMissing() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "QuickScanMissingAttributes-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.m4a")
+        try Data("audio".utf8).write(to: file)
+        let previous = Track(
+            id: StableTrackIdentifier.id(for: "song.m4a"),
+            title: "Stale title", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.m4a",
+            metadataRevision: MetadataService.currentMetadataRevision
+        )
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(files: [file]),
+            metadataService: FirstSeenMetadataStub(),
+            identityService: FirstSeenIdentityStub()
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [previous], depth: .quick
+        )
+
+        XCTAssertEqual(report.library.tracks.first?.title, "song.m4a")
+    }
+
     func testCompleteScanReloadsUnchangedMetadataAndReportsProgress() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "CompleteLibraryScan-\(UUID())", directoryHint: .isDirectory)
@@ -243,6 +354,29 @@ final class TrackFirstSeenAtTests: XCTestCase {
         XCTAssertEqual(resumed.library.tracks, first.library.tracks)
     }
 
+    func testCompleteScanAppendsBoundedCheckpointBatches() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "CheckpointBatching-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = (0..<205).map { directory.appending(path: "track-\($0).m4a") }
+        let checkpoint = RecordingCheckpointStub()
+        let service = MusicLibraryService(
+            fileImportService: FirstSeenFileImportStub(files: files),
+            metadataService: FirstSeenMetadataStub(),
+            identityService: FirstSeenIdentityStub(),
+            checkpointService: checkpoint
+        )
+
+        let report = try await service.loadLibraryReport(
+            from: directory, previousTracks: [], depth: .complete
+        )
+
+        XCTAssertEqual(report.library.tracks.count, 205)
+        let batchSizes = await checkpoint.batchSizes
+        XCTAssertEqual(batchSizes, [100, 100, 5])
+    }
+
     private func makeTrack(folder: URL, name: String, firstSeenAt: Date) -> Track {
         Track(id: UUID(), title: name, artistName: "Artist", duration: 180,
               fileURL: folder.appending(path: "\(name).m4a"), relativePath: "\(name).m4a",
@@ -287,6 +421,23 @@ private struct FailingMetadataStub: MetadataServicing {
 private actor ScanProgressRecorder {
     private(set) var values: [LibraryScanProgress] = []
     func append(_ value: LibraryScanProgress) { values.append(value) }
+}
+
+private actor RecordingCheckpointStub: LibraryScanCheckpointServicing {
+    private(set) var batchSizes: [Int] = []
+
+    func recentEntries(
+        for folderURL: URL,
+        since cutoff: Date
+    ) async -> [String: LibraryScanCheckpointEntry] {
+        [:]
+    }
+
+    func append(_ entries: [String: LibraryScanCheckpointEntry], for folderURL: URL) async {
+        batchSizes.append(entries.count)
+    }
+
+    func remove(for folderURL: URL) async {}
 }
 
 private actor CheckpointMetadataStub: MetadataServicing {

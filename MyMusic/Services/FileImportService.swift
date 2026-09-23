@@ -13,9 +13,29 @@ extension FileImportServicing {
     }
 }
 
+nonisolated struct AudioFileScanEntry: Sendable {
+    let url: URL
+    let fileSize: Int64?
+    let modificationDate: Date?
+}
+
 nonisolated struct AudioFileScanResult: Sendable {
-    let files: [URL]
+    let entries: [AudioFileScanEntry]
     let notices: [LibraryScanNotice]
+
+    var files: [URL] { entries.map(\.url) }
+
+    init(entries: [AudioFileScanEntry], notices: [LibraryScanNotice]) {
+        self.entries = entries
+        self.notices = notices
+    }
+
+    init(files: [URL], notices: [LibraryScanNotice]) {
+        self.init(
+            entries: files.map { AudioFileScanEntry(url: $0, fileSize: nil, modificationDate: nil) },
+            notices: notices
+        )
+    }
 }
 
 nonisolated enum LibraryScanNotice: Sendable, Equatable {
@@ -133,7 +153,14 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
             throw FileImportServiceError.accessDenied
         }
 
-        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isHiddenKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let keys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .isHiddenKey,
+            .isUbiquitousItemKey,
+            .ubiquitousItemDownloadingStatusKey,
+            .fileSizeKey,
+            .contentModificationDateKey
+        ]
         var notices: [LibraryScanNotice] = []
         guard let enumerator = FileManager.default.enumerator(
             at: folderURL,
@@ -150,7 +177,7 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
             throw FileImportServiceError.folderUnavailable
         }
 
-        var files: [URL] = []
+        var entries: [AudioFileScanEntry] = []
         while let url = enumerator.nextObject() as? URL {
             if Task.isCancelled { throw CancellationError() }
             guard supportedExtensions.contains(url.pathExtension.lowercased()) else { continue }
@@ -174,9 +201,13 @@ nonisolated final class FileImportService: FileImportServicing, @unchecked Senda
                 ))
                 continue
             }
-            files.append(url)
+            entries.append(AudioFileScanEntry(
+                url: url,
+                fileSize: values.fileSize.map(Int64.init),
+                modificationDate: values.contentModificationDate
+            ))
         }
-        return AudioFileScanResult(files: files, notices: notices)
+        return AudioFileScanResult(entries: entries, notices: notices)
     }
 
     private nonisolated static func relativePath(for url: URL, root: URL) -> String {

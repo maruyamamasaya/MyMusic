@@ -219,43 +219,52 @@ actor TrackIdentityService: TrackIdentityServicing {
     }
 
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async {
-        let hasAccess = folderURL.startAccessingSecurityScopedResource()
-        defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
-        guard hasAccess || FileManager.default.isReadableFile(atPath: folderURL.path) else { return }
+        await loadIfNeeded()
+        var didChange = false
 
         for track in tracks {
-            if Task.isCancelled { return }
+            if Task.isCancelled { break }
             guard let relativePath = track.relativePath else { continue }
             let scopedPath = folderURL.standardizedFileURL.path.precomposedStringWithCanonicalMapping + "/" + relativePath
-            await loadIfNeeded()
-            let values = try? track.fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            let fileSize = track.fileSize ?? values?.fileSize.map(Int64.init)
-            let modificationDate = track.modificationDate ?? values?.contentModificationDate
-            let resourceIdentifier = Self.resourceIdentifier(for: track.fileURL)
             if let index = idIndex[track.id] ?? pathIndex[scopedPath] ?? pathIndex[relativePath] {
-                updatePath(scopedPath, at: index)
-                updateResourceIdentifier(resourceIdentifier, at: index)
-                records?[index].fileSize = fileSize
-                records?[index].modificationDate = modificationDate
-                records?[index].duration = track.duration
+                if records?[index].relativePath != scopedPath {
+                    updatePath(scopedPath, at: index)
+                    didChange = true
+                }
+                if records?[index].fileSize != track.fileSize {
+                    records?[index].fileSize = track.fileSize
+                    didChange = true
+                }
+                if records?[index].modificationDate != track.modificationDate {
+                    records?[index].modificationDate = track.modificationDate
+                    didChange = true
+                }
+                if records?[index].duration != track.duration {
+                    records?[index].duration = track.duration
+                    didChange = true
+                }
                 if records?[index].firstSeenAt == nil {
                     records?[index].firstSeenAt = track.firstSeenAt
+                    didChange = track.firstSeenAt != nil || didChange
                 }
             } else {
                 append(Record(
                     id: track.id,
                     relativePath: scopedPath,
-                    resourceIdentifier: resourceIdentifier,
+                    resourceIdentifier: nil,
                     audioFingerprint: nil,
-                    fileSize: fileSize,
-                    modificationDate: modificationDate,
+                    fileSize: track.fileSize,
+                    modificationDate: track.modificationDate,
                     duration: track.duration,
                     firstSeenAt: track.firstSeenAt
                 ))
+                didChange = true
             }
         }
-        isDirty = true
-        persistNow()
+        if didChange {
+            isDirty = true
+            persistNow()
+        }
     }
 
     func fingerprints(for trackIDs: [Track.ID]) async -> [Track.ID: String] {

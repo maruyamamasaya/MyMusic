@@ -3,6 +3,35 @@ import XCTest
 @testable import MyMusic
 
 final class TrackIdentityMoveTests: XCTestCase {
+    func testRegisteringCachedTrackDoesNotRequireTheAudioFileToBeReadable() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "TrackIdentityCachedRegistration-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let registryURL = directory.appending(path: "identities.json")
+        let unavailableFolder = directory.appending(path: "offline", directoryHint: .isDirectory)
+        let trackID = UUID()
+        let track = Track(
+            id: trackID, title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: unavailableFolder.appending(path: "song.m4a"), relativePath: "song.m4a",
+            fileSize: 1_024, modificationDate: .distantPast, firstSeenAt: .distantPast
+        )
+        let subject = TrackIdentityService(registryURL: registryURL)
+
+        await subject.registerExistingTracks([track], in: unavailableFolder)
+
+        let resolved = await subject.resolveIdentity(
+            for: track.fileURL,
+            relativePath: unavailableFolder.standardizedFileURL.path + "/song.m4a",
+            fileSize: track.fileSize,
+            modificationDate: track.modificationDate,
+            duration: track.duration,
+            discoveredAt: .now
+        )
+        XCTAssertEqual(resolved.id, trackID)
+        XCTAssertEqual(resolved.firstSeenAt, track.firstSeenAt)
+    }
+
     func testRenameKeepsExistingTrackIDUsingResourceIdentifier() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "TrackIdentityMoveTests-\(UUID())", directoryHint: .isDirectory)
