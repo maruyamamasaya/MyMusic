@@ -55,6 +55,7 @@ final class HiResLibraryCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.tracks.map(\.id), [hiRes.id])
         XCTAssertEqual(catalog.albums.flatMap(\.trackIDs), [hiRes.id])
         XCTAssertEqual(catalog.artists.flatMap(\.trackIDs), [hiRes.id])
+        XCTAssertEqual(catalog.tracks(for: [UUID(), hiRes.id]).map(\.id), [hiRes.id])
     }
 
     func testPresentationSnapshotSeparatesHiResFromRegularLibrary() async throws {

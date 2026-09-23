@@ -14,6 +14,9 @@ struct SearchView: View {
     @State private var playlistName = ""
     @State private var savedPlaylistName: String?
     @State private var searchStore = TrackSearchStore()
+    @State private var displayedResultCount = pageSize
+
+    private static let pageSize = 100
 
     private var hasSearchConditions: Bool {
         !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || filter.hasConditions
@@ -34,6 +37,18 @@ struct SearchView: View {
 
     private var resultArtists: [Artist] { searchStore.resultArtists }
 
+    private var visibleResults: ArraySlice<Track> {
+        results.prefix(displayedResultCount)
+    }
+
+    private var visibleResultAlbums: ArraySlice<Album> {
+        resultAlbums.prefix(displayedResultCount)
+    }
+
+    private var visibleResultArtists: ArraySlice<Artist> {
+        resultArtists.prefix(displayedResultCount)
+    }
+
     private var resultsAreEmpty: Bool {
         switch selectedKeywordField {
         case .title: results.isEmpty
@@ -51,6 +66,9 @@ struct SearchView: View {
                         systemImage: "magnifyingglass",
                         description: Text("複数のキーワードや再生履歴で検索できます。")
                     )
+                } else if searchStore.isSearching {
+                    ProgressView("検索中…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if resultsAreEmpty {
                     ContentUnavailableView(
                         "検索結果がありません",
@@ -62,19 +80,21 @@ struct SearchView: View {
                         switch selectedKeywordField {
                         case .title:
                             Section("検索結果：\(results.count)曲") {
-                                ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
+                                ForEach(visibleResults) { track in
                                     PlayableTrackRowView(track: track) {
+                                        guard let index = results.firstIndex(where: { $0.id == track.id }) else { return }
                                         playerStore.playQueue(
                                             results,
                                             startingAt: index,
                                             startContext: PlaybackStartContext(kind: .manual, source: .search)
                                         )
                                     }
+                                    .onAppear { loadNextPageIfNeeded(after: track.id, totalCount: results.count) }
                                 }
                             }
                         case .album, .albumArtist, .year:
                             Section("検索結果：\(resultAlbums.count)アルバム") {
-                                ForEach(resultAlbums) { album in
+                                ForEach(visibleResultAlbums) { album in
                                     NavigationLink {
                                         AlbumDetailView(album: album)
                                     } label: {
@@ -96,16 +116,18 @@ struct SearchView: View {
                                             }
                                         }
                                     }
+                                    .onAppear { loadNextPageIfNeeded(after: album.id, totalCount: resultAlbums.count) }
                                 }
                             }
                         case .artist:
                             Section("検索結果：\(resultArtists.count)アーティスト") {
-                                ForEach(resultArtists) { artist in
+                                ForEach(visibleResultArtists) { artist in
                                     NavigationLink {
                                         ArtistDetailView(artist: artist)
                                     } label: {
                                         Label(artist.name, systemImage: "person.circle")
                                     }
+                                    .onAppear { loadNextPageIfNeeded(after: artist.id, totalCount: resultArtists.count) }
                                 }
                             }
                         }
@@ -170,10 +192,10 @@ struct SearchView: View {
                 Button("保存") { saveResultsAsPlaylist() }
                     .disabled(
                         playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || regularPlaylistResults.isEmpty
+                            || searchStore.regularResultCount == 0
                     )
             } message: {
-                Text("通常再生の対象 \(regularPlaylistResults.count)曲を新しいプレイリストに保存します。")
+                Text("通常再生の対象 \(searchStore.regularResultCount)曲を新しいプレイリストに保存します。")
             }
             .alert("保存しました", isPresented: savedPlaylistIsPresented) {
                 Button("閉じる", role: .cancel) { savedPlaylistName = nil }
@@ -217,6 +239,27 @@ struct SearchView: View {
         results.filter(PlaylistKind.regular.accepts)
     }
 
+    private func loadNextPageIfNeeded(after id: UUID, totalCount: Int) {
+        let isLastVisible: Bool = switch selectedKeywordField {
+        case .title: visibleResults.last?.id == id
+        case .album, .albumArtist, .year: visibleResultAlbums.last?.id == id
+        case .artist: visibleResultArtists.last?.id == id
+        }
+        guard isLastVisible, displayedResultCount < totalCount else { return }
+        displayedResultCount = Self.nextDisplayedResultCount(
+            current: displayedResultCount,
+            total: totalCount
+        )
+    }
+
+    nonisolated static func nextDisplayedResultCount(
+        current: Int,
+        total: Int,
+        pageSize: Int = 100
+    ) -> Int {
+        min(max(0, current) + max(1, pageSize), max(0, total))
+    }
+
     private func saveResultsAsPlaylist() {
         let name = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !regularPlaylistResults.isEmpty else { return }
@@ -230,6 +273,7 @@ struct SearchView: View {
     }
 
     private func updateSearch() {
+        displayedResultCount = Self.pageSize
         searchStore.update(
             tracks: libraryStore.tracks,
             albums: libraryStore.albums,

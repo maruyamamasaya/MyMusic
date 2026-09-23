@@ -324,6 +324,7 @@ private struct WorkTrackCollectionView: View {
     }
 
     var body: some View {
+        let displayedTracks = filteredTracks
         List {
             if let subtitle {
                 Section {
@@ -332,12 +333,12 @@ private struct WorkTrackCollectionView: View {
                 }
             }
 
-            if !filteredTracks.isEmpty {
+            if !displayedTracks.isEmpty {
                 Section {
                     PlayShuffleButtons(
-                        isDisabled: filteredTracks.isEmpty,
-                        onPlay: { play(shuffled: false) },
-                        onShuffle: { play(shuffled: true) }
+                        isDisabled: displayedTracks.isEmpty,
+                        onPlay: { play(displayedTracks, shuffled: false) },
+                        onShuffle: { play(displayedTracks, shuffled: true) }
                     )
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -345,16 +346,16 @@ private struct WorkTrackCollectionView: View {
             }
 
             Section("曲") {
-                if filteredTracks.isEmpty {
+                if displayedTracks.isEmpty {
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "timer")
                     } else {
                         ContentUnavailableView.search(text: query)
                     }
                 } else {
-                    ForEach(Array(filteredTracks.enumerated()), id: \.element.id) { index, track in
+                    ForEach(Array(displayedTracks.enumerated()), id: \.element.id) { index, track in
                         PlayableTrackRowView(track: track) {
-                            playTrack(at: index)
+                            playTrack(at: index, in: displayedTracks)
                         }
                     }
                 }
@@ -366,10 +367,10 @@ private struct WorkTrackCollectionView: View {
         .searchable(text: $query, prompt: searchPrompt)
     }
 
-    private func play(shuffled: Bool) {
+    private func play(_ displayedTracks: [Track], shuffled: Bool) {
         let playbackTracks = shuffled
-            ? playbackHistoryStore.workPlaybackTracks(from: filteredTracks)
-            : filteredTracks
+            ? playbackHistoryStore.workPlaybackTracks(from: displayedTracks)
+            : displayedTracks
         guard !playbackTracks.isEmpty else { return }
         playerStore.setShuffleEnabled(false)
         playerStore.playQueue(
@@ -380,11 +381,11 @@ private struct WorkTrackCollectionView: View {
         )
     }
 
-    private func playTrack(at index: Int) {
-        guard filteredTracks.indices.contains(index) else { return }
+    private func playTrack(at index: Int, in displayedTracks: [Track]) {
+        guard displayedTracks.indices.contains(index) else { return }
         playerStore.setShuffleEnabled(false)
         playerStore.playQueue(
-            filteredTracks,
+            displayedTracks,
             startingAt: index,
             presentationMode: .workSize,
             startContext: PlaybackStartContext(kind: .manual, source: .workLibrary)

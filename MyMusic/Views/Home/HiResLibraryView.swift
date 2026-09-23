@@ -213,6 +213,7 @@ private struct HiResTrackCollectionView: View {
     }
 
     var body: some View {
+        let displayedTracks = filteredTracks
         List {
             if let snapshot = outputStore.snapshot {
                 Section("出力") {
@@ -225,16 +226,16 @@ private struct HiResTrackCollectionView: View {
             }
 
             Section("曲") {
-                if filteredTracks.isEmpty {
+                if displayedTracks.isEmpty {
                     ContentUnavailableView("ハイレゾ音源はありません", systemImage: "waveform")
                 } else {
-                    ForEach(filteredTracks) { track in
-                        PlayableTrackRowView(track: track) {
+                    ForEach(displayedTracks) { track in
+                        PlayableTrackRowView(track: track, showsListenLater: false) {
                             playerStore.stop()
                             outputStore.stop()
                             outputStore.play(
                                 track: track,
-                                queue: filteredTracks,
+                                queue: displayedTracks,
                                 historyStore: playbackHistoryStore
                             )
                             onPresentNowPlaying()

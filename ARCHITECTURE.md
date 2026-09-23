@@ -112,9 +112,11 @@ Library View → LibraryStore → FileImportService
 
 `SongsView`の検索・filter・sortはTrack、Track Preference、Playback HistoryのMainActor上snapshotを取得し、`Task.detached`内のpureな`arrange`で一括処理する。requestには各Storeのrevisionを含め、処理中に条件や正本が変わった古い結果は反映しない。UIへは先頭100曲から段階表示し、一覧scrollで全件Viewを同時生成しない。filter／sortは表示と、その表示から開始するqueueだけへ適用し、Library、履歴、Preferenceの正本を変更しない。
 
-`LibraryStore`は完成した表示snapshotの反映時に、Track ID→Track、Album ID→Album、Artist ID→Artist、Track ID→Album／Artist IDのlookup indexも同時に再構築する。Album／Artist詳細や再生中画面の参照解決はこのindexを使い、呼び出しごとに全Track辞書を再生成したり全Album／Artistを走査したりしない。indexと専用catalogは派生memory stateであり永続化契約を増やさない。
+`LibraryStore`は完成した表示snapshotの反映時に、Track ID→Track、Album ID→Album、Artist ID→Artist、Track ID→Album／Artist IDのlookup indexも同時に再構築する。Album／Artist／Genre／Composer詳細や再生中画面の参照解決はこのindexを使い、呼び出しごとに全Track辞書を再生成したり全Album／Artistを走査したりしない。作業用／ハイレゾcatalogも構築時に各Track ID indexを保持し、専用Album／Artist／Album Artist詳細で再利用する。indexと専用catalogは派生memory stateであり永続化契約を増やさない。
 
 ユーザーが Files / iCloud Drive の folder を選択し、security-scoped bookmark を保存します。scan は対応音声 extension を列挙して metadata と artwork を抽出し、安定 Track ID と folder ごとの library cache を構築します。
+
+起動時は`LibraryStore`が登録済みfolderをまとめて`LibraryPersistenceService`へ渡し、Application Supportの`library-index.json`を1回だけread／decodeする。cache schema v2はfolder pathとTrack配列だけを保持し、Album／Artist／Genre／Composerは復元したTrackから再構築する。旧schemaの完成`MusicLibrary` snapshotと単一folder snapshotはread互換を維持し、次回保存時にv2へ移行する。cacheは再scan可能な派生データであり、Track Identityやユーザーデータの正本にはしない。
 
 `LibrarySyncService` actorはscanを1件ずつ直列化し、Track Identityのscan sessionとLibrary cache更新の競合を防ぐ。ファイル走査、差分判定、metadata／Identity照合、cache保存、複数folderの重複排除と`MusicLibrary`派生モデル構築はMainActor外で行う。`LibraryStore`は同期状態と完成snapshotの反映だけをMainActorで行い、曲単位ではObservable stateを更新しない。同期中は現在の表示libraryを保持するため、既存Track IDを参照する再生・履歴・Preference・Playlistは同期処理から独立して継続する。
 
@@ -176,7 +178,7 @@ PlayerStoreが再び肥大化した場合の候補は次の通り。
 
 Crossfade、Smart Queue、Auto DJ、Mood Station、AirPlay、Visualizer連動などの追加で責務が増えた場合、またはテスト可能性が下がり一つの修正が複数責務へ波及するようになった場合に再検討する。ファイルサイズだけを理由に分割しない。再開時は1責務ずつ小さく切り出し、Before／Afterで同じCharacterization Testを実行する。再生挙動の変更や新機能追加と同時に行わず、async／Task／Actor境界を不用意に変えない。Queue、Track End、Shuffle、Repeatは特に慎重に扱い、Build／TestがGreenでない限り次の段階へ進まない。
 
-`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。snapshotはLibrary、Playback History、Track／Album／Artist Favoriteの軽量revision通知時と代表画像の定期更新時だけ再生成し、View再描画中にはLibrary全体を走査しません。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierはこれらのDestination snapshotと分離し、表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
+`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。Library、Playback History、Preference、Track／Album／Artist Favorite、Listen Laterの値snapshotを`HomePerformanceSnapshotWorker`へ渡し、通常shuffle適格曲、Destination候補、Highlight Artwork、MIX、今日の再生集計をactor上で構築する。MainActorは完成snapshotの比較・反映だけを行い、View再描画中にはLibrary／履歴全体を走査しない。新しいrevisionでは先行Taskと画像ローテーションTaskをキャンセルし、古い結果を反映しない。60秒ごとのローテーションはMIX／今日の集計を省略する。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierは再生queueに接続せず表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
 
 通常再生開始前にPlayerStoreはStable Track IDで`TrackPlaybackAdjustmentStore`を遅延loadし、有効な`customStartPosition`を開始時刻へ反映する。`AudioPlayerService`から0.5秒間隔で届く再生時刻eventを利用し、7秒間隔とpause／曲変更／backgroundで前回位置を保存する。有効な`customEndPosition`到達時は音声を停止して既存の曲終了・repeat・次曲経路へ合流する。Highlight区間には曲別の開始／終了位置を適用しない。
 
@@ -213,8 +215,8 @@ music root recursive scan
 
 ### Search, favorites, playlists, history
 
-- ホームのMIXは`HomeView`がLibrary・Playback History・Track Preferenceのrevisionとローカル日付変更時に候補snapshotを作り、`MixSelectionService`がDaily／Rediscovery／My Favoritesの一時キューを構成する。順位計算は3種類で共有し、既存の自動選曲weightと通常シャッフル適格性を使う。Dailyは同じ順位で選ぶMy Favoritesの先頭25曲を後回しにして重複を抑え、他の候補が不足したときだけ補充する。Deep Diveはタイルを開くときに`DeepDiveSelectionService`が履歴の日別再生開始数とArtist／Album metadataから候補を作り、同じ適格性・weightの範囲で低再生曲を選ぶ。従来の3種は先頭Trackをタイルのアートワークと再生開始曲に共用する。キューは保存せず、PlayerStoreへ通常再生として渡す。
-- `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには結果だけを反映する。Library、Playback History、Track Preferenceの全配列／Dictionaryそのものではなく各Storeの軽量revisionを変更通知に使い、総再生時間だけの定期保存では再検索しない。保存検索playlistの明示同期も同じactorを使う。
+- ホームのMIXはLibrary・Playback History・Track Preferenceのrevisionとローカル日付変更時に、`HomePerformanceSnapshotWorker`が通常shuffle適格候補とOverplay／Preference weightをMainActor外で一度だけ作り、`MixSelectionService`がDaily／Rediscovery／My Favoritesの一時キューを構成する。順位計算は3種類で共有する。Dailyは同じ順位で選ぶMy Favoritesの先頭25曲を後回しにして重複を抑え、他の候補が不足したときだけ補充する。Deep Diveはタイルを開くときに`DeepDiveSelectionService`が履歴の日別再生開始数とArtist／Album metadataから候補を作り、同じ適格性・weightの範囲で低再生曲を選ぶ。従来の3種は先頭Trackをタイルのアートワークと再生開始曲に共用する。キューは保存せず、PlayerStoreへ通常再生として渡す。
+- `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには最新結果だけを反映する。選択fieldが曲ならAlbum／Artist、Album系ならArtist、ArtistならAlbumのpresentation結果は構築しない。`SearchView`は一致総数と全件queueを保持したまま、Listへは100件ずつ段階表示する。playlist対象件数もworkerで一度だけ集計する。Library、Playback History、Track Preferenceの全配列／Dictionaryそのものではなく各Storeの軽量revisionを変更通知に使い、総再生時間だけの定期保存では再検索しない。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
 - Mood Mixは`StationStore`の同じ候補snapshotから`MoodStationService`がCalm／Energy／Ambient／Electronicの単一特徴を選ぶ。既存のLibrary内percentile、有効範囲、0.72閾値、Overplay補正、Artist分散を共有し、選んだ特徴のキューを一時的にPlayerStoreへ渡す。永続化契約は変更しない。
 - `FavoriteStore` と `PlaylistStore` は専用 persistence service を介し、Track ID で library の曲を参照する。Playlist は regular / work の種別互換性と、正規化・重複排除された複数の表示用tagを持つ。専用tag管理画面の名称変更・削除は全Playlistをmemory上で一括更新して1 snapshotとして保存し、割り当ては既存`setTags`境界へ合流する。曲の追加先選択画面のtag filterはpresentation stateとしてUserDefaultsへregular／work別に保存し、存在しないtagになった場合は解除する。tag編集はTrack ID配列に触れず、再生開始時にPlayerStoreへ渡されたqueue snapshotから独立する。Playlist保存Taskは先行保存の完了後に次のsnapshotを保存し、高速な連続更新でも古いsnapshotが後勝ちしない。
@@ -271,7 +273,7 @@ App外バックアップは`ExternalBackupView` → `ExternalBackupService`の�
 | データ | 主な所有者 | 保存形態 / 場所 |
 | --- | --- | --- |
 | Library folder access | `FileImportService` | UserDefaults の security-scoped bookmark |
-| Folder scan cache | `LibraryPersistenceService` | Application Support 内 JSON |
+| Folder scan cache | `LibraryPersistenceService` | Application Support `MyMusic/library-index.json`（schema v2、folder別Track配列） |
 | Stable Track identity | `TrackIdentityService` | Application Support 内 JSON |
 | Artwork / highlight | `ArtworkService` / `HighlightRepository` | Caches 内 file / JSON |
 | Track preferences / playlists / あとで聴く / playback history | 各 PersistenceService | `track-preferences.json` / `playlists.json` / `listen-later.json` / `playback-history.sqlite3` |

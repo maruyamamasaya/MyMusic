@@ -108,8 +108,9 @@ final class LibraryStore {
         do {
             var scanMessages: [String] = []
             libraryFolders = normalized(try fileImportService.restoreLibraryFolders()).map(LibraryFolder.init)
+            let cachedLibraries = (try? await persistence.load(for: libraryFolders.map(\.url))) ?? [:]
             for folder in libraryFolders {
-                if let cached = try? await persistence.load(for: folder.url) {
+                if let cached = cachedLibraries[folder.id] {
                     librariesByFolderID[folder.id] = cached
                     await identityService.registerExistingTracks(cached.tracks, in: folder.url)
                 } else {
@@ -292,6 +293,7 @@ final class LibraryStore {
         enabledGenreKeys(for: preset).intersection(selectableGenreOptions.map(\.id)).count
     }
     func tracks(for album: Album) -> [Track] { resolvedTracks(for: album.trackIDs).sorted(by: Self.albumTrackOrder) }
+    func tracks(for trackIDs: [Track.ID]) -> [Track] { resolvedTracks(for: trackIDs) }
     func tracks(for playlistKind: PlaylistKind) -> [Track] {
         playlistKind == .work ? workLibraryCatalog.tracks : tracks
     }

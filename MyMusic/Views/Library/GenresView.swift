@@ -19,12 +19,7 @@ struct GenresView: View {
         .themeScreen()
         .navigationTitle("ジャンル")
         .navigationDestination(for: Genre.self) { genre in
-            SongsView(tracks: tracks(for: genre.trackIDs), title: genre.name)
+            SongsView(tracks: libraryStore.tracks(for: genre.trackIDs), title: genre.name)
         }
-    }
-
-    private func tracks(for trackIDs: [Track.ID]) -> [Track] {
-        let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
-        return trackIDs.compactMap { tracksByID[$0] }
     }
 }

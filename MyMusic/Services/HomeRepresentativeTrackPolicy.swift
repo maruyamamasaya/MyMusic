@@ -1,6 +1,6 @@
 import Foundation
 
-enum HomeRepresentativeTrackPolicy {
+nonisolated enum HomeRepresentativeTrackPolicy {
     static func eligibleArtworkTracks(from tracks: [Track]) -> [Track] {
         tracks.filter {
             $0.isEligibleForRegularRandomPlayback && $0.artworkIdentifier != nil

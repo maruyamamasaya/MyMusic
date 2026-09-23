@@ -204,6 +204,65 @@ final class TrackSearchStoreTests: XCTestCase {
         XCTAssertEqual(store.results, [latest])
     }
 
+    func testBuildsOnlyPresentationResultsNeededBySelectedField() async throws {
+        let first = makeTrack(title: "First")
+        let second = makeTrack(title: "Second")
+        let tracks = [first, second]
+        let library = MusicLibrary.build(from: tracks)
+        let store = TrackSearchStore(debounceDuration: .zero)
+        var filter = TrackSearchFilter()
+
+        filter.keywordField = .title
+        store.update(
+            tracks: tracks, albums: library.albums, artists: library.artists,
+            query: "s", filter: filter, historyEntries: [:]
+        )
+        try await waitUntil { !store.isSearching }
+        XCTAssertEqual(store.results.count, 2)
+        XCTAssertTrue(store.resultAlbums.isEmpty)
+        XCTAssertTrue(store.resultArtists.isEmpty)
+        XCTAssertEqual(store.regularResultCount, 2)
+
+        filter.keywordField = .album
+        store.update(
+            tracks: tracks, albums: library.albums, artists: library.artists,
+            query: "Album", filter: filter, historyEntries: [:]
+        )
+        try await waitUntil { !store.isSearching }
+        XCTAssertEqual(store.resultAlbums.count, 1)
+        XCTAssertTrue(store.resultArtists.isEmpty)
+
+        filter.keywordField = .artist
+        store.update(
+            tracks: tracks, albums: library.albums, artists: library.artists,
+            query: "Artist", filter: filter, historyEntries: [:]
+        )
+        try await waitUntil { !store.isSearching }
+        XCTAssertTrue(store.resultAlbums.isEmpty)
+        XCTAssertEqual(store.resultArtists.count, 1)
+    }
+
+    func testSearchResultPaginationAdvancesInBoundedPages() {
+        XCTAssertEqual(SearchView.nextDisplayedResultCount(current: 100, total: 10_000), 200)
+        XCTAssertEqual(SearchView.nextDisplayedResultCount(current: 9_900, total: 9_950), 9_950)
+        XCTAssertEqual(SearchView.nextDisplayedResultCount(current: 100, total: 100), 100)
+    }
+
+    private func waitUntil(
+        timeout: Duration = .seconds(1),
+        condition: @MainActor () -> Bool
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition() {
+            guard clock.now < deadline else {
+                XCTFail("Timed out waiting for search results")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     private func makeTrack(title: String) -> Track {
         Track(
             id: UUID(),

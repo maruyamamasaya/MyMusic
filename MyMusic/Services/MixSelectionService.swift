@@ -1,6 +1,6 @@
 import Foundation
 
-enum MixKind: String, CaseIterable, Identifiable {
+nonisolated enum MixKind: String, CaseIterable, Identifiable, Sendable {
     case daily
     case rediscovery
     case favorites
@@ -34,7 +34,7 @@ enum MixKind: String, CaseIterable, Identifiable {
 
 /// Builds temporary queues from already loaded library, history and preferences.
 /// The same inputs on the same local day produce the same order.
-struct MixSelectionService {
+nonisolated struct MixSelectionService {
     static let maximumCount = 25
 
     func tracks(

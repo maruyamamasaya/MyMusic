@@ -1,16 +1,12 @@
 import SwiftUI
 
 struct HiResNowPlayingView: View {
-    @Environment(\.appTheme) private var appTheme
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
-    @Environment(SettingsStore.self) private var settingsStore
     @Environment(\.dismiss) private var dismiss
 
     let store: HiResDirectOutputProbeStore
 
     @State private var showsAudioInformation = false
-    @State private var isQueuePresented = false
-    @State private var isEqualizerPresented = false
 
     var body: some View {
         NavigationStack {
@@ -26,12 +22,6 @@ struct HiResNowPlayingView: View {
                     Button("完了") { dismiss() }
                 }
             }
-            .sheet(isPresented: $isQueuePresented) {
-                HiResQueueView(store: store)
-            }
-            .sheet(isPresented: $isEqualizerPresented) {
-                HiResEqualizerInformationView()
-            }
             .onChange(of: store.currentTrack?.id) { _, _ in
                 showsAudioInformation = false
             }
@@ -46,7 +36,6 @@ struct HiResNowPlayingView: View {
                 }
 
             trackInformation
-            quickActions
 
             Spacer(minLength: 8)
 
@@ -124,78 +113,26 @@ struct HiResNowPlayingView: View {
             if let track = store.currentTrack {
                 HStack(spacing: 8) {
                     TrackFavoriteButton(track: track, font: .title2, width: 36)
-                    ListenLaterButton(track: track, font: .title2, width: 36)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var quickActions: some View {
-        HStack(spacing: 24) {
-            Button {
-                isQueuePresented = true
-            } label: {
-                Label("再生キュー", systemImage: "list.bullet")
-            }
-
-            Button {
-                isEqualizerPresented = true
-            } label: {
-                Label("イコライザ", systemImage: "slider.vertical.3")
-                    .foregroundStyle(settingsStore.equalizer.isEnabled
-                                     ? ThemePalette.resolve(appTheme).accent
-                                     : Color.secondary)
-            }
-        }
-        .font(.subheadline)
-        .buttonStyle(.bordered)
-    }
-
     private var playbackControls: some View {
-        HStack {
-            Button("前の曲", systemImage: "backward.end.fill", action: store.previous)
-                .font(.system(size: 24))
-                .disabled(!store.canGoPrevious || store.isLoading)
-
-            Spacer()
-
-            Button("15秒戻る", systemImage: "gobackward.15") { store.skip(by: -15) }
-                .font(.system(size: 22))
-                .disabled(store.currentTrack == nil || store.isLoading)
-
-            Spacer()
-
-            if store.isLoading {
-                ProgressView()
-                    .controlSize(.large)
-                    .frame(width: 62, height: 62)
-                    .accessibilityLabel("オーディオを読み込み中")
-            } else {
-                Button(
-                    store.isPlaying ? "一時停止" : "再生",
-                    systemImage: store.isPlaying ? "pause.circle.fill" : "play.circle.fill",
-                    action: store.togglePlayPause
-                )
-                .font(.system(size: 62))
-                .contentTransition(.symbolEffect(.replace))
-            }
-
-            Spacer()
-
-            Button("15秒進む", systemImage: "goforward.15") { store.skip(by: 15) }
-                .font(.system(size: 22))
-                .disabled(store.currentTrack == nil || store.isLoading)
-
-            Spacer()
-
-            Button("次の曲", systemImage: "forward.end.fill", action: store.next)
-                .font(.system(size: 24))
-                .disabled(!store.canGoNext || store.isLoading)
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
+        PlaybackControlsView(
+            isPlaying: store.isPlaying,
+            isLoading: store.isLoading,
+            isShuffleEnabled: store.isShuffleEnabled,
+            repeatMode: store.repeatMode,
+            canGoPrevious: store.canGoPrevious,
+            canGoNext: store.canGoNext,
+            onPrevious: store.previous,
+            onPlayPause: store.togglePlayPause,
+            onNext: store.next,
+            onShuffle: store.toggleShuffle,
+            onRepeat: store.cycleRepeatMode
+        )
     }
 
     private func rateText(_ value: Double) -> String {
@@ -294,78 +231,5 @@ private struct HiResAudioInformationPanel: View {
     private func rate(_ value: Double?) -> String {
         guard let value, value.isFinite, value > 0 else { return "—" }
         return String(format: "%.1f kHz", value / 1_000)
-    }
-}
-
-private struct HiResQueueView: View {
-    @Environment(\.dismiss) private var dismiss
-    let store: HiResDirectOutputProbeStore
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(store.queue.enumerated()), id: \.element.id) { index, track in
-                    Button {
-                        store.playTrack(at: index)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
-                            AlbumArtworkView(artworkIdentifier: track.artworkIdentifier)
-                                .frame(width: 44, height: 44)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title).lineLimit(1)
-                                Text(track.artistName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if index == store.currentIndex {
-                                Image(systemName: store.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                    .foregroundStyle(.tint)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .themeScreen()
-            .navigationTitle("ハイレゾ再生キュー")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-private struct HiResEqualizerInformationView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Label("USB DACへの直接出力中はイコライザを通りません", systemImage: "waveform.badge.exclamationmark")
-                } footer: {
-                    Text("通常のイコライザはAVAudioEngine専用です。Audio QueueへEQを挿入するとPCMを加工する別の再生方式になるため、現在のネイティブレート直接出力では適用しません。")
-                }
-
-                Section {
-                    NavigationLink("通常再生用のイコライザ設定") {
-                        EqualizerSettingsView()
-                    }
-                }
-            }
-            .themeScreen()
-            .navigationTitle("イコライザ")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }
-                }
-            }
-        }
     }
 }

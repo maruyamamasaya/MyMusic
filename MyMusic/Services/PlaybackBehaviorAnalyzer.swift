@@ -27,7 +27,7 @@ struct PreferenceDriftAnalysisResult: Identifiable, Hashable, Sendable {
     var id: Track.ID { track.id }
 }
 
-struct PlaybackBehaviorAnalyzer: Sendable {
+nonisolated struct PlaybackBehaviorAnalyzer: Sendable {
     func overplayScores(
         for trackIDs: some Sequence<Track.ID>,
         historyByTrackID: [Track.ID: PlaybackHistory],

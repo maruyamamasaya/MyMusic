@@ -1,6 +1,6 @@
 import Foundation
 
-struct TodayPlaybackSummary: Equatable {
+nonisolated struct TodayPlaybackSummary: Equatable, Sendable {
     let playCount: Int
     let listenedSeconds: TimeInterval
 
@@ -15,7 +15,7 @@ struct TodayPlaybackSummary: Equatable {
     var compactText: String { "今日 \(playCount)回 · \(compactDuration)" }
 }
 
-struct TodayPlaybackSummaryService {
+nonisolated struct TodayPlaybackSummaryService {
     func summary(
         from histories: [Track.ID: PlaybackHistory],
         now: Date = Date(),

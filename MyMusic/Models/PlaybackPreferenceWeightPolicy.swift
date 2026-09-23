@@ -2,7 +2,7 @@ import Foundation
 
 /// Converts the user's durable Good / Bad value into a selection weight.
 /// Boredom and permanent hiding remain separate eligibility decisions.
-enum PlaybackPreferenceWeightPolicy {
+nonisolated enum PlaybackPreferenceWeightPolicy {
     static let minimumPreference = -10
     static let maximumPreference = 10
 

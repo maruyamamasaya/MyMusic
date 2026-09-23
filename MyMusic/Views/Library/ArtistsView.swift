@@ -18,13 +18,14 @@ struct ArtistsView: View {
     }
 
     var body: some View {
+        let displayedArtists = filteredArtists
         Group {
             if displayMode == .artwork {
                 ScrollView {
-                    artworkGrid
+                    artworkGrid(displaying: displayedArtists)
                 }
             } else {
-                textList
+                textList(displaying: displayedArtists)
             }
         }
         .themeScreen()
@@ -36,28 +37,28 @@ struct ArtistsView: View {
         }
     }
 
-    private var textList: some View {
+    private func textList(displaying artists: [Artist]) -> some View {
         List {
-            ForEach(filteredArtists) { artist in
+            ForEach(artists) { artist in
                 NavigationLink(value: artist) {
                     Label(artist.name, systemImage: "person.circle")
                 }
             }
 
-            if filteredArtists.isEmpty {
+            if artists.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
         }
     }
 
     @ViewBuilder
-    private var artworkGrid: some View {
-        if filteredArtists.isEmpty {
+    private func artworkGrid(displaying artists: [Artist]) -> some View {
+        if artists.isEmpty {
             ContentUnavailableView.search(text: query)
                 .padding(.top, 48)
         } else {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                ForEach(filteredArtists) { artist in
+                ForEach(artists) { artist in
                     NavigationLink(value: artist) {
                         VStack(alignment: .leading) {
                             AlbumArtworkView(artworkIdentifier: artworkIdentifier(for: artist))

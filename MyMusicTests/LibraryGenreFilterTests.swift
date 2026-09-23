@@ -92,6 +92,8 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.hiResLibraryCatalog.tracks.map(\.id), [hiRes.id])
         XCTAssertEqual(store.tracks(for: .work).map(\.id), [work.id])
         XCTAssertEqual(store.tracks(for: .regular).map(\.id), [ambient.id])
+        XCTAssertEqual(store.tracks(for: [UUID(), ambient.id]).map(\.id), [ambient.id])
+        XCTAssertEqual(store.workLibraryCatalog.tracks(for: [UUID(), work.id]).map(\.id), [work.id])
 
         store.setEnabledGenres([])
         try await waitUntil { store.tracks.isEmpty }

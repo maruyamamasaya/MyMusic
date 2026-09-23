@@ -221,8 +221,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         context.hasStarted.store(false, ordering: .releasing)
         try checkAudioQueue(AudioQueueStop(queue, true))
         try checkAudioQueue(AudioQueueReset(queue))
-        context.currentPacket = context.packetOffset(for: target)
-        context.playbackOffset = target
+        let seekPosition = context.seekPosition(for: target)
+        context.currentPacket = seekPosition.packet
+        context.playbackOffset = seekPosition.time
 
         var enqueuedBufferCount = 0
         for buffer in context.buffers where context.fill(buffer) {
@@ -239,7 +240,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         if context.reachedEOF.load(ordering: .acquiring) {
             AudioQueueStop(queue, false)
         }
-        eventHandler?(.progress(target))
+        eventHandler?(.progress(seekPosition.time))
     }
 
     func stop() {
@@ -520,6 +521,7 @@ private final class HiResAudioQueueProbeContext: @unchecked Sendable {
     let sourceSampleRate: Double
     let framesPerPacket: UInt32
     let totalPacketCount: Int64
+    let estimatedDuration: TimeInterval
     let eventHandler: @Sendable (HiResAudioQueueProbeEvent) -> Void
     var queue: AudioQueueRef?
     var buffers: [AudioQueueBufferRef] = []
@@ -550,12 +552,53 @@ private final class HiResAudioQueueProbeContext: @unchecked Sendable {
             packetCount = 0
         }
         totalPacketCount = packetCount
+        var duration: Float64 = 0
+        size = UInt32(MemoryLayout<Float64>.size)
+        if AudioFileGetProperty(
+            audioFile,
+            kAudioFilePropertyEstimatedDuration,
+            &size,
+            &duration
+        ) != noErr || !duration.isFinite || duration <= 0 {
+            duration = 0
+        }
+        estimatedDuration = duration
         self.eventHandler = eventHandler
     }
 
-    func packetOffset(for time: TimeInterval) -> Int64 {
-        guard sourceSampleRate > 0, framesPerPacket > 0 else { return 0 }
-        let packet = Int64(time * sourceSampleRate / Double(framesPerPacket))
+    func seekPosition(for time: TimeInterval) -> (packet: Int64, time: TimeInterval) {
+        let targetTime = max(time.isFinite ? time : 0, 0)
+        guard sourceSampleRate > 0 else { return (0, 0) }
+        let targetFrame = Int64(targetTime * sourceSampleRate)
+        var translation = AudioFramePacketTranslation(
+            mFrame: targetFrame,
+            mPacket: 0,
+            mFrameOffsetInPacket: 0
+        )
+        var size = UInt32(MemoryLayout<AudioFramePacketTranslation>.size)
+        if AudioFileGetProperty(
+            audioFile,
+            kAudioFilePropertyFrameToPacket,
+            &size,
+            &translation
+        ) == noErr {
+            let packet = clampedPacket(translation.mPacket)
+            let packetStartFrame = max(targetFrame - Int64(translation.mFrameOffsetInPacket), 0)
+            return (packet, Double(packetStartFrame) / sourceSampleRate)
+        }
+
+        if framesPerPacket > 0 {
+            let packet = clampedPacket(targetFrame / Int64(framesPerPacket))
+            return (packet, Double(packet * Int64(framesPerPacket)) / sourceSampleRate)
+        }
+
+        guard estimatedDuration > 0, totalPacketCount > 0 else { return (0, 0) }
+        let progress = min(max(targetTime / estimatedDuration, 0), 1)
+        let packet = clampedPacket(Int64(progress * Double(totalPacketCount)))
+        return (packet, targetTime)
+    }
+
+    private func clampedPacket(_ packet: Int64) -> Int64 {
         guard totalPacketCount > 0 else { return max(packet, 0) }
         return min(max(packet, 0), totalPacketCount - 1)
     }

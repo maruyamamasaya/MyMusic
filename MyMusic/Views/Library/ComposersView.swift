@@ -13,8 +13,9 @@ struct ComposersView: View {
     }
 
     var body: some View {
+        let displayedComposers = filteredComposers
         List {
-            ForEach(filteredComposers) { composer in
+            ForEach(displayedComposers) { composer in
                 NavigationLink(value: composer) {
                     HStack {
                         Label(composer.name, systemImage: "music.quarternote.3")
@@ -26,7 +27,7 @@ struct ComposersView: View {
                 }
             }
 
-            if filteredComposers.isEmpty {
+            if displayedComposers.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
         }
@@ -34,12 +35,7 @@ struct ComposersView: View {
         .navigationTitle("作曲者")
         .searchable(text: $query, prompt: "作曲者")
         .navigationDestination(for: Composer.self) { composer in
-            SongsView(tracks: tracks(for: composer.trackIDs), title: composer.name)
+            SongsView(tracks: libraryStore.tracks(for: composer.trackIDs), title: composer.name)
         }
-    }
-
-    private func tracks(for trackIDs: [Track.ID]) -> [Track] {
-        let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
-        return trackIDs.compactMap { tracksByID[$0] }
     }
 }

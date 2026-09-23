@@ -60,10 +60,42 @@ final class TrackFirstSeenAtTests: XCTestCase {
         try await persistence.save(.build(from: [first]), for: firstFolder)
         try await persistence.save(.build(from: [second]), for: secondFolder)
 
-        let restoredFirst = try await persistence.load(for: firstFolder)
-        let restoredSecond = try await persistence.load(for: secondFolder)
+        let restored = try await persistence.load(for: [firstFolder, secondFolder])
+        let restoredFirst = restored[firstFolder.standardizedFileURL.path]
+        let restoredSecond = restored[secondFolder.standardizedFileURL.path]
         XCTAssertEqual(restoredFirst?.tracks.first?.firstSeenAt, firstDate)
         XCTAssertEqual(restoredSecond?.tracks.first?.firstSeenAt, secondDate)
+
+        let cacheText = try String(contentsOf: directory.appending(path: "library-index.json"), encoding: .utf8)
+        XCTAssertTrue(cacheText.contains("\"version\":2"))
+        XCTAssertFalse(cacheText.contains("\"albums\":"))
+        XCTAssertFalse(cacheText.contains("\"artists\":"))
+        XCTAssertFalse(cacheText.contains("\"genres\":"))
+        XCTAssertFalse(cacheText.contains("\"composers\":"))
+    }
+
+    func testLegacyLibrarySnapshotStillLoads() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "LegacyLibrarySnapshotTests-\(UUID())", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cacheURL = directory.appending(path: "library-index.json")
+        let folder = directory.appending(path: "music", directoryHint: .isDirectory)
+        let track = makeTrack(folder: folder, name: "legacy", firstSeenAt: .now)
+        let legacyStore = LegacyLibraryCacheStore(snapshots: [
+            LegacyLibraryCacheSnapshot(
+                folderPath: folder.standardizedFileURL.path,
+                library: .build(from: [track])
+            )
+        ])
+        try JSONEncoder().encode(legacyStore).write(to: cacheURL)
+        let persistence = LibraryPersistenceService(fileURL: cacheURL)
+
+        let restored = try await persistence.load(for: folder)
+
+        XCTAssertEqual(restored?.tracks.map(\.id), [track.id])
+        XCTAssertEqual(restored?.albums.count, 1)
+        XCTAssertEqual(restored?.tracks.first?.fileURL, folder.appending(path: "legacy.m4a"))
     }
 
     func testScanUsesOneTimestampAndPreservesItAcrossMetadataChange() async throws {
@@ -222,6 +254,15 @@ final class TrackFirstSeenAtTests: XCTestCase {
               fileURL: URL(fileURLWithPath: "/tmp/\(name).m4a"),
               relativePath: "\(name).m4a", firstSeenAt: firstSeenAt)
     }
+}
+
+private struct LegacyLibraryCacheStore: Codable {
+    let snapshots: [LegacyLibraryCacheSnapshot]
+}
+
+private struct LegacyLibraryCacheSnapshot: Codable {
+    let folderPath: String
+    let library: MusicLibrary
 }
 
 private struct FirstSeenFileImportStub: FileImportServicing {

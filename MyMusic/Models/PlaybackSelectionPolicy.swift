@@ -2,7 +2,7 @@ import Foundation
 
 /// Centralizes derived behavior adjustments used only by automatic selection.
 /// Eligibility remains the responsibility of the caller (including boredom and permanent hiding).
-enum PlaybackSelectionPolicy {
+nonisolated enum PlaybackSelectionPolicy {
     /// Keeps mild recent repetition close to neutral, then increasingly suppresses
     /// genuinely overplayed tracks without ever excluding them.
     static func overplayFactor(overplayScore: Double) -> Double {

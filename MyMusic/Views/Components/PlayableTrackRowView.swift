@@ -3,6 +3,7 @@ import SwiftUI
 struct PlayableTrackRowView: View {
     let track: Track
     var showsArtwork = true
+    var showsListenLater = true
     let onPlay: () -> Void
 
     var body: some View {
@@ -14,7 +15,9 @@ struct PlayableTrackRowView: View {
             .buttonStyle(.plain)
 
             TrackFavoriteButton(track: track)
-            ListenLaterButton(track: track)
+            if showsListenLater {
+                ListenLaterButton(track: track)
+            }
         }
     }
 }

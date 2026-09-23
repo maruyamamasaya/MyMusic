@@ -81,3 +81,9 @@
 - 既存EQは通常AVAudioEngineの`AVAudioUnitEQ`でありAudio Queue直接出力には作用しない。専用画面では非適用を明示し、通常再生用EQ設定への導線だけを置いた。
 - generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。iPhone 17e / iOS 26.5 SimulatorでPlayback History、pause中の時間除外、専用queueの次曲移動を含むXCTest 4件が成功した。
 - XCTestDevicesは開始前後ともUUID folder 0件、合計12KBで、新規test端末の作成・削除はなかった。実機デプロイとTea Proでの操作確認は未実施。
+
+### シーク位置が先頭へ戻る問題
+
+- ALACなど`mFramesPerPacket == 0`になり得る可変packet音源では、従来の時刻からpacket番号への単純計算が成立せず、シーク先をpacket 0へ戻していた。
+- Audio File Servicesの`kAudioFilePropertyFrameToPacket`でframeからpacketへ変換し、変換不能時だけ固定frames-per-packet計算、推定duration比率の順でfallbackするようにした。
+- generic iOS Simulator Debug buildは`BUILD SUCCEEDED`。hardwareと実音源に依存するためXCTestは追加していない。Tea ProとALAC実音源で、途中位置へのシークが先頭へ戻らず継続することは未検証。

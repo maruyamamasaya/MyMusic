@@ -1,7 +1,7 @@
 import Foundation
 
 enum WorkLibraryCatalogService {
-    static func build(from tracks: [Track]) -> WorkLibraryCatalog {
+    nonisolated static func build(from tracks: [Track]) -> WorkLibraryCatalog {
         build(from: MusicLibrary.build(from: tracks))
     }
 

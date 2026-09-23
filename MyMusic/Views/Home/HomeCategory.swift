@@ -92,7 +92,7 @@ struct HomeCategoryItem: Identifiable, Hashable {
     }
 }
 
-enum HomeDestination: Hashable {
+nonisolated enum HomeDestination: Hashable, Sendable {
     case nowPlaying
     case queue
     case quickPlay

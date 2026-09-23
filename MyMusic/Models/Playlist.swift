@@ -1,6 +1,6 @@
 import Foundation
 
-enum PlaylistKind: String, Codable, Hashable, Sendable {
+nonisolated enum PlaylistKind: String, Codable, Hashable, Sendable {
     case regular
     case work
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct OverplayScore: Hashable, Sendable {
+nonisolated struct OverplayScore: Hashable, Sendable {
     let recentPlayCount: Int
     let baselinePlayCount: Int
     let weeklyBaseline: Double
@@ -9,7 +9,7 @@ struct OverplayScore: Hashable, Sendable {
     let score: Double
 }
 
-enum OverplayScoring {
+nonisolated enum OverplayScoring {
     static let recentDays = 7
     static let baselineDays = 56
     static let baselineWeeks = 8.0
@@ -42,7 +42,7 @@ enum OverplayScoring {
     private static func clamp(_ value: Double) -> Double { min(max(value, 0), 1) }
 }
 
-struct PreferenceDriftScore: Hashable, Sendable {
+nonisolated struct PreferenceDriftScore: Hashable, Sendable {
     let recentFullPlaybackCount: Int
     let recentSkipCount: Int
     let historicalFullPlaybackCount: Int
@@ -56,7 +56,7 @@ struct PreferenceDriftScore: Hashable, Sendable {
     var historicalSampleCount: Int { historicalFullPlaybackCount + historicalSkipCount }
 }
 
-enum PreferenceDriftScoring {
+nonisolated enum PreferenceDriftScoring {
     static let recentDays = 30
     static let minimumRecentSampleCount = 5
     static let minimumHistoricalSampleCount = 8

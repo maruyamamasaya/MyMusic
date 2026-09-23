@@ -99,6 +99,68 @@ final class HiResPlaybackHistoryTests: XCTestCase {
         XCTAssertEqual(service.playedURLs.last, second.fileURL)
     }
 
+    func testRepeatOneRestartsCurrentTrackAfterNaturalEnd() async throws {
+        let service = HiResAudioQueueServiceSpy()
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        await history.loadIfNeeded()
+        let store = HiResDirectOutputProbeStore(service: service)
+        let track = makeTrack(duration: 120)
+
+        store.play(track: track, historyStore: history)
+        try await waitUntil { service.playedURLs.count == 1 }
+        service.send(.started(snapshot(for: track)))
+        store.cycleRepeatMode()
+        store.cycleRepeatMode()
+        service.send(.reachedEnd)
+        try await waitUntil { service.playedURLs.count == 2 }
+
+        XCTAssertEqual(store.repeatMode, .one)
+        XCTAssertEqual(store.currentTrack?.id, track.id)
+        XCTAssertEqual(service.playedURLs, [track.fileURL, track.fileURL])
+    }
+
+    func testRepeatAllWrapsToFirstTrack() async throws {
+        let service = HiResAudioQueueServiceSpy()
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        await history.loadIfNeeded()
+        let store = HiResDirectOutputProbeStore(service: service)
+        let first = makeTrack(duration: 120)
+        let second = Track(
+            id: UUID(),
+            title: "Second Hi-Res Track",
+            artistName: "Artist",
+            duration: 180,
+            fileURL: URL(fileURLWithPath: "/tmp/second-hires.m4a"),
+            audioFormat: first.audioFormat
+        )
+
+        store.play(track: second, queue: [first, second], historyStore: history)
+        try await waitUntil { service.playedURLs.count == 1 }
+        service.send(.started(snapshot(for: second)))
+        store.cycleRepeatMode()
+        service.send(.reachedEnd)
+        try await waitUntil { service.playedURLs.count == 2 }
+
+        XCTAssertEqual(store.repeatMode, .all)
+        XCTAssertEqual(store.currentTrack?.id, first.id)
+        XCTAssertEqual(service.playedURLs.last, first.fileURL)
+    }
+
+    func testShuffleKeepsInternalQueueAndCurrentTrack() async {
+        let service = HiResAudioQueueServiceSpy()
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        await history.loadIfNeeded()
+        let store = HiResDirectOutputProbeStore(service: service)
+        let track = makeTrack(duration: 120)
+
+        store.play(track: track, historyStore: history)
+        store.toggleShuffle()
+
+        XCTAssertTrue(store.isShuffleEnabled)
+        XCTAssertEqual(store.queue.map(\.id), [track.id])
+        XCTAssertEqual(store.currentTrack?.id, track.id)
+    }
+
     private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async throws {
         for _ in 0..<100 {
             if condition() { return }

@@ -20,13 +20,14 @@ struct AlbumsView: View {
     }
 
     var body: some View {
+        let displayedAlbums = filteredAlbums
         Group {
             if displayMode == .artwork {
                 ScrollView {
-                    artworkGrid
+                    artworkGrid(displaying: displayedAlbums)
                 }
             } else {
-                textList
+                textList(displaying: displayedAlbums)
             }
         }
         .themeScreen()
@@ -39,13 +40,13 @@ struct AlbumsView: View {
     }
 
     @ViewBuilder
-    private var artworkGrid: some View {
-        if filteredAlbums.isEmpty {
+    private func artworkGrid(displaying albums: [Album]) -> some View {
+        if albums.isEmpty {
             ContentUnavailableView.search(text: query)
                 .padding(.top, 48)
         } else {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(filteredAlbums) { album in
+                    ForEach(albums) { album in
                         NavigationLink(value: album) {
                             VStack(alignment: .leading) {
                                 AlbumArtworkView(artworkIdentifier: album.artworkIdentifier)
@@ -60,9 +61,9 @@ struct AlbumsView: View {
         }
     }
 
-    private var textList: some View {
+    private func textList(displaying albums: [Album]) -> some View {
         List {
-            ForEach(filteredAlbums) { album in
+            ForEach(albums) { album in
                 NavigationLink(value: album) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(album.title).lineLimit(1)
@@ -74,7 +75,7 @@ struct AlbumsView: View {
                 }
             }
 
-            if filteredAlbums.isEmpty {
+            if albums.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
         }

@@ -25,6 +25,9 @@ final class HiResDirectOutputProbeStore {
     private(set) var queue: [Track] = []
     private(set) var currentIndex: Int?
     private(set) var currentTime: TimeInterval = 0
+    private(set) var isShuffleEnabled = false
+    private(set) var repeatMode: RepeatMode = .off
+    private var playbackOrder: [Int] = []
 
     init(
         service: HiResAudioQueueProbeServicing? = nil,
@@ -45,10 +48,9 @@ final class HiResDirectOutputProbeStore {
     var isPlaying: Bool { state == .playing }
     var isLoading: Bool { state == .switching }
     var duration: TimeInterval { max(currentTrack?.duration ?? 0, 0) }
-    var canGoPrevious: Bool { (currentIndex ?? 0) > 0 || currentTime > 0 }
+    var canGoPrevious: Bool { (currentPlaybackPosition ?? 0) > 0 || currentTime > 0 }
     var canGoNext: Bool {
-        guard let currentIndex else { return false }
-        return currentIndex + 1 < queue.count
+        nextPlaybackPosition(wrapping: repeatMode == .all) != nil
     }
 
     func play(url: URL) {
@@ -63,6 +65,7 @@ final class HiResDirectOutputProbeStore {
         let normalizedQueue = normalizedQueue(tracks, including: track)
         queue = normalizedQueue
         currentIndex = normalizedQueue.firstIndex(where: { $0.id == track.id })
+        rebuildPlaybackOrder()
         currentTrack = track
         self.historyStore = historyStore
         currentTime = 0
@@ -168,13 +171,22 @@ final class HiResDirectOutputProbeStore {
             seek(to: 0)
             return
         }
-        guard let currentIndex, currentIndex > 0 else { return }
-        playTrack(at: currentIndex - 1)
+        guard let position = currentPlaybackPosition, position > 0 else { return }
+        playTrack(at: playbackOrder[position - 1])
     }
 
     func next() {
-        guard let currentIndex, currentIndex + 1 < queue.count else { return }
-        playTrack(at: currentIndex + 1)
+        guard let position = nextPlaybackPosition(wrapping: repeatMode == .all) else { return }
+        playTrack(at: playbackOrder[position])
+    }
+
+    func toggleShuffle() {
+        isShuffleEnabled.toggle()
+        rebuildPlaybackOrder()
+    }
+
+    func cycleRepeatMode() {
+        repeatMode = repeatMode.next
     }
 
     func playTrack(at index: Int) {
@@ -216,7 +228,9 @@ final class HiResDirectOutputProbeStore {
         case .reachedEnd:
             finalizeHistory(endKind: .natural)
             currentTime = duration
-            if canGoNext {
+            if repeatMode == .one, let currentIndex {
+                playTrack(at: currentIndex)
+            } else if canGoNext {
                 next()
             } else {
                 playbackTask?.cancel()
@@ -240,7 +254,7 @@ final class HiResDirectOutputProbeStore {
         session.store.recordPlaybackStarted(
             trackID: session.track.id,
             context: session.context,
-            isRepeatModeActive: false,
+            isRepeatModeActive: repeatMode != .off,
             isConsecutivePlay: false,
             now: startedAt
         )
@@ -297,6 +311,31 @@ final class HiResDirectOutputProbeStore {
         var result = tracks.filter { seen.insert($0.id).inserted }
         if seen.insert(track.id).inserted { result.append(track) }
         return result
+    }
+
+    private var currentPlaybackPosition: Int? {
+        guard let currentIndex else { return nil }
+        return playbackOrder.firstIndex(of: currentIndex)
+    }
+
+    private func nextPlaybackPosition(wrapping: Bool) -> Int? {
+        guard let position = currentPlaybackPosition, !playbackOrder.isEmpty else { return nil }
+        let nextPosition = position + 1
+        if playbackOrder.indices.contains(nextPosition) { return nextPosition }
+        return wrapping ? playbackOrder.startIndex : nil
+    }
+
+    private func rebuildPlaybackOrder() {
+        guard !queue.isEmpty else {
+            playbackOrder = []
+            return
+        }
+        let naturalOrder = Array(queue.indices)
+        guard isShuffleEnabled, let currentIndex else {
+            playbackOrder = naturalOrder
+            return
+        }
+        playbackOrder = [currentIndex] + naturalOrder.filter { $0 != currentIndex }.shuffled()
     }
 }
 

@@ -30,6 +30,35 @@ updated: 2026-09-23
 - 検索画面はPlayback Historyの巨大なDictionary自体を監視せず、検索結果に関係する軽量revisionを監視する。15秒ごとの総再生時間保存だけでは全履歴比較と再検索を起動しない。
 - generic iOS Simulator Debug build、10,000曲queue、既存queue遷移、Library索引、リアルタイム解析gateの対象XCTest 7件は成功。実機の10,000曲ライブラリでのInstruments計測、長時間再生、background／lock screen、検索・一覧の体感比較は未確認。
 
+## 大規模ライブラリ性能改善 Phase 2
+
+- 作業用／ハイレゾcatalogは完成snapshotの構築時にTrack ID索引も保持する。Album／Artist／Album Artistの詳細を開くたびに専用catalog全曲からDictionaryを再生成しない。
+- ジャンル／作曲者から曲一覧へ遷移するときは`LibraryStore`の既存Track索引を再利用し、表示中の通常ライブラリ全曲からDictionaryを作り直さない。
+- HomeのPlaylist表示更新は通常曲／作業用曲のTrack ID索引を各1回だけ作り、Playlistごとの全曲索引再生成を除去した。計算量はPlaylist数×全曲数から、通常曲数＋作業用曲数＋Playlist収録曲数へ縮小した。
+- Album／Artist／Composerと作業用／ハイレゾ曲検索は、1回のSwiftUI body評価中に同じfilter結果を再利用する。検索文字入力時の重複全件filterと一時配列生成を抑える。
+- generic iOS Simulator Debug buildと、専用分類・Track ID索引の対象XCTest 6件は成功。性能改善版はVespera（iPhone 17e）へのDebug build・install・launchにも成功した。実機の約10,000曲ライブラリでの画面遷移時間、Home初期表示、検索入力、memory allocationは引き続きInstruments未計測。
+
+## 大規模ライブラリ性能改善 Phase 3
+
+- HomeのLibrary／Playback History／Preference／Favorite／Listen Later更新時に行う代表Track、Artwork、通常再生候補、MIX、今日の再生集計を`HomePerformanceSnapshotWorker`へ集約し、MainActor外で計算する。StoreからSendableな値snapshotを一度渡し、完成結果だけを画面stateへ反映する。
+- 通常shuffle適格曲は1回の全曲走査で作り、未再生／リピート／Favorite候補、Highlight Artwork、3種類のMIXで共有する。MIXのOverplayは候補ごとに63日分を1回集計し、3種類で同じ順位を使う。
+- 更新Taskは新しいLibrary／History／Preference等のrevisionでキャンセルし、古い結果を反映しない。60秒ごとの代表画像ローテーションは別Taskとし、MIXと今日の集計を再計算しない。Homeが非表示／backgroundの間は両Taskを停止する。
+- generic iOS Simulator Debug buildとHome snapshot／MIX／履歴・queueの対象XCTest 22件は成功。実機約10,000曲でのHome表示、曲切替時のframe hitch、CPU／allocationは未計測。
+
+## 大規模ライブラリ性能改善 Phase 4
+
+- 起動時のfolder別library cache復元を一括APIへ変更し、複数folderでも同じ`library-index.json`を1回だけread／decodeする。cacheがないfolderだけを従来どおりscanする。
+- library cache schema v2は正本であるTrack配列だけを保存し、復元後に必ず再構築するAlbum／Artist／Genre／Composerの重複保存を廃止した。JSONのpretty print／key sortも外し、cacheの容量とencode／decode負荷を抑える。
+- 旧来の複数folder Store形式と単一Snapshot形式は引き続きdecodeでき、次のcache保存でv2へ自然移行する。Track ID、`firstSeenAt`、relative pathからのfile URL復元は維持する。
+- generic iOS Simulator Debug buildと、新旧cache・複数folder一括復元を含む`TrackFirstSeenAtTests` 8件は成功。実機約10,000曲でのcold launch時間、cache容量、peak memoryは未計測。
+
+## 大規模ライブラリ性能改善 Phase 5
+
+- 専用検索画面の曲／アルバム／アーティスト結果を100件ずつ段階表示し、広い条件で数千件が一致しても一度に全行をSwiftUI Listへ渡さない。スクロール末尾で次の100件を追加し、条件変更時は先頭ページへ戻す。
+- 曲名検索ではAlbum／Artist結果、Album系検索ではArtist結果、Artist検索ではAlbum結果を構築しない。検索対象に不要な全Library派生走査を省き、入力中は結果なし表示ではなく検索中表示を行う。
+- 画面の段階表示とは分離し、曲タップ時の再生queueと検索playlist保存には全検索結果を維持する。playlist対象件数は検索完了時に一度だけ集計し、SwiftUI body評価ごとの全件filterを除去した。
+- generic iOS Simulator Debug buildと、検索・Album Artist・曲一覧配置の対象XCTest 15件は成功。実機約10,000曲での検索入力latency、末尾までのscroll、peak memoryは未計測。
+
 ## 実装済み
 
 ### USB DAC ネイティブレート出力 Beta

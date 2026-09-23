@@ -1,10 +1,22 @@
 import Foundation
 
 nonisolated struct WorkLibraryCatalog: Sendable {
-    var tracks: [Track]
-    var albums: [Album]
-    var artists: [Artist]
-    var albumArtists: [WorkAlbumArtist]
+    let tracks: [Track]
+    let albums: [Album]
+    let artists: [Artist]
+    let albumArtists: [WorkAlbumArtist]
+    private let tracksByID: [Track.ID: Track]
+
+    init(tracks: [Track], albums: [Album], artists: [Artist], albumArtists: [WorkAlbumArtist]) {
+        self.tracks = tracks
+        self.albums = albums
+        self.artists = artists
+        self.albumArtists = albumArtists
+        self.tracksByID = Dictionary(
+            tracks.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     static let empty = WorkLibraryCatalog(
         tracks: [],
@@ -14,7 +26,6 @@ nonisolated struct WorkLibraryCatalog: Sendable {
     )
 
     func tracks(for trackIDs: [Track.ID]) -> [Track] {
-        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
         return trackIDs.compactMap { tracksByID[$0] }
     }
 }

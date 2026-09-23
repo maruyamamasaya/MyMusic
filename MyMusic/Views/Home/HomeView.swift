@@ -33,6 +33,8 @@ struct HomeView: View {
     @State private var mixDay: Date?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
+    @State private var homeSnapshotTask: Task<Void, Never>?
+    @State private var rotationSnapshotTask: Task<Void, Never>?
 
     var isActive = true
     @Binding var isHighlightPresented: Bool
@@ -147,44 +149,58 @@ struct HomeView: View {
                 refreshPlaylistPresentations()
             }
             .task(id: isActive) {
-                guard isActive else { return }
-                refreshDestinationPresentations(rotatingRepresentatives: destinationPresentations.isEmpty)
-                refreshHighlightArtwork(rotating: highlightArtworkIdentifier != nil)
-                refreshMixes()
-                refreshTodayPlaybackSummary()
+                guard isActive else {
+                    homeSnapshotTask?.cancel()
+                    rotationSnapshotTask?.cancel()
+                    return
+                }
+                refreshHomeSnapshot(
+                    rotatingRepresentatives: destinationPresentations.isEmpty,
+                    includesMixes: true,
+                    includesTodayPlaybackSummary: true
+                )
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }
-                    refreshDestinationPresentations(rotatingRepresentatives: true)
-                    refreshHighlightArtwork(rotating: true)
                     if let mixDay, !Calendar.current.isDate(mixDay, inSameDayAs: Date()) {
-                        refreshMixes()
-                        refreshTodayPlaybackSummary()
+                        refreshHomeSnapshot(
+                            rotatingRepresentatives: true,
+                            includesMixes: true,
+                            includesTodayPlaybackSummary: true
+                        )
+                    } else {
+                        refreshHomeSnapshot(
+                            rotatingRepresentatives: true,
+                            includesMixes: false,
+                            includesTodayPlaybackSummary: false,
+                            isRotationOnly: true
+                        )
                     }
                 }
             }
             .onChange(of: libraryStore.homePresentationRevision) {
-                refreshDestinationPresentations()
-                refreshHighlightArtwork()
                 refreshPlaylistPresentations()
-                refreshMixes()
+                refreshHomeSnapshot()
             }
             .onChange(of: playbackHistoryStore.homePresentationRevision) {
-                refreshDestinationPresentations()
-                refreshHighlightArtwork()
-                refreshMixes()
-                refreshTodayPlaybackSummary()
+                refreshHomeSnapshot()
             }
-            .onChange(of: playbackHistoryStore.todayPlaybackRevision) { refreshTodayPlaybackSummary() }
+            .onChange(of: playbackHistoryStore.todayPlaybackRevision) {
+                refreshHomeSnapshot()
+            }
             .onChange(of: trackPreferenceStore.homePresentationRevision) {
-                refreshDestinationPresentations()
-                refreshHighlightArtwork()
-                refreshMixes()
+                refreshHomeSnapshot()
             }
-            .onChange(of: favoriteStore.homePresentationRevision) { refreshDestinationPresentations() }
+            .onChange(of: favoriteStore.homePresentationRevision) {
+                refreshHomeSnapshot()
+            }
             .onChange(of: playlistStore.homeContentRevision) { refreshPlaylistPresentations() }
             .onChange(of: listenLaterStore.homePresentationRevision) {
-                refreshDestinationPresentations()
+                refreshHomeSnapshot()
+            }
+            .onDisappear {
+                homeSnapshotTask?.cancel()
+                rotationSnapshotTask?.cancel()
             }
         }
     }
@@ -253,27 +269,6 @@ struct HomeView: View {
         )
     }
 
-    private func refreshMixes() {
-        guard isActive else { return }
-        let now = Date()
-        let candidates = libraryStore.tracks.filter { playbackHistoryStore.isEligibleForRegularShuffle($0, now: now) }
-        let weights = playbackHistoryStore.automaticSelectionWeights(for: candidates, now: now)
-        let queues = MixSelectionService().allQueues(
-            from: candidates,
-            histories: playbackHistoryStore.entries,
-            preferences: trackPreferenceStore.entries,
-            weights: weights,
-            now: now
-        )
-        mixDay = Calendar.current.startOfDay(for: now)
-        if mixQueues != queues { mixQueues = queues }
-    }
-
-    private func refreshTodayPlaybackSummary() {
-        let summary = TodayPlaybackSummaryService().summary(from: playbackHistoryStore.entries)
-        if todayPlaybackSummary != summary { todayPlaybackSummary = summary }
-    }
-
     private func artworkIdentifier(for destination: HomeDestination) -> String? {
         destinationPresentations[destination]?.artworkIdentifier
     }
@@ -325,27 +320,6 @@ struct HomeView: View {
         }
     }
 
-    private var favoriteAlbumTracks: [Track] {
-        uniqueTracks(
-            favoriteStore.favoriteAlbums(from: libraryStore.albums)
-                .flatMap { libraryStore.tracks(for: $0) }
-                .filter(\.isEligibleForRegularPlayback)
-        )
-    }
-
-    private var favoriteArtistTracks: [Track] {
-        uniqueTracks(
-            favoriteStore.favoriteArtists(from: libraryStore.artists)
-                .flatMap { libraryStore.tracks(for: $0) }
-                .filter(\.isEligibleForRegularPlayback)
-        )
-    }
-
-    private func uniqueTracks(_ tracks: [Track]) -> [Track] {
-        var seen: Set<Track.ID> = []
-        return tracks.filter { seen.insert($0.id).inserted }
-    }
-
     private var myMusicDestinations: [HomeDestination] {
         HomeCategory.all.first(where: { $0.id == .myMusic })?.items.map(\.destination) ?? []
     }
@@ -354,87 +328,73 @@ struct HomeView: View {
         destinationPresentations[destination]?.representativeTrack
     }
 
-    private func representativeSourceTracks(for destination: HomeDestination) -> [Track] {
-        switch destination {
-        case .quickPlay, .selectiveRandomPlay:
-            libraryStore.tracks.filter(playbackHistoryStore.isEligibleForRegularShuffle)
-        case .discoveryPlay:
-            libraryStore.tracks.filter {
-                playbackHistoryStore.playCount(for: $0.id) == 0
-                    && playbackHistoryStore.isEligibleForRegularShuffle($0)
-            }
-        case .listenLater:
-            listenLaterStore.tracks(in: libraryStore.tracks)
-        case .recentlyAddedPlay:
-            playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
-        case .repeatPlay:
-            libraryStore.tracks.filter {
-                playbackHistoryStore.playCount(for: $0.id) >= 2
-                    && playbackHistoryStore.isEligibleForRegularShuffle($0)
-            }
-        case .favorites:
-            trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
-                .filter(playbackHistoryStore.isEligibleForRegularShuffle)
-        case .favoriteAlbums:
-            favoriteAlbumTracks
-        case .favoriteArtists:
-            favoriteArtistTracks
-        case .recentTracks:
-            playbackHistoryStore.recentTracks(from: libraryStore.tracks)
-        case .workSizePlay:
-            libraryStore.workLibraryCatalog.tracks
-        case .hiResLibrary:
-            libraryStore.hiResLibraryCatalog.tracks
-        default:
-            []
-        }
-    }
-
-    private func refreshDestinationPresentations(rotatingRepresentatives: Bool = false) {
+    private func refreshHomeSnapshot(
+        rotatingRepresentatives: Bool = false,
+        includesMixes: Bool = true,
+        includesTodayPlaybackSummary: Bool = true,
+        isRotationOnly: Bool = false
+    ) {
         guard isActive else { return }
-        var refreshed: [HomeDestination: HomeDestinationPresentation] = [:]
-        let myMusicDestinationSet = Set(myMusicDestinations)
-        let destinations = Set(HomeCategory.all.flatMap { $0.items.map(\.destination) })
-        for destination in destinations {
-            let sourceTracks = representativeSourceTracks(for: destination)
-            let candidates = HomeRepresentativeTrackPolicy.eligibleArtworkTracks(from: sourceTracks)
-            let previous = destinationPresentations[destination]?.representativeTrack
-            let representative: Track?
-            if !myMusicDestinationSet.contains(destination) {
-                representative = nil
-            } else if !rotatingRepresentatives,
-               let previous,
-               candidates.contains(where: { $0.id == previous.id }) {
-                representative = previous
-            } else {
-                representative = HomeRepresentativeTrackPolicy.select(
-                    from: candidates,
-                    excluding: previous?.id
-                )
+        let request = HomePerformanceSnapshotRequest(
+            tracks: libraryStore.tracks,
+            albums: libraryStore.albums,
+            artists: libraryStore.artists,
+            workTracks: libraryStore.workLibraryCatalog.tracks,
+            hiResTracks: libraryStore.hiResLibraryCatalog.tracks,
+            histories: playbackHistoryStore.entries,
+            preferences: trackPreferenceStore.entries,
+            listenLaterEntries: listenLaterStore.entries,
+            favorites: favoriteStore.favorites,
+            destinations: Set(HomeCategory.all.flatMap { $0.items.map(\.destination) }),
+            representativeDestinations: Set(myMusicDestinations),
+            previousPresentations: destinationPresentations,
+            previousHighlightArtworkIdentifier: highlightArtworkIdentifier,
+            rotatesRepresentatives: rotatingRepresentatives,
+            includesMixes: includesMixes,
+            includesTodayPlaybackSummary: includesTodayPlaybackSummary,
+            now: Date()
+        )
+        let task = Task { @MainActor in
+            guard let snapshot = await HomePerformanceSnapshotWorker.shared.prepare(request),
+                  !Task.isCancelled, isActive else { return }
+            if destinationPresentations != snapshot.destinationPresentations {
+                destinationPresentations = snapshot.destinationPresentations
             }
-            let artworkCandidates = sourceTracks.compactMap(\.artworkIdentifier)
-            let previousArtworkIdentifier = destinationPresentations[destination]?.artworkIdentifier
-            let selectedArtworkIdentifier = representative?.artworkIdentifier
-                ?? previousArtworkIdentifier.flatMap { artworkCandidates.contains($0) ? $0 : nil }
-                ?? artworkCandidates.randomElement()
-            refreshed[destination] = HomeDestinationPresentation(
-                representativeTrack: representative,
-                artworkIdentifier: selectedArtworkIdentifier,
-                instantPlaybackIsAvailable: !sourceTracks.isEmpty
-            )
+            if highlightArtworkIdentifier != snapshot.highlightArtworkIdentifier {
+                highlightArtworkIdentifier = snapshot.highlightArtworkIdentifier
+            }
+            if let queues = snapshot.mixQueues {
+                if mixQueues != queues { mixQueues = queues }
+                mixDay = snapshot.mixDay
+            }
+            if let summary = snapshot.todayPlaybackSummary,
+               todayPlaybackSummary != summary {
+                todayPlaybackSummary = summary
+            }
         }
-        if destinationPresentations != refreshed {
-            destinationPresentations = refreshed
+        if isRotationOnly {
+            rotationSnapshotTask?.cancel()
+            rotationSnapshotTask = task
+        } else {
+            rotationSnapshotTask?.cancel()
+            homeSnapshotTask?.cancel()
+            homeSnapshotTask = task
         }
     }
 
     private func refreshPlaylistPresentations() {
         var resolvedTracks: [Playlist.ID: [Track]] = [:]
         var resolvedArtworkIdentifiers: [Playlist.ID: String] = [:]
+        let regularTracksByID = Dictionary(
+            libraryStore.tracks.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let workTracksByID = Dictionary(
+            libraryStore.workLibraryCatalog.tracks.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         for playlist in playlistStore.playlists {
-            let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore
-                .tracks(for: playlist.kind)
-                .map { ($0.id, $0) })
+            let tracksByID = playlist.kind == .work ? workTracksByID : regularTracksByID
             let tracks = playlist.trackIDs
                 .compactMap { tracksByID[$0] }
                 .filter(playlist.kind.accepts)
@@ -460,29 +420,6 @@ struct HomeView: View {
         if workPlaylists != refreshedWorkPlaylists { workPlaylists = refreshedWorkPlaylists }
     }
 
-    private func refreshHighlightArtwork(rotating: Bool = false) {
-        let candidates = Array(Set(
-            libraryStore.tracks
-                .filter(playbackHistoryStore.isEligibleForRegularShuffle)
-                .compactMap(\.artworkIdentifier)
-        ))
-        guard !candidates.isEmpty else {
-            highlightArtworkIdentifier = nil
-            return
-        }
-        if !rotating, let highlightArtworkIdentifier,
-           candidates.contains(highlightArtworkIdentifier) {
-            return
-        }
-        let alternatives = candidates.filter { $0 != highlightArtworkIdentifier }
-        highlightArtworkIdentifier = (alternatives.isEmpty ? candidates : alternatives).randomElement()
-    }
-}
-
-private struct HomeDestinationPresentation: Equatable {
-    let representativeTrack: Track?
-    let artworkIdentifier: String?
-    let instantPlaybackIsAvailable: Bool
 }
 
 private struct HomeHighlightTile: View {
