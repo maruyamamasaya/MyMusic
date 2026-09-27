@@ -76,32 +76,75 @@ nonisolated struct LibraryPresentationSnapshot: Sendable {
     let hiResLibraryCatalog: HiResLibraryCatalog
 }
 
+nonisolated struct GenreLibraryFilterIndex: Sendable {
+    let regularLibrary: MusicLibrary
+    let filterKeysByTrackIndex: [Set<String>]
+    let workLibraryCatalog: WorkLibraryCatalog
+    let hiResLibraryCatalog: HiResLibraryCatalog
+}
+
 actor GenreLibraryFilterService {
+    func makeIndex(
+        from library: MusicLibrary,
+        unassignedGenreKey: String
+    ) throws -> GenreLibraryFilterIndex {
+        let regularTracks = library.tracks.filter(\.isEligibleForRegularPlayback)
+        try Task.checkCancellation()
+        let regularLibrary = MusicLibrary.build(from: regularTracks)
+        let filterKeysByTrackIndex = regularTracks.map { track in
+            let genreNames = Self.genreNames(in: track.genre)
+            return genreNames.isEmpty ? Set([unassignedGenreKey]) : genreNames
+        }
+        try Task.checkCancellation()
+        return GenreLibraryFilterIndex(
+            regularLibrary: regularLibrary,
+            filterKeysByTrackIndex: filterKeysByTrackIndex,
+            workLibraryCatalog: WorkLibraryCatalogService.build(from: library),
+            hiResLibraryCatalog: HiResLibraryCatalogService.build(from: library.tracks)
+        )
+    }
+
+    func filteredLibrary(
+        from index: GenreLibraryFilterIndex,
+        disabledGenreNames: Set<String>
+    ) throws -> LibraryPresentationSnapshot {
+        guard !disabledGenreNames.isEmpty else {
+            return LibraryPresentationSnapshot(
+                library: index.regularLibrary,
+                workLibraryCatalog: index.workLibraryCatalog,
+                hiResLibraryCatalog: index.hiResLibraryCatalog
+            )
+        }
+
+        var visibleTracks: [Track] = []
+        visibleTracks.reserveCapacity(index.regularLibrary.tracks.count)
+        var visibleTrackIDs: Set<Track.ID> = []
+        visibleTrackIDs.reserveCapacity(index.regularLibrary.tracks.count)
+        for (trackIndex, track) in index.regularLibrary.tracks.enumerated() {
+            if trackIndex.isMultiple(of: 256) { try Task.checkCancellation() }
+            guard disabledGenreNames.isDisjoint(with: index.filterKeysByTrackIndex[trackIndex]) else { continue }
+            visibleTracks.append(track)
+            visibleTrackIDs.insert(track.id)
+        }
+
+        let library = try index.regularLibrary.filtering(to: visibleTrackIDs, tracks: visibleTracks)
+        return LibraryPresentationSnapshot(
+            library: library,
+            workLibraryCatalog: index.workLibraryCatalog,
+            hiResLibraryCatalog: index.hiResLibraryCatalog
+        )
+    }
+
     func filteredLibrary(
         from tracks: [Track],
         disabledGenreNames: Set<String>,
         unassignedGenreKey: String
     ) throws -> LibraryPresentationSnapshot {
-        var visibleTracks: [Track] = []
-        visibleTracks.reserveCapacity(tracks.count)
-
-        for (index, track) in tracks.enumerated() {
-            if index.isMultiple(of: 64) { try Task.checkCancellation() }
-            guard track.isEligibleForRegularPlayback else { continue }
-            let genreNames = Self.genreNames(in: track.genre)
-            let filterKeys = genreNames.isEmpty ? Set([unassignedGenreKey]) : genreNames
-            if disabledGenreNames.isDisjoint(with: filterKeys) {
-                visibleTracks.append(track)
-            }
-        }
-
-        try Task.checkCancellation()
-        let library = MusicLibrary.build(from: visibleTracks)
-        return LibraryPresentationSnapshot(
-            library: library,
-            workLibraryCatalog: WorkLibraryCatalogService.build(from: tracks),
-            hiResLibraryCatalog: HiResLibraryCatalogService.build(from: tracks)
+        let index = try makeIndex(
+            from: MusicLibrary.build(from: tracks),
+            unassignedGenreKey: unassignedGenreKey
         )
+        return try filteredLibrary(from: index, disabledGenreNames: disabledGenreNames)
     }
 
     private static func genreNames(in value: String?) -> Set<String> {
@@ -110,6 +153,58 @@ actor GenreLibraryFilterService {
             .split(whereSeparator: { $0 == ";" || $0 == "\0" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty })
+    }
+}
+
+private extension MusicLibrary {
+    nonisolated func filtering(to visibleTrackIDs: Set<Track.ID>, tracks: [Track]) throws -> MusicLibrary {
+        func filteredIDs(_ ids: [Track.ID]) -> [Track.ID] {
+            ids.filter(visibleTrackIDs.contains)
+        }
+
+        let visibleTracksByID = Dictionary(
+            tracks.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let albums = albums.compactMap { album -> Album? in
+            var album = album
+            album.trackIDs = filteredIDs(album.trackIDs)
+            guard !album.trackIDs.isEmpty else { return nil }
+            let albumTracks = album.trackIDs.compactMap { visibleTracksByID[$0] }
+            album.artworkIdentifier = albumTracks.compactMap(\.artworkIdentifier).first
+            album.year = albumTracks.compactMap(\.year).first
+            let albumTitle = album.title
+            album.legacyAlbumIDs = Set(albumTracks.map {
+                StableLibraryIdentifier.albumID(title: albumTitle, artistName: $0.artistName)
+            })
+            return album
+        }
+        try Task.checkCancellation()
+        let visibleAlbumIDs = Set(albums.map(\.id))
+        let artists = artists.compactMap { artist -> Artist? in
+            var artist = artist
+            artist.trackIDs = filteredIDs(artist.trackIDs)
+            artist.albumIDs = artist.albumIDs.filter(visibleAlbumIDs.contains)
+            return artist.trackIDs.isEmpty ? nil : artist
+        }
+        let genres = genres.compactMap { genre -> Genre? in
+            var genre = genre
+            genre.trackIDs = filteredIDs(genre.trackIDs)
+            return genre.trackIDs.isEmpty ? nil : genre
+        }
+        let composers = composers.compactMap { composer -> Composer? in
+            var composer = composer
+            composer.trackIDs = filteredIDs(composer.trackIDs)
+            return composer.trackIDs.isEmpty ? nil : composer
+        }
+        try Task.checkCancellation()
+        return MusicLibrary(
+            tracks: tracks,
+            albums: albums,
+            artists: artists,
+            genres: genres,
+            composers: composers
+        )
     }
 }
 

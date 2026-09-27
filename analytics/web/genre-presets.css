@@ -1,0 +1,76 @@
+.preset-toolbar,
+.preset-card-actions,
+.preset-dialog-actions,
+.preset-selection-toolbar,
+.preset-selection-toolbar [role="group"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.preset-toolbar { flex-wrap: wrap; margin-bottom: 14px; }
+.primary-button,
+.secondary-button,
+.preset-card-actions button,
+.preset-dialog button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  padding: 9px 13px;
+  text-decoration: none;
+}
+.primary-button { background: var(--accent); border-color: var(--accent); color: white; }
+.secondary-button,
+.preset-card-actions button,
+.preset-dialog button { background: var(--surface2); }
+.preset-import-control { cursor: pointer; overflow: hidden; position: relative; }
+.preset-import-control input { cursor: pointer; inset: 0; opacity: 0; position: absolute; width: 100%; }
+.preset-toolbar :disabled,
+.preset-card-actions button:disabled,
+.preset-dialog button:disabled { cursor: wait; opacity: .5; }
+
+.preset-message { color: var(--muted); min-height: 22px; }
+.preset-message.error,
+.preset-dialog .form-error { color: #ff8a9d; }
+.preset-list { display: grid; gap: 12px; }
+.preset-card { background: linear-gradient(145deg,#141a23,#0f141b); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+.preset-card-main { display: grid; gap: 8px; }
+.preset-card-heading { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
+.preset-card h2 { font-size: 17px; margin: 0; }
+.preset-card-count { color: var(--muted); font-size: 12px; }
+.preset-card-genres { color: #d7dce5; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
+.preset-card-unassigned { color: var(--muted); font-size: 12px; margin: 0; }
+.preset-card-actions { flex-wrap: wrap; justify-content: flex-end; margin-top: 14px; }
+.preset-card-actions .danger { color: #ff8a9d; }
+
+.preset-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 0 0 100vmax #000b; color: var(--text); left: 50%; max-height: min(760px,90vh); overflow: auto; padding: 0; position: fixed; top: 50%; transform: translate(-50%,-50%); width: min(680px,calc(100vw - 30px)); z-index: 100; }
+.preset-dialog[hidden] { display: none; }
+.preset-dialog form { padding: 22px; }
+.preset-dialog-header { align-items: start; display: flex; justify-content: space-between; }
+.preset-dialog-header h2 { font-size: 22px; margin: 5px 0 18px; }
+.preset-dialog .icon-button { border: 0; background: transparent; font-size: 24px; padding: 2px 8px; }
+.preset-name,
+.preset-selection-toolbar > label { color: var(--muted); display: grid; font-size: 12px; gap: 7px; }
+.preset-name input,
+.preset-selection-toolbar input { background: var(--surface2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); font: inherit; padding: 10px 12px; }
+.preset-name input { width: 100%; }
+.preset-selection-toolbar { justify-content: space-between; margin-top: 18px; }
+.preset-selection-toolbar > label { flex: 1; }
+.preset-selection-count,
+.fixed-genre-note { color: var(--muted); font-size: 12px; }
+.preset-unassigned { align-items: center; background: var(--surface2); border-radius: 9px; display: flex; gap: 8px; padding: 12px; }
+.preset-genres { border: 0; margin: 12px 0 0; max-height: 300px; overflow: auto; padding: 0; }
+#preset-genre-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.preset-genre-option { align-items: center; background: #171d27; border-radius: 8px; display: flex; gap: 8px; min-width: 0; padding: 10px; }
+.preset-genre-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preset-dialog-actions { justify-content: flex-end; margin-top: 18px; }
+
+@media (max-width: 600px) {
+  .preset-toolbar { align-items: stretch; flex-direction: column; }
+  .preset-toolbar > * { text-align: center; }
+  .preset-selection-toolbar { align-items: stretch; flex-direction: column; }
+  #preset-genre-options { grid-template-columns: 1fr; }
+  .preset-card-heading { align-items: start; flex-direction: column; }
+}

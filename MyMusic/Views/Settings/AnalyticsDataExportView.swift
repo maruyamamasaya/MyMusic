@@ -69,10 +69,10 @@ struct AnalyticsDataExportView: View {
                         isEnabled: settingsStore.volumeNormalizationEnabled
                     )
                 }
-                exportButton("プレイリスト", filename: "MyMusic-Playlists.json", systemImage: "music.note.list") {
+                exportButton("プレイリスト（すべて）", filename: "MyMusic-Playlists.json", systemImage: "music.note.list") {
                     try exporter.allPlaylistsJSON(
                         playlistStore.playlists,
-                        tracks: libraryStore.tracks
+                        tracks: libraryStore.unfilteredTracks
                     )
                 }
                 exportButton("イコライザー", filename: "MyMusic-Equalizer.json", systemImage: "slider.horizontal.3") {
@@ -86,6 +86,34 @@ struct AnalyticsDataExportView: View {
                 }
             } footer: {
                 Text("PC版Analyticsへ取り込むためのJSONを書き出します。オンライン同期は行いません。")
+            }
+            Section {
+                exportButton(
+                    "通常プレイリスト",
+                    filename: "MyMusic-Regular-Playlists.json",
+                    systemImage: "music.note.list"
+                ) {
+                    try exporter.playlistsJSON(
+                        playlistStore.playlists,
+                        kind: .regular,
+                        tracks: libraryStore.unfilteredTracks
+                    )
+                }
+                exportButton(
+                    "作業用プレイリスト",
+                    filename: "MyMusic-Work-Playlists.json",
+                    systemImage: "timer"
+                ) {
+                    try exporter.playlistsJSON(
+                        playlistStore.playlists,
+                        kind: .work,
+                        tracks: libraryStore.unfilteredTracks
+                    )
+                }
+            } header: {
+                Text("プレイリストの分割書き出し")
+            } footer: {
+                Text("完全同期とZIPには上の「プレイリスト（すべて）」を使います。分割JSONは用途別の共有用です。")
             }
         }
         .themeScreen()
@@ -152,7 +180,7 @@ struct AnalyticsDataExportView: View {
             ),
             try exporter.allPlaylistsJSON(
                 playlistStore.playlists,
-                tracks: libraryStore.tracks
+                tracks: libraryStore.unfilteredTracks
             ),
             try exporter.equalizerJSON(
                 settings: settingsStore.equalizer,

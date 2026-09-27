@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
+from unicodedata import combining, normalize
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -233,13 +235,93 @@ class EqualizerExportV1(BaseModel):
 
 
 class GenrePresetsExportV1(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
     kind: str
     version: int
-    presets: list[dict[str, Any]]
+    presets: list["GenreDisplayPresetV1"]
 
     @model_validator(mode="after")
     def validate_contract(self):
         if self.kind != "mymusic.genre-display-presets" or self.version != 1:
             raise ValueError("unsupported genre presets document")
+        ids: set[UUID] = set()
+        names: set[str] = set()
+        for preset in self.presets:
+            if preset.id in ids:
+                raise ValueError("preset IDs must be unique")
+            normalized_name = normalized_genre_value(preset.name)
+            if normalized_name in names:
+                raise ValueError("preset names must be unique")
+            ids.add(preset.id)
+            names.add(normalized_name)
         return self
+
+
+def normalized_genre_value(value: str) -> str:
+    """Match Swift's case/width/diacritic-insensitive comparison contract."""
+    width_folded = normalize("NFKC", value)
+    return "".join(
+        character for character in normalize("NFKD", width_folded.casefold())
+        if not combining(character)
+    )
+
+
+class GenreDisplayPresetV1(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: UUID = Field(strict=False)
+    name: str
+    enabledGenreNames: list[str]
+    includesUnassignedGenreSetting: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("name must not be empty")
+        return trimmed
+
+    @field_validator("enabledGenreNames")
+    @classmethod
+    def validate_genres(cls, values: list[str]) -> list[str]:
+        trimmed = [value.strip() for value in values]
+        if any(not value for value in trimmed):
+            raise ValueError("genre names must not be empty")
+        normalized = [normalized_genre_value(value) for value in trimmed]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("genre names must be unique")
+        return trimmed
+
+
+class GenreDisplayPresetWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: str
+    enabledGenreNames: list[str]
+    includesUnassignedGenreSetting: bool | None = True
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return GenreDisplayPresetV1.validate_name(value)
+
+    @field_validator("enabledGenreNames")
+    @classmethod
+    def validate_genres(cls, values: list[str]) -> list[str]:
+        return GenreDisplayPresetV1.validate_genres(values)
+
+
+class GenreDisplayPresetOrder(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    ids: list[Annotated[UUID, Field(strict=False)]]
+
+    @field_validator("ids")
+    @classmethod
+    def validate_ids(cls, values: list[UUID]) -> list[UUID]:
+        if len(set(values)) != len(values):
+            raise ValueError("ids must be unique")
+        return values
+
+
+GenrePresetsExportV1.model_rebuild()

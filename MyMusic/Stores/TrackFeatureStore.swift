@@ -75,6 +75,10 @@ final class TrackFeatureStore {
         featuresByTrackID.values.sorted { $0.trackID.uuidString < $1.trackID.uuidString }
     }
 
+    var featureSnapshot: [Track.ID: TrackFeature] {
+        featuresByTrackID
+    }
+
     func statistics(for tracks: [Track]) -> TrackFeatureStatistics {
         let registeredIDs = Set(tracks.map(\.id))
         return TrackFeatureStatistics(

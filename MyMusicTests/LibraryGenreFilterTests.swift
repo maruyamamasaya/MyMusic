@@ -4,6 +4,47 @@ import XCTest
 
 @MainActor
 final class LibraryGenreFilterTests: XCTestCase {
+    func testIndexedFilterMatchesFreshLibraryBuildWithoutRebuildingTaxonomy() async throws {
+        let ambient = makeTrack(title: "Ambient", genre: "Ambient", composer: "Composer A")
+        let crossover = makeTrack(title: "Crossover", genre: "Ambient; Rock", composer: "Composer B")
+        let rock = makeTrack(title: "Rock", genre: "Rock", composer: "Composer A")
+        let unassigned = makeTrack(title: "Unassigned", genre: "", composer: nil)
+        let tracks = [ambient, crossover, rock, unassigned]
+        let service = GenreLibraryFilterService()
+        let index = try await service.makeIndex(
+            from: MusicLibrary.build(from: tracks),
+            unassignedGenreKey: "unassigned"
+        )
+
+        let allVisible = try await service.filteredLibrary(from: index, disabledGenreNames: [])
+        XCTAssertEqual(allVisible.library.genres, index.regularLibrary.genres)
+        XCTAssertEqual(allVisible.library.albums, index.regularLibrary.albums)
+
+        let snapshot = try await service.filteredLibrary(
+            from: index,
+            disabledGenreNames: ["Rock", "unassigned"]
+        )
+        let expected = MusicLibrary.build(from: [ambient])
+
+        XCTAssertEqual(snapshot.library.tracks.map(\.id), expected.tracks.map(\.id))
+        XCTAssertEqual(
+            snapshot.library.albums.map { [$0.id] + $0.trackIDs },
+            expected.albums.map { [$0.id] + $0.trackIDs }
+        )
+        XCTAssertEqual(
+            snapshot.library.artists.map { [$0.id] + $0.albumIDs + $0.trackIDs },
+            expected.artists.map { [$0.id] + $0.albumIDs + $0.trackIDs }
+        )
+        XCTAssertEqual(
+            snapshot.library.genres.map { $0.name + ":" + $0.trackIDs.map(\.uuidString).joined(separator: ",") },
+            expected.genres.map { $0.name + ":" + $0.trackIDs.map(\.uuidString).joined(separator: ",") }
+        )
+        XCTAssertEqual(
+            snapshot.library.composers.map { $0.name + ":" + $0.trackIDs.map(\.uuidString).joined(separator: ",") },
+            expected.composers.map { $0.name + ":" + $0.trackIDs.map(\.uuidString).joined(separator: ",") }
+        )
+    }
+
     func testGenreFilterPublishesLatestRequestedLibrary() async throws {
         let ambient = makeTrack(title: "Ambient", genre: "Ambient")
         let rock = makeTrack(title: "Rock", genre: "Rock")
@@ -131,7 +172,12 @@ final class LibraryGenreFilterTests: XCTestCase {
         }
     }
 
-    private func makeTrack(title: String, genre: String, audioFormat: AudioFormat? = nil) -> Track {
+    private func makeTrack(
+        title: String,
+        genre: String,
+        composer: String? = nil,
+        audioFormat: AudioFormat? = nil
+    ) -> Track {
         Track(
             id: UUID(),
             title: title,
@@ -140,6 +186,7 @@ final class LibraryGenreFilterTests: XCTestCase {
             duration: 180,
             fileURL: URL(fileURLWithPath: "/tmp/\(title).m4a"),
             genre: genre,
+            composer: composer,
             audioFormat: audioFormat
         )
     }

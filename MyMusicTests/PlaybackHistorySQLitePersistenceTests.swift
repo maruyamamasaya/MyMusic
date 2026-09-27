@@ -131,22 +131,58 @@ final class PlaybackHistorySQLitePersistenceTests: XCTestCase {
         XCTAssertEqual(reloaded.playbackPreference, 6)
     }
 
-    func testVerifiedVersionTwoDatabaseMigratesEndKindColumnToVersionThree() async throws {
+    func testVerifiedVersionTwoDatabaseMigratesEndKindAndPlatformToVersionFour() async throws {
         let root = try temporaryDirectory()
         do {
             let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
             _ = try await service.load()
         }
         let databaseURL = root.appending(path: "playback-history.sqlite3")
-        try executeSQL("ALTER TABLE playback_events DROP COLUMN end_kind; PRAGMA user_version = 2", at: databaseURL)
+        try executeSQL("""
+            ALTER TABLE playback_events DROP COLUMN end_kind;
+            ALTER TABLE playback_events DROP COLUMN platform;
+            PRAGMA user_version = 2;
+            """, at: databaseURL)
 
         _ = try await PlaybackHistoryPersistenceService(applicationDirectory: root).load()
 
-        XCTAssertEqual(try scalarInt("PRAGMA user_version", at: databaseURL), 3)
+        XCTAssertEqual(try scalarInt("PRAGMA user_version", at: databaseURL), 4)
         XCTAssertEqual(try scalarInt(
             "SELECT count(*) FROM pragma_table_info('playback_events') WHERE name = 'end_kind'",
             at: databaseURL
         ), 1)
+        XCTAssertEqual(try scalarInt(
+            "SELECT count(*) FROM pragma_table_info('playback_events') WHERE name = 'platform'",
+            at: databaseURL
+        ), 1)
+    }
+
+    func testVersionThreeRowsMigrateWithIOSPlatformDefault() async throws {
+        let root = try temporaryDirectory()
+        let trackID = UUID()
+        let event = PlaybackEvent(
+            id: "pre-platform", trackID: trackID,
+            startedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_800_000_010),
+            listenedSeconds: 10, completionRatio: 0.1,
+            wasSkipped: false, wasFullPlayback: false,
+            startKind: .manual, startSource: .library
+        )
+        do {
+            let service = PlaybackHistoryPersistenceService(applicationDirectory: root)
+            _ = try await service.load()
+            try await service.save(PlaybackHistory(
+                trackID: trackID, isFavorite: false, playCount: 0,
+                lastPlayedAt: event.startedAt, playbackEvents: [event]
+            ))
+        }
+        let databaseURL = root.appending(path: "playback-history.sqlite3")
+        try executeSQL("ALTER TABLE playback_events DROP COLUMN platform; PRAGMA user_version = 3", at: databaseURL)
+
+        let migrated = try await PlaybackHistoryPersistenceService(applicationDirectory: root).load()
+
+        XCTAssertEqual(try scalarInt("PRAGMA user_version", at: databaseURL), 4)
+        XCTAssertEqual(migrated.first?.playbackEvents.first?.platform, .iOS)
     }
 
     private func completeHistory() -> PlaybackHistory {

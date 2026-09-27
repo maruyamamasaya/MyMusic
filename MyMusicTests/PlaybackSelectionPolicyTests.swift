@@ -94,7 +94,10 @@ final class PlaybackSelectionIntegrationTests: XCTestCase {
                 queue, mode: mode, baseWeights: store.automaticSelectionWeights(for: queue, now: now),
                 histories: store.entries, features: [:], now: now
             )
-            XCTAssertEqual(Set(modeQueue.map(\.id)), Set([preferred.id, overplayed.id, recovered.id]))
+            let expectedIDs = mode == .unplayed
+                ? Set([preferred.id, recovered.id])
+                : Set([preferred.id, overplayed.id, recovered.id])
+            XCTAssertEqual(Set(modeQueue.map(\.id)), expectedIDs)
         }
         XCTAssertGreaterThan(
             try XCTUnwrap(store.automaticSelectionWeights(for: tracks, now: now)[preferred.id]),

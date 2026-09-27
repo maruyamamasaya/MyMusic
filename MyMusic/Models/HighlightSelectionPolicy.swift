@@ -2,6 +2,7 @@ import Foundation
 
 enum HighlightSelectionMode: String, CaseIterable, Identifiable, Sendable {
     case shuffle
+    case unplayed
     case upbeat
     case calm
     case discovery
@@ -11,6 +12,7 @@ enum HighlightSelectionMode: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .shuffle: "シャッフル"
+        case .unplayed: "未再生"
         case .upbeat: "アガる"
         case .calm: "穏やか"
         case .discovery: "発掘"
@@ -88,7 +90,7 @@ nonisolated enum HighlightSelectionPolicy {
         now: Date
     ) -> Double {
         switch mode {
-        case .shuffle:
+        case .shuffle, .unplayed:
             return 1
         case .upbeat:
             return featureMultiplier(feature, values: [
@@ -112,7 +114,7 @@ nonisolated enum HighlightSelectionPolicy {
         now: Date
     ) -> Double? {
         switch mode {
-        case .shuffle:
+        case .shuffle, .unplayed:
             return nil
         case .upbeat:
             return featureAffinity(feature, values: [
@@ -198,17 +200,20 @@ nonisolated enum HighlightSelectionPolicy {
         candidatePoolLimit: Int = candidatePoolLimit,
         queueLimit: Int = generatedQueueLimit
     ) -> SelectionResult {
-        guard candidatePoolLimit > 0, queueLimit > 0, !tracks.isEmpty else {
+        let selectableTracks = mode == .unplayed
+            ? tracks.filter { (histories[$0.id]?.playCount ?? 0) == 0 }
+            : tracks
+        guard candidatePoolLimit > 0, queueLimit > 0, !selectableTracks.isEmpty else {
             return SelectionResult(
-                tracks: [], rankingCount: tracks.count,
+                tracks: [], rankingCount: selectableTracks.count,
                 candidatePoolCount: 0, greedyComparisonCount: 0
             )
         }
         let rankings = rankings(
-            tracks: tracks, mode: mode, baseWeights: baseWeights,
+            tracks: selectableTracks, mode: mode, baseWeights: baseWeights,
             histories: histories, features: features, now: now
         )
-        let evaluated = tracks.compactMap { track -> EvaluatedTrack? in
+        let evaluated = selectableTracks.compactMap { track -> EvaluatedTrack? in
             guard let ranking = rankings[track.id] else { return nil }
             return EvaluatedTrack(
                 track: track,
@@ -305,7 +310,7 @@ nonisolated enum HighlightSelectionPolicy {
         let previousFeature = recentTracks.last.flatMap { features[$0.track.id] }
         func score(_ item: EvaluatedTrack) -> Double {
             let base = item.ranking.adjustedWeight
-            let similarity = mode == .shuffle ? 1 : featureSimilarityMultiplier(
+            let similarity = mode == .shuffle || mode == .unplayed ? 1 : featureSimilarityMultiplier(
                 distance: featureDistance(previousFeature, features[item.track.id])
             )
             let random = item.randomValue

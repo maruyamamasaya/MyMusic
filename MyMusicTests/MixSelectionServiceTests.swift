@@ -89,6 +89,88 @@ final class MixSelectionServiceTests: XCTestCase {
         XCTAssertEqual(Set(result.map(\.id)).count, 25)
     }
 
+    func testFlowMixStartsFromMostRecentAnalyzedTrackAndFollowsNearestFeatures() {
+        let distant = track("Distant")
+        let seed = track("Seed")
+        let nearest = track("Nearest")
+        let middle = track("Middle")
+        let histories = [seed.id: history(seed, count: 2, daysAgo: 1)]
+        let features = [
+            seed.id: feature(energy: 0.20, calm: 0.80),
+            nearest.id: feature(energy: 0.25, calm: 0.75),
+            middle.id: feature(energy: 0.55, calm: 0.45),
+            distant.id: feature(energy: 0.90, calm: 0.10)
+        ]
+
+        let result = selector.tracks(
+            for: .flow,
+            from: [distant, middle, nearest, seed],
+            histories: histories,
+            preferences: [:],
+            weights: [:],
+            features: features,
+            now: now
+        )
+
+        XCTAssertEqual(result.map(\.id), [seed.id, nearest.id, middle.id, distant.id])
+    }
+
+    func testFlowMixIsHiddenWhenFewerThanThreeTracksHaveUsableFeatures() {
+        let first = track("First")
+        let second = track("Second")
+        let result = selector.tracks(
+            for: .flow,
+            from: [first, second],
+            histories: [:],
+            preferences: [:],
+            weights: [:],
+            features: [
+                first.id: feature(energy: 0.2, calm: 0.8),
+                second.id: feature(energy: 0.3, calm: 0.7)
+            ],
+            now: now
+        )
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testTimeCapsuleUsesSameSeasonFromPriorYearsAndExcludesRecentTracks() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let anniversary = track("Anniversary")
+        let outsideWindow = track("Outside")
+        let recentlyPlayed = track("Recent")
+        let oneYearAgo = try XCTUnwrap(calendar.date(byAdding: .year, value: -1, to: now))
+        let histories = [
+            anniversary.id: history(
+                anniversary,
+                eventDates: [oneYearAgo.addingTimeInterval(10 * 86_400)],
+                lastPlayedAt: oneYearAgo
+            ),
+            outsideWindow.id: history(
+                outsideWindow,
+                eventDates: [oneYearAgo.addingTimeInterval(80 * 86_400)],
+                lastPlayedAt: oneYearAgo
+            ),
+            recentlyPlayed.id: history(
+                recentlyPlayed,
+                eventDates: [oneYearAgo],
+                lastPlayedAt: now.addingTimeInterval(-10 * 86_400)
+            )
+        ]
+
+        let result = selector.tracks(
+            for: .timeCapsule,
+            from: [outsideWindow, recentlyPlayed, anniversary],
+            histories: histories,
+            preferences: [:],
+            weights: [:],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(result.map(\.id), [anniversary.id])
+    }
+
     private func track(_ title: String) -> Track {
         Track(id: UUID(), title: title, artistName: "Artist", duration: 180,
               fileURL: URL(fileURLWithPath: "/tmp/\(UUID().uuidString).m4a"))
@@ -97,5 +179,51 @@ final class MixSelectionServiceTests: XCTestCase {
     private func history(_ track: Track, count: Int, daysAgo: TimeInterval) -> PlaybackHistory {
         PlaybackHistory(trackID: track.id, isFavorite: false, playCount: count,
                         lastPlayedAt: now.addingTimeInterval(-daysAgo * 86_400))
+    }
+
+    private func history(
+        _ track: Track,
+        eventDates: [Date],
+        lastPlayedAt: Date
+    ) -> PlaybackHistory {
+        PlaybackHistory(
+            trackID: track.id,
+            isFavorite: false,
+            playCount: eventDates.count,
+            firstPlayedAt: eventDates.min(),
+            lastPlayedAt: lastPlayedAt,
+            playbackEvents: eventDates.map {
+                PlaybackEvent(
+                    trackID: track.id,
+                    startedAt: $0,
+                    endedAt: $0.addingTimeInterval(180),
+                    listenedSeconds: 180,
+                    completionRatio: 1,
+                    wasSkipped: false,
+                    wasFullPlayback: true,
+                    startKind: .manual,
+                    startSource: .home,
+                    endKind: .natural
+                )
+            }
+        )
+    }
+
+    private func feature(energy: Double, calm: Double) -> TrackFeatureValues {
+        TrackFeatureValues(
+            tempo: nil,
+            energy: energy,
+            piano: nil,
+            ambient: nil,
+            electronic: nil,
+            drumAndBass: nil,
+            aggressive: nil,
+            calm: calm,
+            bright: nil,
+            dark: nil,
+            vocal: nil,
+            instrumental: nil,
+            additional: nil
+        )
     }
 }

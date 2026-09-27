@@ -28,6 +28,8 @@ final class AnalysisDataExportTests: XCTestCase {
         XCTAssertEqual(byID[identified.id.uuidString]?["audioFingerprint"] as? String, fingerprint)
         XCTAssertEqual(byID[identified.id.uuidString]?["favorite"] as? Bool, true)
         XCTAssertEqual(byID[identified.id.uuidString]?["firstSeenAt"] as? String, "2027-01-15T08:00:00Z")
+        XCTAssertEqual(byID[identified.id.uuidString]?["relativePath"] as? String, "Album/Identified.m4a")
+        XCTAssertEqual(byID[identified.id.uuidString]?["fileSize"] as? Int, 1_024)
         XCTAssertNil(byID[pending.id.uuidString]?["audioFingerprint"])
         XCTAssertNil(byID[pending.id.uuidString]?["favorite"])
         XCTAssertNil(byID[pending.id.uuidString]?["firstSeenAt"])
@@ -38,6 +40,63 @@ final class AnalysisDataExportTests: XCTestCase {
         let text = try XCTUnwrap(String(data: markdown.data, encoding: .utf8))
         XCTAssertTrue(text.contains("- FirstSeenAt: 2027-01-15T08:00:00Z"))
         XCTAssertTrue(text.contains("- FirstSeenAt: \n"))
+    }
+
+    func testPlaylistExportsPreserveCombinedReferencesAndSeparateByGenre() throws {
+        let regular = makeTrack(title: "Regular")
+        var work = makeTrack(title: "Work")
+        work.genre = Track.workPlaybackGenre
+        var longRegular = makeTrack(title: "Long Regular")
+        longRegular.duration = 60 * 60
+        longRegular.genre = "Ambient"
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let regularPlaylist = Playlist(
+            id: UUID(),
+            name: "Regular List",
+            trackIDs: [regular.id, longRegular.id],
+            createdAt: now,
+            updatedAt: now,
+            kind: .regular
+        )
+        let workPlaylist = Playlist(
+            id: UUID(),
+            name: "Work List",
+            trackIDs: [work.id, longRegular.id],
+            createdAt: now,
+            updatedAt: now,
+            kind: .work
+        )
+        let exporter = MusicDataExportService()
+        let tracks = [regular, work, longRegular]
+
+        let library = try exporter.libraryJSON(tracks: tracks, history: [:])
+        let combined = try exporter.allPlaylistsJSON(
+            [regularPlaylist, workPlaylist],
+            tracks: tracks
+        )
+        let regularOnly = try exporter.playlistsJSON(
+            [regularPlaylist, workPlaylist],
+            kind: .regular,
+            tracks: tracks
+        )
+        let workOnly = try exporter.playlistsJSON(
+            [regularPlaylist, workPlaylist],
+            kind: .work,
+            tracks: tracks
+        )
+
+        let libraryIDs = try trackIDs(inLibrary: library)
+        let combinedIDs = try trackIDs(inPlaylists: combined)
+        XCTAssertTrue(combinedIDs.isSubset(of: libraryIDs))
+        XCTAssertEqual(combinedIDs, [regular.id, work.id, longRegular.id])
+
+        XCTAssertEqual(regularOnly.filename, "MyMusic-Regular-Playlists.json")
+        XCTAssertEqual(try playlistKinds(in: regularOnly), [.regular])
+        XCTAssertEqual(try trackIDs(inPlaylists: regularOnly), [regular.id, longRegular.id])
+
+        XCTAssertEqual(workOnly.filename, "MyMusic-Work-Playlists.json")
+        XCTAssertEqual(try playlistKinds(in: workOnly), [.work])
+        XCTAssertEqual(try trackIDs(inPlaylists: workOnly), [work.id])
     }
 
     func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {
@@ -186,6 +245,36 @@ final class AnalysisDataExportTests: XCTestCase {
             relativePath: "Album/\(title).m4a",
             fileSize: 1_024
         )
+    }
+
+    private func trackIDs(inLibrary file: MusicExportFile) throws -> Set<Track.ID> {
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])
+        let tracks = try XCTUnwrap(root["tracks"] as? [[String: Any]])
+        return Set(try tracks.map {
+            try XCTUnwrap(($0["trackID"] as? String).flatMap(UUID.init(uuidString:)))
+        })
+    }
+
+    private func trackIDs(inPlaylists file: MusicExportFile) throws -> Set<Track.ID> {
+        let playlists = try playlistObjects(in: file)
+        return Set(try playlists.flatMap { playlist in
+            let tracks = try XCTUnwrap(playlist["tracks"] as? [[String: Any]])
+            return try tracks.map {
+                try XCTUnwrap(($0["trackID"] as? String).flatMap(UUID.init(uuidString:)))
+            }
+        })
+    }
+
+    private func playlistKinds(in file: MusicExportFile) throws -> Set<PlaylistKind> {
+        Set(try playlistObjects(in: file).map {
+            let value = try XCTUnwrap($0["kind"] as? String)
+            return try XCTUnwrap(PlaylistKind(rawValue: value))
+        })
+    }
+
+    private func playlistObjects(in file: MusicExportFile) throws -> [[String: Any]] {
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: file.data) as? [String: Any])
+        return try XCTUnwrap(root["playlists"] as? [[String: Any]])
     }
 
     private func makeFeature(

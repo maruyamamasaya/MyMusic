@@ -10,21 +10,28 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import ROOT_DIR, Settings
 from app.database import Database
+from app.genre_presets import GenrePresetService
 from app.queries import AnalyticsQueries, LEGACY_PLAYBACK_CUTOFF
 from importer.service import ImportService
-from importer.schema import PlaybackPreferenceUpdate
+from importer.schema import (
+    GenreDisplayPresetOrder,
+    GenreDisplayPresetWrite,
+    PlaybackPreferenceUpdate,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     configured = settings or Settings.from_environment()
     database = Database(configured.database_path)
     queries = AnalyticsQueries(database)
+    genre_presets = GenrePresetService(database)
     importer = ImportService(database, configured.imports_dir)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         configured.ensure_directories()
         database.initialize()
+        genre_presets.backfill_source_records_once()
         yield
 
     app = FastAPI(title="MyMusic Analytics", version="0.1.0", lifespan=lifespan)
@@ -180,6 +187,55 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return queries.update_preference(track_id, update.playbackPreference, update.favorite)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/genre-presets")
+    def list_genre_presets():
+        return genre_presets.list_presets()
+
+    @app.get("/api/genre-presets/genres")
+    def genre_preset_genres():
+        return genre_presets.library_genres()
+
+    @app.get("/api/genre-presets/export")
+    def export_genre_presets() -> JSONResponse:
+        return JSONResponse(
+            genre_presets.export_document(),
+            headers={"Content-Disposition":
+                     'attachment; filename="MyMusic-Genre-Display-Presets.json"'},
+        )
+
+    @app.post("/api/genre-presets", status_code=201)
+    def create_genre_preset(value: GenreDisplayPresetWrite):
+        try:
+            return genre_presets.create(value)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.put("/api/genre-presets/order")
+    def reorder_genre_presets(value: GenreDisplayPresetOrder):
+        try:
+            return genre_presets.reorder(value.ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put("/api/genre-presets/{preset_id}")
+    def update_genre_preset(preset_id: str, value: GenreDisplayPresetWrite):
+        try:
+            return genre_presets.update(preset_id, value)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.delete("/api/genre-presets/{preset_id}")
+    def delete_genre_preset(preset_id: str):
+        try:
+            genre_presets.delete(preset_id)
+            return {"deleted": True}
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get("/api/sources/{data_kind}")
     def sources(

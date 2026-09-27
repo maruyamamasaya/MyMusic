@@ -11,11 +11,22 @@ enum HomeWorkTileLayout {
     }
 }
 
+enum HomeCarouselContentPolicy {
+    static func visibleItems(
+        in category: HomeCategory,
+        destinationHasContent: (HomeDestination) -> Bool
+    ) -> [HomeCategoryItem] {
+        guard category.id == .myMusic else { return category.items }
+        return category.items.filter { destinationHasContent($0.destination) }
+    }
+}
+
 struct HomeView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var trackPreferenceStore
+    @Environment(TrackFeatureStore.self) private var trackFeatureStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(ListenLaterStore.self) private var listenLaterStore
     @Environment(FavoriteStore.self) private var favoriteStore
@@ -45,7 +56,7 @@ struct HomeView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
-                        if category.id == .myMusic {
+                        if category.id == .myMusic, destinationHasContent(.quickPlay) {
                             if !libraryStore.genreDisplayPresets.isEmpty {
                                 HomeTuningSection(
                                     presets: libraryStore.genreDisplayPresets,
@@ -59,12 +70,18 @@ struct HomeView: View {
                         HomeCarouselSection(
                             category: category,
                             artworkIdentifier: artworkIdentifier,
-                            instantPlaybackIsAvailable: instantPlaybackIsAvailable,
+                            destinationHasContent: destinationHasContent,
                             highlightArtworkIdentifier: highlightArtworkIdentifier,
                             onOpenHighlight: { isHighlightPresented = true },
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
+                            HomeMixSection(
+                                queues: mixQueues,
+                                onPlay: playMix,
+                                onOpenDeepDive: openDeepDive,
+                                onOpenMoodMix: { showsMoodMix = true }
+                            )
                             if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
                                     playlists: Array(homePlaylists.prefix(12)),
@@ -75,12 +92,6 @@ struct HomeView: View {
                                     onPlay: playPlaylist
                                 )
                             }
-                            HomeMixSection(
-                                queues: mixQueues,
-                                onPlay: playMix,
-                                onOpenDeepDive: openDeepDive,
-                                onOpenMoodMix: { showsMoodMix = true }
-                            )
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("ステーション").font(.title3.bold())
                                 StationEntryView()
@@ -191,6 +202,12 @@ struct HomeView: View {
             .onChange(of: trackPreferenceStore.homePresentationRevision) {
                 refreshHomeSnapshot()
             }
+            .onChange(of: trackFeatureStore.lastImportDate) {
+                refreshHomeSnapshot()
+            }
+            .onChange(of: trackFeatureStore.storedFeatureCount) {
+                refreshHomeSnapshot()
+            }
             .onChange(of: favoriteStore.homePresentationRevision) {
                 refreshHomeSnapshot()
             }
@@ -273,7 +290,7 @@ struct HomeView: View {
         destinationPresentations[destination]?.artworkIdentifier
     }
 
-    private func instantPlaybackIsAvailable(_ destination: HomeDestination) -> Bool {
+    private func destinationHasContent(_ destination: HomeDestination) -> Bool {
         destinationPresentations[destination]?.instantPlaybackIsAvailable ?? false
     }
 
@@ -343,6 +360,7 @@ struct HomeView: View {
             hiResTracks: libraryStore.hiResLibraryCatalog.tracks,
             histories: playbackHistoryStore.entries,
             preferences: trackPreferenceStore.entries,
+            features: trackFeatureStore.featureSnapshot,
             listenLaterEntries: listenLaterStore.entries,
             favorites: favoriteStore.favorites,
             destinations: Set(HomeCategory.all.flatMap { $0.items.map(\.destination) }),
@@ -785,7 +803,7 @@ private struct HomeMixSection: View {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 12) {
                         ForEach(MixKind.allCases.filter { kind in
-                            kind != .rediscovery || !(queues[kind] ?? []).isEmpty
+                            !kind.hidesWhenEmpty || !(queues[kind] ?? []).isEmpty
                         }) { kind in
                             let tracks = queues[kind] ?? []
                             Button { onPlay(kind) } label: {
@@ -800,10 +818,7 @@ private struct HomeMixSection: View {
                                 title: "Deep Dive",
                                 subtitle: "Artist・Albumから未発見の曲へ",
                                 systemImage: "square.stack.3d.up.fill",
-                                colors: [
-                                    Color(red: 0.13, green: 0.38, blue: 0.43),
-                                    Color(red: 0.05, green: 0.12, blue: 0.22)
-                                ],
+                                artworkName: "DeepDiveMixArtwork",
                                 accessibilityHint: "ArtistまたはAlbumを選んで低再生曲を再生",
                                 width: width
                             )
@@ -814,10 +829,7 @@ private struct HomeMixSection: View {
                                 title: "Mood Mix",
                                 subtitle: "Calm・Energyなどから再生",
                                 systemImage: "waveform.path",
-                                colors: [
-                                    Color(red: 0.45, green: 0.23, blue: 0.38),
-                                    Color(red: 0.13, green: 0.09, blue: 0.24)
-                                ],
+                                artworkName: "MoodMixArtwork",
                                 accessibilityHint: "Moodを選んで再生",
                                 width: width
                             )
@@ -839,13 +851,20 @@ private struct HomeSelectionMixTile: View {
     let title: String
     let subtitle: String
     let systemImage: String
-    let colors: [Color]
+    let artworkName: String
     let accessibilityHint: String
     let width: CGFloat
 
     var body: some View {
         ZStack(alignment: .leading) {
-            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Image(artworkName)
+                .resizable()
+                .scaledToFill()
+            LinearGradient(
+                colors: [.black.opacity(0.08), .black.opacity(0.34), .black.opacity(0.82)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: systemImage)
                     .font(.title2.weight(.semibold))
@@ -879,7 +898,11 @@ private struct HomeMixTile: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if let artworkIdentifier = firstTrack?.artworkIdentifier {
+            if let artworkName = kind.artworkName {
+                Image(artworkName)
+                    .resizable()
+                    .scaledToFill()
+            } else if let artworkIdentifier = firstTrack?.artworkIdentifier {
                 HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
             } else {
                 LinearGradient(
@@ -1112,7 +1135,7 @@ private struct HomePlaylistEmptyTile: View {
 private struct HomeCarouselSection: View {
     let category: HomeCategory
     let artworkIdentifier: (HomeDestination) -> String?
-    let instantPlaybackIsAvailable: (HomeDestination) -> Bool
+    let destinationHasContent: (HomeDestination) -> Bool
     let highlightArtworkIdentifier: String?
     let onOpenHighlight: () -> Void
     let onInstantPlay: (HomeDestination) -> Void
@@ -1148,7 +1171,12 @@ private struct HomeCarouselSection: View {
                             .buttonStyle(.plain)
                         }
 
-                        ForEach(category.items) { item in
+                        ForEach(
+                            HomeCarouselContentPolicy.visibleItems(
+                                in: category,
+                                destinationHasContent: destinationHasContent
+                            )
+                        ) { item in
                             tile(for: item, width: tileWidth)
                         }
                     }
@@ -1165,7 +1193,6 @@ private struct HomeCarouselSection: View {
     @ViewBuilder
     private func tile(for item: HomeCategoryItem, width: CGFloat) -> some View {
         if isInstantPlaybackDestination(item.destination) {
-            let isAvailable = instantPlaybackIsAvailable(item.destination)
             Button {
                 onInstantPlay(item.destination)
             } label: {
@@ -1177,8 +1204,6 @@ private struct HomeCarouselSection: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(!isAvailable)
-            .opacity(isAvailable ? 1 : 0.55)
         } else {
             NavigationLink(value: item.destination) {
                 HomeItemTile(

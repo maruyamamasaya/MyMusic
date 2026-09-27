@@ -91,6 +91,7 @@ final class HomeRepresentativeTrackPolicyTests: XCTestCase {
             hiResTracks: [],
             histories: histories,
             preferences: preferences,
+            features: [:],
             listenLaterEntries: [],
             favorites: LibraryFavorites(),
             destinations: [.quickPlay, .discoveryPlay, .favorites, .workSizePlay],
@@ -132,6 +133,7 @@ final class HomeRepresentativeTrackPolicyTests: XCTestCase {
             hiResTracks: [],
             histories: [:],
             preferences: [:],
+            features: [:],
             listenLaterEntries: [],
             favorites: LibraryFavorites(),
             destinations: [.quickPlay],
@@ -151,6 +153,59 @@ final class HomeRepresentativeTrackPolicyTests: XCTestCase {
         XCTAssertNil(snapshot.mixDay)
         XCTAssertNil(snapshot.todayPlaybackSummary)
         XCTAssertEqual(snapshot.destinationPresentations[.quickPlay]?.representativeTrack?.id, track.id)
+    }
+
+    func testSelectiveRandomRequiresTrackWithGenre() async throws {
+        let withoutGenre = makeTrack(title: "Without Genre")
+        let withGenre = makeTrack(title: "With Genre", genre: "Rock")
+        let library = MusicLibrary.build(from: [withoutGenre, withGenre])
+
+        let availableRequest = snapshotRequest(
+            tracks: library.tracks,
+            destinations: [.selectiveRandomPlay]
+        )
+        let available = await HomePerformanceSnapshotWorker.shared.prepare(availableRequest)
+        XCTAssertEqual(
+            available?.destinationPresentations[.selectiveRandomPlay]?.instantPlaybackIsAvailable,
+            true
+        )
+
+        let unavailableRequest = snapshotRequest(
+            tracks: [withoutGenre],
+            destinations: [.selectiveRandomPlay]
+        )
+        let unavailable = await HomePerformanceSnapshotWorker.shared.prepare(unavailableRequest)
+        XCTAssertEqual(
+            unavailable?.destinationPresentations[.selectiveRandomPlay]?.instantPlaybackIsAvailable,
+            false
+        )
+    }
+
+    private func snapshotRequest(
+        tracks: [Track],
+        destinations: Set<HomeDestination>
+    ) -> HomePerformanceSnapshotRequest {
+        let library = MusicLibrary.build(from: tracks)
+        return HomePerformanceSnapshotRequest(
+            tracks: library.tracks,
+            albums: library.albums,
+            artists: library.artists,
+            workTracks: [],
+            hiResTracks: [],
+            histories: [:],
+            preferences: [:],
+            features: [:],
+            listenLaterEntries: [],
+            favorites: LibraryFavorites(),
+            destinations: destinations,
+            representativeDestinations: destinations,
+            previousPresentations: [:],
+            previousHighlightArtworkIdentifier: nil,
+            rotatesRepresentatives: false,
+            includesMixes: false,
+            includesTodayPlaybackSummary: false,
+            now: Date(timeIntervalSince1970: 1_790_035_200)
+        )
     }
 
     private func makeTrack(

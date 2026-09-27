@@ -714,7 +714,7 @@ class AnalyticsAPITests(unittest.TestCase):
             "customPresets": [{"id": "preset-1", "name": "My EQ", "preamp": -2,
                 "gains": [0, 1], "isBuiltIn": False}]}
         genres = {"kind": "mymusic.genre-display-presets", "version": 1,
-            "presets": [{"id": "genre-1", "name": "Focus",
+            "presets": [{"id": "10000000-0000-0000-0000-000000000001", "name": "Focus",
                 "enabledGenreNames": ["Ambient"], "includesUnassignedGenreSetting": False}]}
 
         for name, payload, kind in [

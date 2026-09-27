@@ -151,6 +151,14 @@ Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを�
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
 
+### ジャンル表示プリセット管理
+
+左ナビゲーションの「ジャンルプリセット」では、プリセットの作成・編集・削除・並べ替えと、`MyMusic-Genre-Display-Presets.json`の読み込み・書き出しができます。編集候補は現在Libraryのジャンルから導出し、Import済みでLibraryにないジャンルも失わずに再書き出します。「作業用BGM」と「ハイレゾ」はiPhoneの固定分類なので通常ジャンルの選択肢には含めません。
+
+編集済みの正本は順序付き`genre_display_presets` table、Import原本と履歴は`source_records`／`import_runs`に分離して保持します。旧版Analyticsで`source_records`に取り込み済みの有効なプリセットは、初回起動時に一度だけ安全にbackfillします。Importは文書全体を検証した後、同名を既存IDのまま更新し、新しい名前だけを末尾へ追加します。JSONにない既存プリセットは削除しません。
+
+Mac AnalyticsとiPhone MyMusicの交換境界は`kind: mymusic.genre-display-presets`、`version: 1`のversioned JSONだけです。AnalyticsからiPhoneのApplication Supportへ直接書き込まず、書き出したJSONをiPhone側の明示Importで反映します。
+
 SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Artistに索引を持ちます。`data/`と`imports/`の内容はGit対象外です。バックアップ時はサーバーを停止して両ディレクトリをまとめてコピーしてください。
 
 ## UI/UX Beta（2026-09-05）
@@ -174,13 +182,16 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 - Insights: 「おすすめ」「最近の変化」「時間帯・好み」「再生行動」のタブに分け、再生入口、選択種別、音楽特徴の5段階比較に加え、最近ハマった／飽きてきた／新しい好み／再発見、JST時間帯×特徴、Artist／Album／Genreの変化、Listening Profileを表示する。時間帯・好み内の行形式一覧は共通定義で初期30件、30件ずつ展開する。再生行動の各表は共通の列ソート定義により、見出しから昇順／降順を切り替えられる。現在の好み・評価・完走実績とOverplay減点によるおすすめ、再発見、好みに近い未再生・低再生曲、最大5件の自動Insightカードも提供する。「分析可能データのみ」（既定）と「すべて」の品質フィルターを期間指定と併用可能
 - Rankings: 今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲／Artist／Album／Genreの4ランキングを同時表示する。フィルターは単独・併用でき、各列は上位50件を初期30件から30件ずつ展開
 - Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・Early Skip回数・率・最終再生日時、項目別AND検索、全表示列の全件基準ソート、30件ページング、Import済みPreferenceの編集と手動Export
-- Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットに加え、Libraryから自動導出したジャンル一覧をタブ別に表示。ジャンルはiOSアプリと同様に`;`／NULで分割し、空白・空要素・曲内重複を除いて集計する。表示列ごとの全件基準ソートと30件ページングを行い、曲単位データはLibraryとのTrack ID照合状況も表示
+- Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットのImport原本に加え、Libraryから自動導出したジャンル一覧をタブ別に表示。ジャンルはiOSアプリと同様に`;`／NULで分割し、空白・空要素・曲内重複を除いて集計する。表示列ごとの全件基準ソートと30件ページングを行い、曲単位データはLibraryとのTrack ID照合状況も表示
+- ジャンルプリセット: iPhone互換プリセットの一覧・作成・編集・削除・並べ替え・JSON Import／Export。Library外ジャンルと旧未分類設定も保持
 - Import履歴: 全列を昇順／降順でソートでき、初期30件から30件ずつ展開
 - Import: 8種類のJSON自動判別アップロードと、新規／更新／重複／エラーを含む直近100件のImport履歴
 
 左ナビゲーションとInsights内タブはURL履歴に反映されます。ブラウザの戻る／進むで直前の画面へ移動でき、再読み込み後も選択中の画面とInsightsタブを復元します。
 
 主なAPIは`GET /api/dashboard`、`GET /api/music-history`、`GET /api/insights`、`GET /api/insights/features`、`GET /api/insights/recent-changes`、`GET /api/insights/advanced`、`GET /api/insights/recommendations`、`GET /api/rankings`、`GET /api/tracks`です。Insights系は共通して期間と`quality=analyzable|all`を受け取ります。比較系の`all`は直近30日対その前30日、その他は選択期間対直前の同日数です。特徴量APIは最新の数値`analysisVersion`だけを使用し、レスポンスにもVersionと閾値を明示します。FastAPIのAPI仕様は起動中の`/docs`で確認できます。
+
+ジャンルプリセット管理APIは`GET/POST /api/genre-presets`、`PUT/DELETE /api/genre-presets/{id}`、`PUT /api/genre-presets/order`、`GET /api/genre-presets/genres`、`GET /api/genre-presets/export`です。既存の`POST /api/import`も同じversion 1文書を受理します。
 
 Dashboard APIとTracks APIは`period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`に対応します。Tracks APIは従来の`period=today|7d|30d|all`と`search=`を維持し、`title`、`artist`、`album`、`genre`、`sort`、`order=asc|desc`、`page`も受け付けます。項目別フィルターは部分一致のAND条件です。`sort`は`title`、`artist`、`album`、`preference`、`playCount`、`totalPlayTime`、`completionRate`、`skipRate`、`earlySkipCount`、`earlySkipRate`、`lastPlayedAt`の許可リストに限定されます。値はすべてSQLiteのparameter bindingで渡します。TracksとData Sourcesは1ページ30件で、APIも`LIMIT`／`OFFSET`によるサーバー側ページングを行います。Data Sourcesは許可リスト方式で名称、補足情報、Library紐付け、取込日時を昇順／降順に並べ替えられます。
 

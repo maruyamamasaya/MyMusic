@@ -9,8 +9,44 @@ struct ExternalBackupServiceTests {
         let manifest = try fixture.service.createBackup(at: fixture.destination)
 
         #expect(manifest.formatVersion == 1)
+        #expect(manifest.schemaVersion == 2)
         #expect(manifest.files.map(\.path) == ["settings.plist"])
+        #expect(manifest.files.allSatisfy { $0.sha256?.count == 64 })
         #expect(try fixture.service.validateBackup(at: fixture.latest) == manifest)
+    }
+
+    @Test func checksumRejectsSameSizePayloadReplacement() throws {
+        let fixture = try Fixture()
+        _ = try fixture.service.createBackup(at: fixture.destination)
+        let settingsURL = fixture.latest.appending(path: "settings.plist")
+        var data = try Data(contentsOf: settingsURL)
+        let index = try #require(data.indices.dropFirst().first)
+        data[index] ^= 0xff
+        try data.write(to: settingsURL, options: .atomic)
+
+        #expect(throws: ExternalBackupError.self) {
+            try fixture.service.validateBackup(at: fixture.latest)
+        }
+    }
+
+    @Test func schemaV1BackupWithoutChecksumsRemainsReadable() throws {
+        let fixture = try Fixture()
+        let current = try fixture.service.createBackup(at: fixture.destination)
+        let legacy = ExternalBackupManifest(
+            formatVersion: current.formatVersion,
+            schemaVersion: 1,
+            appVersion: current.appVersion,
+            createdAt: current.createdAt,
+            files: current.files.map {
+                ExternalBackupManifest.FileEntry(path: $0.path, byteCount: $0.byteCount)
+            }
+        )
+        try JSONEncoder.iso8601.encode(legacy).write(
+            to: fixture.latest.appending(path: "manifest.json"),
+            options: .atomic
+        )
+
+        #expect(try fixture.service.validateBackup(at: fixture.latest) == legacy)
     }
 
     @Test func roundTripPreservesUnicodeSettingsAndState() throws {
@@ -71,6 +107,73 @@ struct ExternalBackupServiceTests {
         defer { sqlite3_finalize(preparedStatement) }
         #expect(sqlite3_step(preparedStatement) == SQLITE_ROW)
         #expect(String(cString: sqlite3_column_text(preparedStatement, 0)) == "kept")
+    }
+
+    @Test func playbackEventIdentityAndPlatformSurviveRoundTrip() throws {
+        let fixture = try Fixture()
+        try FileManager.default.createDirectory(at: fixture.applicationRoot, withIntermediateDirectories: true)
+        let databaseURL = fixture.applicationRoot.appending(path: "playback-history.sqlite3")
+        let trackID = UUID()
+        do {
+            let repository = PlaybackHistorySQLiteRepository(databaseURL: databaseURL)
+            try repository.recreateEmptyDatabase()
+            try repository.markMigrationVerified()
+            let event = PlaybackEvent(
+                id: "mac-backup-event-1",
+                trackID: trackID,
+                startedAt: Date(timeIntervalSince1970: 1_799_999_900),
+                endedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                listenedSeconds: 100,
+                completionRatio: 1,
+                wasSkipped: false,
+                wasFullPlayback: true,
+                startKind: .manual,
+                startSource: .playlist,
+                endKind: .natural,
+                platform: .macOS
+            )
+            try repository.replaceAll(with: [PlaybackHistory(
+                trackID: trackID,
+                isFavorite: false,
+                playCount: 1,
+                lastPlayedAt: event.startedAt,
+                playbackEvents: [event]
+            )])
+        }
+        _ = try fixture.service.createBackup(at: fixture.destination)
+
+        try FileManager.default.removeItem(at: databaseURL)
+        _ = try fixture.service.restore(from: fixture.latest)
+        #expect(try fixture.service.applyPendingRestoreIfNeeded())
+
+        let restored = try PlaybackHistorySQLiteRepository(databaseURL: databaseURL).loadAll()
+        let event = try #require(restored.first?.playbackEvents.first)
+        #expect(event.id == "mac-backup-event-1")
+        #expect(event.platform == .macOS)
+        #expect(event.trackID == trackID)
+    }
+
+    @Test func refusesPlaybackDatabaseWithDuplicateEventIDs() throws {
+        let fixture = try Fixture()
+        try FileManager.default.createDirectory(at: fixture.applicationRoot, withIntermediateDirectories: true)
+        let databaseURL = fixture.applicationRoot.appending(path: "playback-history.sqlite3")
+        var database: OpaquePointer?
+        #expect(sqlite3_open(databaseURL.path, &database) == SQLITE_OK)
+        let openedDatabase = try #require(database)
+        #expect(sqlite3_exec(
+            openedDatabase,
+            "CREATE TABLE playback_events(event_id TEXT, platform TEXT);" +
+            "INSERT INTO playback_events VALUES('duplicate', 'iOS');" +
+            "INSERT INTO playback_events VALUES('duplicate', 'macOS');",
+            nil,
+            nil,
+            nil
+        ) == SQLITE_OK)
+        sqlite3_close(openedDatabase)
+
+        #expect(throws: ExternalBackupError.self) {
+            try fixture.service.createBackup(at: fixture.destination)
+        }
     }
 
     @Test func invalidNewSnapshotDoesNotReplaceLatest() throws {

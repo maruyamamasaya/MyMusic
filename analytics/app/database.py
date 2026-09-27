@@ -95,6 +95,25 @@ CREATE TABLE IF NOT EXISTS source_records (
 );
 CREATE INDEX IF NOT EXISTS idx_source_records_track ON source_records(track_id);
 CREATE INDEX IF NOT EXISTS idx_source_records_kind ON source_records(data_kind, title);
+
+CREATE TABLE IF NOT EXISTS genre_display_presets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL UNIQUE,
+    enabled_genre_names TEXT NOT NULL,
+    includes_unassigned_genre_setting INTEGER
+        CHECK (includes_unassigned_genre_setting IS NULL OR includes_unassigned_genre_setting IN (0, 1)),
+    position INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_genre_display_presets_position
+    ON genre_display_presets(position);
+
+CREATE TABLE IF NOT EXISTS analytics_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
 """
 
 

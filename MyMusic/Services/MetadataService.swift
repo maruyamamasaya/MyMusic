@@ -8,6 +8,9 @@ protocol MetadataServicing: Sendable {
 }
 
 nonisolated final class MetadataService: MetadataServicing, Sendable {
+    // Global library-cache migration gate. Do not increment this for a codec- or
+    // field-specific fix: every cached Track with an older value is synchronously
+    // re-read on the next quick scan. See ADR-0008 before changing this value.
     nonisolated static let currentMetadataRevision = 3
 
     private let artworkService: ArtworkServicing

@@ -61,4 +61,30 @@ final class HomeCategoryTests: XCTestCase {
         XCTAssertFalse(HomeWorkTileLayout.showsContinuationTile(for: 10))
         XCTAssertTrue(HomeWorkTileLayout.showsContinuationTile(for: 11))
     }
+
+    func testMyMusicHidesTilesWithoutTargetTracks() throws {
+        let myMusic = try XCTUnwrap(HomeCategory.all.first { $0.id == .myMusic })
+        let availableDestinations: Set<HomeDestination> = [
+            .quickPlay,
+            .listenLater,
+            .favorites
+        ]
+
+        let visibleItems = HomeCarouselContentPolicy.visibleItems(in: myMusic) {
+            availableDestinations.contains($0)
+        }
+
+        XCTAssertEqual(
+            visibleItems.map(\.destination),
+            [.quickPlay, .listenLater, .favorites]
+        )
+    }
+
+    func testNonMyMusicTilesRemainVisibleWithoutTrackContent() throws {
+        let library = try XCTUnwrap(HomeCategory.all.first { $0.id == .library })
+
+        let visibleItems = HomeCarouselContentPolicy.visibleItems(in: library) { _ in false }
+
+        XCTAssertEqual(visibleItems, library.items)
+    }
 }

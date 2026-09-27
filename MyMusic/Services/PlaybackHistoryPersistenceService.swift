@@ -4,6 +4,7 @@ protocol PlaybackHistoryPersistenceServicing: Sendable {
     func load() async throws -> [PlaybackHistory]
     func save(_ history: [PlaybackHistory]) async throws
     func save(_ entry: PlaybackHistory) async throws
+    func importPlaybackEvents(_ candidates: [PlaybackEventImportCandidate]) async throws -> PlaybackEventImportCommit
 }
 
 extension PlaybackHistoryPersistenceServicing {
@@ -13,6 +14,32 @@ extension PlaybackHistoryPersistenceServicing {
         var entries = Dictionary(uniqueKeysWithValues: try await load().map { ($0.trackID, $0) })
         entries[entry.trackID] = entry
         try await save(Array(entries.values))
+    }
+
+    func importPlaybackEvents(_ candidates: [PlaybackEventImportCandidate]) async throws -> PlaybackEventImportCommit {
+        var entries = Dictionary(uniqueKeysWithValues: try await load().map { ($0.trackID, $0) })
+        var knownEventIDs = Set(entries.values.flatMap(\.playbackEvents).map(\.id))
+        var insertedEventIDs = Set<String>()
+        var duplicateEventIDs = Set<String>()
+        var updatedTrackIDs = Set<Track.ID>()
+        for candidate in candidates {
+            guard knownEventIDs.insert(candidate.event.id).inserted else {
+                duplicateEventIDs.insert(candidate.event.id)
+                continue
+            }
+            entries[candidate.event.trackID] = PlaybackEventImportAggregation.merging(
+                candidate,
+                into: entries[candidate.event.trackID]
+            )
+            insertedEventIDs.insert(candidate.event.id)
+            updatedTrackIDs.insert(candidate.event.trackID)
+        }
+        try await save(Array(entries.values))
+        return PlaybackEventImportCommit(
+            insertedEventIDs: insertedEventIDs,
+            duplicateEventIDs: duplicateEventIDs,
+            updatedEntries: updatedTrackIDs.compactMap { entries[$0] }
+        )
     }
 }
 
@@ -60,6 +87,11 @@ actor PlaybackHistoryPersistenceService: PlaybackHistoryPersistenceServicing {
     func save(_ entry: PlaybackHistory) async throws {
         try prepareIfNeeded()
         try repository.upsert(entry)
+    }
+
+    func importPlaybackEvents(_ candidates: [PlaybackEventImportCandidate]) async throws -> PlaybackEventImportCommit {
+        try prepareIfNeeded()
+        return try repository.importPlaybackEvents(candidates)
     }
 
     private func prepareIfNeeded() throws {

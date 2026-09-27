@@ -19,17 +19,29 @@ enum PlaybackHistorySQLiteError: LocalizedError {
     }
 }
 
+struct PlaybackEventImportCommit: Sendable {
+    let insertedEventIDs: Set<String>
+    let duplicateEventIDs: Set<String>
+    let updatedEntries: [PlaybackHistory]
+}
+
 /// Synchronous SQLite boundary used only from the owning persistence actor.
 /// Child rows are normalized rather than embedded JSON, and each track upsert is one transaction.
 nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
     private let databaseURL: URL
     private let fileManager: FileManager
+    private let importFailureInjector: ((Int) throws -> Void)?
     private var database: OpaquePointer?
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    init(databaseURL: URL, fileManager: FileManager = .default) {
+    init(
+        databaseURL: URL,
+        fileManager: FileManager = .default,
+        importFailureInjector: ((Int) throws -> Void)? = nil
+    ) {
         self.databaseURL = databaseURL
         self.fileManager = fileManager
+        self.importFailureInjector = importFailureInjector
     }
 
     deinit { close() }
@@ -69,6 +81,43 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
     func upsert(_ entry: PlaybackHistory) throws {
         try open()
         try transaction { try write(entry) }
+    }
+
+    func importPlaybackEvents(_ candidates: [PlaybackEventImportCandidate]) throws -> PlaybackEventImportCommit {
+        try open()
+        return try transaction {
+            var entries = Dictionary(uniqueKeysWithValues: try loadAll().map { ($0.trackID, $0) })
+            var knownEventIDs = Set(entries.values.flatMap(\.playbackEvents).map(\.id))
+            var insertedEventIDs = Set<String>()
+            var duplicateEventIDs = Set<String>()
+            var updatedTrackIDs = Set<Track.ID>()
+
+            for candidate in candidates {
+                guard knownEventIDs.insert(candidate.event.id).inserted else {
+                    duplicateEventIDs.insert(candidate.event.id)
+                    continue
+                }
+                entries[candidate.event.trackID] = PlaybackEventImportAggregation.merging(
+                    candidate,
+                    into: entries[candidate.event.trackID]
+                )
+                insertedEventIDs.insert(candidate.event.id)
+                updatedTrackIDs.insert(candidate.event.trackID)
+            }
+
+            var writeCount = 0
+            for trackID in updatedTrackIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+                guard let entry = entries[trackID] else { continue }
+                try write(entry)
+                writeCount += 1
+                try importFailureInjector?(writeCount)
+            }
+            return PlaybackEventImportCommit(
+                insertedEventIDs: insertedEventIDs,
+                duplicateEventIDs: duplicateEventIDs,
+                updatedEntries: updatedTrackIDs.compactMap { entries[$0] }
+            )
+        }
     }
 
     func loadAll() throws -> [PlaybackHistory] {
@@ -179,6 +228,7 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 started_at REAL, ended_at REAL, listened_seconds REAL, completion_ratio REAL,
                 was_skipped INTEGER, start_kind TEXT, start_source TEXT,
                 event_id TEXT, was_full_playback INTEGER, end_kind TEXT,
+                platform TEXT NOT NULL DEFAULT 'iOS',
                 FOREIGN KEY(track_id) REFERENCES playback_tracks(track_id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS playback_events_track_date ON playback_events(track_id, played_at);
@@ -203,6 +253,14 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
             }
         } else if originalVersion == 0 {
             try execute("PRAGMA user_version = 3")
+        }
+        if originalVersion > 0, originalVersion < 4 {
+            try transaction {
+                try execute("ALTER TABLE playback_events ADD COLUMN platform TEXT NOT NULL DEFAULT 'iOS'")
+                try execute("PRAGMA user_version = 4")
+            }
+        } else if originalVersion == 0 {
+            try execute("PRAGMA user_version = 4")
         }
         try execute("CREATE UNIQUE INDEX IF NOT EXISTS playback_events_event_id ON playback_events(event_id) WHERE event_id IS NOT NULL")
     }
@@ -248,13 +306,14 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
             try execute("""
                 INSERT OR IGNORE INTO playback_events(
                     track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
-                    was_skipped, start_kind, start_source, event_id, was_full_playback, end_kind
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    was_skipped, start_kind, start_source, event_id, was_full_playback, end_kind, platform
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, values: [
                     id, event.endedAt.timeIntervalSince1970, event.startedAt.timeIntervalSince1970,
                     event.endedAt.timeIntervalSince1970, event.listenedSeconds, event.completionRatio,
                     event.wasSkipped ? 1 : 0, event.startKind.rawValue, event.startSource.rawValue,
-                    event.id, event.wasFullPlayback ? 1 : 0, event.endKind?.rawValue ?? NSNull()
+                    event.id, event.wasFullPlayback ? 1 : 0, event.endKind?.rawValue ?? NSNull(),
+                    event.platform.rawValue
                 ])
         }
         for (day, summary) in entry.dailySummaries {
@@ -280,7 +339,7 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         let statement = try prepare("""
             SELECT id, track_id, played_at, started_at, ended_at, listened_seconds, completion_ratio,
                    was_skipped, start_kind, start_source, event_id, was_full_playback
-                   , end_kind
+                   , end_kind, platform
             FROM playback_events ORDER BY id
             """)
         defer { sqlite3_finalize(statement) }
@@ -298,7 +357,8 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
                 wasFullPlayback: int(statement, 11) != 0,
                 startKind: PlaybackStartKind(rawValue: nullableText(statement, 8) ?? "") ?? .manual,
                 startSource: PlaybackStartSource(rawValue: nullableText(statement, 9) ?? "") ?? .unknown,
-                endKind: PlaybackEndKind(rawValue: nullableText(statement, 12) ?? "")
+                endKind: PlaybackEndKind(rawValue: nullableText(statement, 12) ?? ""),
+                platform: PlaybackPlatform(rawValue: nullableText(statement, 13) ?? "") ?? .iOS
             ))
             entries[id] = entry
         }
@@ -339,9 +399,13 @@ nonisolated final class PlaybackHistorySQLiteRepository: @unchecked Sendable {
         }
     }
 
-    private func transaction(_ operation: () throws -> Void) throws {
+    private func transaction<Value>(_ operation: () throws -> Value) throws -> Value {
         try execute("BEGIN IMMEDIATE")
-        do { try operation(); try execute("COMMIT") }
+        do {
+            let value = try operation()
+            try execute("COMMIT")
+            return value
+        }
         catch { try? execute("ROLLBACK"); throw error }
     }
 

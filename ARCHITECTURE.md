@@ -74,12 +74,12 @@ Visual Worldの描画種類は`SettingsStore.visualWorldStyle`が所有し、`ap
 MyMusic / future data sources
   → Playback Events / Library / Preferences / Features / Volume / Playlists / Settings JSON
   → analytics/importer (contract detection, validation, deduplication / upsert)
-  → analytics/data/analytics.sqlite3 (events + catalog + preferences + source records + import history)
+  → analytics/data/analytics.sqlite3 (events + catalog + preferences + editable genre presets + source records + import history)
   → analytics/app (FastAPI + on-demand aggregation)
   → analytics/web (local browser dashboard)
 ```
 
-`analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQとジャンルプリセットは曲非依存の設定スナップショットとして扱う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
+`analytics/`はiOSアプリとは別プロセス・別依存・別SQLiteで動作する。iOSのApplication Support、PlaybackHistory Store／Repository、`analyzer/`のcacheを参照せず、Analyticsからそれらへ書き戻さない。統合境界はversioned JSON contractだけとする。Playback Eventはevent IDでappend／重複排除し、Library snapshotとPlayback Preferences snapshotはTrack IDでupsertする。FeaturesとVolumeはTrack ID、Playlistは内包曲のTrack IDでLibraryへ照合する。EQは曲非依存のImport snapshotとして扱う。ジャンル表示プリセットは`source_records`に原本provenanceを残す一方、順序付き`genre_display_presets`をMac編集後の正本とし、iPhone互換の`mymusic.genre-display-presets` version 1 JSONだけで双方向に受け渡す。旧`source_records`だけを持つ環境は冪等な一度限りのbackfillを行う。完全なsnapshotから外れた項目は現行表示から外すが、受理した原本JSONは保持する。将来のAndroid／Analyzer由来ImporterもSwift modelへ依存せず追加できる。v0の契約、データ配置、起動方法は`analytics/README.md`を参照する。
 
 ### Static Web Analytics
 
@@ -122,13 +122,15 @@ Library View → LibraryStore → FileImportService
 
 手動同期は`LibraryScanDepth.quick`と`complete`の2段階を持つ。quickはdirectory列挙時にfile sizeと更新日時も取得し、両方がcacheと一致するTrackを再利用する。属性が片方でも不明なら未変更と断定せずmetadataを再取得する。completeは全ての取得可能な音源を`MetadataService`へ渡してタグとArtworkを再抽出する。どちらも`TrackIdentityService`のpath／resource identifier／fingerprint照合を経るため、metadataの再構築をTrack UUIDの再生成とは分離する。Artworkは`Track UUID + image content hash`をidentifierとし、同一Trackの埋め込み画像が変わった場合だけ表示identifierも変えてViewの画像再loadを発火する。
 
+`MetadataService.currentMetadataRevision`は全Track共通のcache migration gateであり、値を上げるとcodecや変更fieldに関係なく旧revisionの全曲が次回quick同期でAVFoundation metadata／Artwork再取得へ進む。これは20,000曲規模では初回scan相当の処理となり、quick同期には途中checkpointがないため中断するとfolder先頭から再実行される。したがってglobal revisionは、ほぼ全Trackへ及ぶ大規模なmetadata意味変更、または既存cacheの読取・再利用が安全でない障害で、選択的migrationが不可能な場合に限って更新する。FLACなどcodec限定、特定field限定、表示分類限定の修正では更新せず、codec／field別のrefresh条件または互換decodeで対象曲だけを遅延更新する。例外的にglobal更新する場合は、20,000曲でのI/O見積り、途中再開または段階保存、Track Identity維持、未影響形式を含むmigration testを実装・検証してから採用する。詳細は[ADR-0008](decisions/ADR-0008-library-metadata-cache-migration.md)を参照する。
+
 complete同期は`LibraryScanCheckpointService`へ取得済み`Track`と取得日時をfolder別に100曲単位で追記する。各batchだけをJSON Linesへappendし、それまでの全entryをbatchごとに再encodeしない。再開時は10分以内かつrelative path・file size・更新日時が一致するentryだけを候補とし、最新entryへ1回compactする。旧単一JSON checkpointもread互換を維持する。`TrackIdentityService.resolveIdentity`の結果も同じUUIDの場合だけmetadata読取をskipし、元fileが更新された場合やIdentityが一致しない場合は必ず再取得する。scan完了だけではcheckpointを消さず、`LibraryPersistenceService`への完成library保存後にだけ削除するため、scan後の保存失敗からも再開できる。checkpointは同期最適化であり、書込失敗はlibrary同期自体を失敗させない。
 
 `MusicLibraryService`は曲数ベースの`LibraryScanProgress`を`LibrarySyncService`経由で`LibraryStore`へ返す。directory列挙前は総数不明、列挙後はfolder単位の総数／完了数／残数をMainActor stateへ反映する。iCloud未download、directory enumerator、resource values、AVFoundation metadataの失敗は`LibraryScanNotice`として収集する。iCloud未downloadとfile／directoryの一時読取失敗は該当pathの既存Trackをcacheから保持し、metadata読取失敗も同じpathの既存Trackを保持する。noticeはfolder別に集約してLibrary alertへ表示し、実際に列挙から消え、かつ一時失敗noticeもないTrackだけを削除扱いにする。
 
 Track Fingerprintの一括作成は通常scanから分離する。`TrackFingerprintBuildView` → `TrackFingerprintBuildStore` → `TrackIdentityService`のforeground専用経路で、未作成曲を件数上限なく逐次処理する。各曲の音声を8 kHz mono PCMで最大2 MB読み、durationを含むSHA-256を既存`track-identities.json`のoptional `audioFingerprint`へ1曲ごとにatomic保存する。画面離脱、scene非active、再生／Library load開始時はTaskをcancelする。既定では未downloadのiCloud itemをskipし、明示toggle時だけ取得を許可する。処理済みの正本はidentity registryとする。
 
-ジャンル表示設定の適用時は、`LibraryStore`が全曲と無効ジャンルのsnapshotを`GenreLibraryFilterService` actorへ渡す。actorは作業用BGMとハイレゾ対象を除く通常曲にジャンル設定を適用してAlbum / Artist / Genre / Composerを再構築し、全曲から作業用catalogとハイレゾcatalogも構築する。`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
+ジャンル表示設定の適用前に、`GenreLibraryFilterService` actorは完成ライブラリから`GenreLibraryFilterIndex`を一度だけ構築する。索引は通常曲のジャンルfilter key、通常曲のAlbum / Artist / Genre / Composer構造、作業用catalog、ハイレゾcatalogを保持する。切り替え時は無効ジャンルに該当しないTrack IDだけを選び、既存構造内のTrack IDとArtistのAlbum IDを絞り込む。ジャンル文字列の再分解、分類ごとのgroup／localized sort、専用catalog構築はライブラリ自体が更新されるまで繰り返さず、全ジャンル有効時は通常ライブラリsnapshotをそのまま返す。`LibraryStore`は完了した最新requestの結果だけをMainActor上の表示stateへ反映する。ジャンル選択肢と固定分類も完成ライブラリ更新時にcacheし、View再評価から全Track走査を除外する。初期loadや再scanも同じ非同期経路を使い、一貫した完成snapshotだけを公開する。
 
 「作業用BGM」と「ハイレゾ」は専用再生を分離する分類マーカーであり、通常ライブラリのジャンル表示フィルターには選択肢として出さない。各専用catalogは通常側の無効ジャンルやプリセットとは独立して維持する。
 
@@ -178,7 +180,7 @@ PlayerStoreが再び肥大化した場合の候補は次の通り。
 
 Crossfade、Smart Queue、Auto DJ、Mood Station、AirPlay、Visualizer連動などの追加で責務が増えた場合、またはテスト可能性が下がり一つの修正が複数責務へ波及するようになった場合に再検討する。ファイルサイズだけを理由に分割しない。再開時は1責務ずつ小さく切り出し、Before／Afterで同じCharacterization Testを実行する。再生挙動の変更や新機能追加と同時に行わず、async／Task／Actor境界を不用意に変えない。Queue、Track End、Shuffle、Repeatは特に慎重に扱い、Build／TestがGreenでない限り次の段階へ進まない。
 
-`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。Library、Playback History、Preference、Track／Album／Artist Favorite、Listen Laterの値snapshotを`HomePerformanceSnapshotWorker`へ渡し、通常shuffle適格曲、Destination候補、Highlight Artwork、MIX、今日の再生集計をactor上で構築する。MainActorは完成snapshotの比較・反映だけを行い、View再描画中にはLibrary／履歴全体を走査しない。新しいrevisionでは先行Taskと画像ローテーションTaskをキャンセルし、古い結果を反映しない。60秒ごとのローテーションはMIX／今日の集計を省略する。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierは再生queueに接続せず表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
+`HomeView` はホーム代表表示に必要な候補、選択済みTrack、単一artwork identifier、即時再生可否をDestination単位の一時snapshotへまとめます。Library、Playback History、Preference、Track Feature、Track／Album／Artist Favorite、Listen Laterの値snapshotを`HomePerformanceSnapshotWorker`へ渡し、通常shuffle適格曲、Destination候補、Highlight Artwork、MIX、今日の再生集計をactor上で構築する。Track Feature Storeからはcopy-on-writeの辞書snapshotをMainActor上で受け取り、対象曲の値抽出とFlow Mix計算はworkerで行う。MainActorは完成snapshotの比較・反映だけを行い、View再描画中にはLibrary／履歴全体を走査しない。新しいrevisionでは先行Taskと画像ローテーションTaskをキャンセルし、古い結果を反映しない。60秒ごとのローテーションはMIX／今日の集計を省略する。同じ候補が有効な間は同じidentifierと同値snapshotを書き戻さず、Tileは候補配列を`task(id:)`で監視しません。表示中の代表Trackは即時再生queueの先頭へ置く契約を維持します。HighlightタイルのランダムArtwork identifierは再生queueに接続せず表示だけに使う。`ArtworkService`は原Dataに加えてImageIOでdownsample／decodeした`UIImage`をmemory cacheし、画像decodeをMainActor外で行います。decode不能identifierは失敗もcacheし、View再生成時の再試行loopを防ぎます。
 
 通常再生開始前にPlayerStoreはStable Track IDで`TrackPlaybackAdjustmentStore`を遅延loadし、有効な`customStartPosition`を開始時刻へ反映する。`AudioPlayerService`から0.5秒間隔で届く再生時刻eventを利用し、7秒間隔とpause／曲変更／backgroundで前回位置を保存する。有効な`customEndPosition`到達時は音声を停止して既存の曲終了・repeat・次曲経路へ合流する。Highlight区間には曲別の開始／終了位置を適用しない。
 
@@ -215,7 +217,7 @@ music root recursive scan
 
 ### Search, favorites, playlists, history
 
-- ホームのMIXはLibrary・Playback History・Track Preferenceのrevisionとローカル日付変更時に、`HomePerformanceSnapshotWorker`が通常shuffle適格候補とOverplay／Preference weightをMainActor外で一度だけ作り、`MixSelectionService`がDaily／Rediscovery／My Favoritesの一時キューを構成する。順位計算は3種類で共有する。Dailyは同じ順位で選ぶMy Favoritesの先頭25曲を後回しにして重複を抑え、他の候補が不足したときだけ補充する。Deep Diveはタイルを開くときに`DeepDiveSelectionService`が履歴の日別再生開始数とArtist／Album metadataから候補を作り、同じ適格性・weightの範囲で低再生曲を選ぶ。従来の3種は先頭Trackをタイルのアートワークと再生開始曲に共用する。キューは保存せず、PlayerStoreへ通常再生として渡す。
+- ホームのMIXはLibrary・Playback History・Track Preference・Track Featureのrevisionとローカル日付変更時に、`HomePerformanceSnapshotWorker`が通常shuffle適格候補とOverplay／Preference weightをMainActor外で一度だけ作り、`MixSelectionService`がDaily／Rediscovery／My Favorites／Flow／Time Capsuleの一時キューを構成する。基本順位は5種類で共有する。Dailyは同じ順位で選ぶMy Favoritesの先頭25曲を後回しにして重複を抑え、他の候補が不足したときだけ補充する。Flowは最終再生が最新の解析済み曲から、共通する0...1特徴値のRMS距離と直近Artist／Album反復ペナルティで貪欲につなぐ。Time Capsuleは過去1〜3年の同日±45日のeventを記念日距離で並べ、直近60日の曲を外す。Rediscovery／Flow／Time Capsuleは空なら表示しない。Deep Diveはタイルを開くときに`DeepDiveSelectionService`が履歴の日別再生開始数とArtist／Album metadataから候補を作り、同じ適格性・weightの範囲で低再生曲を選ぶ。キューは保存せず、PlayerStoreへ通常再生として渡す。
 - `TrackSearchService` は text field / match mode / AND・OR / 属性条件を組み合わせ、保存検索 playlist の定義にも使われる。Artist条件はTrack ArtistとAlbum Artistの両方を対象にし、Album Artistと年はTrackの各metadataを直接対象にする専用の検索field / 条件も持つ。検索画面は`TrackSearchStore`が225ms debounceとTask cancellationを管理し、専用actorで検索してMainActorには最新結果だけを反映する。選択fieldが曲ならAlbum／Artist、Album系ならArtist、ArtistならAlbumのpresentation結果は構築しない。`SearchView`は一致総数と全件queueを保持したまま、Listへは100件ずつ段階表示する。playlist対象件数もworkerで一度だけ集計する。Library、Playback History、Track Preferenceの全配列／Dictionaryそのものではなく各Storeの軽量revisionを変更通知に使い、総再生時間だけの定期保存では再検索しない。保存検索playlistの明示同期も同じactorを使う。
 - `StationStore` は通常再生対象かつ特徴量を持つTrackから`StationCandidate`を構成する。`MoodStationService`はSemantic v2のraw headを確率として扱わず、選曲時点の候補Libraryごとに同値をmid-rankで扱うpercentileへ変換し、気分profileと任意の音要素との近さを評価する。特徴値のrangeが小さすぎる軸はノイズを順位として増幅しないようscoreから外し、近さの基準を満たす曲がある気分だけを1問目へ表示する。vocal／instrumental／electronic／ambient／pianoは、対象曲の半数以上に値があり、2曲以上かつ軸ごとの最小rangeを満たすものだけを2問目へ表示し、音要素を指定した場合はその値がない曲を候補にしない。年代metadataはStation候補、質問、scoreへ使用しない。近さの基準を満たしたpoolにだけOverplay補正、小さなjitter、artist分散を適用して最大25曲の一時queueを生成する。
 - Mood Mixは`StationStore`の同じ候補snapshotから`MoodStationService`がCalm／Energy／Ambient／Electronicの単一特徴を選ぶ。既存のLibrary内percentile、有効範囲、0.72閾値、Overplay補正、Artist分散を共有し、選んだ特徴のキューを一時的にPlayerStoreへ渡す。永続化契約は変更しない。
@@ -233,13 +235,14 @@ music root recursive scan
 - 通常shuffle、Quick Play、Favorite系shuffle、Repeat、Selective Random候補、Genre Randomの選択曲より後、PlayerStoreの自動shuffle order、ハイライトの曲順は、`Track.isEligibleForRegularRandomPlayback`を共通の候補条件とし、30秒未満のベリーショート曲を除外する。30秒ちょうどを含むそれ以上の通常曲は候補とし、ライブラリ表示、検索、Playlist互換性、手動選択・順再生にはこの時間条件を適用しない。各経路は1選曲単位の同じOverplay snapshotを使う。ハイライトは`PlaybackHistoryStore`の通常shuffle eligibilityとPreference × Overplay基本weightだけを共有し、その後の順位付けを`HighlightSelectionPolicy`へ閉じる。アガる／穏やか／発掘は適合度を0.05幅のbandにして第一条件とする。同一bandは選択済み曲列に基づくArtist／Album反復段階、Preference × Overplay × Recent Highlight、直前曲との特徴類似0.97倍、±0.5% Randomの順で貪欲に配置する。多様性は絶対除外せず、異なるmode bandを逆転しない。シャッフルはmode bandと特徴類似を使わない。詳細パラメータと具体例は[Highlight Selection Policy](Documentation/HighlightSelectionPolicy.md)を正とする。未再生Discoveryと作業用再生は各入口の目的を維持するためPreferenceだけを使う。手動選択にも適用しない。
 - Mood Stationは純粋なMood scoreでthresholdと候補poolを確定した後、同じOverplay multiplierをrankingにだけ掛け、既存artist減点を続ける。Mood StationはPreference／Favoriteをrankingへ使わない。Preference Driftは候補表示専用のままである。
 - PC版Analyticsの「おすすめ」はiOS選曲とは独立したread-only分析である。選択期間内の分析可能な再生1回につき4点、最大24点を推薦scoreから減点し、iOSの7日対56日OverplayScore、二次multiplier、Preference weight表は使用しない。
-- 永続化は`PlaybackHistoryPersistenceService` actorから`PlaybackHistorySQLiteRepository`を呼び、`Application Support/MyMusic/playback-history.sqlite3`を正本とする。schema version 2ではevent IDと完走flag、version 3では終了理由`natural / user_skipped / other`を追加する。通常変更は1曲snapshotを1 transactionで渡し、`playback_events`はevent IDによる`INSERT OR IGNORE`でappendし、track／日別／入口別はupsertする。空event snapshotだけが曲別resetの削除境界となる。初回は`PlaybackHistoryMigrationService`が旧JSONを上書きなしの永久backupへcopyし、transaction import後の全Model一致でのみDB metadataとDB外stateを`verified`にする。`PlaybackHistoryBackupService`は起動load時に24時間条件の日次JSON snapshot（7世代）を作る。
+- 永続化は`PlaybackHistoryPersistenceService` actorから`PlaybackHistorySQLiteRepository`を呼び、`Application Support/MyMusic/playback-history.sqlite3`を正本とする。schema version 2ではevent IDと完走flag、version 3では終了理由`natural / user_skipped / other`、version 4ではeventの`platform`を追加する。旧rowのplatformは`iOS`を既定値とする。通常変更は1曲snapshotを1 transactionで渡し、`playback_events`はevent IDによる`INSERT OR IGNORE`でappendし、track／日別／入口別はupsertする。空event snapshotだけが曲別resetの削除境界となる。初回は`PlaybackHistoryMigrationService`が旧JSONを上書きなしの永久backupへcopyし、transaction import後の全Model一致でのみDB metadataとDB外stateを`verified`にする。`PlaybackHistoryBackupService`は起動load時に24時間条件の日次JSON snapshot（7世代）を作る。
 - `AnalyticsService` のCSV exportは、運用上の共通契約としてヘッダを `種類,日時,曲名,アーティスト,再生回数,値,詳細` とし、分析データを以下の行種別で出力する。
 - `楽曲別再生回数`, `楽曲別再生行動`, `楽曲別再生入口`, `再生傾向評価` はそれぞれTrack別に追加行する。
 - `再生履歴` は再生イベントの時系列（日別にグループ化済み）を出力し、`集計` は全体件数（総再生、手動、自動、お気に入り、プレイリスト）を追加する。
 - `楽曲別再生行動` は `manual:<数>, automatic:<数>, 7日:<数>, 30日:<数>, 初回:<日時>, 最終:<日時>` を `詳細` 列へ格納し、`楽曲別再生入口` は `入口:回数` をスペース区切りで `詳細` 列へ格納する。
 - CSVインポート経路は現時点で未実装のため、上記CSVが現行正規フォーマットとする。
 - `MusicDataImportService` / `MusicDataExportService` は playlist、library、history、解析snapshot、設定の JSON / Markdown 等の入出力境界を担う。Preference Importは専用`TrackPreferenceImportService`で外部schema v2を厳格検証してから`TrackPreferenceStore`へ渡す。Playlist tagはversion 1文書の後方互換な追加fieldとして扱い、field欠落時は空tagとする。
+- Playlist JSONの完全snapshotは`LibraryStore.unfilteredTracks`で保存済みTrack IDを解決し、通常／作業用Playlistを同じversion 1文書へ保持する。用途別書き出しではPlaylist kindとTrackの`PlaylistKind.accepts`を同時に適用し、通常版と作業用版を分離する。作業用判定はgenreの「作業用BGM」完全一致だけで、durationは使わない。Analytics ZIPは複数の部分snapshotによる後勝ちを避けるため統合版だけを含む。
 - `AnalyticsArchiveExportService`は`MusicDataExportService`が生成したAnalytics対応8種類のJSONを一時directoryへ書き、ZIPFoundation 0.9.20のdeflateで日付付きZIPへまとめる。圧縮はMainActor外で実行し、生成元JSON契約と既存の個別共有経路は変更しない。
 - `TrackFeatureStore`は保存済み特徴量をTrack ID順のsnapshotとして提供し、`MusicDataExportService`が全特徴量JSONと、完全なLUFS / True Peak / gainを持つ曲だけの音量ノーマライズJSONへ変換する。これは音源を含まない確認・退避用出力であり、Analyzer schema v1の再Import contractではない。
 - `TrackPreferencePersistenceService`は`Application Support/MyMusic/track-preferences.json`を曲Preferenceの正本とする。schema v2 fileがない初回だけ旧Playback HistoryのFavorite／評価を移し、atomic write後のread-back一致を確認する。History読込失敗時は空migrationを確定しない。
@@ -247,7 +250,8 @@ music root recursive scan
 - Preference Importは外部JSONを直接永続化せず、`TrackPreferenceImportService`が未知fieldを含む構造、schema、日時、UUID、重複、値範囲、BoolをStore変更前に全件検証する。`TrackPreferenceStore`は現在LibraryのTrack IDだけを既存snapshotへmergeし、`TrackPreferencePersistenceService`のatomic保存成功後にのみmemory stateへ反映する。未収録Trackは作成せず、JSONにない既存Preferenceは維持する。
 - Library JSONはidentity registryに保存済みのFingerprintだけをoptional `audioFingerprint`として出力し、Export操作自体では音声を読まない。Analyticsは64文字のlowercase SHA-256として検証・保存するが、v0では別Track IDの自動統合は行わない。
 - AnalyticsのLibrary tableは後方互換なoptional列として`relative_path`／`file_size`を持つ。Track Featuresの`sourceIdentity`は既存どおり`source_records.raw_json`を正とし、Analytics内の`TrackFeatureResolver`がLibrary／Features Import後にTrack ID完全一致を優先して再解決する。救済は本体と同じpath優先、file size完全一致、duration差0.5秒以内、fallback metadata一致かつ一意候補に限定し、fingerprintは必須にしない。
-- 同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
+- 同Serviceの`MyMusic-Library.json`はMyMusic `trackID`に加え、選択音楽ルート以下の`relativePath`と`fileSize`をoptional fieldとして出力する。端末固有のiCloud／File Provider絶対pathは交換Identityへ含めない。同Serviceの`MyMusic-Playback-Events.json`は保存済みPlayback EventをAnalytics schema v1へ写し、Libraryから曲名、Artist、Album、曲長を補完する。イベントID、再生日時、実聴秒数、完走／Skip、入口、選択種別は保存値を使用し、保存していないsession IDは出力しない。現在のLibraryでTrack IDを解決できないeventは必須metadataを安全に補えないため出力対象外とする。
+- HomeStereo由来Playback Eventsの手動Importは`PlaybackEventImportView` → `PlaybackEventImportStore` → `PlaybackEventImportService` → `PlaybackHistoryStore` → `PlaybackHistoryPersistenceService` → SQLiteの順に流れる。Serviceはschema v1文書を保存前に厳格検証し、`endedAt = playedAt + playDuration`、完走なら`natural`、skipなら`user_skipped`、それ以外は`other`として内部Eventへ変換する。Previewはread-onlyで、確認後に現在Libraryへ解決できるeventだけを1 transactionでeventと集計へ反映する。Storeは先行する通常保存を待ち、Import中の再生更新を遅延保存する。SQLite commit成功後だけmemory stateへ新規eventをmergeし、event ID一意制約を最終防衛線とする。外部metadataは表示専用でLibraryを上書きしない。
 - EQ文書は現在の`EqualizerSettings`とcustom preset、ジャンル文書は順序付き`GenreDisplayPreset`を、それぞれ`kind`とversionを持つ別JSONとして扱う。`MusicSettingsImportService`が種類、version、有限値、EQの範囲・バンド数、重複名／IDをStore変更前に検証する。Storeは同名presetを更新し新規presetを追加してUserDefaultsへ保存するため、対象外の既存presetは削除しない。
 
 ## Apple Watch リモコン
@@ -268,7 +272,7 @@ Shuffleは`WatchShuffleKind`のversion 1 message（normal／favorites／unplayed
 
 server / database migration はありません。端末内の file と UserDefaults が保存境界です。
 
-App外バックアップは`ExternalBackupView` → `ExternalBackupService`の経路に限定する。外部フォルダは正本ではなく2世代snapshotであり、manifest付きstagingを完全検証した場合だけrotationする。Restoreは実行中のStoreやWAL databaseを置換せず、Application Supportと同じvolumeのpending directoryへ準備し、次回`MyMusicApp.init`のStore生成前にatomic swapする。音楽フォルダbookmarkは権限再取得が必要なため対象外とし、復元したTrack Identityと再scanでTrack ID参照データを再接続する。
+App外バックアップは`ExternalBackupView` → `ExternalBackupService`の経路に限定する。外部フォルダは正本ではなく2世代snapshotであり、manifest付きstagingを完全検証した場合だけrotationする。schema v2 manifestは各payloadのbyte数とSHA-256を持ち、schema v1は読取互換を維持する。Playback SQLiteは`integrity_check`に加え、非NULL event IDの空値・重複とplatform enumをsnapshot作成時とRestore準備時に検証する。HomeStereo Playback Events Importとは永続化と操作の責務を分け、Import契約は変更しない。Restoreは実行中のStoreやWAL databaseを置換せず、Application Supportと同じvolumeのpending directoryへ準備し、次回`MyMusicApp.init`のStore生成前にatomic swapする。音楽フォルダbookmarkは権限再取得が必要なため対象外とし、復元したTrack Identityと再scanでTrack ID参照データを再接続する。
 
 | データ | 主な所有者 | 保存形態 / 場所 |
 | --- | --- | --- |
@@ -289,7 +293,7 @@ App外バックアップは`ExternalBackupView` → `ExternalBackupService`の�
 
 永続化 model を変える場合は既存 decode compatibility と非破壊性を確認します。Track ID を参照するデータが多いため、identity 変更は横断的な migration なしに行いません。
 
-TrackのAlbum Artistはoptionalで、旧cacheのdecodeを維持する。metadata revisionがない旧Trackは次回の手動再スキャン時に一度だけAVFoundation metadataを再抽出する。アルバムは`albumTitle + (albumArtistName ?? artistName)`で導出し、Artist一覧自体はTrack Artistから導出する。
+TrackのAlbum Artistはoptionalで、旧cacheのdecodeを維持する。metadata revisionがない旧Trackは次回の手動再スキャン時に一度だけAVFoundation metadataを再抽出する。global metadata revisionによる全曲再抽出は通常のfield追加手段として使わず、optional field、互換decode、対象限定migrationを優先する。アルバムは`albumTitle + (albumArtistName ?? artistName)`で導出し、Artist一覧自体はTrack Artistから導出する。
 
 Trackの`firstSeenAt`はMyMusicが論理Trackを初めてscanで確認した絶対時刻である。1 scanで共通の基準時刻を新規Trackへ設定し、再scanやmetadata更新では維持する。旧cache／旧identity Recordは推測せず`nil`（不明）のままとする。Track IDを移動照合で復元した場合はidentity registryから同値も復元し、失敗・cancelしたscanのregistry変更はrollbackする。詳細は[Track firstSeenAt](Documentation/TrackFirstSeenAt.md)を参照する。
 

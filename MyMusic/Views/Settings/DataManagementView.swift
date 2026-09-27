@@ -73,15 +73,41 @@ struct DataManagementView: View {
                     )
                 }
             }
-            Section("プレイリスト") {
+            Section {
                 throwingExportLink("全プレイリストを書き出す", systemImage: "square.and.arrow.up") {
-                    try exporter.allPlaylistsJSON(playlistStore.playlists, tracks: libraryStore.tracks)
+                    try exporter.allPlaylistsJSON(
+                        playlistStore.playlists,
+                        tracks: libraryStore.unfilteredTracks
+                    )
+                }
+                throwingExportLink("通常プレイリストを書き出す", systemImage: "music.note.list") {
+                    try exporter.playlistsJSON(
+                        playlistStore.playlists,
+                        kind: .regular,
+                        tracks: libraryStore.unfilteredTracks
+                    )
+                }
+                throwingExportLink("作業用プレイリストを書き出す", systemImage: "timer") {
+                    try exporter.playlistsJSON(
+                        playlistStore.playlists,
+                        kind: .work,
+                        tracks: libraryStore.unfilteredTracks
+                    )
                 }
                 Button("プレイリストを読み込む", systemImage: "square.and.arrow.down") {
                     presentImporter(for: .playlist)
                 }
+            } header: {
+                Text("プレイリスト")
+            } footer: {
+                Text("全プレイリストは完全な同期用です。通常用と作業用は用途別に分けて共有できます。")
             }
             Section("再生データ") {
+                NavigationLink {
+                    PlaybackEventImportView()
+                } label: {
+                    Label("再生イベントJSONを読み込む", systemImage: "square.and.arrow.down")
+                }
                 throwingExportLink("再生履歴を書き出す", systemImage: "clock.arrow.circlepath") {
                     try exporter.playbackHistoryJSON(
                         historyStore.entries, preferences: preferenceStore.entries

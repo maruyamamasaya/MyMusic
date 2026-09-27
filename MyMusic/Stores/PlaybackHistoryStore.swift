@@ -18,6 +18,8 @@ final class PlaybackHistoryStore {
     private let preferenceStore: TrackPreferenceStore
     private var saveTask: Task<Void, Never>?
     private var isLoading = false
+    private var isImportingPlaybackEvents = false
+    private var deferredPersistenceTrackIDs = Set<Track.ID>()
 
     init(
         persistence: PlaybackHistoryPersistenceServicing? = nil,
@@ -489,6 +491,10 @@ final class PlaybackHistoryStore {
     }
 
     private func persist(_ entry: PlaybackHistory) {
+        if isImportingPlaybackEvents {
+            deferredPersistenceTrackIDs.insert(entry.trackID)
+            return
+        }
         // Do not cancel an earlier per-track write: a later mutation may belong to a
         // different track. Explicit chaining also preserves mutation order even when
         // unstructured tasks are scheduled in a different order.
@@ -505,6 +511,59 @@ final class PlaybackHistoryStore {
 
     func waitForPendingSave() async {
         await saveTask?.value
+    }
+
+    func importPlaybackEvents(
+        _ document: PlaybackEventImportDocument,
+        libraryTrackIDs: Set<Track.ID>
+    ) async throws -> PlaybackEventImportResult {
+        guard isLoaded, !isImportingPlaybackEvents else { throw CocoaError(.fileReadUnknown) }
+        isImportingPlaybackEvents = true
+        await saveTask?.value
+
+        let existingIDs = Set(entries.values.flatMap(\.playbackEvents).map(\.id))
+        let unresolved = document.events.filter {
+            !existingIDs.contains($0.event.id) && !libraryTrackIDs.contains($0.event.trackID)
+        }.count
+        let duplicateOutsideLibrary = document.events.filter {
+            existingIDs.contains($0.event.id) && !libraryTrackIDs.contains($0.event.trackID)
+        }.count
+        let resolved = document.events.filter { libraryTrackIDs.contains($0.event.trackID) }
+
+        do {
+            let commit = try await persistence.importPlaybackEvents(resolved)
+            let inserted = document.events.filter { commit.insertedEventIDs.contains($0.event.id) }
+            for candidate in inserted {
+                entries[candidate.event.trackID] = PlaybackEventImportAggregation.merging(
+                    candidate,
+                    into: entries[candidate.event.trackID]
+                )
+            }
+            if !inserted.isEmpty {
+                homePresentationRevision &+= 1
+                todayPlaybackRevision &+= 1
+            }
+            finishPlaybackEventImport()
+            return PlaybackEventImportResult(
+                total: document.events.count,
+                inserted: commit.insertedEventIDs.count,
+                duplicate: commit.duplicateEventIDs.count + duplicateOutsideLibrary,
+                unresolved: unresolved,
+                invalid: 0
+            )
+        } catch {
+            finishPlaybackEventImport()
+            throw error
+        }
+    }
+
+    private func finishPlaybackEventImport() {
+        isImportingPlaybackEvents = false
+        let trackIDs = deferredPersistenceTrackIDs
+        deferredPersistenceTrackIDs.removeAll()
+        for trackID in trackIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+            if let entry = entries[trackID] { persist(entry) }
+        }
     }
 
     private static func dayKey(for date: Date, calendar: Calendar = .playbackHistory) -> String {

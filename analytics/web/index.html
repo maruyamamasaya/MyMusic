@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/import.css">
   <link rel="stylesheet" href="/static/preferences.css">
+  <link rel="stylesheet" href="/static/genre-presets.css?v=20260927">
   <link rel="stylesheet" href="/static/tracks.css?v=20260904">
   <style>.source-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.source-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer}.source-tabs button.active{background:#2a3140;color:#fff;border-color:#4a5568}</style>
   <link rel="stylesheet" href="/static/experience.css">
@@ -22,6 +23,7 @@
       <button class="nav-item" data-page="rankings">ランキング</button>
       <button class="nav-item" data-page="tracks">曲ライブラリ</button>
       <button class="nav-item" data-page="sources">データソース</button>
+      <button class="nav-item" data-page="genre-presets">ジャンルプリセット</button>
       <button class="nav-item" data-page="import">インポート</button>
     </nav>
     <div class="sidebar-tools">
@@ -108,9 +110,36 @@
       <div id="import-result" role="status" aria-live="polite"></div>
       <article class="panel table-wrap"><div class="import-history-header"><div><h2>Import履歴</h2><p class="subtitle">原本JSONを残したまま、Analyticsの取込データをクリアできます。</p></div><button id="clear-imported-data" class="danger-button" type="button">取込データをクリア</button></div><table data-sortable><thead><tr><th>日時 / ファイル</th><th>種類</th><th>新規</th><th>更新</th><th>重複</th><th>エラー</th></tr></thead><tbody id="imports-body"></tbody></table><div id="imports-more"></div></article>
     </section>
+    <section id="genre-presets" class="page">
+      <header><div><p class="eyebrow">GENRE DISPLAY PRESETS</p><h1>ジャンルプリセット</h1><p class="subtitle">iPhoneと同じversion 1 JSONを、Mac上で編集して受け渡せます。</p></div></header>
+      <div class="preset-toolbar" aria-label="ジャンルプリセット操作">
+        <button id="preset-create" class="primary-button" type="button">新規作成</button>
+        <label class="secondary-button preset-import-control">ジャンルプリセットを読み込む<input id="preset-import" type="file" accept="application/json,.json" aria-label="ジャンルプリセットJSONを選択"></label>
+        <a class="secondary-button" href="/api/genre-presets/export" download="MyMusic-Genre-Display-Presets.json">ジャンルプリセットを書き出す</a>
+      </div>
+      <p id="preset-message" class="preset-message" role="status" aria-live="polite"></p>
+      <div id="preset-list" class="preset-list" aria-live="polite"></div>
+      <div id="preset-editor" class="preset-dialog" role="dialog" aria-modal="true" aria-labelledby="preset-editor-title" hidden>
+        <form id="preset-form">
+          <div class="preset-dialog-header"><div><p class="eyebrow">GENRE SELECTION</p><h2 id="preset-editor-title">プリセットを作成</h2></div><button id="preset-cancel-x" class="icon-button" type="button" aria-label="編集を閉じる">×</button></div>
+          <label class="preset-name">プリセット名<input id="preset-name" name="name" required maxlength="200" autocomplete="off" placeholder="例：集中"></label>
+          <div class="preset-selection-toolbar">
+            <label>ジャンルを検索<input id="preset-search" type="search" autocomplete="off" placeholder="名前の一部を入力"></label>
+            <div role="group" aria-label="ジャンルの一括選択"><button id="preset-select-all" type="button">すべて選択</button><button id="preset-clear-all" type="button">すべて解除</button></div>
+          </div>
+          <p id="preset-selection-count" class="preset-selection-count" aria-live="polite"></p>
+          <label class="preset-unassigned"><input id="preset-unassigned" type="checkbox"> <span>ジャンル未設定</span></label>
+          <p class="fixed-genre-note">「作業用BGM」と「ハイレゾ」はiPhone側の固定分類のため、選択対象には含めません。</p>
+          <fieldset class="preset-genres"><legend class="visually-hidden">表示するジャンル</legend><div id="preset-genre-options"></div></fieldset>
+          <p id="preset-form-error" class="form-error" role="alert"></p>
+          <div class="preset-dialog-actions"><button id="preset-cancel" type="button">キャンセル</button><button id="preset-save" class="primary-button" type="submit">保存</button></div>
+        </form>
+      </div>
+    </section>
   </main>
   <script src="/static/controls.js" defer></script>
   <script src="/static/zoom.js" defer></script>
+  <script src="/static/genre-presets.js?v=20260927-5" defer></script>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

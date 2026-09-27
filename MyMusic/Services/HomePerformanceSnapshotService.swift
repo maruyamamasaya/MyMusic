@@ -22,6 +22,7 @@ nonisolated struct HomePerformanceSnapshotRequest: Sendable {
     let hiResTracks: [Track]
     let histories: [Track.ID: PlaybackHistory]
     let preferences: [Track.ID: TrackPreference]
+    let features: [Track.ID: TrackFeature]
     let listenLaterEntries: [ListenLaterEntry]
     let favorites: LibraryFavorites
     let destinations: Set<HomeDestination>
@@ -62,7 +63,7 @@ actor HomePerformanceSnapshotWorker {
         )
         let sourceTracks: [HomeDestination: [Track]] = [
             .quickPlay: eligibleTracks,
-            .selectiveRandomPlay: eligibleTracks,
+            .selectiveRandomPlay: eligibleTracks.filter { !$0.normalizedGenreNames.isEmpty },
             .discoveryPlay: eligibleTracks.filter { (request.histories[$0.id]?.playCount ?? 0) == 0 },
             .listenLater: request.listenLaterEntries.compactMap { tracksByID[$0.trackID] },
             .recentlyAddedPlay: eligibleTracks.filter {
@@ -136,11 +137,15 @@ actor HomePerformanceSnapshotWorker {
                     overplayScore: scores[track.id] ?? 0
                 ))
             }, uniquingKeysWith: { first, _ in first })
+            let featureValues = Dictionary(uniqueKeysWithValues: eligibleTracks.compactMap { track in
+                request.features[track.id].map { (track.id, $0.values) }
+            })
             mixQueues = MixSelectionService().allQueues(
                 from: eligibleTracks,
                 histories: request.histories,
                 preferences: request.preferences,
                 weights: weights,
+                features: featureValues,
                 now: request.now
             )
             mixDay = Calendar.current.startOfDay(for: request.now)

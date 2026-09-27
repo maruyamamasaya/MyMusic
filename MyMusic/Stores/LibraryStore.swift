@@ -34,28 +34,8 @@ final class LibraryStore {
         fixedGenreOptions + selectableGenreOptions
     }
 
-    var selectableGenreOptions: [GenreDisplayOption] {
-        var options = allGenres
-            .filter { $0.name != Track.workPlaybackGenre && $0.name != Track.hiResPlaybackGenre }
-            .map { GenreDisplayOption(id: $0.name, name: $0.name) }
-        if allTracks.contains(where: {
-            $0.isEligibleForRegularPlayback && Self.genreNames(in: $0.genre).isEmpty
-        }) {
-            options.append(GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定"))
-        }
-        return options
-    }
-
-    var fixedGenreOptions: [GenreDisplayOption] {
-        var options: [GenreDisplayOption] = []
-        if allTracks.contains(where: \.isEligibleForWorkPlayback) {
-            options.append(GenreDisplayOption(id: Track.workPlaybackGenre, name: Track.workPlaybackGenre))
-        }
-        if allTracks.contains(where: \.isEligibleForHiResPlayback) {
-            options.append(GenreDisplayOption(id: Track.hiResPlaybackGenre, name: Track.hiResPlaybackGenre))
-        }
-        return options
-    }
+    private(set) var selectableGenreOptions: [GenreDisplayOption] = []
+    private(set) var fixedGenreOptions: [GenreDisplayOption] = []
 
     var unfilteredTracks: [Track] { allTracks }
 
@@ -67,6 +47,7 @@ final class LibraryStore {
     private var librariesByFolderID: [String: MusicLibrary] = [:]
     private var allTracks: [Track] = []
     private var allGenres: [Genre] = []
+    private var genreFilterIndex: GenreLibraryFilterIndex?
     private var lookupIndex = LibraryLookupIndex.empty
     private var disabledGenreNames: Set<String>
     private var hasRestoredFolder = false
@@ -432,22 +413,32 @@ final class LibraryStore {
         allGenres = completeLibrary.genres.filter { genre in
             genre.trackIDs.contains(where: regularTrackIDs.contains)
         }
+        cacheGenreOptions()
+        do {
+            genreFilterIndex = try await genreFilterService.makeIndex(
+                from: completeLibrary,
+                unassignedGenreKey: Self.unassignedGenreKey
+            )
+        } catch is CancellationError {
+            return
+        } catch {
+            return
+        }
         applyGenreFilter()
     }
     private func applyGenreFilter() {
+        guard let genreFilterIndex else { return }
         genreFilterTask?.cancel()
         let requestID = UUID()
         genreFilterRequestID = requestID
-        let tracks = allTracks
         let disabledGenreNames = disabledGenreNames
         let genreFilterService = genreFilterService
 
         genreFilterTask = Task(priority: .utility) { [weak self] in
             do {
                 let snapshot = try await genreFilterService.filteredLibrary(
-                    from: tracks,
-                    disabledGenreNames: disabledGenreNames,
-                    unassignedGenreKey: Self.unassignedGenreKey
+                    from: genreFilterIndex,
+                    disabledGenreNames: disabledGenreNames
                 )
                 try Task.checkCancellation()
                 guard let self, self.genreFilterRequestID == requestID else { return }
@@ -466,6 +457,26 @@ final class LibraryStore {
     }
     private func saveDisabledGenres() {
         userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)
+    }
+    private func cacheGenreOptions() {
+        selectableGenreOptions = allGenres
+            .filter { $0.name != Track.workPlaybackGenre && $0.name != Track.hiResPlaybackGenre }
+            .map { GenreDisplayOption(id: $0.name, name: $0.name) }
+        if allTracks.contains(where: {
+            $0.isEligibleForRegularPlayback && Self.genreNames(in: $0.genre).isEmpty
+        }) {
+            selectableGenreOptions.append(
+                GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定")
+            )
+        }
+
+        fixedGenreOptions = []
+        if allTracks.contains(where: \.isEligibleForWorkPlayback) {
+            fixedGenreOptions.append(GenreDisplayOption(id: Track.workPlaybackGenre, name: Track.workPlaybackGenre))
+        }
+        if allTracks.contains(where: \.isEligibleForHiResPlayback) {
+            fixedGenreOptions.append(GenreDisplayOption(id: Track.hiResPlaybackGenre, name: Track.hiResPlaybackGenre))
+        }
     }
     private func saveGenreDisplayPresets() {
         guard let data = try? JSONEncoder().encode(genreDisplayPresets) else { return }

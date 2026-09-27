@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SQLite3
 
@@ -5,6 +6,14 @@ nonisolated struct ExternalBackupManifest: Codable, Equatable, Sendable {
     nonisolated struct FileEntry: Codable, Equatable, Sendable {
         let path: String
         let byteCount: Int64
+        /// Added in schema v2. Nil remains decodable for existing schema v1 backups.
+        let sha256: String?
+
+        init(path: String, byteCount: Int64, sha256: String? = nil) {
+            self.path = path
+            self.byteCount = byteCount
+            self.sha256 = sha256
+        }
     }
 
     let formatVersion: Int
@@ -27,6 +36,8 @@ enum ExternalBackupError: LocalizedError {
     case missingFile(String)
     case invalidJSON(String)
     case invalidDatabase
+    case invalidPlaybackEvents
+    case checksumMismatch(String)
     case invalidTrackIdentifier(String)
 
     var errorDescription: String? {
@@ -37,6 +48,8 @@ enum ExternalBackupError: LocalizedError {
         case let .missingFile(path): "バックアップ内のファイルがありません: \(path)"
         case let .invalidJSON(path): "JSONファイルが壊れています: \(path)"
         case .invalidDatabase: "再生履歴データベースの整合性を確認できません。"
+        case .invalidPlaybackEvents: "再生履歴にeventIdの重複、空値、または未対応のplatformがあります。"
+        case let .checksumMismatch(path): "バックアップ内のファイル内容がmanifestと一致しません: \(path)"
         case let .invalidTrackIdentifier(value): "Track IDが不正です: \(value)"
         }
     }
@@ -45,7 +58,7 @@ enum ExternalBackupError: LocalizedError {
 /// Creates an app-external, two-generation snapshot. Application Support remains authoritative.
 nonisolated final class ExternalBackupService: @unchecked Sendable {
     static let formatVersion = 1
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     private let fileManager: FileManager
     private let applicationRoot: URL
@@ -186,7 +199,8 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
         guard fileManager.fileExists(atPath: manifestURL.path) else { throw ExternalBackupError.missingManifest }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         let manifest = try decoder.decode(ExternalBackupManifest.self, from: Data(contentsOf: manifestURL))
-        guard manifest.formatVersion == Self.formatVersion, manifest.schemaVersion == Self.schemaVersion else {
+        guard manifest.formatVersion == Self.formatVersion,
+              (1...Self.schemaVersion).contains(manifest.schemaVersion) else {
             throw ExternalBackupError.unsupportedFormat
         }
         try validatePayload(in: url, manifest: manifest)
@@ -209,8 +223,12 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
     }
 
     private func makeManifest(in directory: URL) throws -> ExternalBackupManifest {
-        let files = try recursiveFiles(in: directory).map {
-            ExternalBackupManifest.FileEntry(path: $0.path.replacingOccurrences(of: directory.path + "/", with: ""), byteCount: (try $0.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0)
+        let files = try recursiveFiles(in: directory).map { url in
+            ExternalBackupManifest.FileEntry(
+                path: url.path.replacingOccurrences(of: directory.path + "/", with: ""),
+                byteCount: (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0,
+                sha256: try sha256(of: url)
+            )
         }.sorted { $0.path < $1.path }
         return ExternalBackupManifest(formatVersion: Self.formatVersion, schemaVersion: Self.schemaVersion,
                                       appVersion: appVersion(), createdAt: now(), files: files)
@@ -225,6 +243,12 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
             guard values.isRegularFile == true, values.isSymbolicLink != true else { throw ExternalBackupError.missingFile(entry.path) }
             let actualSize = values.fileSize.map(Int64.init) ?? -1
             guard actualSize == entry.byteCount else { throw ExternalBackupError.missingFile(entry.path) }
+            if manifest.schemaVersion >= 2 {
+                guard let expectedHash = entry.sha256, expectedHash.count == 64,
+                      try sha256(of: url) == expectedHash else {
+                    throw ExternalBackupError.checksumMismatch(entry.path)
+                }
+            }
             if entry.path.hasSuffix(".json") {
                 do {
                     let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
@@ -334,6 +358,16 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
         return try encoder.encode(manifest)
     }
 
+    private func sha256(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var digest = SHA256()
+        while let data = try handle.read(upToCount: 1_048_576), !data.isEmpty {
+            digest.update(data: data)
+        }
+        return digest.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     private func snapshotDatabase(from source: URL, to destination: URL) throws {
         let temporaryDirectory = fileManager.temporaryDirectory
             .appending(path: "MyMusic-ExternalBackup-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -406,10 +440,57 @@ nonisolated final class ExternalBackupService: @unchecked Sendable {
         }
         defer { sqlite3_close(db) }
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "PRAGMA integrity_check", -1, &statement, nil) == SQLITE_OK, let statement else { throw ExternalBackupError.invalidDatabase }
-        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA integrity_check", -1, &statement, nil) == SQLITE_OK,
+              let statement else { throw ExternalBackupError.invalidDatabase }
         let stepResult = sqlite3_step(statement)
         let resultText = sqlite3_column_text(statement, 0).map { String(cString: $0) }
+        sqlite3_finalize(statement)
         guard stepResult == SQLITE_ROW, resultText == "ok" else { throw ExternalBackupError.invalidDatabase }
+
+        guard try scalarInt(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'playback_events'",
+            database: db
+        ) > 0 else { return }
+        let columns = try columnNames(in: "playback_events", database: db)
+        if columns.contains("event_id") {
+            let emptyIDs = try scalarInt(
+                "SELECT COUNT(*) FROM playback_events WHERE event_id IS NOT NULL AND trim(event_id) = ''",
+                database: db
+            )
+            let duplicateIDs = try scalarInt(
+                "SELECT COUNT(*) FROM (SELECT event_id FROM playback_events WHERE event_id IS NOT NULL GROUP BY event_id HAVING COUNT(*) > 1)",
+                database: db
+            )
+            guard emptyIDs == 0, duplicateIDs == 0 else { throw ExternalBackupError.invalidPlaybackEvents }
+        }
+        if columns.contains("platform") {
+            let invalidPlatforms = try scalarInt(
+                "SELECT COUNT(*) FROM playback_events WHERE platform IS NULL OR platform NOT IN ('iOS', 'macOS')",
+                database: db
+            )
+            guard invalidPlatforms == 0 else { throw ExternalBackupError.invalidPlaybackEvents }
+        }
+    }
+
+    private func scalarInt(_ sql: String, database: OpaquePointer) throws -> Int64 {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement else { throw ExternalBackupError.invalidDatabase }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw ExternalBackupError.invalidDatabase }
+        return sqlite3_column_int64(statement, 0)
+    }
+
+    private func columnNames(in table: String, database: OpaquePointer) throws -> Set<String> {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK,
+              let statement else { throw ExternalBackupError.invalidDatabase }
+        defer { sqlite3_finalize(statement) }
+        var result = Set<String>()
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let text = sqlite3_column_text(statement, 1) else { throw ExternalBackupError.invalidDatabase }
+            result.insert(String(cString: text))
+        }
+        return result
     }
 }

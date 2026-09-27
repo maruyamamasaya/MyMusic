@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.database import Database
+from app.genre_presets import GenrePresetService
 from importer.schema import (
     LibraryExportV1,
     LibraryTrackV1,
@@ -48,6 +49,7 @@ class ImportService:
         self.database = database
         self.imports_dir = Path(imports_dir)
         self.track_feature_resolver = TrackFeatureResolver()
+        self.genre_presets = GenrePresetService(database)
 
     def import_bytes(self, content: bytes, source_filename: str) -> dict[str, Any]:
         imported_at = _now()
@@ -57,6 +59,8 @@ class ImportService:
         exported_at: datetime | None = None
         try:
             decoded = json.loads(content.decode("utf-8-sig"))
+            if isinstance(decoded, dict) and decoded.get("kind") == "mymusic.genre-display-presets":
+                data_kind = "genre_presets"
             data_kind, items, exported_at = self._detect_document(decoded)
         except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
             errors.append(self._error_text(exc))
@@ -78,21 +82,34 @@ class ImportService:
             )
             import_id = int(cursor.lastrowid)
             new_count = updated_count = duplicate_count = 0
-            for index, raw_item in enumerate(items):
-                try:
-                    outcome = self._import_item(
-                        connection, data_kind, raw_item, exported_at, imported_at, import_id
+            if data_kind == "genre_presets" and not errors:
+                document = GenrePresetsExportV1(
+                    kind="mymusic.genre-display-presets", version=1, presets=items
+                )
+                new_count, updated_count, duplicate_count = self.genre_presets.merge_document(
+                    connection, document
+                )
+                for raw_item in items:
+                    self._import_source_record(
+                        connection, data_kind, raw_item.model_dump(mode="json"),
+                        imported_at, import_id,
                     )
-                    if outcome == "new":
-                        new_count += 1
-                    elif outcome == "updated":
-                        updated_count += 1
-                    else:
-                        duplicate_count += 1
-                except ValidationError as exc:
-                    errors.append(f"{self._item_label(data_kind)}[{index}]: {self._error_text(exc)}")
-                except (TypeError, ValueError) as exc:
-                    errors.append(f"{self._item_label(data_kind)}[{index}]: {exc}")
+            else:
+                for index, raw_item in enumerate(items):
+                    try:
+                        outcome = self._import_item(
+                            connection, data_kind, raw_item, exported_at, imported_at, import_id
+                        )
+                        if outcome == "new":
+                            new_count += 1
+                        elif outcome == "updated":
+                            updated_count += 1
+                        else:
+                            duplicate_count += 1
+                    except ValidationError as exc:
+                        errors.append(f"{self._item_label(data_kind)}[{index}]: {self._error_text(exc)}")
+                    except (TypeError, ValueError) as exc:
+                        errors.append(f"{self._item_label(data_kind)}[{index}]: {exc}")
             if data_kind == "library" and not errors:
                 connection.execute(
                     "UPDATE library_tracks SET is_present = 0 WHERE import_id <> ?", (import_id,)

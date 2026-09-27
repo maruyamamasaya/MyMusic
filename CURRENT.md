@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 # MyMusic の現在状態
@@ -41,7 +41,7 @@ updated: 2026-09-24
 ## 大規模ライブラリ性能改善 Phase 3
 
 - HomeのLibrary／Playback History／Preference／Favorite／Listen Later更新時に行う代表Track、Artwork、通常再生候補、MIX、今日の再生集計を`HomePerformanceSnapshotWorker`へ集約し、MainActor外で計算する。StoreからSendableな値snapshotを一度渡し、完成結果だけを画面stateへ反映する。
-- 通常shuffle適格曲は1回の全曲走査で作り、未再生／リピート／Favorite候補、Highlight Artwork、3種類のMIXで共有する。MIXのOverplayは候補ごとに63日分を1回集計し、3種類で同じ順位を使う。
+- 通常shuffle適格曲は1回の全曲走査で作り、未再生／リピート／Favorite候補、Highlight Artwork、5種類の即時再生MIXで共有する。MIXのOverplayは候補ごとに63日分を1回集計し、5種類で同じ基本順位を使う。
 - 更新Taskは新しいLibrary／History／Preference等のrevisionでキャンセルし、古い結果を反映しない。60秒ごとの代表画像ローテーションは別Taskとし、MIXと今日の集計を再計算しない。Homeが非表示／backgroundの間は両Taskを停止する。
 - generic iOS Simulator Debug buildとHome snapshot／MIX／履歴・queueの対象XCTest 22件は成功。実機約10,000曲でのHome表示、曲切替時のframe hitch、CPU／allocationは未計測。
 
@@ -67,6 +67,12 @@ updated: 2026-09-24
 - complete同期の再開checkpointを、10曲ごとの累積全件JSON再生成から100曲ごとの小さな追記へ変更した。2万曲時のcheckpoint encode／write量を二次的増加から線形へ戻し、再開時だけ最新entryへ1回compactする。旧単一JSON checkpointも読める。
 - generic iOS Simulator Debug buildと、quick同期／Identity復元／checkpoint batchingの対象XCTest 16件は成功。Vespera向けDebug実機build・installも成功したが、端末ロック中のため自動launchは未確認。約20,000曲でのcold launch、quick／complete同期時間、発熱、iCloud未download時の曲数維持は未計測。
 
+## 大規模ライブラリ性能改善 Phase 7
+
+- ジャンル表示の切り替え前に、通常曲のジャンル所属とAlbum／Artist／Genre／Composer構造、作業用／ハイレゾcatalogを一度だけ索引化する。切り替え時は既存構造のTrack IDを絞り込むため、2万曲のジャンル文字列再分解、分類モデルの再group／localized sort、専用catalog再生成を繰り返さない。「全曲表示」は索引内の通常ライブラリsnapshotをそのまま再利用する。
+- ジャンル設定画面の選択肢と固定分類は、完成ライブラリ更新時に一度だけ作る。SwiftUIのbody評価やプリセット状態判定ごとに全Trackを走査しない。
+- ジャンルfilterの最新request優先と作業用／ハイレゾ分離は維持した。索引経路と従来の新規構築結果が一致する対象XCTestを追加し、`LibraryGenreFilterTests` 3件とgeneric iOS Simulator Debug buildが成功した。Vespera向けDebug実機build・installも成功したが、端末ロック中のため自動launchは未確認。実機の約20,000曲での切り替え時間とallocationは未計測。
+
 ## 実装済み
 
 ### USB DAC ネイティブレート出力 Beta
@@ -87,7 +93,7 @@ updated: 2026-09-24
 - `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生とUSB DAC出力レート準備を追加した。設定 → オーディオ → USB DAC 出力レートから、内蔵無音PCMによる44.1／48／88.2／96／192kHzの準備、Files上の音源選択、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先の確認ができる。開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
 - 44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ上で生成するrate準備を追加した。実曲の直前に最大2回の短いAudio Queueを開き、初回USB streamが希望rateを採用しないTea Proの挙動を再交渉する。設定診断とホームのハイレゾ専用画面から、音源ファイルなしでも各rateを手動準備できる。
 - Library scanでstream-level codec、sample rate、bit depth、channel、bit rateをTrackへ保存する。ジャンル項目「ハイレゾ」、または既存JEITA基準のHi-Res相当ロスレス音源を通常曲から除外し、ホームの「ハイレゾ」タイルから曲名／アルバム／アーティスト別に閲覧して独立Audio Queueで再生できる。分類優先順位は作業用BGM、ハイレゾ、通常の順。
-- FLACではAppleのstream descriptionが`mBitsPerChannel = 0`を返すため、ALACと同じsource bit depth flagsから16／20／24／32bitを復元する。metadata revisionを3へ更新し、旧cacheのFLACも次回scanで音源仕様を再取得する。ジャンル項目「ハイレゾ」による明示分類は従来どおり音源仕様より優先して利用できる。iPhone実機でのFLAC直接出力再生は未確認。
+- FLACではAppleのstream descriptionが`mBitsPerChannel = 0`を返すため、ALACと同じsource bit depth flagsから16／20／24／32bitを復元する。この修正でmetadata revisionを2から3へ上げた結果、FLACだけでなく旧revisionの全形式が次回quick同期で再取得対象になった。revision 1から2への更新に続く2回目の全件再取得であり、形式限定変更にglobal revisionを使った判断は過大だった。値は再度の不一致を避けるため3に維持し、今後は大規模な全Track移行またはcache読取障害で選択的migrationが不可能な場合を除いて上げない。codec／field限定修正は対象曲だけを更新する。詳細は[ADR-0008](decisions/ADR-0008-library-metadata-cache-migration.md)を正とする。ジャンル項目「ハイレゾ」による明示分類は従来どおり音源仕様より優先して利用できる。iPhone実機でのFLAC直接出力再生は未確認。
 - ジャンル表示設定では、対象曲が存在する「作業用BGM」と「ハイレゾ」を通常ジャンルと分けた固定の専用分類として表示する。両方とも常に有効で解除やプリセット変更の対象外とし、通常ジャンルの選択数には含めない。音源仕様から自動判定されたHi-Res音源も「ハイレゾ」固定分類の表示対象とする。
 - 目的はTea Proと192kHz／24bit ALACで、現行AVAudioEngineを迂回すると192kHz出力できるかだけを先に判定すること。queue、履歴、Now Playing、EQ、normalization、fade、Visualizer、background再生には未統合で、製品用backendではない。
 - generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功し、Vesperaへのbuild・install・launchも成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
@@ -99,11 +105,18 @@ updated: 2026-09-24
 
 - ホームのタイトルをインライン表示にし、同じ行の右側へ「今日 N回 · X分／X時間Y分」を囲いのない小さなテキストで表示する。回数はローカル日付で記録した再生開始回数、時間は同日に開始して終了済みの再生イベントの実聴秒数を合算する。再生開始・終了と日付変更で更新するため、再生中セッションの時間は終了時に反映される。
 
+### マイミュージックの空タイル非表示
+
+- ホームの「マイミュージック」では、ハイライト、あとで聴く、最近追加、未発見、リピート、お気に入り系、最近再生など、対象曲が0件のタイルを表示しない。ライブラリやアクティビティの固定導線にはこの条件を適用しない。「選択してランダム再生」は、実際に起点として選べるジャンル付き対象曲の有無で判定する。
+- 既存のHome performance snapshotが算出するDestination別の対象曲有無を表示条件にも再利用し、SwiftUIの再描画に伴う追加の全Library走査は行わない。
+
 ### MIX Beta
 
-- ホームのプレイリスト直下にMIXを追加。Daily Mix、Rediscovery Mix、My Favorites Mixの3種類はタップで一時キューを先頭から即再生し、先頭曲のアートワークを表示する。画像のない先頭曲は既定のグラデーションを表示する。Deep DiveはArtist／Albumを選んでから候補を選び、低再生曲の一時キューを開始する。
+- ホームのマイミュージック直下にMIX、その下にプレイリストを表示する。Daily Mix、Rediscovery Mix、My Favorites Mix、Flow Mix、Time Capsuleの5種類はタップで一時キューを先頭から即再生する。Daily、My Favorites、Flow、Time Capsuleはローカル同梱の専用抽象画を表示し、Rediscoveryは先頭曲のアートワークまたは既定グラデーションを表示する。Deep DiveはArtist／Albumを選んでから候補を選び、低再生曲の一時キューを開始する。Deep DiveとMood Mixの選択タイルにも専用抽象画を表示する。
 - DailyはMy Favoritesの先頭25曲をいったん避け、最近30日に聴いた曲、再生0〜1回の曲、60日以上聴いていない再生実績のある曲、Favorite／Goodを交互に採る。25曲に足りない場合は通常候補、最後に避けたFavorite／Goodから補充する。Rediscoveryは累計3回以上かつ最終再生が60日以上前の曲、My FavoritesはFavoriteまたはGoodが正の曲を対象とする。各キューは最大25曲で、同じローカル日付・データなら順序が安定する。
-- 通常シャッフルと同じ短い曲・作業用BGM・非表示曲の除外とPreference／Overplay重みを適用する。Rediscoveryは対象曲がない場合タイルを非表示にし、ほかの該当曲がないMIXはタイルを無効化する。実際のユーザーデータでの選曲と見た目は未確認。
+- Flow Mixは特徴量を2軸以上共有する解析済み曲が3曲以上ある場合、最終再生が最も新しい曲を起点にする。Energy／Calm／Ambient等11軸の共通値による距離、直近3曲のArtist／Album反復回避、Preference／Overplay基本順位を使い、音響的に近い曲へ最大25曲を順につなぐ。
+- Time Capsuleは1〜3年前の同日±45日に再生した曲から、直近60日に聴いた曲を除外し、記念日に近い順とPreference／Overplay基本順位で最大25曲を構成する。古いeventがない場合はfirst／last played dateを互換fallbackに使う。
+- 通常シャッフルと同じ短い曲・作業用BGM・非表示曲の除外とPreference／Overplay重みを適用する。Rediscovery、Flow、Time Capsuleは対象曲がない場合タイルを非表示にし、ほかの該当曲がないMIXはタイルを無効化する。実際のユーザーデータでの選曲と見た目は未確認。
 - Deep Diveは直近30日の再生開始が合計15回以上あり、累計再生0〜1回の曲を持つArtist／Albumを対象にする。タイルを開くたび対象から最大8候補をランダム表示し、選んだ候補の低再生曲を最大25曲、未再生優先で再生する。AlbumはタイトルとAlbum Artist（なければTrack Artist）の組で区別する。候補がない場合は説明を表示する。実ライブラリでの候補分布とUIは未確認。
 - Mood MixはCalm／Energy／Ambient／Electronicを選ぶと、その特徴がライブラリ内で相対的に高い曲の一時キューを最大25曲で即再生する。Mood Stationと同じ特徴量の有効範囲・percentile・Overplay・Artist分散を使い、該当曲がない選択肢は無効表示する。実ライブラリでの選曲とUIは未確認。
 
@@ -136,6 +149,8 @@ updated: 2026-09-24
 - 設定の「データ管理」からFiles / iCloud Driveのユーザー選択フォルダを保存先として登録し、security-scoped bookmarkで次回起動後も利用できる。外部には`MyMusic Backup/latest`と`previous`の2世代だけを保持する。
 - 再生履歴SQLite（Playback Events、boredom、soft deleteを含む）、Track Preference、Playlist、Track Identity、Track Features、曲別再生位置・start/end・音量調整、Libraryお気に入り、Highlight、選択したEQ／transition／volume normalization／Genre・表示設定を保存する。音源、Artwork、library cache、音楽フォルダbookmark、内部破損対策Backupは含めない。
 - SQLite online backupはアプリのローカル一時領域で作成し、単体snapshotをWALからDELETE journalへ正規化・検証してから通常ファイルとして外部へcopyするため、File Provider上ではSQLiteを直接開かない。一時的なDB lockは最大5秒retryする。staging検証、manifest、JSON／plist／SQLite integrity／Track ID検証を行い、成功時だけlatest/previousをrotationする。Restoreも検証済みpendingへ一旦配置し、次回起動時にStoreやSQLiteを開く前だけ正本とatomicに入れ替える。失敗時は現データへrollbackする。
+- バックアップschema v2は全payloadのSHA-256をmanifestへ記録し、同じbyte数の破損や置換もRestore前に拒否する。schema v1の旧バックアップは引き続き読み込める。Playback SQLiteはevent IDの空値・重複と`iOS`／`macOS`以外のplatformをsnapshot作成時とRestore検証時に拒否する。
+- 旧schema互換、同一byte数改変、Playback Event不変、重複event ID拒否を含む外部バックアップ対象test 11件と、埋め込みWatch Appを含むgeneric iOS Simulator Debug buildが成功した。
 - Restore後は音楽フォルダを再選択する。復元したIdentity registryと再scanによりStable Track IDを再利用し、不一致データを別曲へ推測接続しない。詳細は[App外バックアップ v1](Documentation/ExternalBackup.md)を参照する。
 
 ### Apple Watch リモコン MVP
@@ -182,6 +197,7 @@ updated: 2026-09-24
 - Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を通常2列・広い画面4列・狭い画面1列で表示し、種類別にも切り替えられる。
 - Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
+- Local／Desktop版Analyticsにジャンルプリセット管理画面を追加した。順序付き専用SQLite tableを編集済み正本、`source_records`をImport原本provenanceとして分離し、一覧・作成・編集・削除・並べ替え・厳密なversion 1 JSON Import／Exportを提供する。同名merge、ID衝突時のUUID再発行、旧未分類設定、Libraryにないジャンルの保持はiPhone契約に合わせ、MacからiPhoneのApplication Supportへ直接書き込まない。
 - AnalyticsのImport画面から、確認ダイアログを経てSQLite内の全取込データとImport履歴を一括クリアできる。schemaと保存済み原本JSONは保持し、直後から再Importできる。
 - AnalyticsのTrack FeaturesはTrack ID完全一致を優先し、Library入力にoptionalの`relativePath`／`fileSize`がある場合だけ、本体と同じpath・file size・duration（0.5秒許容）・metadata条件で一意候補を救済する。identity不足・曖昧候補は未紐付けを維持し、Library／Featuresの再Import時に再解決する。
 - Analyticsの音楽特徴量tableはImport済み全Track Featuresの実在keyから列を構成する。既知keyは音響・Semantic・音量の順と単位付き表示を使い、曲ごとの欠損は0ではなくデータなし、未知keyは末尾の列として保持する。
@@ -229,7 +245,10 @@ updated: 2026-09-24
 - **Track Preference責務分離**: 曲Favoriteと`playbackPreference`の正本を`TrackPreferenceStore`／`Application Support/MyMusic/track-preferences.json`（schema v2）へ移した。初回は旧Playback Historyの値をatomic保存・read-back検証して移行し、以後UI、検索、選曲、分析、ExportはPreferenceを参照する。旧History field／SQLite列は後方互換migration用に残す。Preference Exportは`trackId`、`playbackPreference`、`favorite`を含むschema v2とする。
 - **Track Preference手動双方向連携**: アプリは同じschema v2 Preference JSONを厳格に全体検証し、現在LibraryにあるTrackだけをmerge保存してからStoreへ反映する。未知field、UUID不正、重複、範囲外、不正構造は全件拒否し、未収録Trackは既存値を変えずskipする。AnalyticsはImport済みPreferenceだけを編集し、現在Libraryと照合できる有効UUIDだけを同契約でExportする。
 
-- **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、Preferenceだけは厳格検証付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。解析データのiOS再Importは対象外。
+- **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、PreferenceとPlayback Eventsは厳格検証・Preview付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。音量・特徴量JSONのiOS再Importは対象外。
+- **Library共通relativePath**: `MyMusic-Library.json`は利用者が選択した音楽ルート以下の`relativePath`と`fileSize`を出力する。iCloud containerまでの絶対pathやFile Provider固有prefixは含めず、HomeStereoがMyMusic `trackID`を既存曲へ関連付ける照合キーとして使用する。
+- **Playlist分割書き出し**: 完全同期用の`MyMusic-Playlists.json`は通常／作業用を含む全Library Trackから参照を解決する。追加の`MyMusic-Regular-Playlists.json`は通常Playlistと非作業用genre曲だけ、`MyMusic-Work-Playlists.json`は作業用Playlistとgenreに「作業用BGM」を持つ曲だけを出力する。20分以上などのduration条件は分類に使わない。Analytics ZIPは従来どおり完全snapshotの統合版だけを含む。
+- **HomeStereo再生イベント手動Import**: 設定の「データ管理」→「再生データ」からschema v1の`MyMusic-Playback-Events.json`を選び、未知field、必須field、UUID、日時、有限な再生時間、enum、文書内event ID重複、`completed == (playDuration >= max(3, trackDuration × 0.94))`を全件検証してPreviewする。確認後だけ現在Libraryに解決できる新規event IDをSQLite schema v4の1 transactionへ保存し、集計を更新する。未解決Trackは作らず、既存event IDはイベント・集計とも変更しない。旧rowはiOS、ImportしたHomeStereo eventはmacOSを保持し、再Exportにも保存済みplatformを使用する。
 - **Analytics用JSON書き出し導線**: 設定の「データ管理」から、PC版Analyticsが対応する8種類の既存JSONを個別共有できるほか、8ファイルを日付付きZIPへまとめて共有・Files保存できる。オンライン同期や自動送信は行わない。
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を件数上限なく逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。専用タグ管理画面では全Playlistを横断して名称変更・削除・割り当てを行う。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
@@ -248,7 +267,7 @@ updated: 2026-09-24
 - **Behavior Scoring M3**: 保存済み日別集計から直近7日対過去56日のOverplayと、直近30日対それ以前の完走率によるPreference Driftを都度導出する。Good / Bad重みは専用Policyの-10〜+10テーブルへ分離し、設定の「再生傾向」で候補を確認できる。スコアは保存せず、評価・飽き度・恒久非表示を自動変更しない。選曲補正はM4対象。
 - **Selection Integration M4**: Overplayを保存済み日別集計から選曲処理ごとに導出し、通常の自動shuffle系とMood Station rankingへ、軽度では影響が小さく最大時は通常の1/8となる一時補正を適用する。手動選択、未再生Discovery、作業用再生には適用せず、Preference Drift、Good / Bad、Boredom、永続データを変更しない。計算式と適用範囲の正本は[ARCHITECTURE.md](ARCHITECTURE.md#再生履歴行動スコアと自動選曲)とする。
 - **クイック再生の再生回数補正 Beta**: お気に入り／その他の1:1構成を保ち、各群の候補を重み付きで選ぶ。累計再生回数が3〜5回なら0.7倍、6〜9回なら0.4倍、10回以上なら0.1倍とし、短期Overplay補正との二重掛けを避ける。お気に入りは直近から必要数の3倍まで候補を広げる。
-- **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。シャッフル／アガる／穏やか／発掘の4モードを持つ。方向性のあるモードは適合度帯を第一条件とし、帯内で通常shuffleのPreference × Overplayと直近Highlight減衰を使う。Randomは帯内scoreの±0.5%だけで、30秒未満のベリーショート曲、Boredom中／永久shuffle非表示の曲は全モードから除外する。ベリーショート曲のライブラリ表示と手動再生は維持する。
+- **ハイライト再生**: 約30秒の候補区間、縦 paging、先読み cache、反応による傾向調整。シャッフル／未再生／アガる／穏やか／発掘の5モードを持ち、未再生は再生回数0の曲だけを対象にする。方向性のあるモードは適合度帯を第一条件とし、帯内で通常shuffleのPreference × Overplayと直近Highlight減衰を使う。Randomは帯内scoreの±0.5%だけで、30秒未満のベリーショート曲、Boredom中／永久shuffle非表示の曲は全モードから除外する。ベリーショート曲のライブラリ表示と手動再生は維持する。
 - **作業用BGM再生**: ジャンルに「作業用BGM」が明示された曲を通常ライブラリと通常ランダム再生から分離し、専用 player / playlist を提供する。再生時間は分類に使わない。ホームの入口から曲名、アルバム、アーティスト、アルバムアーティスト、プレイリスト別の専用一覧へ進み、各一覧を検索できる。ホームではこの入口を先頭に、最大10件の作業用プレイリストを表示し、残りがある場合は12枠目を「続きを見る」とする。
 - **通常ランダム再生のベリーショート除外**: 30秒未満の曲を通常shuffle、Quick Play、Favorite系shuffle、Repeat、Discovery、最近追加、Selective／Genre Random、Mood Stationから除外する。30秒ちょうどの曲は候補に含め、ライブラリ表示、検索、通常Playlist、手動選択・順再生は変更しない。
 - **選択してランダム再生**: 最初の候補曲と共通ジャンルを起点に queue を作成。

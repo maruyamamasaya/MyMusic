@@ -220,6 +220,37 @@ final class HighlightSelectionPolicyTests: XCTestCase {
         XCTAssertEqual(queue.first?.id, unplayed.id)
     }
 
+    func testUnplayedModeExcludesTracksWithPlaybackCount() {
+        let unplayed = track("Unplayed")
+        let played = track("Played")
+        let histories = [played.id: history(played.id, playCount: 1)]
+
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [played, unplayed], mode: .unplayed,
+            baseWeights: [played.id: 42, unplayed.id: 0.01],
+            histories: histories, features: [:],
+            randomValues: [played.id: 1, unplayed.id: 0]
+        )
+
+        XCTAssertEqual(queue.map(\.id), [unplayed.id])
+    }
+
+    func testUnplayedModeReturnsEmptyWhenEveryTrackHasBeenPlayed() {
+        let first = track("First")
+        let second = track("Second")
+        let histories = [
+            first.id: history(first.id, playCount: 1),
+            second.id: history(second.id, playCount: 2)
+        ]
+
+        let queue = HighlightSelectionPolicy.orderedTracks(
+            [first, second], mode: .unplayed,
+            baseWeights: [:], histories: histories, features: [:]
+        )
+
+        XCTAssertTrue(queue.isEmpty)
+    }
+
     func testFinalWeightsLayerRecentAndModeFactorsWithoutDroppingTracks() {
         let recent = track("Recent")
         let ordinary = track("Ordinary")

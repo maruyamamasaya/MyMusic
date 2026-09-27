@@ -32,6 +32,11 @@ nonisolated enum PlaybackEndKind: String, Codable, CaseIterable, Sendable {
     case other
 }
 
+nonisolated enum PlaybackPlatform: String, Codable, CaseIterable, Sendable {
+    case iOS
+    case macOS
+}
+
 nonisolated struct PlaybackStartContext: Codable, Hashable, Sendable {
     var kind: PlaybackStartKind
     var source: PlaybackStartSource
@@ -53,6 +58,8 @@ nonisolated struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
     let startSource: PlaybackStartSource
     /// Nil identifies an event written before precise end-reason tracking.
     let endKind: PlaybackEndKind?
+    /// Events written before platform tracking are iPhone events.
+    let platform: PlaybackPlatform
 
     var isEarlySkip: Bool { wasSkipped && listenedSeconds <= 30 }
 
@@ -67,7 +74,8 @@ nonisolated struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
         wasFullPlayback: Bool,
         startKind: PlaybackStartKind,
         startSource: PlaybackStartSource,
-        endKind: PlaybackEndKind? = nil
+        endKind: PlaybackEndKind? = nil,
+        platform: PlaybackPlatform = .iOS
     ) {
         self.id = id
         self.trackID = trackID
@@ -80,6 +88,46 @@ nonisolated struct PlaybackEvent: Codable, Hashable, Identifiable, Sendable {
         self.startKind = startKind
         self.startSource = startSource
         self.endKind = endKind
+        self.platform = platform
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, trackID, startedAt, endedAt, listenedSeconds, completionRatio
+        case wasSkipped, wasFullPlayback, startKind, startSource, endKind, platform
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            trackID: try container.decode(Track.ID.self, forKey: .trackID),
+            startedAt: try container.decode(Date.self, forKey: .startedAt),
+            endedAt: try container.decode(Date.self, forKey: .endedAt),
+            listenedSeconds: try container.decode(TimeInterval.self, forKey: .listenedSeconds),
+            completionRatio: try container.decode(Double.self, forKey: .completionRatio),
+            wasSkipped: try container.decode(Bool.self, forKey: .wasSkipped),
+            wasFullPlayback: try container.decode(Bool.self, forKey: .wasFullPlayback),
+            startKind: try container.decode(PlaybackStartKind.self, forKey: .startKind),
+            startSource: try container.decode(PlaybackStartSource.self, forKey: .startSource),
+            endKind: try container.decodeIfPresent(PlaybackEndKind.self, forKey: .endKind),
+            platform: try container.decodeIfPresent(PlaybackPlatform.self, forKey: .platform) ?? .iOS
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(trackID, forKey: .trackID)
+        try container.encode(startedAt, forKey: .startedAt)
+        try container.encode(endedAt, forKey: .endedAt)
+        try container.encode(listenedSeconds, forKey: .listenedSeconds)
+        try container.encode(completionRatio, forKey: .completionRatio)
+        try container.encode(wasSkipped, forKey: .wasSkipped)
+        try container.encode(wasFullPlayback, forKey: .wasFullPlayback)
+        try container.encode(startKind, forKey: .startKind)
+        try container.encode(startSource, forKey: .startSource)
+        try container.encodeIfPresent(endKind, forKey: .endKind)
+        try container.encode(platform, forKey: .platform)
     }
 }
 
