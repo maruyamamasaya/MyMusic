@@ -236,6 +236,26 @@ struct PlaybackEventImportService {
         )
     }
 
+    func filtered(
+        _ document: PlaybackEventImportDocument,
+        from startDate: Date,
+        through endDate: Date,
+        calendar: Calendar = .current
+    ) -> PlaybackEventImportDocument {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        guard start <= end,
+              let endExclusive = calendar.date(byAdding: .day, value: 1, to: end) else {
+            return PlaybackEventImportDocument(exportedAt: document.exportedAt, events: [])
+        }
+        return PlaybackEventImportDocument(
+            exportedAt: document.exportedAt,
+            events: document.events.filter {
+                $0.event.startedAt >= start && $0.event.startedAt < endExclusive
+            }
+        )
+    }
+
     private func validateKeys(data: Data) throws {
         let object: Any
         do { object = try JSONSerialization.jsonObject(with: data) }

@@ -29,7 +29,12 @@
 }
 
 .favorite-editor.active { color: var(--accent); }
-.preference-editor { padding: 7px 9px; }
+.preference-editor { display: inline-flex; align-items: center; overflow: hidden; }
+.preference-editor output { min-width: 32px; text-align: center; font-variant-numeric: tabular-nums; }
+.preference-adjust { width: 28px; min-height: 30px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 18px; cursor: pointer; }
+.preference-adjust.good { color: var(--good); }
+.preference-adjust.bad { color: var(--warn); }
+.preference-adjust:disabled { opacity: .3; cursor: default; }
 
 @media (max-width: 600px) {
   .toolbar { align-items: stretch; flex-direction: column; }

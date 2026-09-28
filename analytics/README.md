@@ -74,6 +74,7 @@ chmod +x build-macos.sh
 ```
 
 出力は`dist/MyMusic Analytics.app`です。現在のBetaビルドは未署名・未Notarizeです。別のMacへ一般配布する場合はDeveloper ID署名とNotarizationを別途構成してください。Windows版もコード署名とinstaller作成は今後の配布工程です。
+macOS buildにはPython 3.10〜3.13を使います。複数versionがある場合は3.13から順に自動選択し、明示する場合は`PYTHON_BIN=/path/to/python3.12 ./build-macos.sh`を使います。固定中のPydantic依存が対応するまではPython 3.14をpackagingに使いません。
 
 `dist/`、`release/`、`out/`以下のPortable版・installer・アプリbundleなど、生成した配布物はGit管理しません。公開する配布物はGitHub Releasesへ添付し、リポジトリではソースコード、依存定義、build script、packaging設定だけを管理します。
 
@@ -147,13 +148,15 @@ Track FeaturesはTrack ID単位でmergeし、部分JSONにない既存特徴量�
 
 Data Sourcesの音楽特徴量tableは、Import済みTrack Features全件の`features`に実在するkeyを列として表示します。既知keyはTEMPO／ENERGY、Semantic特徴、音量特徴の順に並べ、BPM・LUFS・dBTP・dBの単位を付けます。曲ごとに存在しないkeyは`—`とし、未知keyも既知列の後ろへ表示するため、Analyzerが追加した値を捨てません。
 
-Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
+Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。Goodは1回につき+1、Badは1回につき-1とし、上限／下限では該当ボタンを無効化します。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
 
 ### ジャンル表示プリセット管理
 
 左ナビゲーションの「ジャンルプリセット」では、プリセットの作成・編集・削除・並べ替えと、`MyMusic-Genre-Display-Presets.json`の読み込み・書き出しができます。編集候補は現在Libraryのジャンルから導出し、Import済みでLibraryにないジャンルも失わずに再書き出します。「作業用BGM」と「ハイレゾ」はiPhoneの固定分類なので通常ジャンルの選択肢には含めません。
+
+Tracks画面上部にもプリセットをタグとして表示します。「すべて」または1件のプリセットを選ぶと、iPhoneと同じ通常ジャンル、未分類設定、固定分類（作業用BGM／ハイレゾ）でLibrary曲を絞り込みます。曲名・Artist・Album・Genreの手動条件とはANDで組み合わせます。
 
 編集済みの正本は順序付き`genre_display_presets` table、Import原本と履歴は`source_records`／`import_runs`に分離して保持します。旧版Analyticsで`source_records`に取り込み済みの有効なプリセットは、初回起動時に一度だけ安全にbackfillします。Importは文書全体を検証した後、同名を既存IDのまま更新し、新しい名前だけを末尾へ追加します。JSONにない既存プリセットは削除しません。
 
@@ -181,7 +184,7 @@ SQLiteは`data/analytics.sqlite3`です。WALを使用し、日時・Track・Art
 - Music History: JSTの月ごとの再生回数・再生時間・その月の代表曲・代表Artistを新しい月からタイムライン表示し、30か月ずつ展開。月カードは1件だけインライン展開し、日別グラフと日付別再生曲、曲／Artist／Album／Genreランキング、月間指標と前月比の振り返りをタブで表示
 - Insights: 「おすすめ」「最近の変化」「時間帯・好み」「再生行動」のタブに分け、再生入口、選択種別、音楽特徴の5段階比較に加え、最近ハマった／飽きてきた／新しい好み／再発見、JST時間帯×特徴、Artist／Album／Genreの変化、Listening Profileを表示する。時間帯・好み内の行形式一覧は共通定義で初期30件、30件ずつ展開する。再生行動の各表は共通の列ソート定義により、見出しから昇順／降順を切り替えられる。現在の好み・評価・完走実績とOverplay減点によるおすすめ、再発見、好みに近い未再生・低再生曲、最大5件の自動Insightカードも提供する。「分析可能データのみ」（既定）と「すべて」の品質フィルターを期間指定と併用可能
 - Rankings: 今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲／Artist／Album／Genreの4ランキングを同時表示する。フィルターは単独・併用でき、各列は上位50件を初期30件から30件ずつ展開
-- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・Early Skip回数・率・最終再生日時、項目別AND検索、全表示列の全件基準ソート、30件ページング、Import済みPreferenceの編集と手動Export
+- Tracks: 未再生曲を含むLibrary、Good／Bad、お気に入り、曲metadata、期間別の再生回数・総再生時間・完走率・Skip率・Early Skip回数・率・最終再生日時、ジャンルプリセットタグと項目別AND検索、全表示列の全件基準ソート、30件ページング、Import済みPreferenceの±1編集と手動Export
 - Data Sources: 特徴量、音量、プレイリスト、EQ、ジャンルプリセットのImport原本に加え、Libraryから自動導出したジャンル一覧をタブ別に表示。ジャンルはiOSアプリと同様に`;`／NULで分割し、空白・空要素・曲内重複を除いて集計する。表示列ごとの全件基準ソートと30件ページングを行い、曲単位データはLibraryとのTrack ID照合状況も表示
 - ジャンルプリセット: iPhone互換プリセットの一覧・作成・編集・削除・並べ替え・JSON Import／Export。Library外ジャンルと旧未分類設定も保持
 - Import履歴: 全列を昇順／降順でソートでき、初期30件から30件ずつ展開

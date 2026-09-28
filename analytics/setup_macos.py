@@ -8,7 +8,10 @@ setup(
         "py2app": {
             "argv_emulation": False,
             "resources": ["web"],
-            "packages": ["app", "importer", "fastapi", "uvicorn", "multipart", "pydantic"],
+            "packages": [
+                "app", "importer", "fastapi", "starlette", "uvicorn", "anyio",
+                "h11", "multipart", "pydantic",
+            ],
             "plist": {
                 "CFBundleDisplayName": "MyMusic Analytics",
                 "CFBundleName": "MyMusic Analytics",

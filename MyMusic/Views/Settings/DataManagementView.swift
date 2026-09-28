@@ -2,6 +2,127 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct DataManagementView: View {
+    var body: some View {
+        List {
+            Section {
+                NavigationLink {
+                    ExternalBackupView()
+                } label: {
+                    DataManagementLinkLabel(
+                        title: "App外バックアップ",
+                        description: "重要データをFilesまたはiCloud Driveへ保存・復元",
+                        systemImage: "externaldrive.badge.icloud"
+                    )
+                }
+
+                NavigationLink {
+                    AnalyticsDataExportView()
+                } label: {
+                    DataManagementLinkLabel(
+                        title: "Analyticsと同期",
+                        description: "ローカル分析で使うデータをまとめて書き出す",
+                        systemImage: "arrow.up.doc"
+                    )
+                }
+            } header: {
+                Text("保護と同期")
+            }
+
+            Section {
+                detailLink(
+                    .library,
+                    description: "ライブラリ一覧とTrack識別情報"
+                )
+                detailLink(
+                    .playlists,
+                    description: "通常・作業用プレイリスト"
+                )
+                detailLink(
+                    .playback,
+                    description: "再生履歴・イベント・再生傾向"
+                )
+                detailLink(
+                    .analysis,
+                    description: "音量ノーマライズと音楽特徴量"
+                )
+                detailLink(
+                    .settings,
+                    description: "イコライザーとジャンルプリセット"
+                )
+            } header: {
+                Text("読み込み・書き出し")
+            } footer: {
+                Text("扱うデータの種類を選ぶと、利用できる読み込み・書き出し操作を確認できます。")
+            }
+        }
+        .themeScreen()
+        .navigationTitle("データ管理")
+    }
+
+    private func detailLink(
+        _ category: DataManagementCategory,
+        description: String
+    ) -> some View {
+        NavigationLink {
+            DataManagementDetailView(category: category)
+        } label: {
+            DataManagementLinkLabel(
+                title: category.title,
+                description: description,
+                systemImage: category.systemImage
+            )
+        }
+    }
+}
+
+private struct DataManagementLinkLabel: View {
+    let title: String
+    let description: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+        }
+    }
+}
+
+private enum DataManagementCategory {
+    case library
+    case playlists
+    case playback
+    case analysis
+    case settings
+
+    var title: String {
+        switch self {
+        case .library: "ライブラリとTrack識別"
+        case .playlists: "プレイリスト"
+        case .playback: "再生データ"
+        case .analysis: "解析データ"
+        case .settings: "設定とプリセット"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .library: "music.note.house"
+        case .playlists: "music.note.list"
+        case .playback: "clock.arrow.circlepath"
+        case .analysis: "waveform.path.ecg"
+        case .settings: "slider.horizontal.3"
+        }
+    }
+}
+
+private struct DataManagementDetailView: View {
     private enum ImportTarget {
         case playlist
         case playbackPreferences
@@ -33,145 +154,29 @@ struct DataManagementView: View {
 
     private let exporter = MusicDataExportService()
 
+    let category: DataManagementCategory
+
     var body: some View {
         List {
-            Section {
-                NavigationLink {
-                    ExternalBackupView()
-                } label: {
-                    Label("App外バックアップ", systemImage: "externaldrive.badge.icloud")
-                }
-            } footer: {
-                Text("アンインストールに備えて、重要データをFilesまたはiCloud Driveへ2世代保存します。")
-            }
-            Section {
-                NavigationLink {
-                    AnalyticsDataExportView()
-                } label: {
-                    Label("Analyticsと同期", systemImage: "arrow.up.doc")
-                }
-            }
-            Section("Track識別") {
-                NavigationLink {
-                    TrackFingerprintBuildView()
-                } label: {
-                    Label("Fingerprintを作成", systemImage: "waveform.badge.magnifyingglass")
-                }
-            }
-            Section("ライブラリ") {
-                exportLink("ライブラリをMarkdownで書き出す", systemImage: "doc.plaintext",
-                    file: exporter.libraryMarkdown(
-                        tracks: libraryStore.tracks, history: historyStore.entries,
-                        preferences: preferenceStore.entries
-                    ))
-                throwingExportLink("ライブラリをJSONで書き出す", systemImage: "curlybraces") {
-                    try exporter.libraryJSON(
-                        tracks: libraryStore.unfilteredTracks,
-                        history: historyStore.entries,
-                        preferences: preferenceStore.entries,
-                        fingerprints: libraryFingerprints
-                    )
-                }
-            }
-            Section {
-                throwingExportLink("全プレイリストを書き出す", systemImage: "square.and.arrow.up") {
-                    try exporter.allPlaylistsJSON(
-                        playlistStore.playlists,
-                        tracks: libraryStore.unfilteredTracks
-                    )
-                }
-                throwingExportLink("通常プレイリストを書き出す", systemImage: "music.note.list") {
-                    try exporter.playlistsJSON(
-                        playlistStore.playlists,
-                        kind: .regular,
-                        tracks: libraryStore.unfilteredTracks
-                    )
-                }
-                throwingExportLink("作業用プレイリストを書き出す", systemImage: "timer") {
-                    try exporter.playlistsJSON(
-                        playlistStore.playlists,
-                        kind: .work,
-                        tracks: libraryStore.unfilteredTracks
-                    )
-                }
-                Button("プレイリストを読み込む", systemImage: "square.and.arrow.down") {
-                    presentImporter(for: .playlist)
-                }
-            } header: {
-                Text("プレイリスト")
-            } footer: {
-                Text("全プレイリストは完全な同期用です。通常用と作業用は用途別に分けて共有できます。")
-            }
-            Section("再生データ") {
-                NavigationLink {
-                    PlaybackEventImportView()
-                } label: {
-                    Label("再生イベントJSONを読み込む", systemImage: "square.and.arrow.down")
-                }
-                throwingExportLink("再生履歴を書き出す", systemImage: "clock.arrow.circlepath") {
-                    try exporter.playbackHistoryJSON(
-                        historyStore.entries, preferences: preferenceStore.entries
-                    )
-                }
-                throwingExportLink("Analytics用再生イベントを書き出す", systemImage: "chart.bar.doc.horizontal") {
-                    try exporter.playbackEventsJSON(
-                        historyStore.entries,
-                        tracks: libraryStore.unfilteredTracks
-                    )
-                }
-                throwingExportLink("再生傾向を書き出す", systemImage: "hand.thumbsup") {
-                    try exporter.playbackPreferencesJSON(preferenceStore.entries)
-                }
-                Button("再生傾向を読み込む", systemImage: "square.and.arrow.down") {
-                    presentImporter(for: .playbackPreferences)
-                }
-            }
-            Section {
-                throwingExportLink("音量ノーマライズを書き出す", systemImage: "waveform.badge.magnifyingglass") {
-                    try exporter.volumeNormalizationJSON(
-                        featureStore.exportedFeatures,
-                        tracks: libraryStore.unfilteredTracks,
-                        isEnabled: settingsStore.volumeNormalizationEnabled
-                    )
-                }
-                throwingExportLink("音楽特徴量を書き出す", systemImage: "waveform.path.ecg") {
-                    try exporter.trackFeaturesJSON(
-                        featureStore.exportedFeatures,
-                        tracks: libraryStore.unfilteredTracks
-                    )
-                }
-            } header: {
-                Text("解析データ")
-            } footer: {
-                Text("音量ノーマライズは解析済みの曲だけを、音楽特徴量は保存済みの全項目を書き出します。音源ファイルは含みません。")
-            }
-            Section {
-                throwingExportLink("イコライザーを書き出す", systemImage: "slider.horizontal.3") {
-                    try exporter.equalizerJSON(
-                        settings: settingsStore.equalizer,
-                        customPresets: settingsStore.customEqualizerPresets
-                    )
-                }
-                Button("イコライザーを読み込む", systemImage: "square.and.arrow.down") {
-                    presentImporter(for: .equalizer)
-                }
-                throwingExportLink("ジャンルプリセットを書き出す", systemImage: "list.bullet.rectangle.portrait") {
-                    try exporter.genreDisplayPresetsJSON(libraryStore.genreDisplayPresets)
-                }
-                Button("ジャンルプリセットを読み込む", systemImage: "square.and.arrow.down") {
-                    presentImporter(for: .genreDisplayPresets)
-                }
-            } header: {
-                Text("設定とプリセット")
-            } footer: {
-                Text("読み込み時、同名のプリセットは更新し、それ以外は追加します。現在のイコライザー設定は読み込んだ内容へ切り替わります。")
+            switch category {
+            case .library:
+                librarySections
+            case .playlists:
+                playlistSections
+            case .playback:
+                playbackSections
+            case .analysis:
+                analysisSections
+            case .settings:
+                settingsSections
             }
         }
         .themeScreen()
-        .navigationTitle("データ管理")
+        .navigationTitle(category.title)
         .activityShareSheet(item: $shareItem)
-        .onAppear {
-            Task { libraryFingerprints = await libraryStore.trackFingerprintsForExport() }
+        .task {
+            guard category == .library else { return }
+            libraryFingerprints = await libraryStore.trackFingerprintsForExport()
         }
         .fileImporter(isPresented: $isImportingFile, allowedContentTypes: importTarget.allowedContentTypes) { result in
             switch importTarget {
@@ -191,6 +196,138 @@ struct DataManagementView: View {
         .alert("データエラー", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("閉じる") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    @ViewBuilder private var librarySections: some View {
+        Section("Track識別") {
+            NavigationLink {
+                TrackFingerprintBuildView()
+            } label: {
+                Label("Fingerprintを作成", systemImage: "waveform.badge.magnifyingglass")
+            }
+        }
+        Section("書き出し") {
+            exportLink("ライブラリをMarkdownで書き出す", systemImage: "doc.plaintext",
+                file: exporter.libraryMarkdown(
+                    tracks: libraryStore.tracks, history: historyStore.entries,
+                    preferences: preferenceStore.entries
+                ))
+            throwingExportLink("ライブラリをJSONで書き出す", systemImage: "curlybraces") {
+                try exporter.libraryJSON(
+                    tracks: libraryStore.unfilteredTracks,
+                    history: historyStore.entries,
+                    preferences: preferenceStore.entries,
+                    fingerprints: libraryFingerprints
+                )
+            }
+        }
+    }
+
+    @ViewBuilder private var playlistSections: some View {
+        Section {
+            throwingExportLink("全プレイリストを書き出す", systemImage: "square.and.arrow.up") {
+                try exporter.allPlaylistsJSON(
+                    playlistStore.playlists,
+                    tracks: libraryStore.unfilteredTracks
+                )
+            }
+            throwingExportLink("通常プレイリストを書き出す", systemImage: "music.note.list") {
+                try exporter.playlistsJSON(
+                    playlistStore.playlists,
+                    kind: .regular,
+                    tracks: libraryStore.unfilteredTracks
+                )
+            }
+            throwingExportLink("作業用プレイリストを書き出す", systemImage: "timer") {
+                try exporter.playlistsJSON(
+                    playlistStore.playlists,
+                    kind: .work,
+                    tracks: libraryStore.unfilteredTracks
+                )
+            }
+            Button("プレイリストを読み込む", systemImage: "square.and.arrow.down") {
+                presentImporter(for: .playlist)
+            }
+        } header: {
+            Text("プレイリスト")
+        } footer: {
+            Text("全プレイリストは完全な同期用です。通常用と作業用は用途別に分けて共有できます。")
+        }
+    }
+
+    @ViewBuilder private var playbackSections: some View {
+        Section("読み込み") {
+            NavigationLink {
+                PlaybackEventImportView()
+            } label: {
+                Label("再生イベントJSONを読み込む", systemImage: "square.and.arrow.down")
+            }
+            Button("再生傾向を読み込む", systemImage: "square.and.arrow.down") {
+                presentImporter(for: .playbackPreferences)
+            }
+        }
+        Section("書き出し") {
+            throwingExportLink("再生履歴を書き出す", systemImage: "clock.arrow.circlepath") {
+                try exporter.playbackHistoryJSON(
+                    historyStore.entries, preferences: preferenceStore.entries
+                )
+            }
+            throwingExportLink("Analytics用再生イベントを書き出す", systemImage: "chart.bar.doc.horizontal") {
+                try exporter.playbackEventsJSON(
+                    historyStore.entries,
+                    tracks: libraryStore.unfilteredTracks
+                )
+            }
+            throwingExportLink("再生傾向を書き出す", systemImage: "hand.thumbsup") {
+                try exporter.playbackPreferencesJSON(preferenceStore.entries)
+            }
+        }
+    }
+
+    @ViewBuilder private var analysisSections: some View {
+        Section {
+            throwingExportLink("音量ノーマライズを書き出す", systemImage: "waveform.badge.magnifyingglass") {
+                try exporter.volumeNormalizationJSON(
+                    featureStore.exportedFeatures,
+                    tracks: libraryStore.unfilteredTracks,
+                    isEnabled: settingsStore.volumeNormalizationEnabled
+                )
+            }
+            throwingExportLink("音楽特徴量を書き出す", systemImage: "waveform.path.ecg") {
+                try exporter.trackFeaturesJSON(
+                    featureStore.exportedFeatures,
+                    tracks: libraryStore.unfilteredTracks
+                )
+            }
+        } header: {
+            Text("解析データ")
+        } footer: {
+            Text("音量ノーマライズは解析済みの曲だけを、音楽特徴量は保存済みの全項目を書き出します。音源ファイルは含みません。")
+        }
+    }
+
+    @ViewBuilder private var settingsSections: some View {
+        Section {
+            throwingExportLink("イコライザーを書き出す", systemImage: "slider.horizontal.3") {
+                try exporter.equalizerJSON(
+                    settings: settingsStore.equalizer,
+                    customPresets: settingsStore.customEqualizerPresets
+                )
+            }
+            Button("イコライザーを読み込む", systemImage: "square.and.arrow.down") {
+                presentImporter(for: .equalizer)
+            }
+            throwingExportLink("ジャンルプリセットを書き出す", systemImage: "list.bullet.rectangle.portrait") {
+                try exporter.genreDisplayPresetsJSON(libraryStore.genreDisplayPresets)
+            }
+            Button("ジャンルプリセットを読み込む", systemImage: "square.and.arrow.down") {
+                presentImporter(for: .genreDisplayPresets)
+            }
+        } header: {
+            Text("設定とプリセット")
+        } footer: {
+            Text("読み込み時、同名のプリセットは更新し、それ以外は追加します。現在のイコライザー設定は読み込んだ内容へ切り替わります。")
+        }
     }
 
     private func presentImporter(for target: ImportTarget) {

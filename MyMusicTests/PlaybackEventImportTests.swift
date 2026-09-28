@@ -85,6 +85,48 @@ final class PlaybackEventImportTests: XCTestCase {
         XCTAssertEqual(events.first { $0["eventId"] as? String == "ios-existing" }?["platform"] as? String, "iOS")
     }
 
+    func testSelectedLocalDateRangeFiltersBeforePreviewAndImport() async throws {
+        let root = try temporaryDirectory()
+        let persistence = PlaybackHistoryPersistenceService(applicationDirectory: root)
+        let track = makeTrack(id: UUID(), title: "Date Range", duration: 100)
+        let historyStore = PlaybackHistoryStore(persistence: persistence)
+        await historyStore.loadIfNeeded()
+        let importStore = PlaybackEventImportStore()
+        let calendar = Calendar.current
+        let selectedDay = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2027, month: 1, day: 15))
+        )
+        let nextDay = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: selectedDay))
+        let formatter = ISO8601DateFormatter()
+        let data = playbackJSON(events: [
+            eventJSON(id: "before", trackID: track.id,
+                      playedAt: formatter.string(from: selectedDay.addingTimeInterval(-1)),
+                      playDuration: 50, trackDuration: 100, completed: false, skipped: false,
+                      source: "library", selection: "manual", platform: "macOS"),
+            eventJSON(id: "selected", trackID: track.id,
+                      playedAt: formatter.string(from: selectedDay.addingTimeInterval(12 * 60 * 60)),
+                      playDuration: 50, trackDuration: 100, completed: false, skipped: false,
+                      source: "library", selection: "manual", platform: "macOS"),
+            eventJSON(id: "after", trackID: track.id,
+                      playedAt: formatter.string(from: nextDay),
+                      playDuration: 50, trackDuration: 100, completed: false, skipped: false,
+                      source: "library", selection: "manual", platform: "macOS")
+        ])
+
+        importStore.prepare(data: data, history: [:], libraryTrackIDs: [track.id])
+        importStore.updatePeriod(from: selectedDay, through: selectedDay)
+
+        XCTAssertEqual(importStore.sourceEventCount, 3)
+        XCTAssertEqual(importStore.preview?.total, 1)
+        XCTAssertEqual(importStore.preview?.details.map(\.id), ["selected"])
+
+        await importStore.apply(to: historyStore)
+        XCTAssertEqual(importStore.result?.total, 1)
+        XCTAssertEqual(importStore.result?.inserted, 1)
+        let persisted = try await persistence.load()
+        XCTAssertEqual(persisted.first?.playbackEvents.map(\.id), ["selected"])
+    }
+
     func testAggregationUsesPlayThresholdKindsSourcesAndDailySummary() async throws {
         let root = try temporaryDirectory()
         let persistence = PlaybackHistoryPersistenceService(applicationDirectory: root)

@@ -1006,7 +1006,7 @@ class AnalyticsQueries:
     def tracks(
         self, period: str, search: str = "", start_date: str | None = None,
         end_date: str | None = None, title: str = "", artist: str = "",
-        album: str = "", genre: str = "", sort: str = "playCount",
+        album: str = "", genre: str = "", preset_id: str = "", sort: str = "playCount",
         order: str = "desc", page: int = 1, page_size: int = 30,
     ) -> dict[str, Any]:
         event_where, params = _period_where(period, start_date, end_date)
@@ -1030,8 +1030,59 @@ class AnalyticsQueries:
         search_where = "WHERE " + " AND ".join(search_conditions) if search_conditions else ""
         sort_column, sort_order = TRACK_SORT_COLUMNS[sort], order.upper()
         with self.database.connect() as connection:
+            preset = None
+            preset_genres: list[str] = []
+            includes_unassigned = False
+            if preset_id:
+                try:
+                    canonical_preset_id = str(UUID(preset_id))
+                except ValueError as exc:
+                    raise ValueError("presetId must be a UUID") from exc
+                preset = connection.execute(
+                    """SELECT id,name,enabled_genre_names,includes_unassigned_genre_setting
+                       FROM genre_display_presets WHERE id=?""",
+                    (canonical_preset_id,),
+                ).fetchone()
+                if preset is None:
+                    raise LookupError("ジャンルプリセットが見つかりません。")
+                stored_genres = json.loads(preset["enabled_genre_names"])
+                includes_unassigned = (
+                    preset["includes_unassigned_genre_setting"] != 1
+                    or "maruyama.MyMusic.genre.unassigned" in stored_genres
+                )
+                preset_genres = [
+                    value for value in stored_genres
+                    if value != "maruyama.MyMusic.genre.unassigned"
+                ]
+                preset_genres.extend(
+                    value for value in ("作業用BGM", "ハイレゾ")
+                    if value not in preset_genres
+                )
+                preset_conditions = []
+                if preset_genres:
+                    placeholders = ",".join("?" for _ in preset_genres)
+                    preset_conditions.append(
+                        "EXISTS (SELECT 1 FROM track_genres preset_genre "
+                        "WHERE preset_genre.track_id=c.track_id "
+                        f"AND preset_genre.genre COLLATE NOCASE IN ({placeholders}))"
+                    )
+                    params.extend(preset_genres)
+                if includes_unassigned:
+                    preset_conditions.append(
+                        "NOT EXISTS (SELECT 1 FROM track_genres preset_genre "
+                        "WHERE preset_genre.track_id=c.track_id)"
+                    )
+                search_conditions.append(
+                    "c.in_library=1 AND (" + (
+                        " OR ".join(preset_conditions) if preset_conditions else "0"
+                    ) + ")"
+                )
+                search_where = "WHERE " + " AND ".join(search_conditions)
+            with_clause = (
+                f"WITH RECURSIVE {GENRE_PARTS_CTE}," if preset_id else "WITH"
+            )
             rows = connection.execute(
-                f"""WITH filtered_events AS (
+                f"""{with_clause} filtered_events AS (
                         SELECT * FROM playback_events {event_where}
                     ), event_stats AS (
                         SELECT track_id, COUNT(*) play_count,
@@ -1092,7 +1143,13 @@ class AnalyticsQueries:
                 item = dict(row)
                 item.pop("totalCount")
                 items.append(item)
-            return {"items": items, "total": total}
+            return {
+                "items": items, "total": total,
+                "appliedPreset": None if preset is None else {
+                    "id": preset["id"], "name": preset["name"],
+                    "includesUnassigned": includes_unassigned,
+                },
+            }
 
     def imports(self) -> list[dict[str, Any]]:
         with self.database.connect() as connection:

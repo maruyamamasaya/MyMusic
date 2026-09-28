@@ -184,6 +184,62 @@ class GenrePresetAPITests(unittest.TestCase):
         self.client.delete("/api/imports")
         self.assertEqual(self.client.get("/api/genre-presets").json()["count"], 1)
 
+    def test_track_list_applies_preset_with_exact_genres_fixed_and_unassigned(self):
+        def track(track_id, title, genre):
+            return {"trackID": track_id, "title": title, "artist": "Artist",
+                    "album": None, "genre": genre, "year": None, "duration": 12,
+                    "format": "aac", "favorite": False, "playCount": 0,
+                    "lastPlayedAt": None}
+
+        library = {"version": 1, "tracks": [
+            track("rock", "Rock", "Rock; Live"),
+            track("hard-rock", "Hard Rock", "Hard Rock"),
+            track("missing", "No Genre", None),
+            track("work", "Work", "作業用BGM"),
+            track("hires", "Hi-Res", "ハイレゾ"),
+            track("pop", "Pop", "Pop"),
+        ]}
+        imported = self.client.post("/api/import", files={"file": (
+            "MyMusic-Library.json", json.dumps(library).encode(), "application/json")})
+        self.assertEqual(imported.json()["errorCount"], 0)
+        created = self.client.post("/api/genre-presets", json={
+            "name": "Rock と未分類", "enabledGenreNames": ["Rock", UNASSIGNED],
+            "includesUnassignedGenreSetting": True,
+        }).json()
+
+        response = self.client.get("/api/tracks", params={"presetId": created["id"]})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["appliedPreset"]["name"], "Rock と未分類")
+        self.assertEqual({item["trackId"] for item in body["tracks"]},
+                         {"rock", "missing", "work", "hires"})
+
+        without_unassigned = self.client.post("/api/genre-presets", json={
+            "name": "Rock のみ", "enabledGenreNames": ["Rock"],
+            "includesUnassignedGenreSetting": True,
+        }).json()
+        filtered = self.client.get("/api/tracks", params={
+            "presetId": without_unassigned["id"]
+        }).json()["tracks"]
+        self.assertEqual({item["trackId"] for item in filtered}, {"rock", "work", "hires"})
+
+        legacy = self.client.post("/api/genre-presets", json={
+            "name": "旧形式相当", "enabledGenreNames": ["Pop"],
+            "includesUnassignedGenreSetting": False,
+        }).json()
+        legacy_tracks = self.client.get("/api/tracks", params={
+            "presetId": legacy["id"]
+        }).json()["tracks"]
+        self.assertEqual({item["trackId"] for item in legacy_tracks},
+                         {"pop", "missing", "work", "hires"})
+
+        self.assertEqual(self.client.get("/api/tracks", params={
+            "presetId": ID_C
+        }).status_code, 404)
+        self.assertEqual(self.client.get("/api/tracks", params={
+            "presetId": "not-a-uuid"
+        }).status_code, 422)
+
     def test_legacy_source_records_backfill_once(self):
         self.context.__exit__(None, None, None)
         database = Database(self.settings.database_path)

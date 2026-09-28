@@ -6,6 +6,8 @@ struct PlaybackEventImportView: View {
     @Environment(PlaybackHistoryStore.self) private var historyStore
     @State private var store = PlaybackEventImportStore()
     @State private var isChoosingFile = false
+    @State private var selectedStartDate = Date()
+    @State private var selectedEndDate = Date()
 
     var body: some View {
         List {
@@ -26,6 +28,9 @@ struct PlaybackEventImportView: View {
                     }
                 }
             }
+            if let range = store.availableDateRange {
+                periodSection(availableRange: range)
+            }
             if let preview = store.preview { previewSection(preview) }
             if let result = store.result { resultSection(result) }
             if let error = store.errorMessage {
@@ -40,6 +45,40 @@ struct PlaybackEventImportView: View {
         .navigationTitle("再生イベントJSONを読み込む")
         .fileImporter(isPresented: $isChoosingFile, allowedContentTypes: [.json]) { result in
             importFile(result)
+        }
+    }
+
+    private func periodSection(availableRange: ClosedRange<Date>) -> some View {
+        Section {
+            DatePicker(
+                "開始日",
+                selection: $selectedStartDate,
+                in: availableRange.lowerBound ... availableRange.upperBound,
+                displayedComponents: .date
+            )
+            DatePicker(
+                "終了日",
+                selection: $selectedEndDate,
+                in: availableRange.lowerBound ... availableRange.upperBound,
+                displayedComponents: .date
+            )
+            LabeledContent(
+                "期間内のイベント",
+                value: "\(store.preview?.total ?? 0) / \(store.sourceEventCount)件"
+            )
+        } header: {
+            Text("取り込む期間")
+        } footer: {
+            Text("開始日と終了日を含みます。選択した期間外のイベントは保存しません。")
+        }
+        .disabled(store.isBusy)
+        .onChange(of: selectedStartDate) { _, newValue in
+            if newValue > selectedEndDate { selectedEndDate = newValue }
+            updatePeriod()
+        }
+        .onChange(of: selectedEndDate) { _, newValue in
+            if newValue < selectedStartDate { selectedStartDate = newValue }
+            updatePeriod()
         }
     }
 
@@ -78,7 +117,7 @@ struct PlaybackEventImportView: View {
                 Task { await store.apply(to: historyStore) }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(store.isBusy)
+            .disabled(store.isBusy || preview.pendingInsert == 0)
             Button("キャンセル", role: .cancel) { store.cancel() }
                 .disabled(store.isBusy)
         } header: {
@@ -128,9 +167,19 @@ struct PlaybackEventImportView: View {
                 history: historyStore.entries,
                 libraryTrackIDs: Set(libraryStore.unfilteredTracks.map(\.id))
             )
+            if let range = store.availableDateRange {
+                let calendar = Calendar.current
+                selectedStartDate = calendar.startOfDay(for: range.lowerBound)
+                selectedEndDate = calendar.startOfDay(for: range.upperBound)
+                updatePeriod()
+            }
         } catch let error as CocoaError where error.code == .userCancelled { }
         catch {
             store.reportFileReadError(error)
         }
+    }
+
+    private func updatePeriod() {
+        store.updatePeriod(from: selectedStartDate, through: selectedEndDate)
     }
 }

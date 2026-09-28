@@ -41,3 +41,14 @@ test('major operations use protected APIs and render inline failures', () => {
     '並べ替えできませんでした:',
   ]) assert.ok(source.includes(fragment), fragment);
 });
+
+test('track list renders presets as accessible tags and sends the selected id', () => {
+  const source = fs.readFileSync(`${__dirname}/../web/app.js`, 'utf8');
+  const html = fs.readFileSync(`${__dirname}/../web/index.html`, 'utf8');
+  assert.ok(source.includes("request('/api/genre-presets')"));
+  assert.ok(source.includes("params.set('presetId',state.trackPresetId)"));
+  assert.ok(source.includes('aria-pressed='));
+  assert.ok(source.includes("navigate('genre-presets')"));
+  assert.ok(html.includes('id="track-preset-tags"'));
+  assert.ok(html.includes('aria-label="ジャンルプリセットで曲を絞り込む"'));
+});

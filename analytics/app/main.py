@@ -79,18 +79,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         startDate: str | None = Query(None), endDate: str | None = Query(None),
         title: str = Query("", max_length=200), artist: str = Query("", max_length=200),
         album: str = Query("", max_length=200), genre: str = Query("", max_length=200),
+        presetId: str = Query("", max_length=36),
         sort: str = Query("playCount"), order: str = Query("desc"),
         page: int = Query(1, ge=1),
     ):
         try:
             result = queries.tracks(
                 period, search.strip(), startDate, endDate, title.strip(), artist.strip(),
-                album.strip(), genre.strip(), sort, order, page,
+                album.strip(), genre.strip(), presetId.strip(), sort, order, page,
             )
             return {"tracks": result["items"], "total": result["total"], "page": page,
-                    "pageSize": 30, "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
+                    "pageSize": 30, "appliedPreset": result["appliedPreset"],
+                    "legacyPlaybackCutoff": LEGACY_PLAYBACK_CUTOFF}
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.get("/api/music-history")
     def music_history():

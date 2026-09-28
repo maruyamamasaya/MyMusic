@@ -75,6 +75,11 @@ updated: 2026-09-27
 
 ## 実装済み
 
+### データ管理画面の整理
+
+- データ管理のトップを「保護と同期」と「読み込み・書き出し」の入口へ整理した。バックアップとAnalytics同期はトップから直接開き、個別の操作はライブラリとTrack識別、プレイリスト、再生データ、解析データ、設定とプリセットの5ページへ分けた。
+- 既存の書き出し内容とデータ契約は変更していない。再生イベントの読み込みには、JSON全体の検証後に開始日〜終了日を選ぶ期間filterを追加した。generic iOS Simulator Debug buildと対象XCTest 7件が成功した。実機でのDynamic Typeと画面遷移の見た目は未確認。
+
 ### USB DAC ネイティブレート出力 Beta
 
 - 設定「音源レート優先」を既定ONで追加。USB Audio routeでは再生音源のdecoded sample rateをAVAudioSessionへ希望値として渡し、再生開始、resume、DAC接続、route構成変更で適用する。希望値はiOS／機器が採用しない場合がある。
@@ -197,7 +202,7 @@ updated: 2026-09-27
 - Overviewと分けたMusic Historyは、JSTの月ごとに再生回数・詳細取得後の再生時間・代表曲・代表Artistをタイムライン表示する。月カードを1件だけインライン展開し、「日ごと」「ランキング」「振り返り」から日別の再生曲、4種類の月間上位、月間指標と前月比を確認できる。Rankingsは今日／7日／30日／全期間／任意期間、Artist／Genreフィルター、再生回数／再生時間を共通条件とし、曲・Artist・Album・Genreの上位50件を通常2列・広い画面4列・狭い画面1列で表示し、種類別にも切り替えられる。
 - Analyticsの非ページング一覧は共通定義で初期30件・30件ずつ展開し、TracksとData Sourcesは1ページ30件のサーバーページングを使う。表は表示する全列を見出しから昇順／降順に切り替えられ、ページング表のソートは全件を対象とする。
 - Track Features、Volume Normalization、Playlists、Equalizer、Genre Display Presetsの各JSONもImportできる。Data Sources画面で種類別に閲覧し、Libraryの曲metadataからiOSと同じ分割規則で導出したジャンル一覧も表示する。曲単位データはLibraryとのTrack ID照合状況を表示する。
-- Local／Desktop版Analyticsにジャンルプリセット管理画面を追加した。順序付き専用SQLite tableを編集済み正本、`source_records`をImport原本provenanceとして分離し、一覧・作成・編集・削除・並べ替え・厳密なversion 1 JSON Import／Exportを提供する。同名merge、ID衝突時のUUID再発行、旧未分類設定、Libraryにないジャンルの保持はiPhone契約に合わせ、MacからiPhoneのApplication Supportへ直接書き込まない。
+- Local／Desktop版Analyticsにジャンルプリセット管理画面を追加した。順序付き専用SQLite tableを編集済み正本、`source_records`をImport原本provenanceとして分離し、一覧・作成・編集・削除・並べ替え・厳密なversion 1 JSON Import／Exportを提供する。Tracks上部には同じプリセットをタグ表示し、通常ジャンル、未分類、固定分類をiPhoneと同じ意味でLibrary曲の絞り込みへ適用する。同名merge、ID衝突時のUUID再発行、旧未分類設定、Libraryにないジャンルの保持はiPhone契約に合わせ、MacからiPhoneのApplication Supportへ直接書き込まない。
 - AnalyticsのImport画面から、確認ダイアログを経てSQLite内の全取込データとImport履歴を一括クリアできる。schemaと保存済み原本JSONは保持し、直後から再Importできる。
 - AnalyticsのTrack FeaturesはTrack ID完全一致を優先し、Library入力にoptionalの`relativePath`／`fileSize`がある場合だけ、本体と同じpath・file size・duration（0.5秒許容）・metadata条件で一意候補を救済する。identity不足・曖昧候補は未紐付けを維持し、Library／Featuresの再Import時に再解決する。
 - Analyticsの音楽特徴量tableはImport済み全Track Featuresの実在keyから列を構成する。既知keyは音響・Semantic・音量の順と単位付き表示を使い、曲ごとの欠損は0ではなくデータなし、未知keyは末尾の列として保持する。
@@ -248,7 +253,7 @@ updated: 2026-09-27
 - **データ管理の解析・設定JSON**: 音量ノーマライズ解析値と音楽特徴量を用途別JSONへ出力する。ローカルWeb Analytics契約に合わせた再生イベントJSONを、保存済みPlayback Eventと現在のLibrary metadataから生成する。曲Favoriteと再生傾向はTrack ID単位のschema v2 Preference JSONへ分離し、再生履歴を混在させず、PreferenceとPlayback Eventsは厳格検証・Preview付きで再Importできる。現在のEQ＋オリジナルEQプリセット、ジャンル表示プリセットはversioned JSONで出力・読込できる。音量・特徴量JSONのiOS再Importは対象外。
 - **Library共通relativePath**: `MyMusic-Library.json`は利用者が選択した音楽ルート以下の`relativePath`と`fileSize`を出力する。iCloud containerまでの絶対pathやFile Provider固有prefixは含めず、HomeStereoがMyMusic `trackID`を既存曲へ関連付ける照合キーとして使用する。
 - **Playlist分割書き出し**: 完全同期用の`MyMusic-Playlists.json`は通常／作業用を含む全Library Trackから参照を解決する。追加の`MyMusic-Regular-Playlists.json`は通常Playlistと非作業用genre曲だけ、`MyMusic-Work-Playlists.json`は作業用Playlistとgenreに「作業用BGM」を持つ曲だけを出力する。20分以上などのduration条件は分類に使わない。Analytics ZIPは従来どおり完全snapshotの統合版だけを含む。
-- **HomeStereo再生イベント手動Import**: 設定の「データ管理」→「再生データ」からschema v1の`MyMusic-Playback-Events.json`を選び、未知field、必須field、UUID、日時、有限な再生時間、enum、文書内event ID重複、`completed == (playDuration >= max(3, trackDuration × 0.94))`を全件検証してPreviewする。確認後だけ現在Libraryに解決できる新規event IDをSQLite schema v4の1 transactionへ保存し、集計を更新する。未解決Trackは作らず、既存event IDはイベント・集計とも変更しない。旧rowはiOS、ImportしたHomeStereo eventはmacOSを保持し、再Exportにも保存済みplatformを使用する。
+- **HomeStereo再生イベント手動Import**: 設定の「データ管理」→「再生データ」からschema v1の`MyMusic-Playback-Events.json`を選び、未知field、必須field、UUID、日時、有限な再生時間、enum、文書内event ID重複、`completed == (playDuration >= max(3, trackDuration × 0.94))`を全件検証する。検証後に端末のローカル日付で開始日〜終了日を選び、期間内の対象だけをPreviewする。確認後だけ現在Libraryに解決できる新規event IDをSQLite schema v4の1 transactionへ保存し、集計を更新する。期間外と未解決Trackは保存せず、既存event IDはイベント・集計とも変更しない。旧rowはiOS、ImportしたHomeStereo eventはmacOSを保持し、再Exportにも保存済みplatformを使用する。
 - **Analytics用JSON書き出し導線**: 設定の「データ管理」から、PC版Analyticsが対応する8種類の既存JSONを個別共有できるほか、8ファイルを日付付きZIPへまとめて共有・Files保存できる。オンライン同期や自動送信は行わない。
 - **Track Fingerprint作成**: データ管理の専用画面で未作成曲を件数上限なく逐次処理し、1曲完了ごとに既存Track identity registryへ保存する。初回起動・通常scanでは自動実行せず、画面離脱、非active、再生開始、Library scan開始でcancelする。既定はdownload済み音源だけで、iCloud取得は明示toggleとする。Library JSONは保存済みFingerprintだけをoptional fieldへ出力する。
 - **プレイリストタグ**: 通常／作業用Playlistへ複数タグを保存し、一覧と曲の追加先を1タグで絞り込む。専用タグ管理画面では全Playlistを横断して名称変更・削除・割り当てを行う。旧Playlist JSONは空タグでdecodeし、JSON／Markdown import / exportでもタグを保持する。タグ・曲構成の更新は再生開始時のPlayerStore queue snapshotへ伝播させず、Playlist保存は更新順に直列化する。
