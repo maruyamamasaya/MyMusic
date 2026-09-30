@@ -43,11 +43,9 @@ nonisolated struct MoodStationService: Sendable {
     func availableMixes(in candidates: [StationCandidate]) -> [MoodMixKind] {
         let distributions = distributions(for: candidates)
         return MoodMixKind.allCases.filter { kind in
-            guard let distribution = distributions[kind.featureKey] else { return false }
             return candidates.contains { candidate in
-                guard let value = validScore(kind.featureKey, in: candidate.values),
-                      let relative = percentile(of: value, in: distribution) else { return false }
-                return relative >= Self.selectionThreshold
+                (mixScore(candidate.values, for: kind, distributions: distributions) ?? 0)
+                    >= Self.selectionThreshold
             }
         }
     }
@@ -60,14 +58,29 @@ nonisolated struct MoodStationService: Sendable {
     ) -> [Track.ID] {
         var seen: Set<Track.ID> = []
         let unique = candidates.filter { seen.insert($0.trackID).inserted }
-        guard let distribution = distributions(for: unique)[kind.featureKey] else { return [] }
+        let distributions = distributions(for: unique)
         let ranked = unique.compactMap { candidate -> (StationCandidate, Double)? in
-            guard let value = validScore(kind.featureKey, in: candidate.values),
-                  let relative = percentile(of: value, in: distribution),
+            guard let relative = mixScore(candidate.values, for: kind, distributions: distributions),
                   relative >= Self.selectionThreshold else { return nil }
             return (candidate, relative * candidate.overplayFactor)
         }
         return selectedTrackIDs(from: ranked, limit: limit, using: &generator)
+    }
+
+    /// Energy Mix uses semantic evidence without inventing a stored DSP Energy value.
+    /// Require both axes: missing calm is unknown, not evidence of excitement.
+    private func mixScore(_ values: TrackFeatureValues, for kind: MoodMixKind,
+                          distributions: [String: [Double]]) -> Double? {
+        func relative(_ key: String) -> Double? {
+            guard let raw = validScore(key, in: values),
+                  let distribution = distributions[key] else { return nil }
+            return percentile(of: raw, in: distribution)
+        }
+        if kind == .energy,
+           let aggressive = relative("aggressive"), let calm = relative("calm") {
+            return aggressive * 0.6 + (1 - calm) * 0.4
+        }
+        return relative(kind.featureKey)
     }
 
     func makeStation<R: RandomNumberGenerator>(

@@ -11,6 +11,8 @@ struct SelectiveRandomPlayView: View {
         return candidateTrackIDs.compactMap { tracksByID[$0] }
     }
 
+    var onPresentNowPlaying: () -> Void = {}
+
     var body: some View {
         List {
             Section {
@@ -72,5 +74,6 @@ struct SelectiveRandomPlayView: View {
             startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
         )
+        onPresentNowPlaying()
     }
 }

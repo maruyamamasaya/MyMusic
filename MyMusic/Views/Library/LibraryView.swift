@@ -31,7 +31,7 @@ struct LibraryView: View {
                                 Label("もっと見る", systemImage: "ellipsis")
                             }
                         }
-                    } else {
+                    } else if libraryStore.isInitialLoadComplete {
                         ContentUnavailableView(
                             "音楽フォルダが未選択です",
                             systemImage: "folder.badge.questionmark",
@@ -49,14 +49,15 @@ struct LibraryView: View {
                             } else {
                                 ProgressView()
                             }
-                            Text(libraryStore.scanFolderName.map { "\($0) を同期中…" } ?? "音楽ライブラリを同期中…")
+                            Text(libraryStore.isRestoring && libraryStore.scanFolderName == nil ? "保存済みライブラリを読み込み中…" : libraryStore.scanFolderName.map { "\($0) を同期中…" } ?? "音楽ライブラリを同期中…")
                             if let total = libraryStore.scanTotalCount,
                                let remaining = libraryStore.scanRemainingCount {
                                 Text("同期対象 \(total) 曲・完了 \(libraryStore.scanCompletedCount) 曲・残り \(remaining) 曲")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("ファイル一覧を確認しています")
+                                Text(libraryStore.isRestoring && libraryStore.scanFolderName == nil
+                                     ? "曲と分類を復元しています" : "ファイル一覧を確認しています")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

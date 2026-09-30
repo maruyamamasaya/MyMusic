@@ -63,7 +63,8 @@ final class LibraryGenreFilterTests: XCTestCase {
         )
 
         await store.restoreAndLoadIfNeeded()
-        await store.waitForPendingGenreFilter()
+        XCTAssertTrue(store.isInitialLoadComplete)
+        XCTAssertFalse(store.isLoading)
         XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id])
         XCTAssertEqual(store.album(containing: ambient.id)?.trackIDs, [ambient.id])
         XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
@@ -114,7 +115,8 @@ final class LibraryGenreFilterTests: XCTestCase {
         )
 
         await store.restoreAndLoadIfNeeded()
-        await store.waitForPendingGenreFilter()
+        XCTAssertTrue(store.isInitialLoadComplete)
+        XCTAssertFalse(store.isLoading)
 
         XCTAssertEqual(store.tracks.map(\.id), [ambient.id])
         XCTAssertEqual(store.albums.flatMap(\.trackIDs), [ambient.id])
@@ -155,6 +157,57 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertTrue(store.isGenreDisplayPresetActive(preset))
         XCTAssertEqual(store.enabledGenreCount(for: preset), 0)
         XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
+    }
+
+    func testCacheFailureDoesNotAutomaticallyScan() async throws {
+        let folder = URL(fileURLWithPath: "/tmp/cache-failure-library")
+        let suiteName = "LibraryStartupTests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = LibraryStore(
+            service: GenreFilterLibraryService(tracks: [makeTrack(title: "Unexpected scan", genre: "Rock")]),
+            fileImportService: GenreFilterFileImport(folders: [folder]),
+            persistence: StartupLibraryPersistence(fails: true),
+            userDefaults: defaults
+        )
+        await store.restoreAndLoadIfNeeded()
+        XCTAssertTrue(store.isInitialLoadComplete)
+        XCTAssertFalse(store.isLoading)
+        XCTAssertTrue(store.tracks.isEmpty)
+        XCTAssertTrue(store.errorMessage?.contains("クイック同期") == true)
+    }
+
+    func testConcurrentRestoreWaitsForVisibleCachedLibrary() async throws {
+        let folder = URL(fileURLWithPath: "/tmp/cache-startup-library")
+        let track = makeTrack(title: "Cached", genre: "Ambient")
+        let persistence = StartupLibraryPersistence(library: MusicLibrary.build(from: [track]))
+        let suiteName = "LibraryStartupTests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = LibraryStore(
+            fileImportService: GenreFilterFileImport(folders: [folder]),
+            persistence: persistence,
+            identityService: TrackIdentityService(registryURL: FileManager.default.temporaryDirectory
+                .appending(path: "startup-identities-\(UUID()).json")),
+            userDefaults: defaults
+        )
+        let first = Task { await store.restoreAndLoadIfNeeded() }
+        try await waitUntil { store.isRestoring }
+        XCTAssertTrue(store.isLoading)
+        XCTAssertFalse(store.isInitialLoadComplete)
+        var secondReturned = false
+        let second = Task {
+            await store.restoreAndLoadIfNeeded()
+            secondReturned = true
+        }
+        await Task.yield()
+        XCTAssertFalse(secondReturned)
+        await persistence.release()
+        await first.value
+        await second.value
+        XCTAssertTrue(store.isInitialLoadComplete)
+        XCTAssertFalse(store.isLoading)
+        XCTAssertEqual(store.tracks.map(\.id), [track.id])
     }
 
     private func waitUntil(
@@ -215,5 +268,33 @@ private final class GenreFilterFileImport: FileImportServicing, @unchecked Senda
 
 private actor GenreFilterLibraryPersistence: LibraryPersistenceServicing {
     func load(for folderURL: URL) async throws -> MusicLibrary? { nil }
+    func save(_ library: MusicLibrary, for folderURL: URL) async throws {}
+}
+
+private actor StartupLibraryPersistence: LibraryPersistenceServicing {
+    let library: MusicLibrary?
+    let fails: Bool
+    private var released = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    init(library: MusicLibrary? = nil, fails: Bool = false) {
+        self.library = library
+        self.fails = fails
+    }
+
+    func load(for folderURL: URL) async throws -> MusicLibrary? {
+        if fails { throw CocoaError(.fileReadCorruptFile) }
+        if !released {
+            await withCheckedContinuation { waiter = $0 }
+        }
+        return library
+    }
+
+    func release() {
+        released = true
+        waiter?.resume()
+        waiter = nil
+    }
+
     func save(_ library: MusicLibrary, for folderURL: URL) async throws {}
 }

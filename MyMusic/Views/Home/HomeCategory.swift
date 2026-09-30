@@ -48,15 +48,6 @@ struct HomeCategory: Identifiable, Hashable {
             ]
         ),
         HomeCategory(
-            id: .hiRes,
-            title: "ハイレゾ",
-            description: "高解像度のロスレス音源を専用出力で再生",
-            systemImage: "waveform.badge.magnifyingglass",
-            items: [
-                HomeCategoryItem(title: "ハイレゾ音源", description: "専用ライブラリとUSB DAC出力", systemImage: "waveform.circle.fill", destination: .hiResLibrary)
-            ]
-        ),
-        HomeCategory(
             id: .playback,
             title: "作業用",
             description: "指定したBGMを作業のお供に",
@@ -74,6 +65,15 @@ struct HomeCategory: Identifiable, Hashable {
                 HomeCategoryItem(title: "再生分析", description: "履歴、再生回数、よく聴く曲をまとめて表示", systemImage: "chart.xyaxis.line", destination: .analytics),
                 HomeCategoryItem(title: "音楽史", description: "年・月・日の記録から聴いてきた音楽を振り返る", systemImage: "calendar.badge.clock", destination: .musicHistory),
                 HomeCategoryItem(title: "最近の音楽傾向", description: "聴く音楽の変化を時系列で見る", systemImage: "waveform.path.ecg", destination: .recentMusicTrends)
+            ]
+        ),
+        HomeCategory(
+            id: .hiRes,
+            title: "ハイレゾ",
+            description: "高解像度のロスレス音源を専用出力で再生",
+            systemImage: "waveform.badge.magnifyingglass",
+            items: [
+                HomeCategoryItem(title: "ハイレゾ音源", description: "専用ライブラリとUSB DAC出力", systemImage: "waveform.circle.fill", destination: .hiResLibrary)
             ]
         )
     ]

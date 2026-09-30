@@ -144,6 +144,45 @@ final class MoodStationServiceTests: XCTestCase {
         XCTAssertEqual(service.makeMix(for: .electronic, candidates: candidates, using: &generator), [high.trackID])
     }
 
+    func testEnergyMixWorksWithoutDSPAndPrefersDriveOverCalm() {
+        let quiet = candidate(["aggressive": 0.01, "calm": 0.98])
+        let middle = candidate(["aggressive": 0.08, "calm": 0.90])
+        let driven = candidate(["aggressive": 0.20, "calm": 0.60])
+        let aggressiveButCalm = candidate(["aggressive": 0.30, "calm": 0.99])
+        let candidates = [quiet, middle, driven, aggressiveButCalm]
+        var generator = StationSeed(seed: 1)
+        XCTAssertTrue(service.availableMixes(in: candidates).contains(.energy))
+        XCTAssertEqual(service.makeMix(for: .energy, candidates: candidates, using: &generator),
+                       [driven.trackID])
+    }
+
+    func testEnergyMixRequiresBothSemanticAxesAndRejectsInvalidEvidence() {
+        let candidates = [candidate(["aggressive": 0.01, "calm": 0.9]),
+                          candidate(["aggressive": 1, "calm": 0.2]),
+                          candidate(["aggressive": 0.5]),
+                          candidate(["aggressive": 0.6, "calm": .nan]),
+                          candidate(["aggressive": 0.7, "calm": -1])]
+        var generator = StationSeed(seed: 1)
+        XCTAssertEqual(service.makeMix(for: .energy, candidates: candidates, using: &generator),
+                       [candidates[1].trackID])
+        let flat = [candidate(["aggressive": 0.2, "calm": 0.8]),
+                    candidate(["aggressive": 0.21, "calm": 0.81])]
+        XCTAssertFalse(service.availableMixes(in: flat).contains(.energy))
+    }
+
+    func testEnergyMixUsesSemanticEvidenceBeforeDSPAndFallsBackForMissingAxes() {
+        let quiet = candidate(["aggressive": 0.01, "calm": 0.98, "energy": 1])
+        let driven = candidate(["aggressive": 0.5, "calm": 0.1, "energy": 0])
+        let dspOnly = candidate(["energy": 0.9])
+        var generator = StationSeed(seed: 1)
+        let selected = service.makeMix(for: .energy, candidates: [quiet, driven, dspOnly],
+                                       using: &generator)
+        XCTAssertEqual(Set(selected), Set([driven.trackID]))
+        let dspCandidates = [candidate(["energy": 0.1]), dspOnly]
+        XCTAssertEqual(service.makeMix(for: .energy, candidates: dspCandidates, using: &generator),
+                       [dspOnly.trackID])
+    }
+
     func testMoodMixHonorsQueueLimitWithoutDuplicates() {
         let candidates = (0..<50).map { candidate(["energy": Double($0) / 49]) }
         var generator = StationSeed(seed: 9)

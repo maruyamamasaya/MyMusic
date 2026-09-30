@@ -8,6 +8,8 @@ struct MoodMixSelectionView: View {
     @State private var availableMixes: Set<MoodMixKind> = []
     @State private var isPreparing = true
 
+    let onPlaybackStarted: () -> Void
+
     var body: some View {
         NavigationStack {
             Group {
@@ -82,6 +84,7 @@ struct MoodMixSelectionView: View {
             let played = await stationStore.playMoodMix(selectedMix)
             guard !Task.isCancelled else { return }
             if played {
+                onPlaybackStarted()
                 dismiss()
             } else {
                 errorMessage = "再生できる曲がありません。別のMoodを選んでください。"

@@ -9,6 +9,8 @@ struct ListenLaterView: View {
         listenLaterStore.tracks(in: libraryStore.tracks)
     }
 
+    var onPresentNowPlaying: () -> Void = {}
+
     var body: some View {
         List {
             if tracks.isEmpty {
@@ -55,6 +57,7 @@ struct ListenLaterView: View {
             startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
+        onPresentNowPlaying()
     }
 
     private func play(startingAt index: Int) {
@@ -65,5 +68,6 @@ struct ListenLaterView: View {
             startingAt: index,
             startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
+        onPresentNowPlaying()
     }
 }

@@ -10,6 +10,8 @@ struct FavoriteAlbumsView: View {
         favoriteStore.favoriteAlbums(from: libraryStore.albums)
     }
 
+    var onPresentNowPlaying: () -> Void = {}
+
     var body: some View {
         List {
             if albums.isEmpty {
@@ -63,6 +65,7 @@ struct FavoriteAlbumsView: View {
             startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
         )
+        onPresentNowPlaying()
     }
 }
 
@@ -75,6 +78,8 @@ struct FavoriteArtistsView: View {
     private var artists: [Artist] {
         favoriteStore.favoriteArtists(from: libraryStore.artists)
     }
+
+    var onPresentNowPlaying: () -> Void = {}
 
     var body: some View {
         List {
@@ -135,5 +140,6 @@ struct FavoriteArtistsView: View {
             startingAt: 0,
             startContext: PlaybackStartContext(kind: .manual, source: .shuffle)
         )
+        onPresentNowPlaying()
     }
 }

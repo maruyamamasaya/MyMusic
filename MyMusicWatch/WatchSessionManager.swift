@@ -1,4 +1,8 @@
 import Foundation
+#if os(iOS)
+// Compile the Watch receiver in the existing iOS test target for regression tests.
+@testable import MyMusic
+#endif
 import ImageIO
 import Observation
 @preconcurrency import WatchConnectivity
@@ -12,6 +16,7 @@ final class WatchSessionManager: NSObject {
     private(set) var errorMessage: String?
 
     private let session: WCSession?
+    private let reachabilityProvider: (() -> Bool)?
     private var requestedArtworkTrackID: UUID?
     private var artworkRequestAttemptCount = 0
     private var artworkRequestTimeoutTask: Task<Void, Never>?
@@ -19,6 +24,7 @@ final class WatchSessionManager: NSObject {
 
     override init() {
         session = WCSession.isSupported() ? .default : nil
+        reachabilityProvider = nil
         super.init()
         session?.delegate = self
         session?.activate()
@@ -44,9 +50,26 @@ final class WatchSessionManager: NSObject {
     }
 #endif
 
-    private init(session: WCSession?) {
+    init(session: WCSession?, reachabilityProvider: (() -> Bool)? = nil) {
         self.session = session
+        self.reachabilityProvider = reachabilityProvider
         super.init()
+    }
+
+    private func refreshReachability() {
+        isPhoneReachable = reachabilityProvider?()
+            ?? (session?.activationState == .activated && session?.isReachable == true)
+    }
+
+    func refreshConnectionAndState() {
+        refreshReachability()
+        guard let session, session.activationState == .activated else { return }
+        apply(session.receivedApplicationContext)
+        if isPhoneReachable {
+            requestedArtworkTrackID = nil
+            artworkRequestAttemptCount = 0
+            send(.requestState)
+        }
     }
 
     func send(_ command: WatchPlaybackCommand) {
@@ -55,6 +78,7 @@ final class WatchSessionManager: NSObject {
             errorMessage = "iPhoneに接続できません"
             return
         }
+        refreshReachability()
         errorMessage = nil
         session.sendMessage(
             WatchPlaybackState.commandMessage(command),
@@ -63,7 +87,7 @@ final class WatchSessionManager: NSObject {
             },
             errorHandler: { [weak self] _ in
                 Task { @MainActor in
-                    self?.isPhoneReachable = false
+                    self?.refreshReachability()
                     self?.errorMessage = "MyMusicと通信できません"
                 }
             }
@@ -101,7 +125,7 @@ final class WatchSessionManager: NSObject {
         })
     }
 
-    private func apply(_ message: [String: Any]) {
+    func apply(_ message: [String: Any]) {
         guard let state = WatchPlaybackState(message: message) else { return }
         if state.trackID != playbackState.trackID || state.artworkIdentifier != playbackState.artworkIdentifier {
             artworkData = nil
@@ -110,11 +134,12 @@ final class WatchSessionManager: NSObject {
             artworkRequestTimeoutTask?.cancel()
         }
         playbackState = state
+        refreshReachability()
         errorMessage = nil
         requestArtworkIfNeeded()
     }
 
-    private func applyArtwork(_ data: Data, trackID: UUID, identifier: String?) {
+    func applyArtwork(_ data: Data, trackID: UUID, identifier: String?) {
         guard playbackState.trackID == trackID,
               playbackState.hasArtwork,
               (playbackState.artworkIdentifier == nil || playbackState.artworkIdentifier == identifier) else {
@@ -169,28 +194,24 @@ final class WatchSessionManager: NSObject {
 }
 
 extension WatchSessionManager: WCSessionDelegate {
+#if os(iOS)
+    // iOS-only requirements when compiling the receiver in the regression test target.
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+    nonisolated func sessionDidDeactivate(_ session: WCSession) {}
+#endif
     nonisolated func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
         Task { @MainActor [weak self] in
-            self?.isPhoneReachable = activationState == .activated && session.isReachable
-            if activationState == .activated {
-                self?.send(.requestState)
-            }
+            self?.refreshConnectionAndState()
         }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor [weak self] in
-            let canSend = session.activationState == .activated && session.isReachable
-            self?.isPhoneReachable = canSend
-            if canSend {
-                self?.requestedArtworkTrackID = nil
-                self?.artworkRequestAttemptCount = 0
-                self?.send(.requestState)
-            }
+            self?.refreshConnectionAndState()
         }
     }
 
@@ -205,12 +226,19 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         guard let trackID = WatchArtworkFileMetadata.trackID(from: file.metadata) else { return }
         let identifier = WatchArtworkFileMetadata.identifier(from: file.metadata)
-        Task.detached(priority: .utility) { [weak self] in
-            guard let data = try? Data(contentsOf: file.fileURL) else {
-                await self?.artworkRequestFailed(for: trackID)
+        receiveArtworkFile(at: file.fileURL, trackID: trackID, identifier: identifier)
+    }
+
+    nonisolated func receiveArtworkFile(at fileURL: URL, trackID: UUID, identifier: String?) {
+        // WCSession deletes the temporary file when the delegate returns.
+        // Read it on the delegate's background thread before scheduling UI work.
+        let data = try? Data(contentsOf: fileURL)
+        Task { @MainActor [weak self] in
+            guard let data else {
+                self?.artworkRequestFailed(for: trackID)
                 return
             }
-            await self?.applyArtwork(data, trackID: trackID, identifier: identifier)
+            self?.applyArtwork(data, trackID: trackID, identifier: identifier)
         }
     }
 }

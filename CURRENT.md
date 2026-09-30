@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-27
+updated: 2026-10-01
 ---
 
 # MyMusic の現在状態
@@ -73,6 +73,12 @@ updated: 2026-09-27
 - ジャンル設定画面の選択肢と固定分類は、完成ライブラリ更新時に一度だけ作る。SwiftUIのbody評価やプリセット状態判定ごとに全Trackを走査しない。
 - ジャンルfilterの最新request優先と作業用／ハイレゾ分離は維持した。索引経路と従来の新規構築結果が一致する対象XCTestを追加し、`LibraryGenreFilterTests` 3件とgeneric iOS Simulator Debug buildが成功した。Vespera向けDebug実機build・installも成功したが、端末ロック中のため自動launchは未確認。実機の約20,000曲での切り替え時間とallocationは未計測。
 
+## 起動時のライブラリ復元
+
+- 初回復元はジャンルfilterの表示snapshot反映まで待って完了とする。同時に呼ばれた復元処理も完了まで待ち、cache復元とscanの両方を読み込み状態へ含める。ホームとライブラリに起動読み込み表示を出す。
+- cache読取失敗は無言で全scanへ置き換えず、エラーと手動クイック同期への案内を表示する。cacheが存在しないfolderは従来どおりscanする。cache schema、Track ID、metadata revisionは変更しない。
+- generic iOS Simulator Debug buildと、起動復元／genre filter／新旧cache互換の対象XCTest 19件が成功した。起動時の全曲symlink解決と分類構築は維持する。大量ライブラリでのcold launch時間は実機未計測。
+
 ## 実装済み
 
 ### データ管理画面の整理
@@ -117,13 +123,15 @@ updated: 2026-09-27
 
 ### MIX Beta
 
+- ホームから即再生するマイミュージック／MIX／プレイリストは、再生キューを開始後にRootViewの再生中画面を開く。選択してランダム再生、お気に入りAlbum／Artist、あとで聴く、最近再生した曲もホームからの再生操作で同画面を開く。Mood Mix／Deep Diveは再生した場合だけ選択sheetのdismiss完了後に再生中画面を開き、閉じるだけでは開かない。
+
 - ホームのマイミュージック直下にMIX、その下にプレイリストを表示する。Daily Mix、Rediscovery Mix、My Favorites Mix、Flow Mix、Time Capsuleの5種類はタップで一時キューを先頭から即再生する。Daily、My Favorites、Flow、Time Capsuleはローカル同梱の専用抽象画を表示し、Rediscoveryは先頭曲のアートワークまたは既定グラデーションを表示する。Deep DiveはArtist／Albumを選んでから候補を選び、低再生曲の一時キューを開始する。Deep DiveとMood Mixの選択タイルにも専用抽象画を表示する。
 - DailyはMy Favoritesの先頭25曲をいったん避け、最近30日に聴いた曲、再生0〜1回の曲、60日以上聴いていない再生実績のある曲、Favorite／Goodを交互に採る。25曲に足りない場合は通常候補、最後に避けたFavorite／Goodから補充する。Rediscoveryは累計3回以上かつ最終再生が60日以上前の曲、My FavoritesはFavoriteまたはGoodが正の曲を対象とする。各キューは最大25曲で、同じローカル日付・データなら順序が安定する。
 - Flow Mixは特徴量を2軸以上共有する解析済み曲が3曲以上ある場合、最終再生が最も新しい曲を起点にする。Energy／Calm／Ambient等11軸の共通値による距離、直近3曲のArtist／Album反復回避、Preference／Overplay基本順位を使い、音響的に近い曲へ最大25曲を順につなぐ。
 - Time Capsuleは1〜3年前の同日±45日に再生した曲から、直近60日に聴いた曲を除外し、記念日に近い順とPreference／Overplay基本順位で最大25曲を構成する。古いeventがない場合はfirst／last played dateを互換fallbackに使う。
 - 通常シャッフルと同じ短い曲・作業用BGM・非表示曲の除外とPreference／Overplay重みを適用する。Rediscovery、Flow、Time Capsuleは対象曲がない場合タイルを非表示にし、ほかの該当曲がないMIXはタイルを無効化する。実際のユーザーデータでの選曲と見た目は未確認。
 - Deep Diveは直近30日の再生開始が合計15回以上あり、累計再生0〜1回の曲を持つArtist／Albumを対象にする。タイルを開くたび対象から最大8候補をランダム表示し、選んだ候補の低再生曲を最大25曲、未再生優先で再生する。AlbumはタイトルとAlbum Artist（なければTrack Artist）の組で区別する。候補がない場合は説明を表示する。実ライブラリでの候補分布とUIは未確認。
-- Mood MixはCalm／Energy／Ambient／Electronicを選ぶと、その特徴がライブラリ内で相対的に高い曲の一時キューを最大25曲で即再生する。Mood Stationと同じ特徴量の有効範囲・percentile・Overplay・Artist分散を使い、該当曲がない選択肢は無効表示する。実ライブラリでの選曲とUIは未確認。
+- Mood MixはCalm／Energy／Ambient／Electronicから最大25曲の一時キューを即再生する。EnergyはLibrary内percentileでaggressiveの高さ60%＋calmの低さ40%を評価し、合成score 0.72以上を対象にする。両軸が有効に比較できない曲は既存DSP Energyのpercentileへfallbackする。欠損値は低さの根拠にせず、保存済みEnergy値や解析JSONは変更しない。他3種は選んだ特徴がLibrary内で相対的に高い曲を対象にする。Mood Stationと同じ特徴量の有効範囲・percentile・Overplay・Artist分散を使い、該当曲がない選択肢は無効表示する。実ライブラリでの選曲とUIは未確認。
 
 ### 最近の音楽傾向 Beta
 
@@ -157,6 +165,16 @@ updated: 2026-09-27
 - バックアップschema v2は全payloadのSHA-256をmanifestへ記録し、同じbyte数の破損や置換もRestore前に拒否する。schema v1の旧バックアップは引き続き読み込める。Playback SQLiteはevent IDの空値・重複と`iOS`／`macOS`以外のplatformをsnapshot作成時とRestore検証時に拒否する。
 - 旧schema互換、同一byte数改変、Playback Event不変、重複event ID拒否を含む外部バックアップ対象test 11件と、埋め込みWatch Appを含むgeneric iOS Simulator Debug buildが成功した。
 - Restore後は音楽フォルダを再選択する。復元したIdentity registryと再scanによりStable Track IDを再利用し、不一致データを別曲へ推測接続しない。詳細は[App外バックアップ v1](Documentation/ExternalBackup.md)を参照する。
+
+### ホームのハイレゾ配置
+
+- ハイレゾセクションはアクティビティの下、ホーム最下部へ配置する。変更後の実機buildとVesperaへのInstall／Launchは成功。
+
+### Watch受信・接続復帰の修正
+
+- Artwork受信はWCSession delegateが戻る前に一時fileのDataを確保し、MainActorへ渡す。一時file削除と非同期readの競合を除去した。
+- 操作messageの失敗だけで接続状態を固定しない。正常状態受信・activation・到達性変化・Watch画面の再activationでWCSessionの実到達性を再確認し、保存済みapplication contextから表示を復元して、到達中だけ最新状態を要求する。
+- 通信schema version 1とArtwork identity照合は維持。既存iOS test targetにWatch receiverを追加し、画像の一時file削除・接続復帰・offline表示・旧形式互換など対象XCTest 14件が成功。埋め込みWatchを含むgeneric iOS Simulator Debug buildも成功。VesperaへBuild／Install／Launch、CometへInstall成功。Cometの自動Launchは端末ロックで拒否され、実機での再発確認は未実施。
 
 ### Apple Watch リモコン MVP
 

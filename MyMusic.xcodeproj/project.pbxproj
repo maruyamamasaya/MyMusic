@@ -11,6 +11,7 @@
 		C0DE00000000000000000002 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE00000000000000000005 /* ZIPFoundation */; };
 		D0C000000000000000000001 /* MyMusicWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0C000000000000000000002 /* MyMusicWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0C000000000000000000003 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */; };
+		D0C000000000000000000020 /* MyMusicWatch/WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C000000000000000000021 /* MyMusicWatch/WatchSessionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +49,7 @@
 		AB1000000000000000000001 /* MyMusicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyMusicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0C000000000000000000002 /* MyMusicWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyMusicWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyMusic/WatchConnectivity/WatchPlaybackMessage.swift; sourceTree = SOURCE_ROOT; };
+		D0C000000000000000000021 /* MyMusicWatch/WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyMusicWatch/WatchSessionManager.swift; sourceTree = SOURCE_ROOT; };
 		FCC1BB1A302B265200C78471 /* MyMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -117,6 +119,7 @@
 				D0C000000000000000000004 /* MyMusic/WatchConnectivity/WatchPlaybackMessage.swift */,
 				AB1000000000000000000002 /* MyMusicTests */,
 				FCC1BB1B302B265200C78471 /* Products */,
+				D0C000000000000000000021 /* MyMusicWatch/WatchSessionManager.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -279,6 +282,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C000000000000000000020 /* MyMusicWatch/WatchSessionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

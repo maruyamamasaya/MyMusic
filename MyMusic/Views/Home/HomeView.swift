@@ -41,6 +41,7 @@ struct HomeView: View {
     @State private var deepDiveOptions: [DeepDiveKind: [DeepDiveOption]] = [:]
     @State private var showsDeepDive = false
     @State private var showsMoodMix = false
+    @State private var presentsPlayerAfterMixDismissal = false
     @State private var mixDay: Date?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
@@ -55,6 +56,10 @@ struct HomeView: View {
         NavigationStack {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 28) {
+                    if !libraryStore.isInitialLoadComplete {
+                        ProgressView("ライブラリを読み込み中…")
+                            .frame(maxWidth: .infinity)
+                    }
                     ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
                         if category.id == .myMusic, destinationHasContent(.quickPlay) {
                             if !libraryStore.genreDisplayPresets.isEmpty {
@@ -136,7 +141,7 @@ struct HomeView: View {
                 .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(for: HomeDestination.self) { destination in
-                HomeDestinationView(destination: destination)
+                HomeDestinationView(destination: destination, onPresentNowPlaying: onPresentNowPlaying)
             }
             .navigationDestination(isPresented: $isHighlightPresented) {
                 HighlightPlayerView(onPresentNowPlaying: onPresentNowPlaying)
@@ -147,11 +152,11 @@ struct HomeView: View {
                         highlightStore.resetRandomSelection()
                     }
             }
-            .sheet(isPresented: $showsDeepDive) {
+            .sheet(isPresented: $showsDeepDive, onDismiss: presentPlayerAfterMixDismissal) {
                 DeepDiveSelectionView(options: deepDiveOptions, onPlay: playDeepDive)
             }
-            .sheet(isPresented: $showsMoodMix) {
-                MoodMixSelectionView()
+            .sheet(isPresented: $showsMoodMix, onDismiss: presentPlayerAfterMixDismissal) {
+                MoodMixSelectionView(onPlaybackStarted: { presentsPlayerAfterMixDismissal = true })
             }
             .task(id: playlistStore.homeOrderingRevision) {
                 randomizedPlaylistIDs = playlistStore.playlists.map(\.id).shuffled()
@@ -251,6 +256,7 @@ struct HomeView: View {
             presentationMode: playlist.kind == .work ? .workSize : .standard,
             startContext: PlaybackStartContext(kind: .manual, source: .playlist)
         )
+        onPresentNowPlaying()
     }
 
     private func playMix(_ kind: MixKind) {
@@ -260,7 +266,14 @@ struct HomeView: View {
 
     private func playDeepDive(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
+        presentsPlayerAfterMixDismissal = true
         playMixQueue(tracks)
+    }
+
+    private func presentPlayerAfterMixDismissal() {
+        guard presentsPlayerAfterMixDismissal else { return }
+        presentsPlayerAfterMixDismissal = false
+        onPresentNowPlaying()
     }
 
     private func openDeepDive() {
@@ -284,6 +297,7 @@ struct HomeView: View {
             presentationMode: .standard,
             startContext: PlaybackStartContext(kind: .manual, source: .home)
         )
+        if !presentsPlayerAfterMixDismissal { onPresentNowPlaying() }
     }
 
     private func artworkIdentifier(for destination: HomeDestination) -> String? {
@@ -324,6 +338,7 @@ struct HomeView: View {
             presentationMode: .standard,
             startContext: PlaybackStartContext(kind: .manual, source: source(for: destination))
         )
+        onPresentNowPlaying()
     }
 
     private func source(for destination: HomeDestination) -> PlaybackStartSource {

@@ -73,6 +73,7 @@ struct HomeDestinationView: View {
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
 
     let destination: HomeDestination
+    var onPresentNowPlaying: () -> Void = {}
 
     @ViewBuilder
     var body: some View {
@@ -88,7 +89,7 @@ struct HomeDestinationView: View {
                 tracks: playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
             )
         case .listenLater:
-            ListenLaterView()
+            ListenLaterView(onPresentNowPlaying: onPresentNowPlaying)
         case .recentlyAddedPlay:
             GeneratedQueueView(
                 title: "最近追加した曲",
@@ -98,7 +99,7 @@ struct HomeDestinationView: View {
                 tracks: playbackHistoryStore.recentlyAddedTracks(from: libraryStore.tracks)
             )
         case .selectiveRandomPlay:
-            SelectiveRandomPlayView()
+            SelectiveRandomPlayView(onPresentNowPlaying: onPresentNowPlaying)
         case .repeatPlay:
             GeneratedQueueView(
                 title: "リピート曲再生",
@@ -110,15 +111,16 @@ struct HomeDestinationView: View {
         case .favorites:
             FavoritesView()
         case .favoriteAlbums:
-            FavoriteAlbumsView()
+            FavoriteAlbumsView(onPresentNowPlaying: onPresentNowPlaying)
         case .favoriteArtists:
-            FavoriteArtistsView()
+            FavoriteArtistsView(onPresentNowPlaying: onPresentNowPlaying)
         case .recentTracks:
             HomeTrackListView(
                 title: "最近再生した曲",
                 emptyTitle: "再生履歴はありません",
                 emptyDescription: "曲を再生すると、ここに表示されます。",
-                tracks: playbackHistoryStore.recentTracks(from: libraryStore.tracks)
+                tracks: playbackHistoryStore.recentTracks(from: libraryStore.tracks),
+                onPresentNowPlaying: onPresentNowPlaying
             )
         case .playlists:
             // HomeView already owns the NavigationStack. Nesting another stack here
@@ -227,6 +229,7 @@ private struct HomeTrackListView: View {
     let emptyTitle: String
     let emptyDescription: String
     let tracks: [Track]
+    var onPresentNowPlaying: () -> Void = {}
 
     var body: some View {
         List {
@@ -244,6 +247,7 @@ private struct HomeTrackListView: View {
                             startingAt: index,
                             startContext: PlaybackStartContext(kind: .manual, source: .history)
                         )
+                        onPresentNowPlaying()
                     }
                 }
             }

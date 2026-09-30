@@ -22,7 +22,9 @@ final class LibraryStore {
     private(set) var workLibraryCatalog = WorkLibraryCatalog.empty
     private(set) var hiResLibraryCatalog = HiResLibraryCatalog.empty
     private(set) var libraryFolders: [LibraryFolder] = []
-    private(set) var isLoading = false
+    private var isScanning = false
+    private(set) var isRestoring = false
+    var isLoading: Bool { isRestoring || isScanning }
     private(set) var scanFolderName: String?
     private(set) var scanCompletedCount = 0
     private(set) var scanTotalCount: Int?
@@ -51,6 +53,7 @@ final class LibraryStore {
     private var lookupIndex = LibraryLookupIndex.empty
     private var disabledGenreNames: Set<String>
     private var hasRestoredFolder = false
+    private var restoreWaiters: [CheckedContinuation<Void, Never>] = []
     private let fileImportService: FileImportServicing
     private let persistence: LibraryPersistenceServicing
     private let identityService: TrackIdentityServicing
@@ -83,13 +86,30 @@ final class LibraryStore {
     }
 
     func restoreAndLoadIfNeeded() async {
+        if isRestoring {
+            await withCheckedContinuation { restoreWaiters.append($0) }
+            return
+        }
         guard !hasRestoredFolder else { return }
         hasRestoredFolder = true
-        defer { isInitialLoadComplete = true }
+        isRestoring = true
+        defer {
+            isRestoring = false
+            isInitialLoadComplete = true
+            let waiters = restoreWaiters
+            restoreWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
         do {
             var scanMessages: [String] = []
             libraryFolders = normalized(try fileImportService.restoreLibraryFolders()).map(LibraryFolder.init)
-            let cachedLibraries = (try? await persistence.load(for: libraryFolders.map(\.url))) ?? [:]
+            let cachedLibraries: [String: MusicLibrary]
+            do {
+                cachedLibraries = try await persistence.load(for: libraryFolders.map(\.url))
+            } catch {
+                errorMessage = "保存済みライブラリを読み込めませんでした。クイック同期で再読み込みできます: \(error.localizedDescription)"
+                return
+            }
             for folder in libraryFolders {
                 if let cached = cachedLibraries[folder.id] {
                     librariesByFolderID[folder.id] = cached
@@ -99,6 +119,7 @@ final class LibraryStore {
                 }
             }
             await rebuildCombinedLibrary()
+            await waitForPendingGenreFilter()
             presentScanMessages(scanMessages)
         } catch {
             errorMessage = error.localizedDescription
@@ -305,7 +326,7 @@ final class LibraryStore {
         scanFolderName = folder.name
         scanCompletedCount = 0
         scanTotalCount = nil
-        isLoading = true; defer { isLoading = false }
+        isScanning = true; defer { isScanning = false }
         do {
             let previous = librariesByFolderID[folder.id]?.tracks ?? []
             let result = try await syncService.scan(
