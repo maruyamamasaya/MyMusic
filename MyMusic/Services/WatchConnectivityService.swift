@@ -70,6 +70,7 @@ final class WatchConnectivityService: NSObject, WatchConnectivityServicing {
         let materiallyChanged = lastPublishedState?.trackID != state.trackID
             || lastPublishedState?.isPlaying != state.isPlaying
             || lastPublishedState?.duration != state.duration
+            || (!state.isPlaying && lastPublishedState != state)
         // Playback ticks can be frequent. One state per second is enough for the MVP progress UI.
         guard force || materiallyChanged || now.timeIntervalSince(lastPublishDate) >= 1 else { return }
         do {

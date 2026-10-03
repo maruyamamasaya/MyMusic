@@ -32,6 +32,8 @@ Model / AVFoundation / MediaPlayer / FileManager / UserDefaults
 
 ## Composition と画面構成
 
+音楽史トップの月別履歴入力は`AnalyticsService.makePlaybackMonths`で生成する。Analytics全体のsnapshotも同じ月別生成処理を共有するが、音楽史からは評価曲一覧や直近7／30日のAnalytics集計を呼ばない。月別処理は従来と同じく現在Libraryで解決できるeventだけを終了日時から日・月へgroup化する。
+
 音楽史トップの「今日の音楽史」は`MusicHistoryView`から読み込み時に`MusicHistoryCardService`を呼び、`MusicHistoryCardCandidate`を表示する。Serviceは現在LibraryのTrackとPlayback Eventを日・月・曲・Artist単位に一度索引化し、12種の独立した候補生成関数へ渡す。カード集計は`Task.detached`でMainActor外へ送り、キャンセル済みの結果は表示へ適用しない。候補は成立条件、優先度、score、主役Trackの重複で選択し、同じ入力と日付では順序が安定する。Candidateは表示用Trackと再生候補の順序付きTrack IDを分けて持つ。カードタップ時は`MusicHistoryCardPlaybackService`が現在Libraryとファイルの可読性で再解決・重複排除し、最大10曲をPlayerStoreの通常Queueへ手動／History入口で渡す。曲が残らなければ再生状態は変更しない。既存の`MusicHistoryService`、`MusicHistoryDiscoveryService`、`MusicHistoryMemoryService`は従来の年表示と記憶の構築を継続する。追加の永続化はない。
 
 `MyMusicApp` が `AudioPlayerService` を一つ生成し、同じ instance を `PlayerStore`、`SettingsStore` に接続します。`TrackPlaybackAdjustmentStore`もPlayerStoreとSwiftUI environmentで共有します。各 Store は SwiftUI environment に注入されます。`RootView` は Home / Library / Playlist / Search / Settings の5 tab、mini player、通常 / 作業用 Now Playing sheet、root-level error alert、初期 load task、background移行時の再生位置flushを管理します。HighlightはHomeの「マイミュージック」タイル列左端から同じHome NavigationStack内へ遷移する。
@@ -165,6 +167,8 @@ HiResDirectOutputProbeView / HiResLibraryView
 
 専用ライブラリからの再生はAudio Queueの実開始通知後にだけ履歴sessionを開き、開始元を`hi_res_library`として既存の`PlaybackHistoryStore`／SQLiteへ記録する。停止・曲置換・自然終了・失敗で1件の`PlaybackEvent`へ確定し、再生回数は通常PlayerStoreと同じ「自然終了、または30秒と曲長50%の短い方以上」の条件を使う。自然終了は曲長全体を実聴時間として扱う。これにより再生回数、総再生時間、最近の再生event、Analytics集計へ反映する一方、通常ライブラリの`tracks`を入力とするStation、行動分析による選曲、整理候補、shuffle、音響特徴量には流さない。Track Identityを持たない設定診断は履歴対象外である。
 
+`MyMusicApp`はライブラリ用の`HiResDirectOutputProbeStore`を1個保持しEnvironmentへ渡す。`RootView`は各タブ共通の下部accessoryへハイレゾのミニプレイヤーを表示し、専用Now Playing sheetの表示を所有する。専用ライブラリは共通Storeへ再生と画面表示を要求し、画面離脱時には停止しない。Appで接続した弱参照の`beforePlayback` callbackにより通常／ハイレゾの開始・再開前に他方のactive再生を停止する。設定のFiles診断は従来の画面内Storeを維持し、診断開始時に共有ハイレゾ再生も停止する。
+
 `HiResDirectOutputProbeStore`は専用queueと現在位置を所有し、`HiResAudioQueueProbeService`のpause／resume／seek／進捗／queue終了eventを専用Now Playingへ公開する。自然終了では次曲へ進み、曲置換時は旧Audio Queueと履歴sessionを確定してから新しい音源rateの準備を行う。アートワーク裏面にはTrackの音源情報とAudio Session／Audio Queueの実出力rateを表示する。既存EQ、normalization、fade、VisualizerはAVAudioEngineの信号処理であり直接出力へは挿入しない。専用画面のEQ導線は非適用理由の説明と通常再生用設定へのリンクに限定する。通常queue、remote command、background制御とは統合しない。Tea Proでrateの上げ下げと初回接続を実機確認し、成立した場合に限り製品用backendへの拡張可否を別段階で検討する。
 
 #### PlayerStoreの段階的な責務分離
@@ -261,6 +265,8 @@ music root recursive scan
 
 通信契約は`WatchPlaybackMessage`に集約し、commandとversion付きの再生状態をProperty List互換dictionaryへ変換する。iPhoneの`PlayerStore`と`TrackPreferenceStore`だけが状態の正本であり、Watchのボタン操作では楽観的に表示状態を変更しない。iPhoneは到達中の即時messageに加え、最新状態を`updateApplicationContext`へ保存するため、一時的な非到達から復帰したWatchも同期できる。version 1 stateへ追加したfavorite／preference／Artwork有無はoptional decodeとし、旧version 1 payloadを維持する。
 
+通常再生の`AudioPlayerService`は一時停止時に最終位置を通知して再生位置Timerを解除し、resumeで再生成する。`WatchPlaybackCoordinator`は前回通知と同一の状態を送信Serviceへ渡さない。一時停止中に位置やPreferenceが変わった場合は、`WatchConnectivityService`が1秒の進捗throttleを待たず同期する。接続復帰／状態要求の強制同期は既存経路を維持する。
+
 Artwork本体はstateへ含めず、現在TrackのArtwork identifierだけを含める。WatchはTrack IDまたはidentifierが変わると保持画像を破棄して要求し、`WatchArtworkPreparationService` actorが既存`ArtworkService`のデータをアスペクト比を維持した最大512px・JPEG品質0.82へ変換する。元画像の最大辺が512px未満なら拡大しない。iPhoneの`WatchConnectivityService`は同じ画像の転送中要求をまとめ、一時fileを`transferFile`し、完了時に削除する。Track変更時は古い転送を取り消す。Watch側は30秒以内に画像を受け取れなければ最大3回まで再要求し、到達性復帰時も要求済み状態を解除する。送信管理keyとfile metadataはTrack IDとArtwork identifierを組み合わせ、古い画像を現在曲へ適用しない。Watchは現在Track分だけをmemoryに保持し、永続cacheを増やさない。Artwork失敗はstate／command経路へ影響させない。
 
 Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolumeControl`の`.companion` sourceをSwiftUIへbridgeする。これはペアリング中iPhoneのシステム出力音量をDigital Crownで制御する経路であり、`PlayerStore`、`AudioPlayerService`の内部mixer gain、WatchConnectivity契約は変更しない。画面をscroll containerにせず、volume controlを明示選択した時だけCrown focusを得る。
@@ -270,6 +276,8 @@ Watchの音量操作は`CompanionVolumeControl`がWatchKit標準`WKInterfaceVolu
 Shuffleは`WatchShuffleKind`のversion 1 message（normal／favorites／unplayed）を即時送信する。`WatchConnectivityService.shuffleHandler` → `PlayerStore.startRemoteShuffle`で、Appから接続された最新Libraryと既存History／Preferenceを参照する。通常・お気に入りは`preferenceWeightedShuffle`、未発見再生は`discoveryPlayTracks`（最大30曲・Preferenceのみ）をそのまま呼ぶ。生成済み順序を再shuffleしないようqueue shuffleをOFFにして`playQueue`へ渡す。対象なし・読込未完了なら現queueを変更しない。既存playback taskの完了を待ち、request IDと再生状態を確認して、再生stateに`shuffleSucceeded`／`shuffleError`を添え返信する。Watchは返信成功時のみsheetを閉じる。通信不能時の遅延再生を避けるためcommandをapplication contextやuser infoへ蓄積しない。
 
 ## 永続化
+
+Playback Events手動Importでは、PlaybackEventImportStoreが検証済みの元DataをPreview中保持し、確定時にPlaybackEventImportArchiveService actorへ渡す。Serviceは期間filter前のbytesをApplication Support/MyMusic/PlaybackEventImportOriginalsのSHA-256名JSONへatomic保存しread-back照合する。既存fileは上書きせず、一致しない場合は失敗する。原本保存成功後だけ従来の履歴Import transactionへ進む。原本と履歴は別保存であり、履歴保存が失敗しても原本は残す。原本の自動削除、再適用UI、外部backup対象化は未実装。
 
 server / database migration はありません。端末内の file と UserDefaults が保存境界です。
 

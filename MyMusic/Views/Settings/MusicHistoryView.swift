@@ -305,15 +305,13 @@ struct MusicHistoryView: View {
     private func rebuildSnapshot() async {
         guard playbackHistoryStore.isLoaded, libraryStore.isInitialLoadComplete else { return }
 
-        let analytics = AnalyticsService().makeSnapshot(
+        let playbackMonths = AnalyticsService().makePlaybackMonths(
             tracks: libraryStore.unfilteredTracks,
-            historyEntries: playbackHistoryStore.entries,
-            preferenceEntries: trackPreferenceStore.entries,
-            playlists: []
+            historyEntries: playbackHistoryStore.entries
         )
         let now = Date()
         snapshot = MusicHistoryService().makeSnapshot(
-            playbackMonths: analytics.playbackMonths,
+            playbackMonths: playbackMonths,
             historyEntries: playbackHistoryStore.entries,
             now: now
         )

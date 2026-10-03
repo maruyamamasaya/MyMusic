@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class PlaybackHistoryBehaviorTests: XCTestCase {
+    func testNormalPlaybackAndResumeStopCompetingPlaybackFirst() async throws {
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let store = makePlayerStore(player: player, history: history)
+        var handoffs = 0
+        store.beforePlayback = { handoffs += 1 }
+        store.play(makeTrack("Handoff"))
+        XCTAssertEqual(handoffs, 1)
+        try await waitUntil { !store.isLoading }
+        store.pause()
+        store.resume()
+        XCTAssertEqual(handoffs, 2)
+        try await waitUntil { !store.isLoading }
+        store.stop()
+    }
+
     func testFirstPlayedAtDailySummariesAndRecentCounts() async throws {
         let trackID = UUID()
         let persistence = PlaybackHistoryBehaviorPersistence()

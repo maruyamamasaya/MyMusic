@@ -76,6 +76,8 @@ final class PlayerStore {
         return playbackOrderPositions[currentIndex]
     }
 
+    @ObservationIgnored var beforePlayback: (() -> Void)?
+
     private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
     private let playbackHistoryStore: PlaybackHistoryStore
@@ -430,6 +432,7 @@ final class PlayerStore {
 
     func resume() {
         guard currentTrack != nil else { return }
+        beforePlayback?()
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         isLoading = true
@@ -560,6 +563,7 @@ final class PlayerStore {
         outgoingEndKind: PlaybackEndKind = .other
     ) {
         guard queue.indices.contains(index), playbackOrderPositions[index] != nil else { return }
+        beforePlayback?()
         finalizeCurrentPlaybackSession(endKind: outgoingEndKind)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()

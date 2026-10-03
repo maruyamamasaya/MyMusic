@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct HiResDirectOutputProbeView: View {
+    @Environment(HiResDirectOutputProbeStore.self) private var libraryOutputStore
     @Environment(PlayerStore.self) private var playerStore
     @State private var store = HiResDirectOutputProbeStore()
     @State private var isImporting = false
@@ -34,6 +35,7 @@ struct HiResDirectOutputProbeView: View {
             Section {
                 ForEach([44_100.0, 48_000, 88_200, 96_000, 192_000], id: \.self) { sampleRate in
                     Button {
+                        libraryOutputStore.stop()
                         playerStore.stop()
                         store.prepare(sampleRate: sampleRate)
                     } label: {
@@ -104,6 +106,7 @@ struct HiResDirectOutputProbeView: View {
                     // Pause leaves AVAudioEngine active and can pin the USB DAC
                     // to its previous hardware rate. This diagnostic requires a
                     // full stop before it negotiates the selected file's rate.
+                    libraryOutputStore.stop()
                     playerStore.stop()
                     store.play(url: url)
                 }

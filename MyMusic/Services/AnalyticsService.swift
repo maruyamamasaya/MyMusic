@@ -99,13 +99,6 @@ final class AnalyticsService {
             )
         }
         let playCounts = trackItems.filter { $0.playCount > 0 }.sorted(by: playCountSort)
-        let events = historyEntries.values.flatMap { history in
-            guard let track = tracksByID[history.trackID] else { return [AnalyticsSnapshot.PlaybackEvent]() }
-            return history.playbackEvents.map {
-                AnalyticsSnapshot.PlaybackEvent(track: track, playedAt: $0.endedAt)
-            }
-        }
-        .sorted { $0.playedAt > $1.playedAt }
 
         return AnalyticsSnapshot(
             totalPlayCount: historyEntries.values.reduce(0) { $0 + $1.playCount },
@@ -128,8 +121,33 @@ final class AnalyticsService {
             permanentlyHiddenTracks: trackItems
                 .filter(\.isPermanentlyHiddenFromShuffle)
                 .sorted(by: titleSort),
-            playbackMonths: groupedEvents(events)
+            playbackMonths: makePlaybackMonths(tracksByID: tracksByID, historyEntries: historyEntries)
         )
+    }
+
+    /// Resolves the history timeline without building unrelated analytics rankings.
+    func makePlaybackMonths(
+        tracks: [Track],
+        historyEntries: [Track.ID: PlaybackHistory]
+    ) -> [AnalyticsSnapshot.MonthGroup] {
+        makePlaybackMonths(
+            tracksByID: Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) }),
+            historyEntries: historyEntries
+        )
+    }
+
+    private func makePlaybackMonths(
+        tracksByID: [Track.ID: Track],
+        historyEntries: [Track.ID: PlaybackHistory]
+    ) -> [AnalyticsSnapshot.MonthGroup] {
+        let events = historyEntries.values.flatMap { history in
+            guard let track = tracksByID[history.trackID] else { return [AnalyticsSnapshot.PlaybackEvent]() }
+            return history.playbackEvents.map {
+                AnalyticsSnapshot.PlaybackEvent(track: track, playedAt: $0.endedAt)
+            }
+        }
+        .sorted { $0.playedAt > $1.playedAt }
+        return groupedEvents(events)
     }
 
     private func playbackCount(dayKeys: [String], of entry: PlaybackHistory) -> Int {

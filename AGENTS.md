@@ -36,6 +36,10 @@ MISMATCH の場合は直ちに停止し、ファイル変更、新規ファイ�
 
 ## Repository Boundaries
 
+MyMusic／HomeStereo間の連携変更では、[共通データ交換・保全契約](Documentation/DataInterchangeContract.md)を読む。別GitのHomeStereo側の同契約とrevision・本文を照合し、未照合データ、競合、部分snapshotを削除扱いしない。文書の要件と実装済み保証を区別する。
+
+段階的な対策と未解決事項は[データ連携の保全課題](Documentation/DataInterchangeIssues.md)で管理する。
+
 - 作業開始時に `git rev-parse --show-toplevel` で現在の Git root を確認し、想定する `/workspace/MyMusic`（環境が異なる場合は、この `AGENTS.md` を含む MyMusic repository root）と一致することを確認します。
 - 原則として現在の Git root 内だけを読み書きし、隣接 directory や別 repository を勝手に変更しません。明示的なユーザー依頼がある場合だけ、対象と境界を再確認して例外とします。
 - Git root が想定と一致しない、または対象 file が境界外を指す場合は変更を止め、誤った repository で続行しません。

@@ -27,8 +27,7 @@ private enum HiResLibraryCategory: String, CaseIterable, Identifiable, Hashable 
 struct HiResLibraryView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlayerStore.self) private var playerStore
-    @State private var outputStore = HiResDirectOutputProbeStore()
-    @State private var isNowPlayingPresented = false
+    @Environment(HiResDirectOutputProbeStore.self) private var outputStore
 
     private var catalog: HiResLibraryCatalog { libraryStore.hiResLibraryCatalog }
 
@@ -65,13 +64,6 @@ struct HiResLibraryView: View {
         .navigationDestination(for: HiResLibraryCategory.self) { category in
             destination(for: category)
         }
-        .sheet(isPresented: $isNowPlayingPresented) {
-            HiResNowPlayingView(store: outputStore)
-        }
-        .hiResMiniPlayer(store: outputStore) {
-            isNowPlayingPresented = true
-        }
-        .onDisappear { outputStore.stop() }
     }
 
     private func count(for category: HiResLibraryCategory) -> Int {
@@ -90,19 +82,19 @@ struct HiResLibraryView: View {
                 title: "曲名",
                 tracks: catalog.tracks,
                 outputStore: outputStore,
-                onPresentNowPlaying: { isNowPlayingPresented = true }
+                onPresentNowPlaying: { outputStore.isNowPlayingPresented = true }
             )
         case .albums:
             HiResAlbumListView(
                 catalog: catalog,
                 outputStore: outputStore,
-                onPresentNowPlaying: { isNowPlayingPresented = true }
+                onPresentNowPlaying: { outputStore.isNowPlayingPresented = true }
             )
         case .artists:
             HiResArtistListView(
                 catalog: catalog,
                 outputStore: outputStore,
-                onPresentNowPlaying: { isNowPlayingPresented = true }
+                onPresentNowPlaying: { outputStore.isNowPlayingPresented = true }
             )
         }
     }
@@ -136,7 +128,7 @@ struct HiResLibraryView: View {
                 }
                 if outputStore.currentTrack != nil {
                     Button("再生中画面を表示", systemImage: "play.square.stack") {
-                        isNowPlayingPresented = true
+                        outputStore.isNowPlayingPresented = true
                     }
                 }
             }
@@ -169,7 +161,6 @@ private struct HiResAlbumListView: View {
         }
         .themeScreen()
         .navigationTitle("アルバム")
-        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }
 
@@ -193,7 +184,6 @@ private struct HiResArtistListView: View {
         }
         .themeScreen()
         .navigationTitle("アーティスト")
-        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }
 
@@ -253,6 +243,5 @@ private struct HiResTrackCollectionView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "曲名、アーティスト、アルバムを検索")
-        .hiResMiniPlayer(store: outputStore, onOpen: onPresentNowPlaying)
     }
 }

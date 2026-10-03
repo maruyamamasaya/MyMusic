@@ -9,6 +9,7 @@ final class WatchPlaybackCoordinator {
     private let playbackCommand: (WatchPlaybackCommand) -> Void
     private let shuffleCommand: (WatchShuffleKind, [Track], TrackPreferenceStore) async -> String?
     private var playbackState = WatchPlaybackState.empty
+    private var lastPublishedState: WatchPlaybackState?
 
     init(
         service: WatchConnectivityServicing,
@@ -58,6 +59,8 @@ final class WatchPlaybackCoordinator {
             playbackState.isFavorite = preferenceStore.isFavorite(trackID: trackID)
             playbackState.playbackPreference = preferenceStore.playbackPreference(for: trackID)
         }
+        guard playbackState != lastPublishedState else { return }
+        lastPublishedState = playbackState
         service.publish(playbackState, artworkIdentifier: playbackState.artworkIdentifier)
     }
 

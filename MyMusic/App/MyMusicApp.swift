@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MyMusicApp: App {
+    @State private var hiResPlayerStore: HiResDirectOutputProbeStore
     @State private var playerStore: PlayerStore
     @State private var playbackHistoryStore: PlaybackHistoryStore
     @State private var trackPreferenceStore: TrackPreferenceStore
@@ -37,6 +38,16 @@ struct MyMusicApp: App {
                 )
             }
         )
+        let hiResPlayerStore = HiResDirectOutputProbeStore()
+        hiResPlayerStore.beforePlayback = { [weak playerStore] in
+            guard let playerStore, playerStore.currentTrack != nil else { return }
+            playerStore.stop()
+        }
+        playerStore.beforePlayback = { [weak hiResPlayerStore] in
+            guard let hiResPlayerStore, hiResPlayerStore.hasActiveSession else { return }
+            hiResPlayerStore.stop()
+        }
+        _hiResPlayerStore = State(initialValue: hiResPlayerStore)
         let libraryStore = LibraryStore()
         playerStore.connectWatch(using: WatchConnectivityService(), preferenceStore: preferenceStore, libraryStore: libraryStore)
         _libraryStore = State(initialValue: libraryStore)
@@ -69,6 +80,7 @@ struct MyMusicApp: App {
                 .tint(ThemePalette.resolve(settingsStore.theme).accent)
                 .preferredColorScheme(.dark)
                 .environment(playerStore)
+                .environment(hiResPlayerStore)
                 .environment(libraryStore)
                 .environment(playlistStore)
                 .environment(listenLaterStore)

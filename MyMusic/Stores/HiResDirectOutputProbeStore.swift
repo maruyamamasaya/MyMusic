@@ -14,6 +14,9 @@ final class HiResDirectOutputProbeStore {
         case failed(String)
     }
 
+    @ObservationIgnored var beforePlayback: (() -> Void)?
+    var isNowPlayingPresented = false
+
     private let service: HiResAudioQueueProbeServicing
     private let now: () -> Date
     private var playbackTask: Task<Void, Never>?
@@ -82,6 +85,7 @@ final class HiResDirectOutputProbeStore {
         replacingActiveSession: Bool = false
     ) {
         guard replacingActiveSession || !hasActiveSession else { return }
+        beforePlayback?()
         finalizeHistory(endKind: .userSkipped)
         self.historySession = historySession
         let previousTask = playbackTask
@@ -107,6 +111,7 @@ final class HiResDirectOutputProbeStore {
 
     func prepare(sampleRate: Double) {
         guard !hasActiveSession else { return }
+        beforePlayback?()
         playbackTask?.cancel()
         service.stop()
         state = .switching
@@ -134,6 +139,7 @@ final class HiResDirectOutputProbeStore {
                 state = .failed(error.localizedDescription)
             }
         case .paused:
+            beforePlayback?()
             do {
                 try service.resume()
                 resumeHistory()

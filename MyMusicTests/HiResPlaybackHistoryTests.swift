@@ -3,6 +3,33 @@ import XCTest
 
 @MainActor
 final class HiResPlaybackHistoryTests: XCTestCase {
+    func testPlaybackHandoffRunsBeforeStartAndResume() async throws {
+        let service = HiResAudioQueueServiceSpy()
+        let store = HiResDirectOutputProbeStore(service: service)
+        let history = PlaybackHistoryStore(persistence: HiResHistoryPersistence())
+        var handoffs = 0
+        store.beforePlayback = {
+            handoffs += 1
+            XCTAssertTrue(service.playedURLs.isEmpty || store.state == .paused)
+        }
+        let track = makeTrack(duration: 120)
+        store.play(track: track, historyStore: history)
+        XCTAssertEqual(handoffs, 1)
+        try await waitUntil { service.playedURLs.count == 1 }
+        service.send(.started(snapshot(for: track)))
+        store.togglePlayPause()
+        XCTAssertTrue(store.hasActiveSession)
+        store.isNowPlayingPresented = true
+        store.isNowPlayingPresented = false
+        XCTAssertEqual(store.state, .paused)
+        XCTAssertEqual(store.currentTrack?.id, track.id)
+        store.togglePlayPause()
+        XCTAssertEqual(handoffs, 2)
+        XCTAssertEqual(service.resumeCount, 1)
+        store.stop()
+        XCTAssertFalse(store.hasActiveSession)
+    }
+
     func testManualStopRecordsHiResPlaybackForAnalytics() async {
         let service = HiResAudioQueueServiceSpy()
         let persistence = HiResHistoryPersistence()

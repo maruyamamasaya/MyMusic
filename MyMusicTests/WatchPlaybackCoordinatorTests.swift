@@ -3,6 +3,39 @@ import XCTest
 
 @MainActor
 final class WatchPlaybackCoordinatorTests: XCTestCase {
+    func testPausedStatePublishesOnlyChangesAndResumesProgressUpdates() {
+        let service = WatchConnectivitySpy()
+        let preferences = TrackPreferenceStore()
+        let library = LibraryStore()
+        let coordinator = WatchPlaybackCoordinator(
+            service: service, preferenceStore: preferences, libraryStore: library,
+            playbackCommand: { _ in }, shuffleCommand: { _, _, _ in nil }
+        )
+        let track = Track(
+            id: UUID(), title: "Paused", artistName: "Artist", albumTitle: "Album",
+            duration: 120, fileURL: URL(fileURLWithPath: "/tmp/watch-pause.wav")
+        )
+        coordinator.updateState(track: track, isPlaying: true, currentTime: 12, duration: 120)
+        coordinator.updateState(track: track, isPlaying: false, currentTime: 12, duration: 120)
+        XCTAssertEqual(service.publishCount, 2)
+        XCTAssertEqual(service.publishedState?.isPlaying, false)
+        for _ in 0..<10 {
+            coordinator.updateState(track: track, isPlaying: false, currentTime: 12, duration: 120)
+        }
+        XCTAssertEqual(service.publishCount, 2)
+
+        coordinator.updateState(track: track, isPlaying: false, currentTime: 30, duration: 120)
+        XCTAssertEqual(service.publishCount, 3)
+        XCTAssertEqual(service.publishedState?.currentTime, 30)
+        preferences.toggleFavorite(trackID: track.id)
+        XCTAssertEqual(service.publishCount, 4)
+        XCTAssertEqual(service.publishedState?.isFavorite, true)
+        coordinator.updateState(track: track, isPlaying: true, currentTime: 30, duration: 120)
+        coordinator.updateState(track: track, isPlaying: true, currentTime: 31, duration: 120)
+        XCTAssertEqual(service.publishCount, 6)
+        XCTAssertEqual(service.publishedState, service.stateProvider?())
+    }
+
     func testRoutesPlaybackCommandsAndPublishesCurrentState() async {
         let service = WatchConnectivitySpy()
         let preferences = TrackPreferenceStore()
@@ -53,12 +86,14 @@ private final class WatchConnectivitySpy: WatchConnectivityServicing {
     var shuffleHandler: ((WatchShuffleKind) async -> String?)?
     var stateProvider: (() -> WatchPlaybackState)?
     var activated = false
+    var publishCount = 0
     var publishedState: WatchPlaybackState?
     var publishedArtworkIdentifier: String?
 
     func activate() { activated = true }
 
     func publish(_ state: WatchPlaybackState, artworkIdentifier: String?) {
+        publishCount += 1
         publishedState = state
         publishedArtworkIdentifier = artworkIdentifier
     }

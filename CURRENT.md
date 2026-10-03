@@ -5,6 +5,29 @@ updated: 2026-10-01
 
 # MyMusic の現在状態
 
+## データ連携保全 DI-001
+
+- Playback EventsのImport確定時、期間filter前の原本JSONをApplication Support/MyMusic/PlaybackEventImportOriginalsへSHA-256名でatomic保存し、read-back一致を確認してから履歴を保存する。原本保管失敗では履歴を変更しない。未照合・期間外のeventも原本へ残す。
+- 再適用UI、他文書／HomeStereoの原本保管、受領確認、原本の外部backupは未実装。課題管理は[保全課題](Documentation/DataInterchangeIssues.md)を参照。
+- generic iPhone／埋め込みWatch Simulator Debug buildとPlaybackEventImportTests 8件が成功。原本Service単独のbytes一致・重複保管・破損拒否・保存失敗も確認した。実機UIと外部backupへの原本包含は未検証。
+
+## ハイレゾ再生画面への共通入口
+
+- ライブラリ用ハイレゾStoreをAppで保持し、専用画面から離れても再生を停止しない。各タブの共通下部ミニプレイヤーから専用再生画面へ戻れる。一時停止中と自然終了後も入口を維持する。
+- 通常／ハイレゾ再生の開始・再開前に他方のactive再生を停止する。独立Audio Queue、履歴、EQ等の非適用範囲は維持する。
+- generic iPhone／埋め込みWatch Simulator Debug buildと対象XCTest 21件が成功。各タブでの表示・タップとUSB DACでの継続再生は実機未確認。
+
+## 音楽史の性能改善 Phase 1
+
+- 音楽史トップは`AnalyticsService.makePlaybackMonths`で必要な月別履歴だけを生成する。従来の全Analytics snapshotに含まれていた直近7／30日集計、評価・非表示曲一覧の生成とsortを省く。履歴の日付、並び順、年・月ランキング、カード、再生queueの仕様は維持する。
+- 集計のMainActor外移動、詳細の遅延生成、snapshot cacheは今回の対象外。実機の表示時間・CPUは未計測。
+- iPhone／埋め込みWatchのgeneric Simulator Debug buildが成功。既存のカード生成に関するSwift 6 async警告とApp Intents metadata警告は残る。
+
+## TestFlight 配布準備
+
+- App Store Connectへ `MyMusic Local Player`（Apple ID `6818121580`、Bundle ID `maruyama.MyMusic`）を登録し、Release `1.0 (1)` をアップロード済み。ビルドは「提出準備完了」。App Store正式リリースはしていない。
+- 外部テストのパブリックリンクは未作成。Beta審査用連絡先のユーザー回答と、内部グループ作成に関する承認を待っている。詳細は [作業記録](sessions/2026-10-01-testflight-setup.md) を参照。
+
 ## 現在の位置づけと優先事項
 
 - iPhone 向け個人用ローカル音楽プレイヤー。App Store 正式リリースを示す版番号は確認できません。
@@ -14,6 +37,12 @@ updated: 2026-10-01
 - Streaming / server integration は未着手の将来領域。
 
 この方針を採った経緯は [ADR-0002](decisions/ADR-0002-baseline-and-beta-delivery.md)、利用者向け機能説明は [README.md](README.md) を参照してください。
+
+## 一時停止中のWatch同期
+
+- 通常再生は一時停止時に最終位置を通知し、0.5秒周期の再生位置タイマーを解除する。再開時にタイマーを再生成する。
+- Watch向けの同一状態の重複通知を抑止し、一時停止中のシーク／Preference変更は即時同期対象とする。通信契約と再生backendは変更しない。
+- iPhone／Watchのgeneric Simulator Debug buildとWatch同期の対象XCTest 2件が成功。電池消費への効果、実機Watchの通信回数、音声再生中のpause／resume実機確認は未計測・未検証。
 
 ## PlayerStore Refactoring
 
@@ -110,7 +139,7 @@ updated: 2026-10-01
 - generic iOS Simulator Debug buildと、Vespera向け実機build・install・launchは成功。Bluetoothを無効にしてTea Proを有線接続し、192kHz／24bit ALACを再生すると、音源、AVAudioSession、Audio Queue、Tea Pro本体表示がすべて192kHzで一致した。Audio Queue経路なら現行AVAudioEngineを迂回して音源rateを維持できることを実機確認済み。一方、診断内で曲の途中に44.1↔192kHzを切り替えると、完全停止と300ms待機を入れても初回rateが維持された。内蔵無音PCMによる2段階rate準備と専用ライブラリはSimulator buildと分類XCTest 4件が成功し、Vesperaへのbuild・install・launchも成功したが、Tea Proでの44.1／48／88.2／96／192kHz切替は未検証。
 - 「USB DAC 出力レート」への名称変更と設定「オーディオ」への移動後も、generic iOS Simulator Debug buildとVesperaへのDebug build・install・launchが成功した。
 - ハイレゾ専用ライブラリに専用の「ハイレゾ再生中」画面を追加した。アートワークを反転すると音源／実出力／曲の詳細を確認でき、再生・一時停止、シーク、15秒移動、前後曲、専用queue、自然終了時の次曲再生をAudio Queue経路だけで操作する。既存EQはAVAudioEngine専用のため直接出力には適用せず、画面上で制約を明示して通常再生用設定への導線だけを提供する。
-- ハイレゾ専用ライブラリのトップ、曲、アルバム、アーティスト画面には、専用Audio Queueの再生中だけ下部ミニプレイヤーを表示する。アートワーク、曲名、アーティスト、進捗、再生／一時停止を確認・操作でき、曲情報部分のタップで専用Now Playingを再表示する。
+- ハイレゾ専用Audio Queueの再生中は、ホーム、ライブラリ、プレイリスト、検索、設定の共通下部ミニプレイヤーへ表示する。画面移動では停止せず、一時停止中と自然終了後も再生画面への入口を維持する。通常再生を開始／再開すると専用再生を停止し、ハイレゾ再生開始時には通常再生を停止する。アートワーク、曲名、アーティスト、進捗、再生／一時停止を確認・操作でき、曲情報部分のタップで専用Now Playingを再表示する。
 
 ### ホームの本日再生表示
 

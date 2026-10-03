@@ -33,7 +33,7 @@ final class PlaybackEventImportTests: XCTestCase {
         try await persistence.save([original])
         let historyStore = PlaybackHistoryStore(persistence: persistence)
         await historyStore.loadIfNeeded()
-        let importStore = PlaybackEventImportStore()
+        let importStore = PlaybackEventImportStore(archiveService: PlaybackEventImportArchiveService(directory: root.appendingPathComponent("originals")))
         let data = playbackJSON(events: [
             eventJSON(
                 id: "mac-event-1", trackID: track.id, playedAt: "2027-01-15T08:00:00Z",
@@ -91,7 +91,7 @@ final class PlaybackEventImportTests: XCTestCase {
         let track = makeTrack(id: UUID(), title: "Date Range", duration: 100)
         let historyStore = PlaybackHistoryStore(persistence: persistence)
         await historyStore.loadIfNeeded()
-        let importStore = PlaybackEventImportStore()
+        let importStore = PlaybackEventImportStore(archiveService: PlaybackEventImportArchiveService(directory: root.appendingPathComponent("originals")))
         let calendar = Calendar.current
         let selectedDay = try XCTUnwrap(
             calendar.date(from: DateComponents(year: 2027, month: 1, day: 15))
@@ -133,7 +133,7 @@ final class PlaybackEventImportTests: XCTestCase {
         let track = makeTrack(id: UUID(), title: "Aggregate", duration: 100)
         let historyStore = PlaybackHistoryStore(persistence: persistence)
         await historyStore.loadIfNeeded()
-        let importStore = PlaybackEventImportStore()
+        let importStore = PlaybackEventImportStore(archiveService: PlaybackEventImportArchiveService(directory: root.appendingPathComponent("originals")))
         let data = playbackJSON(events: [
             eventJSON(id: "manual-full", trackID: track.id, playedAt: "2027-01-15T08:00:00Z",
                       playDuration: 95, trackDuration: 100, completed: true, skipped: false,
@@ -172,7 +172,8 @@ final class PlaybackEventImportTests: XCTestCase {
         let historyStore = PlaybackHistoryStore(persistence: persistence)
         await historyStore.loadIfNeeded()
         let missingID = UUID()
-        let importStore = PlaybackEventImportStore()
+        let originals = root.appendingPathComponent("originals")
+        let importStore = PlaybackEventImportStore(archiveService: PlaybackEventImportArchiveService(directory: originals))
         let data = playbackJSON(events: [
             eventJSON(id: "missing", trackID: missingID, playedAt: "2027-01-15T08:00:00Z",
                       playDuration: 10, trackDuration: 100, completed: false, skipped: false,
@@ -182,6 +183,30 @@ final class PlaybackEventImportTests: XCTestCase {
         XCTAssertEqual(importStore.preview?.unresolved, 1)
         await importStore.apply(to: historyStore)
         XCTAssertEqual(importStore.result?.unresolved, 1)
+        let persisted = try await persistence.load()
+        XCTAssertEqual(persisted, [])
+        let files = try FileManager.default.contentsOfDirectory(at: originals, includingPropertiesForKeys: nil)
+        XCTAssertEqual(files.count, 1)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(files.first)), data)
+    }
+
+    func testArchiveFailurePreventsHistoryImport() async throws {
+        let root = try temporaryDirectory()
+        let blocked = root.appendingPathComponent("blocked")
+        try Data("not a directory".utf8).write(to: blocked)
+        let persistence = PlaybackHistoryPersistenceService(applicationDirectory: root)
+        let historyStore = PlaybackHistoryStore(persistence: persistence)
+        await historyStore.loadIfNeeded()
+        let trackID = UUID()
+        let store = PlaybackEventImportStore(archiveService: PlaybackEventImportArchiveService(directory: blocked))
+        store.prepare(data: playbackJSON(events: [
+            eventJSON(id: "archive-failure", trackID: trackID, playedAt: "2027-01-15T08:00:00Z",
+                      playDuration: 10, trackDuration: 100, completed: false, skipped: false,
+                      source: "library", selection: "manual", platform: "macOS")
+        ]), history: [:], libraryTrackIDs: [trackID])
+        await store.apply(to: historyStore)
+        XCTAssertEqual(store.state, .failed)
+        XCTAssertNil(store.result)
         let persisted = try await persistence.load()
         XCTAssertEqual(persisted, [])
     }

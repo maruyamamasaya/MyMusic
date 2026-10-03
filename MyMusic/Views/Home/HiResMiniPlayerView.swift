@@ -65,28 +65,3 @@ struct HiResMiniPlayerView: View {
         return min(max(store.currentTime / store.duration, 0), 1)
     }
 }
-
-private struct HiResMiniPlayerInsetModifier: ViewModifier {
-    let store: HiResDirectOutputProbeStore
-    let onOpen: () -> Void
-
-    func body(content: Content) -> some View {
-        content.safeAreaInset(edge: .bottom, spacing: 0) {
-            if store.currentTrack != nil, store.hasActiveSession {
-                HiResMiniPlayerView(store: store, onOpen: onOpen)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.default, value: store.currentTrack?.id)
-        .animation(.default, value: store.hasActiveSession)
-    }
-}
-
-extension View {
-    func hiResMiniPlayer(
-        store: HiResDirectOutputProbeStore,
-        onOpen: @escaping () -> Void
-    ) -> some View {
-        modifier(HiResMiniPlayerInsetModifier(store: store, onOpen: onOpen))
-    }
-}

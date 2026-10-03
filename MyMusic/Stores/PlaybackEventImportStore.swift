@@ -21,12 +21,18 @@ final class PlaybackEventImportStore {
     private(set) var availableDateRange: ClosedRange<Date>?
 
     @ObservationIgnored private let service = PlaybackEventImportService()
+    @ObservationIgnored private let archiveService: PlaybackEventImportArchiveService
+    @ObservationIgnored private var originalData: Data?
     @ObservationIgnored private var sourceDocument: PlaybackEventImportDocument?
     @ObservationIgnored private var pendingDocument: PlaybackEventImportDocument?
     @ObservationIgnored private var history: [Track.ID: PlaybackHistory] = [:]
     @ObservationIgnored private var libraryTrackIDs = Set<Track.ID>()
 
     var isBusy: Bool { state == .validating || state == .applying }
+
+    init(archiveService: PlaybackEventImportArchiveService = PlaybackEventImportArchiveService()) {
+        self.archiveService = archiveService
+    }
 
     func prepare(
         data: Data,
@@ -35,6 +41,7 @@ final class PlaybackEventImportStore {
     ) {
         guard state != .validating, state != .applying, state != .preview else { return }
         state = .validating
+        originalData = nil
         sourceDocument = nil
         pendingDocument = nil
         self.history.removeAll()
@@ -46,6 +53,7 @@ final class PlaybackEventImportStore {
         errorMessage = nil
         do {
             let document = try service.parse(data: data)
+            originalData = data
             sourceDocument = document
             sourceEventCount = document.events.count
             availableDateRange = dateRange(for: document)
@@ -89,14 +97,22 @@ final class PlaybackEventImportStore {
     }
 
     func apply(to historyStore: PlaybackHistoryStore) async {
-        guard state == .preview, let document = pendingDocument else { return }
+        guard state == .preview, let document = pendingDocument, let originalData else { return }
         state = .applying
+        do {
+            _ = try await archiveService.preserve(originalData)
+        } catch {
+            errorMessage = "再生イベントの原本を保管できなかったため、読み込みを中止しました: \(error.localizedDescription)"
+            state = .failed
+            return
+        }
         do {
             result = try await historyStore.importPlaybackEvents(
                 document,
                 libraryTrackIDs: libraryTrackIDs
             )
             sourceDocument = nil
+            self.originalData = nil
             pendingDocument = nil
             history.removeAll()
             libraryTrackIDs.removeAll()
@@ -112,6 +128,7 @@ final class PlaybackEventImportStore {
 
     func cancel() {
         guard state == .preview else { return }
+        originalData = nil
         sourceDocument = nil
         pendingDocument = nil
         history.removeAll()
@@ -124,6 +141,7 @@ final class PlaybackEventImportStore {
 
     func reset() {
         guard !isBusy else { return }
+        originalData = nil
         sourceDocument = nil
         pendingDocument = nil
         history.removeAll()
@@ -138,6 +156,7 @@ final class PlaybackEventImportStore {
 
     func reportFileReadError(_ error: Error) {
         guard !isBusy else { return }
+        originalData = nil
         sourceDocument = nil
         pendingDocument = nil
         history.removeAll()

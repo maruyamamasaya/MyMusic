@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(HiResDirectOutputProbeStore.self) private var hiResPlayerStore
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaylistStore.self) private var playlistStore
     @Environment(ListenLaterStore.self) private var listenLaterStore
@@ -17,6 +18,7 @@ struct RootView: View {
     @State private var selectedTab = RootTab.home
 
     var body: some View {
+        @Bindable var hiResPlayerStore = hiResPlayerStore
         TabView(selection: $selectedTab) {
             Tab("ホーム", systemImage: "house", value: .home) {
                 HomeView(
@@ -39,7 +41,9 @@ struct RootView: View {
             }
         }
         .modifier(MiniPlayerAccessoryModifier(
-            isPresented: playerStore.currentTrack != nil && !isHomeHighlightPresented
+            isPresented: (hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil)
+                || (playerStore.currentTrack != nil && !isHomeHighlightPresented),
+            hiResStore: hiResPlayerStore
         ) {
             returnsHomeAfterNowPlaying = false
             isNowPlayingPresented = true
@@ -54,6 +58,10 @@ struct RootView: View {
                 }
             }
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $hiResPlayerStore.isNowPlayingPresented) {
+            HiResNowPlayingView(store: hiResPlayerStore)
+                .presentationDragIndicator(.visible)
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab == .home, newTab != .home {
@@ -182,14 +190,20 @@ private enum RootTab: Hashable {
 
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isPresented: Bool
+    let hiResStore: HiResDirectOutputProbeStore
     let onOpen: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isPresented {
             content.tabViewBottomAccessory {
-                MiniPlayerView(onOpen: onOpen)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                if hiResStore.hasActiveSession, hiResStore.currentTrack != nil {
+                    HiResMiniPlayerView(store: hiResStore) {
+                        hiResStore.isNowPlayingPresented = true
+                    }
+                } else {
+                    MiniPlayerView(onOpen: onOpen)
+                }
             }
         } else {
             content

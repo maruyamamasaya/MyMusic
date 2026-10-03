@@ -245,8 +245,13 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         playbackTransitionService.cancelActiveRamp(resetVolume: false)
         pausedFrame = currentFrame()
         playerNode.pause()
+        playbackTimer?.invalidate()
+        playbackTimer = nil
         playbackTransitionService.cancelActiveRamp(resetVolume: true)
         spectrumHandler?(Self.silentSpectrum)
+        if let audioFile {
+            eventHandler?(.timeChanged(Double(pausedFrame) / audioFile.processingFormat.sampleRate))
+        }
         eventHandler?(.playingChanged(false))
     }
 
@@ -528,7 +533,7 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         guard playbackTimer == nil else { return }
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let audioFile = self.audioFile else { return }
+                guard let self, self.playerNode.isPlaying, let audioFile = self.audioFile else { return }
                 let time = Double(self.currentFrame()) / audioFile.processingFormat.sampleRate
                 self.eventHandler?(.timeChanged(max(time, 0)))
             }
