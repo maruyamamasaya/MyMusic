@@ -216,3 +216,23 @@ Brightとembedding自体はMyMusic Import JSONへ追加しない。
 既存実測の平均約415KB/曲ならNPZだけで約8.3GBの目安となるため、空き容量を別途確保する。
 本番JSON/SQLiteとPoCへの書込経路はない。
 Swift変更はないためXcode Build対象外。
+
+## Embedding cacheの外部バックアップ（2026-10-08）
+
+アプリ用特徴量JSONはembeddingを含まない。MacのSemantic cacheは別に保全する。
+Analyzer directoryで次を実行する。archiveはcacheの外に、新しいファイル名で指定する。
+
+```sh
+python -m mymusic_semantic.backup create --cache-dir semantic_cache --archive /Volumes/Backup/semantic-2026-10-08.zip
+python -m mymusic_semantic.backup restore --archive /Volumes/Backup/semantic-2026-10-08.zip --cache-dir semantic_workspaces/restored-cache
+```
+
+各workspaceも`--cache-dir`で指定して個別に保存する。自動定期backupではない。
+
+createは既存Semantic processと同じlockを取得し、SQLite backup APIでindexをsnapshotする。cache内のowner、scope、profiles、embeddings、head結果、output等をまとめる。run.lockとSQLiteのWAL/SHM等は持ち込まない。manifestに全fileのsize/SHA-256を記録し、index integrityとready embeddingのchecksumを確認する。保存失敗では今回作成した不完全archiveを除去し、既存archiveは上書きしない。
+
+restoreはsemantic_cache/semantic_workspaces配下の**まだ存在しない保存先**だけを受け付ける。全entry、path、size/hash、owner/version、index、embedding参照を検証してから公開する。既存cache/音源は変更しない。元の音源rootとidentity/profileを保持するので、音源移動を自動で再対応する機能ではない。
+
+cache外の音源、model/head binary/runtime、統合export先はこのarchiveに含まれない。再解析に必要なmodel等は別保全する。iPhoneの外部backupからMac上のcacheを保存する仕組みではない。
+
+隔離fixtureでWAL index、embedding/profile bytes、SQL rowsの一致、既存先拒否、破損checksum/path traversal拒否を確認した。実cache全量のbackup/復元と外部diskでの障害/容量試験は未実施。

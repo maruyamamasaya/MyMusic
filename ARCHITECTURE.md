@@ -320,7 +320,7 @@ Local／Desktop版の表示倍率は`analytics/web/zoom.js`だけが所有する
 - App と `MyMusicTests` は Xcode File System Synchronized Groups を使用。
 - iOS Simulator Debug build は `xcodebuild ... CODE_SIGNING_ALLOWED=NO build`。
 - Swift test は `MyMusicTests`、Analyzer test は Python `unittest`。
-- CI/CD、専用 lint、API、認証、network infrastructure、DB schema / migration は現時点で存在しない。
+- CI/CD workflowと専用lint設定は未導入。端末内のPlayback HistoryにはSQLite schema／migrationがあり、Local／Desktop AnalyticsにはFastAPIとSQLiteがある。外部server integrationは未着手。
 - 物理端末への build / install / launch は `scripts/check-iphone.sh` と `scripts/deploy-iphone.sh` を明示依頼時だけ使用する。
 
 ## 詳細資料
@@ -351,3 +351,5 @@ Artwork受信delegateは戻る前にfileをDataへ読み込み、受信fileの�
 ## Playlist JSON Importの確定境界
 
 MusicDataImportServiceはID・日時・tagsの存在を保持し、文書全体を検証する。未照合・kind非互換曲は部分Importせず拒否する。DataManagementDetailViewは同一ID異内容の更新を確認し、確認時のStore snapshotを確定処理へ渡す。PlaylistStore.applyImportedPlaylistsはpending saveを待ち、snapshot一致を検証し、PlaylistImportArchiveServiceで原本bytesと更新前の全Playlistを保管してから候補配列をatomic保存する。保存成功までmemoryへ公開しない。処理中のPlaylist編集を抑止する。JSONにないローカル検索条件・説明・画像は既存Playlistで維持する。JSON Exportは未解決曲の除外を行わずエラーにする。通常／作業用はPlaylist単位でfilterし、曲参照を削らない。wire v1は変更しない。
+
+Semantic Analyzerの外部保全はmymusic_semantic.backupがcache lockとSQLite backup APIで行い、hash manifest付きZIPへ保存する。既存cacheを置換せず新規workspaceへ検証後に復元する。iPhoneのExternalBackupServiceとは保存境界を分ける。手順と除外資産は[Semantic README](analyzer/SEMANTIC_README.md)。

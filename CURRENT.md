@@ -1,9 +1,15 @@
 ---
 status: active
-updated: 2026-10-04
+updated: 2026-10-08
 ---
 
 # MyMusic の現在状態
+
+2026-10-08: 現在の作業ツリーをVesperaへDebug build・install・launchした。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、識別子・署名設定は変更しない。デプロイ成功はTea Proの全rate切替や実データrestore成功の確認を意味しない。詳細は[sessions/2026-10-08-deploy-and-push.md](sessions/2026-10-08-deploy-and-push.md)。
+
+## 実機検証の方針と次回チェックリスト
+
+個人の日常利用で使えているため、大規模ライブラリの定量計測は現時点で急がない。未計測を性能不良とは扱わず、具体的な支障が出た場合や配布範囲を広げる前に対象を選ぶ。次のテスト内容を聞かれた場合は[実機検証チェックリスト](Documentation/DeviceValidationChecklist.md)を最初に参照する。ハイレゾは素の音を聴くためEQ・音量補正等を加えない独立経路を維持し、操作性・経路切り替え・実出力を別に確認する。
 
 ## ライブラリの登録音源容量
 
@@ -374,6 +380,11 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 
 ## テスト・検証の現状
 
+以下は日付ごとの検証記録。実装時点の未実施事項は後続の検証で更新されるため、現在の未検証範囲は「既知の制約・未検証」を参照する。過去の成功は、その時点のコードと対象範囲に対する結果であり、現在の全機能を検証済みとするものではない。
+
+- Playback History SQLite移行／Playback Event Foundationは、実装時点のCloud検証後、[2026-09-01のローカルMac検証](sessions/2026-09-01-library-cleanup-event-ratios.md)でPlayback Event・SQLite永続化・v2→v3 migrationを含む対象XCTest 21件、全XCTest 120件とSimulator Debug buildが成功した。旧JSON移行・破損時のfail-closed・再開・日次backupのfixtureは`PlaybackHistorySQLitePersistenceTests`にある。実データcopyでのmigrationと実機長期運用は別途未検証。
+- [2026-09-20の履歴境界検証](sessions/2026-09-20-playerstore-history-one-record.md)では全XCTest 215件とSwift Testing 7件、iPhone／埋め込みWatch Simulator buildが成功。App外Backup／Restoreは[2026-09-27](sessions/2026-09-27-playback-backup-integrity.md)に対象XCTest 11件とgeneric Simulator Debug buildが成功している。
+
 - 2026-09-14 のデプロイ前検証で、iPhone 17 Pro / iOS 26.5 SimulatorのXCTest 190件とSwift Testing 6件、Analyzer / Semantic unittest 38件、Analytics unittest 52件が成功した。全件実行で判明したGenre filter初期表示testの待機不足、Mood Station描画fixtureの`ListenLaterStore`不足、Track Preference旧履歴移行時の未確定な配列順序を修正した。実測結果と未実施項目は[デプロイ前検証チェックリスト](sessions/2026-09-14-device-validation.md)を正とする。
 - `MyMusicTests` に音楽特徴量の import / matching / persistence / presentation / Observation / layout を対象とする XCTest がある。
 - `analyzer/tests` に discovery、cache、schema、audio analysis、CLI を対象とする Python unittest がある。
@@ -391,11 +402,11 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 2026-08-31 の作業用ライブラリ追加後、専用catalog・項目順のテストを含むiPhone 17 / iOS 26.5 Simulatorの全XCTest 81件とDebug buildが成功。
 - 2026-09-01 のPlayback History拡張後、履歴基盤のXCTestを追加し、Debug test buildが成功。Simulator runtime検出がCoreSimulatorの`simdiskimaged`不調で失敗したため、実行XCTestは未完了。
 - 2026-09-01 のPlayback History分析CSV運用定義を確定。旧インポートが未対応のため、新規ダウンロードCSVの現行ヘッダ定義を正式運用に採用。
-- 2026-09-01 にPlayback HistoryのSQLite正本化、旧JSONのfail-closed migration、永久migration backup、24時間単位の日次JSON snapshotを実装。ユーザー指定によりXcode build / Simulator / 実機検証は後日ローカルMacで実施する。
-- 2026-09-01 にPlayback Event Foundationを追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機、実データschema migrationはローカルMacで未検証。
-- 2026-09-01 にライブラリ整理候補 M2を追加。CloudではSwift parseとdiff静的検査のみ実施し、Xcode build、Simulator XCTest、実機UIはローカルMacで未検証。
+- 2026-09-01 にPlayback HistoryのSQLite正本化、旧JSONのfail-closed migration、永久migration backup、24時間単位の日次JSON snapshotを実装。実装時点ではユーザー指定によりXcode build / Simulator / 実機検証を未実施。後続のSimulator検証は上記の2026-09-01記録を参照。
+- 2026-09-01 にPlayback Event Foundationを追加。CloudではSwift parseとdiff静的検査のみ実施し、実装時点ではXcode build、Simulator XCTest、実機、実データschema migrationを未実施。後続のSimulator検証は上記の2026-09-01記録を参照。
+- 2026-09-01 にライブラリ整理候補 M2を追加。CloudではSwift parseとdiff静的検査のみ実施し、実装時点ではXcode build、Simulator XCTest、実機UIを未実施。後続のSimulator検証は2026-09-01のPlayback Event比率判定の記録を参照。
 - 2026-09-01 にライブラリ整理候補をPlayback Event比率判定へ更新。SQLite schema v3、終了理由、直近20件／最低5件、途中スキップ率50%以上、平均再生率10%以下を対象とし、iPhone 17 / iOS 26.5 Simulatorの全XCTest 120件とDebug buildが成功。
-- 2026-09-01 にBehavior Scoring M3を追加。CloudではSwift parse、独立Scoring typecheck、diff静的検査のみ実施し、Xcode build、Simulator XCTest、実機はローカルMacで未検証。Overplayの選曲適用はM4へ保留。
+- 2026-09-01 にBehavior Scoring M3を追加。CloudではSwift parse、独立Scoring typecheck、diff静的検査のみ実施し、実装時点ではXcode build、Simulator XCTest、実機を未実施。後続の全件検証は2026-09-14の記録を参照し、実機の聴感・選曲妥当性は別途確認する。Overplayの選曲適用はM4へ保留。
 - 2026-09-02 にTrack Preference責務分離後のMood Station描画testへ不足していた`TrackPreferenceStore`のtest fixture注入を追加し、Xcode 26.6、iPhone 17 / iOS 26.5 Simulatorで全XCTest 129件が成功した。
 - 2026-09-02 にTrack Fingerprint作成の1日100曲上限を撤廃。件数無制限の処理testは成功し、Debug test buildも成功した。全XCTestでは無関係なTrack Preference永続化testが一度失敗したが、同testの単独再実行は成功した。
 - 2026-09-13 の作業用BGMジャンル指定への統一後、専用catalog、通常再生対象、ホーム代表Artwork、整理候補、最近追加の関連XCTest 17件とDebug test buildがiPhone 17 / iOS 26.5 Simulatorで成功。
@@ -415,7 +426,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 - 作業用判定は完全一致するgenre項目「作業用BGM」だけを使い、暗転時間は固定。対象曲は通常ライブラリには表示せず、作業用専用一覧または作業用プレイリストからの選曲時に専用 playerを使う。
 - crossfade、streaming、server integration、offline download、ReplayGain は未実装。
 - 実音源での全再生回帰、実機 background / lock screen / AirPods、特徴量の聴感妥当性は、最新資料上では未確認。
-- Playback History SQLite移行とPlayback Event FoundationのXCTestは追加済みだが未実行。Xcode build、Simulator、実機でのmigration／長期運用／ディスク障害検証、Restore UI、月次集約、生event retentionは未検証または将来拡張である。
+- Playback History SQLite移行／Playback Event FoundationのSimulator XCTestとbuildは成功記録あり（上記「テスト・検証の現状」参照）。実データcopyでのschema migration、実機での再生eventの時間精度・重複防止、長期運用、ディスク障害からの復旧は未検証。App外Backup／Restore UIは実装済みで対象XCTestも成功しているが、実機での一連の復元操作は未確認。内部の日次／migration backupからのRestore UI、月次集約、生event retention／圧縮は未実装。
 - 音量ノーマライズのTrue Peak ceilingは元音源＋固定ゲインを対象とし、後段EQによるピーク増加は保証しない。実ライブラリ全曲解析時間と実機聴感は未確認。
 - Track Adjustmentsの開始・終了位置、background時の位置保存、手動補正の聴感はSimulatorのunit/integration testまで確認済み。実音源・実機での境界精度、background直後の永続化完了、操作性は未確認。
 - プレイリストタグは1プレイリスト20件・1タグ40文字までで、絞り込みは一度に1タグ。色、階層、複数タグのAND／OR条件は未実装。
@@ -429,3 +440,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 2. Semantic v2はraw head仕様を維持する。変更が必要になった場合は、作品横断の人手ラベル付き評価で現行仕様との回帰を測る。
 3. 実機確認が必要なリリース候補では、再生操作、background、lock screen / Control Center / AirPods、データ削除の非破壊性を検証する。
 4. CI / lint を導入する場合は、既存環境に存在しないことを前提に別タスクとして設計判断を記録する。
+
+## Analyzer embedding保全 Beta（2026-10-08）
+
+Semantic CLIのcache backup/restoreを追加。SQLite index、NPZ、profile、scope、outputを検証付きarchiveに保管し、復元先は新規workspaceだけを許可する。アプリ/NPZのデータ構造は変更しない。Analyzer test 40件成功。実cache全量/外部disk試験は未実施。手順は[Semantic README](analyzer/SEMANTIC_README.md)。MyMusic外部backupの履歴sidecar不足は本番Serviceの隔離実行で再現済み、ユーザー指示により修正保留。詳細は[現行データ地図](Documentation/CurrentDataPreservationMap.md)。
