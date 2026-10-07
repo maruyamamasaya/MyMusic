@@ -2,6 +2,7 @@ import AVFoundation
 import AudioToolbox
 import Foundation
 import Synchronization
+import OSLog
 
 struct HiResAudioQueueProbeSnapshot: Equatable, Sendable {
     var fileName: String
@@ -60,6 +61,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
     private var context: HiResAudioQueueProbeContext?
     private var accessedURL: URL?
     private var isAccessingSecurityScope = false
+    private let rateLogger = Logger(subsystem: "MyMusic", category: "HiResRateSwitch")
+    private var rateRequestID = "none"
+    private var isPreparingRate = false
     private var refreshTask: Task<Void, Never>?
 
     init(fileImportService: FileImportServicing? = nil) {
@@ -175,6 +179,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
                     AudioQueueStop(queue, false)
                 }
                 context = playbackContext
+                logRate(rateRequestID, phase: "real-queue-started", requested: format.mSampleRate)
                 publishSnapshot(fileName: url.lastPathComponent, sourceSampleRate: format.mSampleRate, started: true)
                 schedulePlaybackUpdates(fileName: url.lastPathComponent, sourceSampleRate: format.mSampleRate)
             } catch {
@@ -193,6 +198,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         let hardwareRate = try await configureAudioSession(sourceSampleRate: sampleRate)
         let session = AVAudioSession.sharedInstance()
         let output = session.currentRoute.outputs.first
+        logRate(rateRequestID, phase: "prepared", requested: sampleRate, hardware: hardwareRate)
         eventHandler?(.prepared(HiResAudioQueueProbeSnapshot(
             fileName: "内蔵無音PCM",
             sourceSampleRate: sampleRate,
@@ -248,9 +254,13 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         refreshTask = nil
         disposePlayback()
         endFileAccess()
-        // Manual mode intentionally leaves the shared session inactive until
-        // the user selects the next file, giving the USB stream time to close.
-        try? AVAudioSession.sharedInstance().setActive(false)
+        // Release an established output immediately. A preparing request owns
+        // its temporary queue and deactivates after cancellation cleanup.
+        // A cancelled warm-up must dispose its queue before deactivation.
+        if !isPreparingRate {
+            do { try AVAudioSession.sharedInstance().setActive(false) }
+            catch { rateLogger.error("stop deactivate failed: \(error.localizedDescription, privacy: .public)") }
+        }
     }
 
     @discardableResult
@@ -260,23 +270,44 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
             throw HiResAudioQueueProbeError.invalidFormat
         }
         let session = AVAudioSession.sharedInstance()
-        // A paused AVAudioEngine can keep the previous hardware rate alive. The
-        // diagnostic stops normal playback before reaching here, so failure to
-        // deactivate is actionable and must not be hidden.
-        try session.setCategory(.playback, mode: .default)
-        var hardwareRate: Double?
-        for attempt in 0..<2 {
-            try session.setActive(false)
-            // The first USB stream after a route opens is unreliable on the
-            // tested DAC. Always open two generated silent streams before the
-            // real queue, even if the first queue reports the requested rate.
-            try await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 160))
-            try Task.checkCancellation()
-            try session.setPreferredSampleRate(sourceSampleRate)
-            try session.setActive(true)
-            hardwareRate = try await primeSilentPCM(sampleRate: sourceSampleRate)
+        isPreparingRate = true
+        defer { isPreparingRate = false }
+        let requestID = UUID().uuidString
+        rateRequestID = requestID
+        do {
+            return try await HiResRatePreparation.run(
+                deactivate: {
+                    try session.setActive(false)
+                    self.logRate(requestID, phase: "deactivated", requested: sourceSampleRate)
+                },
+                wait: { try await Task.sleep(for: .milliseconds($0)) },
+                configure: {
+                    try session.setCategory(.playback, mode: .default)
+                    try session.setPreferredSampleRate(sourceSampleRate)
+                },
+                activate: {
+                    try session.setActive(true)
+                    self.logRate(requestID, phase: "activated", requested: sourceSampleRate)
+                },
+                warmUp: { attempt in
+                    let rate = try await self.primeSilentPCM(sampleRate: sourceSampleRate)
+                    self.logRate(requestID, phase: "warm-up-\(attempt + 1)-disposed", requested: sourceSampleRate, hardware: rate)
+                    return rate
+                }
+            )
+        } catch {
+            // primeSilentPCM has already synchronously disposed its queue.
+            do { try session.setActive(false) }
+            catch { rateLogger.error("cleanup deactivate failed: \(error.localizedDescription, privacy: .public)") }
+            rateLogger.error("request=\(requestID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            throw error
         }
-        return hardwareRate
+    }
+
+    private func logRate(_ requestID: String, phase: String, requested: Double, hardware: Double? = nil) {
+        let session = AVAudioSession.sharedInstance()
+        let route = session.currentRoute.outputs.map { "\($0.portName)/\($0.portType.rawValue)" }.joined(separator: ",")
+        rateLogger.notice("request=\(requestID, privacy: .public) phase=\(phase, privacy: .public) requested=\(requested) preferred=\(session.preferredSampleRate) session=\(session.sampleRate) queue=\(hardware ?? 0) route=\(route, privacy: .public)")
     }
 
     private func primeSilentPCM(sampleRate: Double) async throws -> Double? {
@@ -306,8 +337,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         ))
         guard let queue else { throw HiResAudioQueueProbeError.invalidFormat }
         defer {
-            AudioQueueStop(queue, true)
-            AudioQueueDispose(queue, true)
+            let stopStatus = AudioQueueStop(queue, true)
+            let disposeStatus = AudioQueueDispose(queue, true)
+            rateLogger.notice("request=\(self.rateRequestID, privacy: .public) queue cleanup stop=\(stopStatus) dispose=\(disposeStatus)")
         }
 
         let frameCount = max(UInt32(sampleRate * 0.12), 1)
@@ -332,6 +364,7 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
             &hardwareRate,
             &propertySize
         )
+        rateLogger.notice("request=\(self.rateRequestID, privacy: .public) warm-up hardware read status=\(status) rate=\(hardwareRate)")
         return status == noErr && hardwareRate > 0 ? hardwareRate : nil
     }
 
@@ -357,6 +390,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
             outputName: output?.portName ?? "Unknown",
             outputPortType: output?.portType.rawValue ?? "Unknown"
         )
+        if started {
+            logRate(rateRequestID, phase: "real-queue-measured", requested: sourceSampleRate, hardware: snapshot.queueHardwareSampleRate)
+        }
         eventHandler?(started ? .started(snapshot) : .updated(snapshot))
     }
 
@@ -471,8 +507,9 @@ final class HiResAudioQueueProbeService: HiResAudioQueueProbeServicing {
         guard let context else { return }
         context.isStopping.store(true, ordering: .releasing)
         if let queue = context.queue {
-            AudioQueueStop(queue, true)
-            AudioQueueDispose(queue, true)
+            let stopStatus = AudioQueueStop(queue, true)
+            let disposeStatus = AudioQueueDispose(queue, true)
+            rateLogger.notice("request=\(self.rateRequestID, privacy: .public) queue cleanup stop=\(stopStatus) dispose=\(disposeStatus)")
         }
         AudioFileClose(context.audioFile)
         self.context = nil

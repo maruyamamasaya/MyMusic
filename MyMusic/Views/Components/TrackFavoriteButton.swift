@@ -7,6 +7,7 @@ struct TrackFavoriteButton: View {
     let track: Track
     var font: Font = .body
     var width: CGFloat = 32
+    var favoriteColor: Color = .pink
 
     @State private var effectTrigger = 0
     @State private var showsBurst = false
@@ -20,14 +21,14 @@ struct TrackFavoriteButton: View {
                     ZStack {
                         if showsBurst {
                             Circle()
-                                .stroke(Color.pink.opacity(0.75), lineWidth: 2.5)
+                                .stroke(favoriteColor.opacity(0.75), lineWidth: 2.5)
                                 .frame(width: 28, height: 28)
                                 .scaleEffect(1.9)
                                 .opacity(0)
                         }
                         Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .font(font)
-                            .foregroundStyle(isFavorite ? Color.pink : ThemePalette.resolve(appTheme).accent)
+                            .foregroundStyle(isFavorite ? favoriteColor : ThemePalette.resolve(appTheme).accent)
                             .symbolEffect(.bounce, options: .speed(1.6), value: effectTrigger)
                             .scaleEffect(showsBurst ? 1.22 : 1)
                             .frame(width: width, height: 36)

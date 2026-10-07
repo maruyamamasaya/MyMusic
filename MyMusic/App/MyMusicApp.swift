@@ -44,8 +44,7 @@ struct MyMusicApp: App {
             playerStore.stop()
         }
         playerStore.beforePlayback = { [weak hiResPlayerStore] in
-            guard let hiResPlayerStore, hiResPlayerStore.hasActiveSession else { return }
-            hiResPlayerStore.stop()
+            hiResPlayerStore?.stopForPlaybackHandoff()
         }
         _hiResPlayerStore = State(initialValue: hiResPlayerStore)
         let libraryStore = LibraryStore()

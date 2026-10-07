@@ -43,7 +43,7 @@ struct VisualWorldController: View {
                 control(isFavorite ? "いいねを取り消す" : "いいね",
                         symbol: isFavorite ? "heart.fill" : "heart",
                         enabled: canRate, action: toggleFavorite)
-                    .foregroundStyle(isFavorite ? Color.pink : Color.white)
+                    .foregroundStyle(isFavorite ? Color.red : Color.white)
                 control("グッド", symbol: preference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup",
                         enabled: canRate, action: increasePreference)
                     .accessibilityValue(preference > 0 ? "\(preference)" : "未評価")

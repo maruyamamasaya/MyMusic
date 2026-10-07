@@ -65,6 +65,7 @@ private struct PlaylistManagementView: View {
     @State private var selection: Set<Playlist.ID> = []
     @State private var confirmsBulkDelete = false
     @State private var selectedTag: String?
+    @State private var filtersUntagged = false
     @State private var playlistToEditTags: Playlist?
     @State private var searchText = ""
 
@@ -74,7 +75,7 @@ private struct PlaylistManagementView: View {
     let searchPrompt: String?
 
     private var playlists: [Playlist] {
-        let playlists = playlistStore.playlists(of: kind, tagged: selectedTag)
+        let playlists = playlistStore.playlists(of: kind, tagged: selectedTag, untaggedOnly: filtersUntagged)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return playlists }
         return playlists.filter { playlist in
@@ -89,9 +90,9 @@ private struct PlaylistManagementView: View {
 
     var body: some View {
         List {
-            if !availableTags.isEmpty {
+            if !playlistStore.playlists(of: kind).isEmpty {
                 Section {
-                    PlaylistTagFilterBar(tags: availableTags, selectedTag: $selectedTag)
+                    PlaylistTagFilterBar(tags: availableTags, selectedTag: $selectedTag, untaggedSelection: $filtersUntagged)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
                 }

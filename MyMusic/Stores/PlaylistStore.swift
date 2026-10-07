@@ -12,6 +12,70 @@ final class PlaylistStore {
 
     private let persistence: PlaylistPersistenceServicing
     private var saveTask: Task<Void, Never>?
+    private(set) var isImportApplying = false
+    private var didLoadSuccessfully = false
+
+    func importChangeCount(_ drafts: [PlaylistImportDraft]) -> Int {
+        drafts.filter { draft in
+            guard let id = draft.id, let existing = playlist(id: id) else { return false }
+            return existing.name != draft.name || existing.trackIDs != draft.trackIDs
+                || existing.kind != draft.kind || (draft.tagsWereProvided && existing.tags != draft.tags)
+        }.count
+    }
+
+    /// Save a complete candidate before publishing it; rejected or failed imports never change memory.
+    func applyImportedPlaylists(
+        _ drafts: [PlaylistImportDraft], original: Data,
+        archive: PlaylistImportArchiveService = PlaylistImportArchiveService(),
+        allowUpdatingExisting: Bool = false, expectedPlaylists: [Playlist]? = nil
+    ) async throws -> PlaylistFileImportSummary {
+        guard !isImportApplying, didLoadSuccessfully else { throw MusicDataImportError.importInProgress }
+        isImportApplying = true
+        defer { isImportApplying = false }
+        await saveTask?.value
+        if let expectedPlaylists, expectedPlaylists != playlists {
+            throw MusicDataImportError.conflictingPlaylist
+        }
+        let ids = drafts.compactMap(\.id)
+        guard Set(ids).count == ids.count else { throw MusicDataImportError.invalidData }
+        guard allowUpdatingExisting || importChangeCount(drafts) == 0 else {
+            throw MusicDataImportError.conflictingPlaylist
+        }
+        var candidate = playlists
+        var added = 0, updated = 0, unchanged = 0
+        for draft in drafts {
+            if let id = draft.id, let index = candidate.firstIndex(where: { $0.id == id }) {
+                let existing = candidate[index]
+                let tags = draft.tagsWereProvided ? draft.tags : existing.tags
+                if existing.name == draft.name && existing.trackIDs == draft.trackIDs
+                    && existing.kind == draft.kind && existing.tags == tags {
+                    unchanged += 1
+                    continue
+                }
+                candidate[index].name = draft.name
+                candidate[index].trackIDs = draft.trackIDs
+                candidate[index].kind = draft.kind
+                candidate[index].tags = tags
+                candidate[index].updatedAt = draft.updatedAt ?? Date()
+                // Local search conditions, artwork and description do not travel in JSON.
+                updated += 1
+            } else {
+                let now = Date()
+                candidate.insert(Playlist(id: draft.id ?? UUID(), name: draft.name,
+                    trackIDs: draft.trackIDs, createdAt: draft.createdAt ?? now,
+                    updatedAt: draft.updatedAt ?? now, kind: draft.kind, tags: draft.tags), at: 0)
+                added += 1
+            }
+        }
+        try await archive.preserve(original: original, playlists: playlists)
+        if added + updated > 0 {
+            try await persistence.save(candidate)
+            playlists = candidate
+            homeOrderingRevision &+= 1
+            homeContentRevision &+= 1
+        }
+        return PlaylistFileImportSummary(added: added, updated: updated, unchanged: unchanged)
+    }
 
     init(persistence: PlaylistPersistenceServicing? = nil) {
         self.persistence = persistence ?? PlaylistPersistenceService()
@@ -22,6 +86,7 @@ final class PlaylistStore {
         isLoaded = true
         do {
             playlists = try await persistence.load().sorted { $0.updatedAt > $1.updatedAt }
+            didLoadSuccessfully = true
             homeOrderingRevision &+= 1
             homeContentRevision &+= 1
         } catch {
@@ -31,6 +96,7 @@ final class PlaylistStore {
 
     @discardableResult
     func createPlaylist(named name: String, kind: PlaylistKind = .regular) -> Playlist.ID? {
+        guard !isImportApplying else { return nil }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
         let now = Date()
@@ -50,6 +116,7 @@ final class PlaylistStore {
     }
 
     func deletePlaylist(id: Playlist.ID) {
+        guard !isImportApplying else { return }
         playlists.removeAll { $0.id == id }
         homeOrderingRevision &+= 1
         homeContentRevision &+= 1
@@ -57,6 +124,7 @@ final class PlaylistStore {
     }
 
     func deletePlaylists(ids: Set<Playlist.ID>) {
+        guard !isImportApplying else { return }
         guard !ids.isEmpty else { return }
         playlists.removeAll { ids.contains($0.id) }
         homeOrderingRevision &+= 1
@@ -211,8 +279,9 @@ final class PlaylistStore {
         playlists.filter { $0.kind == kind }
     }
 
-    func playlists(of kind: PlaylistKind, tagged tag: String?) -> [Playlist] {
+    func playlists(of kind: PlaylistKind, tagged tag: String?, untaggedOnly: Bool = false) -> [Playlist] {
         let matchingKind = playlists(of: kind)
+        if untaggedOnly { return matchingKind.filter { $0.tags.isEmpty } }
         guard let tag else { return matchingKind }
         return matchingKind.filter { PlaylistTagRules.contains($0.tags, tag: tag) }
     }
@@ -248,6 +317,7 @@ final class PlaylistStore {
     }
 
     private func update(_ id: Playlist.ID, change: (inout Playlist) -> Void) {
+        guard !isImportApplying else { return }
         guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
         let previous = playlists[index]
         change(&playlists[index])
@@ -258,6 +328,7 @@ final class PlaylistStore {
     }
 
     private func updateTagsAcrossPlaylists(_ transform: ([String]) -> [String]) {
+        guard !isImportApplying else { return }
         let now = Date()
         var didChange = false
         for index in playlists.indices {
@@ -290,4 +361,10 @@ struct PlaylistSyncResult: Equatable, Sendable {
     let addedCount: Int
     let removedCount: Int
     let totalCount: Int
+}
+
+struct PlaylistFileImportSummary: Equatable, Sendable {
+    let added: Int
+    let updated: Int
+    let unchanged: Int
 }

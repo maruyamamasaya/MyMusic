@@ -95,9 +95,10 @@ struct PlaylistDetailView: View {
                 }
             }
             ToolbarItem(placement: .secondaryAction) {
-                if let playlist, let json = try? exporter.playlistJSON(playlist, tracks: tracks) {
+                if let playlist {
                     Button("JSONで書き出す", systemImage: "curlybraces") {
-                        presentShare(json)
+                        do { presentShare(try exporter.playlistJSON(playlist, tracks: libraryStore.unfilteredTracks)) }
+                        catch { shareErrorMessage = error.localizedDescription }
                     }
                 }
             }

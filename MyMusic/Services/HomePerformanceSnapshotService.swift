@@ -33,6 +33,7 @@ nonisolated struct HomePerformanceSnapshotRequest: Sendable {
     let includesMixes: Bool
     let includesTodayPlaybackSummary: Bool
     let now: Date
+    var mixSelectionSeed: UInt64 = 0
 }
 
 actor HomePerformanceSnapshotWorker {
@@ -146,7 +147,8 @@ actor HomePerformanceSnapshotWorker {
                 preferences: request.preferences,
                 weights: weights,
                 features: featureValues,
-                now: request.now
+                now: request.now,
+                selectionSeed: request.mixSelectionSeed
             )
             mixDay = Calendar.current.startOfDay(for: request.now)
         }

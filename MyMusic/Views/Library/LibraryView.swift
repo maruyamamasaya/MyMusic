@@ -66,6 +66,21 @@ struct LibraryView: View {
                 }
 
                 if libraryStore.hasLibraryFolder {
+                    Section {
+                        LabeledContent("登録済み音源", value: "\(libraryStore.storageSummary.trackCount)曲")
+                        LabeledContent(
+                            libraryStore.storageSummary.unknownSizeCount == 0 ? "合計容量" : "確認済み容量",
+                            value: libraryStore.storageSummary.formattedSize
+                        )
+                        if libraryStore.storageSummary.unknownSizeCount > 0 {
+                            Text("容量不明：\(libraryStore.storageSummary.unknownSizeCount)曲")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Text("作業用BGM・ハイレゾ・非表示ジャンルを含む登録音源の容量です。iCloudの未ダウンロード音源も含まれるため、iPhoneの使用容量とは異なります。")
+                    }
+
                     Section("ライブラリ") {
                         NavigationLink(value: LibraryDestination.songs) { countRow("曲", systemImage: "music.note", count: libraryStore.tracks.count) }
                         NavigationLink(value: LibraryDestination.albums) { countRow("アルバム", systemImage: "square.stack", count: libraryStore.albums.count) }

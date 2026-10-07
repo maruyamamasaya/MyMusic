@@ -1,6 +1,10 @@
 import Foundation
 
 struct PlaylistImportDraft: Sendable {
+    let id: UUID?
+    let createdAt: Date?
+    let updatedAt: Date?
+    let tagsWereProvided: Bool
     let name: String
     let trackIDs: [Track.ID]
     let kind: PlaylistKind
@@ -16,12 +20,16 @@ struct PlaylistImportResult: Sendable {
 
 enum MusicDataImportError: LocalizedError {
     case unsupportedFormat, invalidData, missingName, noTrackIDs
+    case unresolvedTracks, conflictingPlaylist, importInProgress
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat: "対応していないファイル形式です。"
         case .invalidData: "プレイリストデータを解析できませんでした。"
         case .missingName: "プレイリスト名がありません。"
         case .noTrackIDs: "有効なTrack IDがありません。"
+        case .unresolvedTracks: "照合できない曲、または種別が異なる曲があります。情報の欠落を防ぐため操作を停止しました。ライブラリとプレイリストの種別を確認してください。"
+        case .conflictingPlaylist: "同じIDのプレイリストに変更があります。内容の更新を確認してから読み込んでください。"
+        case .importInProgress: "プレイリストの保存中です。完了後に再試行してください。"
         }
     }
 }
@@ -45,12 +53,16 @@ struct MusicDataImportService: Sendable {
             missing += unique.count - found.count
             incompatible += found.count - accepted.count
             return PlaylistImportDraft(
-                name: draft.name,
+                id: draft.id, createdAt: draft.createdAt, updatedAt: draft.updatedAt,
+                tagsWereProvided: draft.tagsWereProvided, name: draft.name,
                 trackIDs: accepted.map(\.id),
                 kind: draft.kind,
                 tags: PlaylistTagRules.normalizedTags(draft.tags)
             )
         }
+        guard missing == 0, incompatible == 0 else { throw MusicDataImportError.unresolvedTracks }
+        let ids = resolved.compactMap(\.id)
+        guard Set(ids).count == ids.count else { throw MusicDataImportError.invalidData }
         return PlaylistImportResult(
             playlists: resolved,
             importedTrackCount: imported,
@@ -69,11 +81,40 @@ struct MusicDataImportService: Sendable {
     private func parseJSONObject(_ object: [String: Any]) throws -> PlaylistImportDraft {
         guard let name = (object["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { throw MusicDataImportError.missingName }
         guard let tracks = object["tracks"] as? [[String: Any]] else { throw MusicDataImportError.noTrackIDs }
-        let ids = tracks.compactMap { ($0["trackID"] as? String).flatMap(UUID.init(uuidString:)) }
+        let ids = try tracks.map { track -> UUID in
+            guard let text = track["trackID"] as? String, let id = UUID(uuidString: text) else { throw MusicDataImportError.invalidData }
+            return id
+        }
+        guard Set(ids).count == ids.count else { throw MusicDataImportError.invalidData }
         guard !ids.isEmpty || tracks.isEmpty else { throw MusicDataImportError.noTrackIDs }
-        let kind = (object["kind"] as? String).flatMap(PlaylistKind.init(rawValue:)) ?? .regular
-        let tags = object["tags"] as? [String] ?? []
-        return PlaylistImportDraft(name: name, trackIDs: ids, kind: kind, tags: tags)
+        let kind: PlaylistKind
+        if let raw = object["kind"] {
+            guard let text = raw as? String, let parsed = PlaylistKind(rawValue: text) else { throw MusicDataImportError.invalidData }
+            kind = parsed
+        } else { kind = .regular }
+        let tags: [String]
+        if let raw = object["tags"] {
+            guard let values = raw as? [String], PlaylistTagRules.normalizedTags(values) == values else { throw MusicDataImportError.invalidData }
+            tags = values
+        } else { tags = [] }
+        let id: UUID?
+        if let raw = object["playlistID"] {
+            guard let text = raw as? String, let parsed = UUID(uuidString: text) else { throw MusicDataImportError.invalidData }
+            id = parsed
+        } else { id = nil }
+        return PlaylistImportDraft(id: id, createdAt: try date(object["createdAt"]), updatedAt: try date(object["updatedAt"]),
+            tagsWereProvided: object["tags"] != nil, name: name, trackIDs: ids, kind: kind, tags: tags)
+    }
+
+    private func date(_ raw: Any?) throws -> Date? {
+        guard let raw else { return nil }
+        guard let text = raw as? String else { throw MusicDataImportError.invalidData }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        guard let date = formatter.date(from: text) else { throw MusicDataImportError.invalidData }
+        return date
     }
 
     private func parseMarkdown(_ data: Data) throws -> [PlaylistImportDraft] {
@@ -97,6 +138,16 @@ struct MusicDataImportService: Sendable {
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         }.first ?? []
-        return [PlaylistImportDraft(name: name, trackIDs: ids, kind: kind, tags: tags)]
+        func field(_ key: String) -> String? {
+            text.split(separator: "\n").first { $0.hasPrefix("- \(key): ") }
+                .map { String($0.dropFirst(key.count + 4)) }
+        }
+        let id: UUID?
+        if let raw = field("ID") {
+            guard let parsed = UUID(uuidString: raw) else { throw MusicDataImportError.invalidData }
+            id = parsed
+        } else { id = nil }
+        return [PlaylistImportDraft(id: id, createdAt: try date(field("Created")), updatedAt: try date(field("Updated")),
+            tagsWereProvided: field("Tags") != nil, name: name, trackIDs: ids, kind: kind, tags: tags)]
     }
 }

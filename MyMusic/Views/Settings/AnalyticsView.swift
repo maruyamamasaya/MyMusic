@@ -75,6 +75,13 @@ struct AnalyticsView: View {
 
     private var overviewSection: some View {
         Section("概要") {
+            NavigationLink {
+                PlaybackDurationCalendarView()
+            } label: {
+                LabeledContent("総再生時間", value: PlaybackDurationSummary.formatted(
+                    playbackHistoryStore.entries.values.reduce(0) { $0 + $1.totalPlaybackDuration }
+                ))
+            }
             LabeledContent("総再生回数", value: "\(snapshot.totalPlayCount)回")
             LabeledContent("手動再生", value: "\(snapshot.totalManualPlayCount)回")
             LabeledContent("自動再生", value: "\(snapshot.totalAutomaticPlayCount)回")

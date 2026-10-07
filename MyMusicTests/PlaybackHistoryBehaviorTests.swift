@@ -9,7 +9,7 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
         let store = makePlayerStore(player: player, history: history)
         var handoffs = 0
-        store.beforePlayback = { handoffs += 1 }
+        store.beforePlayback = { handoffs += 1; return nil }
         store.play(makeTrack("Handoff"))
         XCTAssertEqual(handoffs, 1)
         try await waitUntil { !store.isLoading }
@@ -18,6 +18,92 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(handoffs, 2)
         try await waitUntil { !store.isLoading }
         store.stop()
+    }
+
+    func testNormalStartWaitsForHiResPreparationCleanup() async throws {
+        try await verifyHiResHandoff(resume: false)
+    }
+
+    func testNormalResumeWaitsForHiResPreparationCleanup() async throws {
+        try await verifyHiResHandoff(resume: true)
+    }
+
+    func testNormalStartWaitsEvenAfterExplicitHiResStop() async throws {
+        try await verifyHiResHandoff(resume: false, stopHiResFirst: true)
+    }
+
+    func testCancelledNormalStartDoesNotActivateAfterHiResCleanup() async throws {
+        try await verifyHiResHandoff(resume: false, cancelNormal: true)
+    }
+
+    func testCancelledNormalResumeDoesNotActivateAfterHiResCleanup() async throws {
+        try await verifyHiResHandoff(resume: true, cancelNormal: true)
+    }
+
+    func testNormalStartWaitsForVisibleDiagnosticCleanup() async throws {
+        try await verifyHiResHandoff(resume: false, diagnostic: true)
+    }
+
+    func testNormalResumeWaitsAfterDiagnosticCloses() async throws {
+        try await verifyHiResHandoff(resume: true, diagnostic: true, closeDiagnostic: true)
+    }
+
+    private func verifyHiResHandoff(
+        resume: Bool, stopHiResFirst: Bool = false, cancelNormal: Bool = false,
+        diagnostic: Bool = false, closeDiagnostic: Bool = false
+    ) async throws {
+        let player = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let store = makePlayerStore(player: player, history: history)
+        if resume {
+            store.play(makeTrack("Paused"))
+            try await waitUntil { !store.isLoading }
+            store.pause()
+        }
+        let previousPlayCount = player.playedTrackIDs.count
+        let service = HandoffPreparationService()
+        let hiRes = HiResDirectOutputProbeStore(service: service)
+        hiRes.prepare(sampleRate: 192_000)
+        try await waitUntil { service.continuation != nil }
+        defer {
+            service.finishPreparation()
+            store.stop()
+            hiRes.stop()
+        }
+        if stopHiResFirst { hiRes.stop() }
+        if diagnostic {
+            store.beforeDiagnosticPlayback = { hiRes.stopForPlaybackHandoff() }
+            if closeDiagnostic {
+                hiRes.stop()
+                store.retainOutputCleanup(hiRes.stopForPlaybackHandoff())
+                store.beforeDiagnosticPlayback = nil
+            }
+        } else {
+            store.beforePlayback = { hiRes.stopForPlaybackHandoff() }
+        }
+        var activatedBeforeCleanup = false
+        player.onActivation = {
+            if !service.cleanedUp { activatedBeforeCleanup = true }
+        }
+        if resume { store.resume() } else { store.play(makeTrack("Next")) }
+        XCTAssertEqual(hiRes.state, .idle)
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertTrue(store.isLoading)
+        XCTAssertEqual(player.playedTrackIDs.count, previousPlayCount)
+        XCTAssertEqual(player.resumeCount, 0)
+        if cancelNormal { store.stop() }
+        service.finishPreparation()
+        try await waitUntil { service.cleanedUp }
+        if cancelNormal {
+            for _ in 0..<10 { await Task.yield() }
+            XCTAssertEqual(player.playedTrackIDs.count, previousPlayCount)
+            XCTAssertEqual(player.resumeCount, 0)
+        } else {
+            try await waitUntil { !store.isLoading }
+            XCTAssertEqual(player.playedTrackIDs.count, previousPlayCount + (resume ? 0 : 1))
+            XCTAssertEqual(player.resumeCount, resume ? 1 : 0)
+        }
+        XCTAssertFalse(activatedBeforeCleanup)
     }
 
     func testFirstPlayedAtDailySummariesAndRecentCounts() async throws {
@@ -430,8 +516,11 @@ private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, Playbac
     var eventHandler: ((AudioPlaybackEvent) -> Void)?
     private(set) var playedTrackIDs: [Track.ID] = []
     private(set) var realtimeAudioMetricsEnabled = false
+    var onActivation: (() -> Void)?
+    private(set) var resumeCount = 0
 
     func play(_ track: Track) async throws {
+        onActivation?()
         playedTrackIDs.append(track.id)
         eventHandler?(.ready(duration: track.duration))
         eventHandler?(.playingChanged(true))
@@ -451,7 +540,11 @@ private final class PlaybackHistoryAudioPlayerSpy: AudioPlayerServicing, Playbac
     }
 
     func pause() { eventHandler?(.playingChanged(false)) }
-    func resume() async throws { eventHandler?(.playingChanged(true)) }
+    func resume() async throws {
+        onActivation?()
+        resumeCount += 1
+        eventHandler?(.playingChanged(true))
+    }
     func seek(to time: TimeInterval) { eventHandler?(.timeChanged(time)) }
     func seek(to time: TimeInterval, transition: PlaybackTransitionReason) async throws { seek(to: time) }
     func seek(
@@ -480,4 +573,26 @@ private final class PlaybackHistoryNowPlayingSpy: NowPlayingServicing {
 private final class PlaybackHistoryRemoteCommandSpy: RemoteCommandServicing {
     func configure(actions: RemoteCommandActions) {}
     func updateAvailability(hasTrack: Bool, canGoNext: Bool, canGoPrevious: Bool) {}
+}
+
+@MainActor
+private final class HandoffPreparationService: HiResAudioQueueProbeServicing {
+    var eventHandler: ((HiResAudioQueueProbeEvent) -> Void)?
+    var continuation: CheckedContinuation<Void, Never>?
+    private(set) var cleanedUp = false
+    func prepare(sampleRate: Double) async throws {
+        // Model a warm-up whose synchronous dispose/deactivate is still pending.
+        await withCheckedContinuation { continuation = $0 }
+        cleanedUp = true
+        try Task.checkCancellation()
+    }
+    func finishPreparation() {
+        continuation?.resume()
+        continuation = nil
+    }
+    func play(url: URL) async throws {}
+    func pause() throws {}
+    func resume() throws {}
+    func seek(to time: TimeInterval) throws {}
+    func stop() {}
 }

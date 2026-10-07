@@ -115,7 +115,17 @@ struct HiResDirectOutputProbeView: View {
                 store.state = .failed(error.localizedDescription)
             }
         }
-        .onDisappear { store.stop() }
+        .onAppear {
+            let diagnosticStore = store
+            playerStore.beforeDiagnosticPlayback = { [weak diagnosticStore] in
+                diagnosticStore?.stopForPlaybackHandoff()
+            }
+        }
+        .onDisappear {
+            store.stop()
+            playerStore.retainOutputCleanup(store.stopForPlaybackHandoff())
+            playerStore.beforeDiagnosticPlayback = nil
+        }
     }
 
     private func row(_ label: String, _ value: String) -> some View {

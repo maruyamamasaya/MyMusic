@@ -50,6 +50,19 @@ final class PlaylistTagModelTests: XCTestCase {
 
 @MainActor
 final class PlaylistTagStoreTests: XCTestCase {
+    func testUntaggedFilterIsSeparateFromLiteralTagAndPlaylistKind() async {
+        let store = PlaylistStore(persistence: PlaylistMemoryPersistence())
+        let regular = store.createPlaylist(named: "No tags")!
+        let work = store.createPlaylist(named: "Work no tags", kind: .work)!
+        let tagged = store.createPlaylist(named: "Literal tag")!
+        store.setTags(["タグなし"], for: tagged)
+        XCTAssertEqual(store.playlists(of: .regular, tagged: nil, untaggedOnly: true).map(\.id), [regular])
+        XCTAssertEqual(store.playlists(of: .work, tagged: nil, untaggedOnly: true).map(\.id), [work])
+        XCTAssertEqual(store.playlists(of: .regular, tagged: "タグなし").map(\.id), [tagged])
+        XCTAssertEqual(store.playlists(of: .regular, tagged: nil).count, 2)
+        await store.waitForPendingSave()
+    }
+
     func testTagFilteringAndTagChangesDoNotMutateTracks() async {
         let persistence = PlaylistMemoryPersistence()
         let store = PlaylistStore(persistence: persistence)

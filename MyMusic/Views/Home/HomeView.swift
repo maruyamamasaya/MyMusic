@@ -42,6 +42,7 @@ struct HomeView: View {
     @State private var showsDeepDive = false
     @State private var showsMoodMix = false
     @State private var presentsPlayerAfterMixDismissal = false
+    @State private var mixSelectionSeed: UInt64 = 0
     @State private var mixDay: Date?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
@@ -124,6 +125,15 @@ struct HomeView: View {
                 }
                 .padding(.top, 4)
                 .padding(.bottom, 12)
+            }
+            .refreshable {
+                mixSelectionSeed = UInt64.random(in: 1...UInt64.max)
+                let task = refreshHomeSnapshot(
+                    rotatingRepresentatives: true,
+                    includesMixes: true,
+                    includesTodayPlaybackSummary: false
+                )
+                await task?.value
             }
             .themeScreen()
             .navigationTitle("ホーム")
@@ -360,13 +370,14 @@ struct HomeView: View {
         destinationPresentations[destination]?.representativeTrack
     }
 
+    @discardableResult
     private func refreshHomeSnapshot(
         rotatingRepresentatives: Bool = false,
         includesMixes: Bool = true,
         includesTodayPlaybackSummary: Bool = true,
         isRotationOnly: Bool = false
-    ) {
-        guard isActive else { return }
+    ) -> Task<Void, Never>? {
+        guard isActive else { return nil }
         let request = HomePerformanceSnapshotRequest(
             tracks: libraryStore.tracks,
             albums: libraryStore.albums,
@@ -385,7 +396,8 @@ struct HomeView: View {
             rotatesRepresentatives: rotatingRepresentatives,
             includesMixes: includesMixes,
             includesTodayPlaybackSummary: includesTodayPlaybackSummary,
-            now: Date()
+            now: Date(),
+            mixSelectionSeed: mixSelectionSeed
         )
         let task = Task { @MainActor in
             guard let snapshot = await HomePerformanceSnapshotWorker.shared.prepare(request),
@@ -413,6 +425,7 @@ struct HomeView: View {
             homeSnapshotTask?.cancel()
             homeSnapshotTask = task
         }
+        return task
     }
 
     private func refreshPlaylistPresentations() {

@@ -123,7 +123,7 @@ struct MusicDataExportService {
     }
 
     func playlistJSON(_ playlist: Playlist, tracks: [Track]) throws -> MusicExportFile {
-        try jsonFile(document(for: playlist, tracks: tracks), filename: safe(playlist.name) + ".json")
+        try jsonFile(try document(for: playlist, tracks: tracks), filename: safe(playlist.name) + ".json")
     }
 
     func playlistMarkdown(_ playlist: Playlist, tracks: [Track]) -> MusicExportFile {
@@ -138,7 +138,7 @@ struct MusicDataExportService {
     }
 
     func allPlaylistsJSON(_ playlists: [Playlist], tracks: [Track]) throws -> MusicExportFile {
-        try jsonFile(PlaylistsDocument(version: 1, playlists: playlists.map { document(for: $0, tracks: tracks) }), filename: "MyMusic-Playlists.json")
+        try jsonFile(PlaylistsDocument(version: 1, playlists: try playlists.map { try document(for: $0, tracks: tracks) }), filename: "MyMusic-Playlists.json")
     }
 
     func playlistsJSON(
@@ -146,7 +146,6 @@ struct MusicDataExportService {
         kind: PlaylistKind,
         tracks: [Track]
     ) throws -> MusicExportFile {
-        let compatibleTracks = tracks.filter(kind.accepts)
         let filename = switch kind {
         case .regular: "MyMusic-Regular-Playlists.json"
         case .work: "MyMusic-Work-Playlists.json"
@@ -154,9 +153,9 @@ struct MusicDataExportService {
         return try jsonFile(
             PlaylistsDocument(
                 version: 1,
-                playlists: playlists
+                playlists: try playlists
                     .filter { $0.kind == kind }
-                    .map { document(for: $0, tracks: compatibleTracks) }
+                    .map { try document(for: $0, tracks: tracks) }
             ),
             filename: filename
         )
@@ -352,8 +351,11 @@ struct MusicDataExportService {
         )
     }
 
-    private func document(for playlist: Playlist, tracks: [Track]) -> PlaylistDocument {
+    private func document(for playlist: Playlist, tracks: [Track]) throws -> PlaylistDocument {
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
+        guard playlist.trackIDs.allSatisfy({ byID[$0] != nil }) else {
+            throw MusicDataImportError.unresolvedTracks
+        }
         return PlaylistDocument(version: 1, name: playlist.name, playlistID: playlist.id,
             createdAt: playlist.createdAt, updatedAt: playlist.updatedAt, kind: playlist.kind, tags: playlist.tags,
             tracks: playlist.trackIDs.compactMap { byID[$0] }.map {

@@ -14,6 +14,7 @@ struct LibraryFolder: Identifiable, Hashable {
 @Observable
 final class LibraryStore {
     private(set) var tracks: [Track] = []
+    private(set) var storageSummary = LibraryStorageSummary.empty
     private(set) var homePresentationRevision = 0
     private(set) var albums: [Album] = []
     private(set) var artists: [Artist] = []
@@ -428,6 +429,7 @@ final class LibraryStore {
         )
         guard folderIDs == libraryFolders.map(\.id) else { return }
         allTracks = completeLibrary.tracks
+        storageSummary = LibraryStorageSummary(fileSizes: completeLibrary.tracks.map(\.fileSize))
         let regularTrackIDs = Set(completeLibrary.tracks.lazy
             .filter(\.isEligibleForRegularPlayback)
             .map(\.id))

@@ -78,14 +78,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Beta機能") {
-                NavigationLink {
-                    TrackFeatureSettingsView()
-                } label: {
-                    Label("音楽特徴量", systemImage: "waveform.badge.magnifyingglass")
-                }
-            }
-
             Section("データ管理") {
                 NavigationLink {
                     DataManagementView()

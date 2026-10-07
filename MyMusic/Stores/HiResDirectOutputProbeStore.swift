@@ -112,10 +112,13 @@ final class HiResDirectOutputProbeStore {
     func prepare(sampleRate: Double) {
         guard !hasActiveSession else { return }
         beforePlayback?()
-        playbackTask?.cancel()
+        let previousTask = playbackTask
+        previousTask?.cancel()
         service.stop()
         state = .switching
         playbackTask = Task { [weak self] in
+            _ = await previousTask?.result
+            guard !Task.isCancelled else { return }
             guard let self else { return }
             do {
                 try await service.prepare(sampleRate: sampleRate)
@@ -211,10 +214,18 @@ final class HiResDirectOutputProbeStore {
     func stop() {
         finalizeHistory(endKind: .userSkipped)
         playbackTask?.cancel()
-        playbackTask = nil
+        // Retain the cancelled task so the next request waits for cleanup.
         service.stop()
         state = .idle
         currentTime = 0
+    }
+
+    /// Also returns cleanup after an earlier explicit stop put the UI in idle.
+    func stopForPlaybackHandoff() -> Task<Void, Never>? {
+        if hasActiveSession || state == .prepared {
+            stop()
+        }
+        return playbackTask
     }
 
     private func handle(_ event: HiResAudioQueueProbeEvent) {

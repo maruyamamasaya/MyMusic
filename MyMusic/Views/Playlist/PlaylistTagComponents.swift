@@ -4,11 +4,13 @@ struct PlaylistTagFilterBar: View {
     @Environment(\.appTheme) private var appTheme
     let tags: [String]
     @Binding var selectedTag: String?
+    var untaggedSelection: Binding<Bool>? = nil
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 tagButton(title: "すべて", tag: nil)
+                if untaggedSelection != nil { tagButton(title: "タグなし", tag: nil, untagged: true) }
                 ForEach(tags, id: \.self) { tag in
                     tagButton(title: tag, tag: tag)
                 }
@@ -19,10 +21,11 @@ struct PlaylistTagFilterBar: View {
         .accessibilityLabel("プレイリストのタグ絞り込み")
     }
 
-    private func tagButton(title: String, tag: String?) -> some View {
-        let isSelected = selectedTag == tag
+    private func tagButton(title: String, tag: String?, untagged: Bool = false) -> some View {
+        let isSelected = untagged ? (untaggedSelection?.wrappedValue == true) : (selectedTag == tag && untaggedSelection?.wrappedValue != true)
         return Button {
             selectedTag = tag
+            untaggedSelection?.wrappedValue = untagged
         } label: {
             Text(title)
                 .font(.subheadline.weight(isSelected ? .semibold : .regular))

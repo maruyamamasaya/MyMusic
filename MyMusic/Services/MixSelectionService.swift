@@ -58,7 +58,7 @@ nonisolated enum MixKind: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// Builds temporary queues from already loaded library, history and preferences.
-/// The same inputs on the same local day produce the same order.
+/// The same inputs, local day and selection seed produce the same order.
 nonisolated struct MixSelectionService {
     static let maximumCount = 25
 
@@ -84,9 +84,10 @@ nonisolated struct MixSelectionService {
         weights: [Track.ID: Double],
         features: [Track.ID: TrackFeatureValues] = [:],
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        selectionSeed: UInt64 = 0
     ) -> [MixKind: [Track]] {
-        let ordered = ranked(candidates, weights: weights, now: now, calendar: calendar)
+        let ordered = ranked(candidates, weights: weights, now: now, calendar: calendar, selectionSeed: selectionSeed)
         return Dictionary(uniqueKeysWithValues: MixKind.allCases.map { kind in
             (kind, select(kind, from: ordered, histories: histories,
                           preferences: preferences, features: features,
@@ -95,11 +96,11 @@ nonisolated struct MixSelectionService {
     }
 
     func ranked(
-        _ candidates: [Track], weights: [Track.ID: Double], now: Date, calendar: Calendar
+        _ candidates: [Track], weights: [Track.ID: Double], now: Date, calendar: Calendar, selectionSeed: UInt64 = 0
     ) -> [Track] {
         let day = calendar.startOfDay(for: now)
         let keys = Dictionary(uniqueKeysWithValues: candidates.map {
-            ($0.id, drawKey(for: $0.id, day: day, weight: weights[$0.id] ?? 1))
+            ($0.id, drawKey(for: $0.id, day: day, weight: weights[$0.id] ?? 1, selectionSeed: selectionSeed))
         })
         return candidates.sorted {
             let left = keys[$0.id] ?? 0
@@ -301,10 +302,18 @@ nonisolated struct MixSelectionService {
         return preference?.favorite == true || (preference?.playbackPreference ?? 0) > 0
     }
 
-    private func drawKey(for id: Track.ID, day: Date, weight: Double) -> Double {
+    private func drawKey(for id: Track.ID, day: Date, weight: Double, selectionSeed: UInt64 = 0) -> Double {
         var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in "\(Int(day.timeIntervalSince1970)):\(id.uuidString)".utf8 {
+        let base = "\(Int(day.timeIntervalSince1970)):\(id.uuidString)"
+        let key = selectionSeed == 0 ? base : "\(base):\(selectionSeed)"
+        for byte in key.utf8 {
             hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211
+        }
+        if selectionSeed != 0 {
+            // Avalanche the seeded hash so nearby seeds redraw the weighted ranking.
+            hash = (hash ^ (hash >> 30)) &* 0xbf58476d1ce4e5b9
+            hash = (hash ^ (hash >> 27)) &* 0x94d049bb133111eb
+            hash ^= hash >> 31
         }
         let unit = (Double(hash) + 1) / (Double(UInt64.max) + 2)
         return -log(unit) / max(weight.isFinite ? weight : 1, 0.01)

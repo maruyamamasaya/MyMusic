@@ -4,6 +4,14 @@ import UniformTypeIdentifiers
 struct DataManagementView: View {
     var body: some View {
         List {
+            Section("音楽特徴量") {
+                NavigationLink {
+                    TrackFeatureSettingsView()
+                } label: {
+                    Label("音楽特徴量", systemImage: "waveform.badge.magnifyingglass")
+                }
+            }
+
             Section {
                 NavigationLink {
                     ExternalBackupView()
@@ -150,6 +158,11 @@ private struct DataManagementDetailView: View {
     @State private var resultMessage: String?
     @State private var errorMessage: String?
     @State private var shareItem: ActivityShareItem?
+    @State private var pendingPlaylistImport: PlaylistImportResult?
+    @State private var pendingPlaylistOriginal: Data?
+    @State private var pendingPlaylistSnapshot: [Playlist]?
+    @State private var showsPlaylistImportConfirmation = false
+    @State private var playlistImportChanges = 0
     @State private var libraryFingerprints: [Track.ID: String] = [:]
 
     private let exporter = MusicDataExportService()
@@ -175,6 +188,7 @@ private struct DataManagementDetailView: View {
         .navigationTitle(category.title)
         .activityShareSheet(item: $shareItem)
         .task {
+            await playlistStore.loadIfNeeded()
             guard category == .library else { return }
             libraryFingerprints = await libraryStore.trackFingerprintsForExport()
         }
@@ -189,6 +203,16 @@ private struct DataManagementDetailView: View {
             case .genreDisplayPresets:
                 importSettingsFile(result, expectedKind: .genreDisplayPresets)
             }
+        }
+        .alert("プレイリストの内容を更新", isPresented: $showsPlaylistImportConfirmation) {
+            Button("更新して読み込む") { applyPendingPlaylistImport(allowUpdatingExisting: true) }
+            Button("キャンセル", role: .cancel) {
+                pendingPlaylistImport = nil
+                pendingPlaylistOriginal = nil
+                pendingPlaylistSnapshot = nil
+            }
+        } message: {
+            Text("同じIDのプレイリスト\(playlistImportChanges)件について、名前・タグ・曲順を受信内容へ更新します。更新前のデータと受信原本をアプリ内に保管します。")
         }
         .alert("インポート結果", isPresented: Binding(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } })) {
             Button("閉じる") { resultMessage = nil }
@@ -251,7 +275,7 @@ private struct DataManagementDetailView: View {
         } header: {
             Text("プレイリスト")
         } footer: {
-            Text("全プレイリストは完全な同期用です。通常用と作業用は用途別に分けて共有できます。")
+            Text("同じIDは確認のうえ更新し、同じ内容の再読み込みでは増えません。照合できない曲がある場合は読み込み・書き出しを停止します。")
         }
     }
 
@@ -355,19 +379,32 @@ private struct DataManagementDetailView: View {
             let url = try result.get()
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            let parsed = try MusicDataImportService().parse(data: Data(contentsOf: url), fileExtension: url.pathExtension, libraryTracks: libraryStore.tracks)
-            let tracksByID = Dictionary(uniqueKeysWithValues: libraryStore.tracks.map { ($0.id, $0) })
-            for draft in parsed.playlists {
-                playlistStore.importPlaylist(
-                    named: draft.name,
-                    tracks: draft.trackIDs.compactMap { tracksByID[$0] },
-                    kind: draft.kind,
-                    tags: draft.tags
-                )
-            }
-            resultMessage = "\(parsed.playlists.count)件のプレイリスト、\(parsed.importedTrackCount)曲を読み込みました。\n見つからない曲: \(parsed.missingTrackCount)曲\n種別が異なる曲: \(parsed.incompatibleTrackCount)曲"
+            let data = try Data(contentsOf: url)
+            let parsed = try MusicDataImportService().parse(data: data, fileExtension: url.pathExtension, libraryTracks: libraryStore.unfilteredTracks)
+            pendingPlaylistImport = parsed
+            pendingPlaylistOriginal = data
+            pendingPlaylistSnapshot = playlistStore.playlists
+            playlistImportChanges = playlistStore.importChangeCount(parsed.playlists)
+            if playlistImportChanges > 0 { showsPlaylistImportConfirmation = true }
+            else { applyPendingPlaylistImport(allowUpdatingExisting: false) }
         } catch let error as CocoaError where error.code == .userCancelled { }
         catch { errorMessage = error.localizedDescription }
+    }
+
+    private func applyPendingPlaylistImport(allowUpdatingExisting: Bool) {
+        guard let parsed = pendingPlaylistImport, let original = pendingPlaylistOriginal else { return }
+        let expected = pendingPlaylistSnapshot
+        pendingPlaylistImport = nil
+        pendingPlaylistOriginal = nil
+        pendingPlaylistSnapshot = nil
+        Task {
+            do {
+                await playlistStore.loadIfNeeded()
+                let result = try await playlistStore.applyImportedPlaylists(parsed.playlists, original: original,
+                    allowUpdatingExisting: allowUpdatingExisting, expectedPlaylists: expected)
+                resultMessage = "追加: \(result.added)件、更新: \(result.updated)件、変更なし: \(result.unchanged)件\n\(parsed.importedTrackCount)曲を確認しました。"
+            } catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private func importSettingsFile(

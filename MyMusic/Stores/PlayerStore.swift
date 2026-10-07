@@ -76,7 +76,26 @@ final class PlayerStore {
         return playbackOrderPositions[currentIndex]
     }
 
-    @ObservationIgnored var beforePlayback: (() -> Void)?
+    // Stop the previous output synchronously and return its pending cleanup.
+    @ObservationIgnored var beforePlayback: (() -> Task<Void, Never>?)?
+    @ObservationIgnored var beforeDiagnosticPlayback: (() -> Task<Void, Never>?)?
+    @ObservationIgnored private var pendingOutputCleanup: Task<Void, Never>?
+
+    /// Keep a closing diagnostic's cleanup alive after its view disappears.
+    func retainOutputCleanup(_ task: Task<Void, Never>?) {
+        guard let task else { return }
+        let previousTask = pendingOutputCleanup
+        pendingOutputCleanup = Task {
+            await previousTask?.value
+            await task.value
+        }
+    }
+
+    private func prepareOutputHandoff() -> [Task<Void, Never>] {
+        // Capture and stop both outputs before suspension. Completed tasks are harmless.
+        [beforePlayback?(), beforeDiagnosticPlayback?(), pendingOutputCleanup].compactMap { $0 }
+    }
+
 
     private let previousRestartThreshold: TimeInterval = 3
     private let audioPlayer: AudioPlayerServicing
@@ -432,13 +451,15 @@ final class PlayerStore {
 
     func resume() {
         guard currentTrack != nil else { return }
-        beforePlayback?()
+        let previousOutputTasks = prepareOutputHandoff()
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         isLoading = true
         errorMessage = nil
         playbackTask = Task { [weak self] in
             guard let self else { return }
+            for task in previousOutputTasks { await task.value }
+            guard playbackRequestID == requestID, !Task.isCancelled else { return }
             do {
                 try await audioPlayer.resume()
             } catch is CancellationError {
@@ -563,7 +584,7 @@ final class PlayerStore {
         outgoingEndKind: PlaybackEndKind = .other
     ) {
         guard queue.indices.contains(index), playbackOrderPositions[index] != nil else { return }
-        beforePlayback?()
+        let previousOutputTasks = prepareOutputHandoff()
         finalizeCurrentPlaybackSession(endKind: outgoingEndKind)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
         playbackTask?.cancel()
@@ -595,6 +616,8 @@ final class PlayerStore {
 
         playbackTask = Task { [weak self] in
             guard let self else { return }
+            for task in previousOutputTasks { await task.value }
+            guard playbackRequestID == requestID, !Task.isCancelled else { return }
             let adjustment = await trackPlaybackAdjustmentStore.load(
                 for: track.id,
                 duration: track.duration

@@ -16,19 +16,17 @@ struct PlaybackBehaviorView: View {
     }
 
     var body: some View {
+        let analysis = analysis
         List {
             Section("聴きすぎている曲") {
                 if analysis.overplayCandidates.isEmpty {
                     Text("現在、強い聴きすぎ傾向はありません。")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(analysis.overplayCandidates.prefix(5)) { result in
-                        OverplayTrackRow(result: result)
-                    }
-                    if analysis.overplayCandidates.count > 5 {
-                        NavigationLink("続きを見る") {
-                            OverplayCandidatesView(results: analysis.overplayCandidates)
-                        }
+                    NavigationLink {
+                        OverplayCandidatesView(results: analysis.overplayCandidates)
+                    } label: {
+                        LabeledContent("一覧を見る", value: "\(analysis.overplayCandidates.count)曲")
                     }
                 }
             }

@@ -1,9 +1,43 @@
 ---
 status: active
-updated: 2026-10-01
+updated: 2026-10-04
 ---
 
 # MyMusic の現在状態
+
+## ライブラリの登録音源容量
+
+ライブラリに登録済み音源の曲数と合計容量を表示する。通常曲・作業用BGM・ハイレゾ・非表示ジャンルを含む統合済みTrackのfileSizeを復元／同期／フォルダ変更時に集計する。容量不明がある場合は「確認済み容量」と不明曲数を表示する。iCloud未ダウンロード音源も含む論理ファイル容量であり、iPhoneの実使用容量ではない。保存形式・同期処理は変更しない。generic iPhone／Watch Simulator Debug buildと容量集計の単独チェック3件が成功。実機表示は未確認。
+
+## 再生画面のいいね表示
+
+通常再生画面とVisual World再生バーのいいね済みハートを赤に統一した。解除時は従来の未選択色へ戻る。一覧の色・保存形式・再生処理は維持する。generic iPhone／Watch Simulator Debug build成功。実機表示は未検証、デプロイ未実施。
+
+## Playlistのタグなしfilter
+
+通常／作業用のPlaylist一覧と曲追加先sheetで「すべて」「タグなし」「各タグ」を切り替えられる。タグなしは実際のタグ名とは別の状態とし、tagsが空のPlaylistだけを表示する。タグ未設定のPlaylistしかない場合もfilterを表示する。ID・保存形式・JSONを変更しない。対象XCTest 16件成功、Vesperaへのbuild・install・launch成功。Macのレイアウト修正と合わせた記録はsessions/2026-10-04-playlist-layout-untagged.md。
+
+## Playlist JSON往復保全 Beta
+
+- JSONのplaylistIDを保持し、同一ID・同一内容の再Importは追加も書換えもしない。異内容は更新確認を表示し、確認後の再編集は適用前に拒否する。新規の作成／更新日時を保持し、既存のローカル検索条件・説明・画像は保持する。
+- 受信原本と更新前の全PlaylistをApplication Support/MyMusic/PlaylistImportArchiveへhash名でatomic保存・read-back確認し、候補全体の保存成功後だけStoreへ反映する。保存失敗では既存値を維持する。
+- 未照合／kind非互換曲がある文書のImportと、未解決参照を含むJSON Exportは全体を停止する。未照合参照を保持して部分適用する機能は未実装。旧IDなし形式は新規追加を維持するため、反復同期にはID付きJSONを使う。
+- HomeStereoにタグの追加・削除・既存タグ選択とタグfilterを追加。両側で同じ20個／40文字の制約を使う。既存の重複は自動削除しない。
+- VesperaへのDebug build・install・launch、Mac正式配置へのRelease build・install・launchが2026-10-04に成功。iPhone／Watch buildと対象XCTest 15件、Macの全回帰testとbuildが成功。実端末間の操作・既存重複の整理・原本の外部backup／復元UIは未検証・未実装。詳細は[作業記録](sessions/2026-10-04-playlist-interchange-fix.md)。
+
+
+## ホームのおすすめ引き直し Beta
+
+- ホームを下へ引くと、おすすめ代表曲・画像と5種類のMIXを選び直す。ロード済みStoreを使い、ライブラリ同期、プレイリストの再読み込み、今日の再生集計の手動更新は行わない。再生中の曲・queueは変更しない。
+- MIXに画面内で保持する抽選seedを導入。通常の初回表示は従来の日別順序を維持し、手動の引き直し後はそのseedを自動更新でも使用する。候補やランキング条件によって同じ曲が選ばれる場合がある。
+- iPhone／Watch generic Simulator Debug build成功。MIX・代表曲・再生時間集計の対象XCTest 17件成功。実機でのpull操作は未検証。
+
+## 設定の整理・再生時間カレンダー Beta
+
+- 音楽特徴量の設定入口を設定トップのBeta機能からデータ管理へ移動。再生傾向の「聴きすぎている曲」は件数と一覧への入口だけを表示する。
+- 分析の概要に保存済み履歴全体の総再生時間を表示し、タップで日付を選べるカレンダーを開く。選択日の月・週・日別時間は終了済みeventのlistenedSecondsを開始日の端末Calendarで集計する。週の区切りも端末設定に従う。
+- 日付をまたぐ再生は開始日に含む。日時付き時間がない旧履歴、再生中の未確定eventは期間別集計に含まれず、全体の総再生時間と差が出る。既存保存形式と記録処理は変更しない。
+
 
 ## データ連携保全 DI-001
 
@@ -129,6 +163,10 @@ updated: 2026-10-01
 - 共通の表示項目生成XCTest 2件とgeneric iOS Simulator Debug buildが成功。実機での小画面、長いパス、Dynamic Typeの見た目は未確認。
 
 ### USB DAC 出力レート
+
+- 2026-10-07: 通常再生の開始／再開は、共有Hi-Resと設定Files診断の停止後cleanup完了を待ってからbackendへ進む。診断画面を閉じた直後のcleanupも保持し、待機中に通常再生を停止した場合は解放後の開始を拒否する。追加7件を含む対象XCTest 32件と最終generic iPhone／Watch Simulator Debug buildが成功。Tea Pro実機確認は未実施。
+
+- 2026-10-07: rate切替のキャンセル済み準備を次の要求が待つようにし、無音queue解放前のsession deactivateを回避した。category／希望rateの設定はdeactivate後へ移した。`HiResRateSwitch`ログで要求ID、各warm-upのhardware rate、session rate、route、停止／解放OSStatusを記録する。2回のwarm-upと300／160ms待機は維持。generic iPhone／Watch Simulator Debug buildと対象XCTest 12件（新規4件＋既存8件）が成功。Tea Proでの全rate切替成功は未検証。確認手順は[rate切替検証](Documentation/HiResRateSwitchVerification.md)。
 
 - `codex/hires-direct-output-beta` branchに、Audio Queue Servicesの単曲再生とUSB DAC出力レート準備を追加した。設定 → オーディオ → USB DAC 出力レートから、内蔵無音PCMによる44.1／48／88.2／96／192kHzの準備、Files上の音源選択、音源rate、AVAudioSessionの実rate、Audio Queueが報告するhardware rate、出力先の確認ができる。開始時だけ`PlayerStore.stop()`で通常のAVAudioEngineを完全停止し、その後の再生処理は既存`AudioPlayerService`へ接続しない。
 - 44.1／48／88.2／96／192kHzの16-bit stereo無音PCMをメモリ上で生成するrate準備を追加した。実曲の直前に最大2回の短いAudio Queueを開き、初回USB streamが希望rateを採用しないTea Proの挙動を再交渉する。設定診断とホームのハイレゾ専用画面から、音源ファイルなしでも各rateを手動準備できる。

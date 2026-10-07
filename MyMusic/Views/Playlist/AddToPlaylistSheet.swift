@@ -7,6 +7,7 @@ struct AddToPlaylistSheet: View {
 
     @State private var isCreatingPlaylist = false
     @State private var searchText = ""
+    @State private var filtersUntagged = false
     @AppStorage("playlist.addDestination.regularTagFilter") private var regularTagFilter = ""
     @AppStorage("playlist.addDestination.workTagFilter") private var workTagFilter = ""
 
@@ -15,7 +16,7 @@ struct AddToPlaylistSheet: View {
     }
 
     private var compatiblePlaylists: [Playlist] {
-        playlistStore.playlists(compatibleWith: track, tagged: selectedTagValue).filter {
+        playlistStore.playlists(of: playlistKind, tagged: selectedTagValue, untaggedOnly: filtersUntagged).filter {
             searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)
         }
     }
@@ -27,9 +28,9 @@ struct AddToPlaylistSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                if !availableTags.isEmpty {
+                if !playlistStore.playlists(compatibleWith: track).isEmpty {
                     Section {
-                        PlaylistTagFilterBar(tags: availableTags, selectedTag: selectedTagBinding)
+                        PlaylistTagFilterBar(tags: availableTags, selectedTag: selectedTagBinding, untaggedSelection: $filtersUntagged)
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
                     }

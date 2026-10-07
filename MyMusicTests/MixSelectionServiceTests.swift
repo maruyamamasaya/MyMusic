@@ -6,6 +6,19 @@ final class MixSelectionServiceTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_790_000_000)
     private let selector = MixSelectionService()
 
+    func testSelectionSeedChangesOrderAndRemainsStable() {
+        let tracks = (0..<80).map { track("Track \($0)") }
+        let first = selector.allQueues(from: tracks, histories: [:], preferences: [:],
+                                       weights: [:], now: now, selectionSeed: 1)
+        let repeatSelection = selector.allQueues(from: tracks.reversed(), histories: [:],
+                                       preferences: [:], weights: [:], now: now, selectionSeed: 1)
+        let next = selector.allQueues(from: tracks, histories: [:], preferences: [:],
+                                       weights: [:], now: now, selectionSeed: 2)
+        XCTAssertEqual(first[.daily]?.map(\.id), repeatSelection[.daily]?.map(\.id))
+        XCTAssertNotEqual(first[.daily]?.map(\.id), next[.daily]?.map(\.id))
+        XCTAssertEqual(first[.daily]?.count, MixSelectionService.maximumCount)
+    }
+
     func testDailyMixInterleavesFourSourcesAndIsStableWithinDay() {
         let recent = track("Recent")
         let favorite = track("Favorite")
