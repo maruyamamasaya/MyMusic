@@ -20,7 +20,6 @@ actor TrackPreferencePersistenceService: TrackPreferencePersistenceServicing {
         )[0].appending(path: "MyMusic")
         fileURL = root.appending(path: "track-preferences.json")
         encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         decoder = JSONDecoder()
     }
 

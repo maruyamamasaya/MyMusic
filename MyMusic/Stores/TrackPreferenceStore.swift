@@ -14,6 +14,7 @@ final class TrackPreferenceStore {
     private let persistence: TrackPreferencePersistenceServicing
     private var saveTask: Task<Void, Never>?
     private var isLoading = false
+    private var saveRevision = 0
     var stateChangeHandler: (() -> Void)?
 
     init(persistence: TrackPreferencePersistenceServicing) {
@@ -148,14 +149,26 @@ final class TrackPreferenceStore {
         homePresentationRevision &+= 1
         stateChangeHandler?()
         guard isLoaded else { return }
-        let snapshot = Array(entries.values)
-        let preceding = saveTask
-        saveTask = Task { [weak self, persistence] in
-            do {
-                await preceding?.value
-                try await persistence.save(snapshot)
-            } catch {
-                self?.errorMessage = "曲の設定を保存できませんでした: \(error.localizedDescription)"
+        saveRevision &+= 1
+        guard saveTask == nil else { return }
+        saveTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.saveTask = nil }
+            // Combine changes in the same UI turn and retain only the latest
+            // state while a save is in flight, rather than queueing every tap.
+            await Task.yield()
+            while true {
+                let revision = self.saveRevision
+                let snapshot = self.entries
+                let persistence = self.persistence
+                do {
+                    try await Task.detached(priority: .utility) {
+                        try await persistence.save(Array(snapshot.values))
+                    }.value
+                } catch {
+                    self.errorMessage = "曲の設定を保存できませんでした: \(error.localizedDescription)"
+                }
+                guard revision != self.saveRevision else { return }
             }
         }
     }

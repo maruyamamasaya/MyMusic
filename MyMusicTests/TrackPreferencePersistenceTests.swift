@@ -41,12 +41,38 @@ final class TrackPreferencePersistenceTests: XCTestCase {
 
         store.toggleFavorite(trackID: trackID)
         store.increasePlaybackPreference(for: trackID)
-        await persistence.waitForPreference(1)
+        await store.waitForPendingSave()
 
         let reloaded = TrackPreferenceStore(persistence: persistence)
         await reloaded.loadIfNeeded(legacyHistory: [:])
         XCTAssertTrue(reloaded.isFavorite(trackID: trackID))
         XCTAssertEqual(reloaded.playbackPreference(for: trackID), 1)
+    }
+
+    func testChangesDuringSaveCoalesceAndPersistLatestStateWithLargeLibrary() async {
+        let trackID = UUID()
+        let initial = (0..<15_000).map { _ in
+            TrackPreference(trackID: UUID(), playbackPreference: 0, favorite: false)
+        }
+        let persistence = BlockingPreferencePersistence(initial: initial)
+        let store = TrackPreferenceStore(persistence: persistence)
+        await store.loadIfNeeded(legacyHistory: [:])
+        store.toggleFavorite(trackID: trackID)
+        await persistence.waitForFirstSave()
+
+        for _ in 0..<5 { store.increasePlaybackPreference(for: trackID) }
+        store.toggleFavorite(trackID: trackID)
+        XCTAssertFalse(store.isFavorite(trackID: trackID))
+        XCTAssertEqual(store.playbackPreference(for: trackID), 5)
+        await persistence.releaseFirstSave()
+        await store.waitForPendingSave()
+
+        let saved = await persistence.load()
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 2)
+        XCTAssertEqual(saved?.count, 15_001)
+        XCTAssertEqual(saved?.first(where: { $0.trackID == trackID }),
+                       TrackPreference(trackID: trackID, playbackPreference: 5, favorite: false))
     }
 
     func testPreferenceImportMergesKnownTracksAndSurvivesReload() async throws {
@@ -152,10 +178,33 @@ private actor PreferenceMemoryPersistence: TrackPreferencePersistenceServicing {
     }
 
     func failNextSave() { shouldFailNextSave = true }
+}
 
-    func waitForPreference(_ value: Int) async {
-        for _ in 0..<100 where entries?.first?.playbackPreference != value {
-            await Task.yield()
+private actor BlockingPreferencePersistence: TrackPreferencePersistenceServicing {
+    private var entries: [TrackPreference]
+    private(set) var saveCount = 0
+    private var started: CheckedContinuation<Void, Never>?
+    private var release: CheckedContinuation<Void, Never>?
+
+    init(initial: [TrackPreference]) { entries = initial }
+    func load() -> [TrackPreference]? { entries }
+    func save(_ preferences: [TrackPreference]) async throws {
+        saveCount += 1
+        if saveCount == 1 {
+            await withCheckedContinuation { continuation in
+                release = continuation
+                started?.resume()
+                started = nil
+            }
         }
+        entries = preferences
+    }
+    func waitForFirstSave() async {
+        if release != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
+    func releaseFirstSave() {
+        release?.resume()
+        release = nil
     }
 }

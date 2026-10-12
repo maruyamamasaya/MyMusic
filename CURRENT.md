@@ -15,6 +15,12 @@ updated: 2026-10-08
 
 ライブラリに登録済み音源の曲数と合計容量を表示する。通常曲・作業用BGM・ハイレゾ・非表示ジャンルを含む統合済みTrackのfileSizeを復元／同期／フォルダ変更時に集計する。容量不明がある場合は「確認済み容量」と不明曲数を表示する。iCloud未ダウンロード音源も含む論理ファイル容量であり、iPhoneの実使用容量ではない。保存形式・同期処理は変更しない。generic iPhone／Watch Simulator Debug buildと容量集計の単独チェック3件が成功。実機表示は未確認。
 
+## 再生中の評価操作の保存負荷改善
+
+- 曲のいいね／Good／Badはメモリ上の状態を即時更新し、保存中の追加操作は最新状態へまとめる。タップごとの全件配列生成と保存Taskの累積を廃止し、保存用配列化をMainActor外へ移した。
+- generic iPhone／Watch Simulator Debug buildと評価保存の対象XCTest 6件（15,000件での保存中連続操作を含む）が成功。
+- track-preferences.jsonはschema v2、Track ID、全件のatomic保存と読戻し検証を維持し、pretty print／key sortを外して出力量を抑える。全件保存自体とDictionaryのcopy-on-write、画面更新に伴う負荷は残る。2026-10-12にVesperaへのDebug build・install・launch成功。実機15,000曲での応答改善は未計測。
+
 ## 再生画面のいいね表示
 
 通常再生画面とVisual World再生バーのいいね済みハートを赤に統一した。解除時は従来の未選択色へ戻る。一覧の色・保存形式・再生処理は維持する。generic iPhone／Watch Simulator Debug build成功。実機表示は未検証、デプロイ未実施。

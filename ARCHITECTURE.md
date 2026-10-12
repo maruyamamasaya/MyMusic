@@ -7,6 +7,8 @@ updated: 2026-09-18
 
 ライブラリ容量はLibraryStoreが統合済み全Track（表示filter前）のfileSizeをLibraryStorageSummaryへ渡して集計し、LibraryViewへ完成値を公開する。復元／同期／フォルダ変更の統合処理時に更新し、Viewからファイルへアクセスしない。既存のpath重複除外を利用し、容量欠落・負値・加算overflowは不明件数に含める。ByteCountFormatterのfile表記を使用し、iCloudの実ローカル占有量は測定しない。
 
+曲評価の永続化はTrackPreferenceStoreが単一の保存Taskで調整する。状態更新は即時反映し、保存revisionが変わった場合だけ最新snapshotを再保存する。snapshotの配列化はMainActor外、JSON encode／atomic write／読戻し検証はTrackPreferencePersistenceService actorで行う。外部backupのwaitForPendingSaveは追加変更を含む保存Taskの完了を待つ。schema v2の契約は維持する。
+
 ## システム境界と技術スタック
 
 MyMusic は Swift / SwiftUI / Observation で構築した iPhone 中心の単一アプリです。音声には AVFoundation、lock screen と remote control には MediaPlayer、Files 選択には UniformTypeIdentifiers を含む Apple 標準 framework を使います。外部 Swift package は確認できません。
