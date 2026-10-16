@@ -272,21 +272,8 @@ private struct HighlightTrackPage: View {
             }
             .accessibilityLabel(isListenLater ? "あとで聴くから削除" : "あとで聴くに追加")
 
-            Button {
-                preferenceStore.increasePlaybackPreference(for: track.id)
-            } label: {
-                preferenceIcon(direction: .increase)
-            }
-            .accessibilityLabel("グッド")
-            .accessibilityValue(preferenceAccessibilityValue)
-
-            Button {
-                preferenceStore.decreasePlaybackPreference(for: track.id)
-            } label: {
-                preferenceIcon(direction: .decrease)
-            }
-            .accessibilityLabel("よくないね")
-            .accessibilityValue(preferenceAccessibilityValue)
+            PlaybackPreferenceButton(track: track, direction: .increase, circularBackground: true)
+            PlaybackPreferenceButton(track: track, direction: .decrease, circularBackground: true)
 
             Button("プレイリストに追加", systemImage: "text.badge.plus", action: onAddToPlaylist)
             Button("曲情報", systemImage: "ellipsis", action: onShowInformation)
@@ -351,42 +338,6 @@ private struct HighlightTrackPage: View {
     private var progress: Double {
         guard isCurrent, candidate.duration > 0 else { return 0 }
         return min(max((playerStore.currentTime - candidate.startTime) / candidate.duration, 0), 1)
-    }
-
-    private var playbackPreference: Int {
-        preferenceStore.playbackPreference(for: track.id)
-    }
-
-    private var preferenceAccessibilityValue: String {
-        guard playbackPreference != 0 else { return "未評価" }
-        return "\(playbackPreference > 0 ? "グッド" : "バッド") \(abs(playbackPreference))、10段階中"
-    }
-
-    private func preferenceIcon(direction: PlaybackPreferenceButton.Direction) -> some View {
-        let level = direction == .increase
-            ? max(0, playbackPreference)
-            : max(0, -playbackPreference)
-        let isActive = level > 0
-
-        return ZStack(alignment: .topTrailing) {
-            Image(systemName: isActive
-                  ? "\(direction.systemImage).fill"
-                  : direction.systemImage)
-                .foregroundStyle(isActive
-                                 ? (direction == .increase ? Color.green : Color.orange)
-                                 : Color.white)
-
-            if isActive {
-                Text("\(level)")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .frame(minWidth: 16, minHeight: 16)
-                    .background(direction == .increase ? Color.green : Color.orange, in: Capsule())
-                    .offset(x: 9, y: -8)
-            }
-        }
-        .frame(width: 24, height: 24)
     }
 
     private func togglePlaybackFromArtwork() {

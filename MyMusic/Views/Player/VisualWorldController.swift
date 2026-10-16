@@ -46,6 +46,11 @@ struct VisualWorldController: View {
                     .foregroundStyle(isFavorite ? Color.red : Color.white)
                 control("グッド", symbol: preference > 0 ? "hand.thumbsup.fill" : "hand.thumbsup",
                         enabled: canRate, action: increasePreference)
+                    .overlay {
+                        if canRate && preference >= 5 {
+                            PreferenceSparklesView()
+                        }
+                    }
                     .accessibilityValue(preference > 0 ? "\(preference)" : "未評価")
             }
         }

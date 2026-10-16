@@ -6,6 +6,7 @@ struct PlaybackPreferenceButton: View {
     let track: Track
     let direction: Direction
     var compact = false
+    var circularBackground = false
 
     @State private var effectTrigger = 0
     @State private var isBursting = false
@@ -60,7 +61,12 @@ struct PlaybackPreferenceButton: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .overlay {
+            if direction == .increase && level >= 5 {
+                PreferenceSparklesView()
+            }
+        }
+        .buttonStyle(PreferenceButtonStyle(circular: circularBackground))
         .sensoryFeedback(.impact(weight: .light, intensity: min(1, 0.35 + Double(level) * 0.06)), trigger: effectTrigger)
         .accessibilityLabel(direction.accessibilityLabel)
         .accessibilityValue(preference == 0 ? "未評価" : "\(preference > 0 ? "プラス" : "マイナス")\(abs(preference))、10段階中")
@@ -130,6 +136,22 @@ struct PlaybackPreferenceButton: View {
             withAnimation(.easeOut(duration: 0.38)) {
                 isBursting = false
             }
+        }
+    }
+}
+
+private struct PreferenceButtonStyle: ButtonStyle {
+    let circular: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if circular {
+            configuration.label
+                .frame(width: 42, height: 42)
+                .background(.ultraThinMaterial, in: Circle())
+                .opacity(configuration.isPressed ? 0.65 : 1)
+                .scaleEffect(configuration.isPressed ? 0.94 : 1)
+        } else {
+            configuration.label
         }
     }
 }

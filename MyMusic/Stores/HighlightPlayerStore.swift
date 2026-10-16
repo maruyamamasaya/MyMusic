@@ -179,7 +179,8 @@ final class HighlightPlayerStore {
         playerStore.seekWithTransition(
             to: candidate.startTime,
             endingAt: candidate.endTime,
-            reason: .highlightUserInitiated
+            reason: .highlightUserInitiated,
+            presentationMode: .highlight
         )
         restartAutoAdvance(for: track, candidate: candidate)
     }
@@ -287,6 +288,7 @@ final class HighlightPlayerStore {
                 playbackStartTime: candidate.startTime,
                 playbackEndTime: candidate.endTime,
                 transitionReason: reason,
+                presentationMode: .highlight,
                 startContext: PlaybackStartContext(
                     kind: reason == .highlightAutomatic ? .automatic : .manual,
                     source: .highlight
@@ -309,6 +311,7 @@ final class HighlightPlayerStore {
                 guard !Task.isCancelled, let self, playbackGeneration == generation else { return }
                 let now = ProcessInfo.processInfo.systemUptime
                 defer { previousTime = now }
+                guard playerStore.presentationMode == .highlight else { return }
                 guard isHighlightPlaybackActive,
                       playerStore.currentTrack?.id == track.id,
                       playerStore.isPlaying else { continue }

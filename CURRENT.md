@@ -21,6 +21,16 @@ updated: 2026-10-08
 - generic iPhone／Watch Simulator Debug buildと評価保存の対象XCTest 6件（15,000件での保存中連続操作を含む）が成功。
 - track-preferences.jsonはschema v2、Track ID、全件のatomic保存と読戻し検証を維持し、pretty print／key sortを外して出力量を抑える。全件保存自体とDictionaryのcopy-on-write、画面更新に伴う負荷は残る。2026-10-12にVesperaへのDebug build・install・launch成功。実機15,000曲での応答改善は未計測。
 
+## ハイライト再生画面への復帰 Beta
+
+ハイライトからホームへ戻ってもqueue・現在曲・選択区間を保持する。ミニプレイヤーをタップするとホームの同じハイライト画面へ戻り、一時停止も維持する。フル再生／通常・作業用再生に切り替えた後は通常の画面選択へ戻る。新規のハイライト開始時だけ候補を引き直す。アプリ終了後の復元は対象外。対象XCTest 2件とgeneric iPhone／Watch Simulator Debug build成功。2026-10-16にVesperaへbuild・install・launch成功。ユーザーがホームからミニプレイヤー経由でハイライトへ戻れることを実機確認。一時停止・別tabからの復帰は個別未確認。詳細は[sessions/2026-10-16-highlight-return.md](sessions/2026-10-16-highlight-return.md)。
+
+## グッド評価5以上のきらめき Beta
+
+グッド評価が5以上のボタンに小さな金色のきらめきを追加した。共通評価ボタンとVisual Worldに適用し、5未満では非表示。「視差効果を減らす」有効時とscene非active時は静止表示とする。保存・選曲・再生経路は変更しない。実機の見た目は未検証。検証詳細は[sessions/2026-10-15-preference-sparkles.md](sessions/2026-10-15-preference-sparkles.md)。
+
+2026-10-16: ハイライトのグッド／バッドも共通評価ボタンへ統一し、段階別の色・数字・タップ反応とグッド5以上のきらめきを反映。丸い背景を維持。実機表示は未確認。
+
 ## 再生画面のいいね表示
 
 通常再生画面とVisual World再生バーのいいね済みハートを赤に統一した。解除時は従来の未選択色へ戻る。一覧の色・保存形式・再生処理は維持する。generic iPhone／Watch Simulator Debug build成功。実機表示は未検証、デプロイ未実施。

@@ -4,6 +4,62 @@ import XCTest
 
 @MainActor
 final class PlaybackHistoryBehaviorTests: XCTestCase {
+    func testHighlightReentryPreservesQueueCandidatePositionAndPause() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let highlight = HighlightPlayerStore(
+            playerStore: player, playbackHistoryStore: history,
+            trackFeatureStore: TrackFeatureStore(), analysisService: ReentryHighlightAnalysis()
+        )
+        let tracks = [makeTrack("Highlight A"), makeTrack("Highlight B")]
+        highlight.updateLibrary(tracks)
+        highlight.startIfNeeded()
+        try await waitUntil { player.currentTrack != nil && !player.isLoading }
+        highlight.playAnotherPart()
+        try await waitUntil { player.currentTime == highlight.currentCandidate?.startTime }
+        player.pause()
+        let queue = highlight.queue.map(\.id)
+        let candidate = highlight.currentCandidate
+        let position = player.currentTime
+        let playCount = audio.playedTrackIDs.count
+
+        // The same lifecycle calls run when the navigation destination is recreated.
+        highlight.updateLibrary(tracks)
+        highlight.startIfNeeded()
+        XCTAssertEqual(player.presentationMode, .highlight)
+        XCTAssertEqual(highlight.queue.map(\.id), queue)
+        XCTAssertEqual(highlight.currentCandidate, candidate)
+        XCTAssertEqual(player.currentTime, position)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(audio.playedTrackIDs.count, playCount)
+        player.stop()
+    }
+
+    func testFullAndExternalPlaybackLeaveHighlightPresentation() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let highlight = HighlightPlayerStore(
+            playerStore: player, playbackHistoryStore: history,
+            trackFeatureStore: TrackFeatureStore(), analysisService: ReentryHighlightAnalysis()
+        )
+        highlight.updateLibrary([makeTrack("Highlight")])
+        try await waitUntil { player.currentTrack != nil && !player.isLoading }
+        XCTAssertEqual(player.presentationMode, .highlight)
+        highlight.prepareFullPlayback()
+        XCTAssertEqual(player.presentationMode, .standard)
+        try await waitUntil { !player.isLoading }
+        highlight.playAnotherPart()
+        XCTAssertEqual(player.presentationMode, .highlight)
+        let track = try XCTUnwrap(player.currentTrack)
+        player.play(track) // Even a regular replay of the same track leaves Highlight.
+        XCTAssertEqual(player.presentationMode, .standard)
+        try await waitUntil { !player.isLoading }
+        player.stop()
+        XCTAssertEqual(player.presentationMode, .standard)
+    }
+
     func testNormalPlaybackAndResumeStopCompetingPlaybackFirst() async throws {
         let player = PlaybackHistoryAudioPlayerSpy()
         let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
@@ -595,4 +651,15 @@ private final class HandoffPreparationService: HiResAudioQueueProbeServicing {
     func resume() throws {}
     func seek(to time: TimeInterval) throws {}
     func stop() {}
+}
+
+private struct ReentryHighlightAnalysis: HighlightAnalysisServicing {
+    func cachedHighlights(for track: Track) async -> TrackHighlightData? { data(for: track) }
+    func highlights(for track: Track) async -> TrackHighlightData { data(for: track) }
+    private func data(for track: Track) -> TrackHighlightData {
+        TrackHighlightData(trackID: track.id, fileSize: nil, modificationDate: nil, candidates: [
+            HighlightCandidate(startTime: 10, duration: 30, score: 1),
+            HighlightCandidate(startTime: 50, duration: 30, score: 0.8)
+        ])
+    }
 }

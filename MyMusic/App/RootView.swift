@@ -45,8 +45,13 @@ struct RootView: View {
                 || (playerStore.currentTrack != nil && !isHomeHighlightPresented),
             hiResStore: hiResPlayerStore
         ) {
-            returnsHomeAfterNowPlaying = false
-            isNowPlayingPresented = true
+            if playerStore.presentationMode == .highlight {
+                selectedTab = .home
+                isHomeHighlightPresented = true
+            } else {
+                returnsHomeAfterNowPlaying = false
+                isNowPlayingPresented = true
+            }
         })
         .animation(.default, value: playerStore.currentTrack?.id)
         .sheet(isPresented: $isNowPlayingPresented, onDismiss: handleNowPlayingDismissal) {

@@ -18,6 +18,7 @@ enum RepeatMode: String, CaseIterable, Sendable {
 enum PlayerPresentationMode: Sendable, Equatable {
     case standard
     case workSize
+    case highlight
 }
 
 @MainActor
@@ -492,8 +493,10 @@ final class PlayerStore {
     func seekWithTransition(
         to time: TimeInterval,
         endingAt playbackEndTime: TimeInterval? = nil,
-        reason: PlaybackTransitionReason = .highlightUserInitiated
+        reason: PlaybackTransitionReason = .highlightUserInitiated,
+        presentationMode: PlayerPresentationMode? = nil
     ) {
+        if let presentationMode { self.presentationMode = presentationMode }
         playbackTask?.cancel()
         let requestID = beginPlaybackRequest()
         playbackTask = Task { [weak self] in

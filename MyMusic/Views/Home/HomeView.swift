@@ -78,7 +78,12 @@ struct HomeView: View {
                             artworkIdentifier: artworkIdentifier,
                             destinationHasContent: destinationHasContent,
                             highlightArtworkIdentifier: highlightArtworkIdentifier,
-                            onOpenHighlight: { isHighlightPresented = true },
+                            onOpenHighlight: {
+                                if playerStore.presentationMode != .highlight {
+                                    highlightStore.resetRandomSelection()
+                                }
+                                isHighlightPresented = true
+                            },
                             onInstantPlay: playImmediately
                         )
                         if category.id == .myMusic {
@@ -158,9 +163,6 @@ struct HomeView: View {
                     .themeScreen()
                     .navigationTitle("ハイライト")
                     .navigationBarTitleDisplayMode(.inline)
-                    .onDisappear {
-                        highlightStore.resetRandomSelection()
-                    }
             }
             .sheet(isPresented: $showsDeepDive, onDismiss: presentPlayerAfterMixDismissal) {
                 DeepDiveSelectionView(options: deepDiveOptions, onPlay: playDeepDive)
