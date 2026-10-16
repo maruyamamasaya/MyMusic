@@ -76,6 +76,7 @@ struct PlaybackPreferenceButton: View {
                     .accessibilityHidden(true)
             }
         }
+        .disabled(preferenceStore.isImporting)
         .buttonStyle(PreferenceButtonStyle(circular: circularBackground))
         .sensoryFeedback(.impact(weight: .light, intensity: min(1, 0.35 + Double(level) * 0.06)), trigger: effectTrigger)
         .accessibilityLabel(direction.accessibilityLabel)

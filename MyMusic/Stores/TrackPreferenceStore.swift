@@ -15,6 +15,7 @@ final class TrackPreferenceStore {
     private let persistence: TrackPreferencePersistenceServicing
     private var saveTask: Task<Void, Never>?
     private var isLoading = false
+    private(set) var isImporting = false
     private var saveRevision = 0
     var stateChangeHandler: (() -> Void)?
 
@@ -96,12 +97,34 @@ final class TrackPreferenceStore {
         await saveTask?.value
     }
 
+    func prepareImportPreview(_ imported: [TrackPreference], tracks: [Track]) throws -> TrackPreferenceImportPreview {
+        guard isLoaded, !isImporting else { throw CocoaError(.fileReadUnknown) }
+        return TrackPreferenceImportPreview(imported: imported, entries: entries, tracks: tracks)
+    }
+
+    func importPreferences(_ preview: TrackPreferenceImportPreview, libraryTrackIDs: Set<Track.ID>) async throws -> TrackPreferenceImportResult {
+        guard libraryTrackIDs.intersection(preview.imported.map(\.trackID)) == preview.matchedTrackIDs else {
+            throw TrackPreferenceImportPreviewError.stateChanged
+        }
+        return try await importPreferences(preview.imported, libraryTrackIDs: libraryTrackIDs,
+                                          expectedEntries: preview.expectedEntries)
+    }
+
     func importPreferences(
         _ imported: [TrackPreference],
-        libraryTrackIDs: Set<Track.ID>
+        libraryTrackIDs: Set<Track.ID>,
+        expectedEntries: [Track.ID: TrackPreference]? = nil
     ) async throws -> TrackPreferenceImportResult {
-        guard isLoaded else { throw CocoaError(.fileReadUnknown) }
+        guard isLoaded, !isImporting else { throw CocoaError(.fileReadUnknown) }
+        isImporting = true
+        defer { isImporting = false }
         await saveTask?.value
+        if let expectedEntries {
+            let ids = Set(imported.map(\.trackID))
+            guard entries.filter({ ids.contains($0.key) }) == expectedEntries else {
+                throw TrackPreferenceImportPreviewError.stateChanged
+            }
+        }
 
         var merged = entries
         var updated = 0
@@ -112,7 +135,9 @@ final class TrackPreferenceStore {
                 missingTrack += 1
                 continue
             }
-            if merged[preference.trackID] == preference {
+            let current = merged[preference.trackID] ?? TrackPreference(
+                trackID: preference.trackID, playbackPreference: 0, favorite: false)
+            if current == preference {
                 unchanged += 1
             } else {
                 merged[preference.trackID] = preference
@@ -146,6 +171,7 @@ final class TrackPreferenceStore {
     }
 
     private func update(_ preference: TrackPreference) {
+        guard !isImporting else { return }
         entries[preference.trackID] = preference
         homePresentationRevision &+= 1
         stateChangeHandler?()

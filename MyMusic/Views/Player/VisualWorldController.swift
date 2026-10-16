@@ -6,7 +6,7 @@ struct VisualWorldController: View {
     @Environment(TrackPreferenceStore.self) private var preferences
 
     private var track: Track? { player.currentTrack }
-    private var canRate: Bool { track?.isEligibleForRegularPlayback == true }
+    private var canRate: Bool { track?.isEligibleForRegularPlayback == true && !preferences.isImporting }
     private var isFavorite: Bool {
         guard let track else { return false }
         return preferences.isFavorite(trackID: track.id)

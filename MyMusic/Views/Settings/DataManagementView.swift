@@ -158,6 +158,8 @@ private struct DataManagementDetailView: View {
     @State private var resultMessage: String?
     @State private var errorMessage: String?
     @State private var shareItem: ActivityShareItem?
+    @State private var preferenceImportResult: TrackPreferenceImportResult?
+    @State private var preferencePreview: TrackPreferenceImportPreview?
     @State private var pendingPlaylistImport: PlaylistImportResult?
     @State private var pendingPlaylistOriginal: Data?
     @State private var pendingPlaylistSnapshot: [Playlist]?
@@ -202,6 +204,17 @@ private struct DataManagementDetailView: View {
                 importSettingsFile(result, expectedKind: .equalizer)
             case .genreDisplayPresets:
                 importSettingsFile(result, expectedKind: .genreDisplayPresets)
+            }
+        }
+        .sheet(item: $preferencePreview, onDismiss: {
+            if let report = preferenceImportResult {
+                resultMessage = "更新: \(report.updated)件\n変更なし: \(report.unchanged)件\nLibraryにない曲: \(report.missingTrack)件"
+                preferenceImportResult = nil
+            }
+        }) { preview in
+            TrackPreferenceImportPreviewView(preview: preview) {
+                preferenceImportResult = try await preferenceStore.importPreferences(
+                    preview, libraryTrackIDs: Set(libraryStore.unfilteredTracks.map(\.id)))
             }
         }
         .alert("プレイリストの内容を更新", isPresented: $showsPlaylistImportConfirmation) {
@@ -440,11 +453,10 @@ private struct DataManagementDetailView: View {
                 let accessing = url.startAccessingSecurityScopedResource()
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                 let imported = try TrackPreferenceImportService().parse(data: Data(contentsOf: url))
-                let report = try await preferenceStore.importPreferences(
-                    imported,
-                    libraryTrackIDs: Set(libraryStore.unfilteredTracks.map(\.id))
-                )
-                resultMessage = "合計: \(report.total)件\n更新: \(report.updated)件\n変更なし: \(report.unchanged)件\nLibraryに存在しないTrack: \(report.missingTrack)件\n不正: \(report.invalid)件"
+                guard preferenceStore.isLoaded, libraryStore.isInitialLoadComplete else {
+                    throw CocoaError(.fileReadUnknown)
+                }
+                preferencePreview = try preferenceStore.prepareImportPreview(imported, tracks: libraryStore.unfilteredTracks)
             } catch let error as CocoaError where error.code == .userCancelled { }
             catch { errorMessage = error.localizedDescription }
         }

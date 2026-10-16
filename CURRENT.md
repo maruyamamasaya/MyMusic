@@ -11,6 +11,8 @@ updated: 2026-10-08
 
 個人の日常利用で使えているため、大規模ライブラリの定量計測は現時点で急がない。未計測を性能不良とは扱わず、具体的な支障が出た場合や配布範囲を広げる前に対象を選ぶ。次のテスト内容を聞かれた場合は[実機検証チェックリスト](Documentation/DeviceValidationChecklist.md)を最初に参照する。ハイレゾは素の音を聴くためEQ・音量補正等を加えない独立経路を維持し、操作性・経路切り替え・実出力を別に確認する。
 
+評価15・HomeStereoとのJSON受け渡しを確認するときは[疎結合の仕組みと実機手順](Documentation/PreferenceInterchangeDeviceGuide.md)を参照する。短い再確認手順と、未実装の効率化案も分けて記載している。
+
 ## ライブラリの登録音源容量
 
 ライブラリに登録済み音源の曲数と合計容量を表示する。通常曲・作業用BGM・ハイレゾ・非表示ジャンルを含む統合済みTrackのfileSizeを復元／同期／フォルダ変更時に集計する。容量不明がある場合は「確認済み容量」と不明曲数を表示する。iCloud未ダウンロード音源も含む論理ファイル容量であり、iPhoneの実使用容量ではない。保存形式・同期処理は変更しない。generic iPhone／Watch Simulator Debug buildと容量集計の単独チェック3件が成功。実機表示は未確認。
@@ -476,3 +478,8 @@ Semantic CLIのcache backup/restoreを追加。SQLite index、NPZ、profile、sc
 MyMusicだけでGood 8〜15に段階別の星・光・周回する輪・虹色を追加。星は7〜21個、装飾はボタン外へ6〜20pt広がる。共通評価ボタン（通常／小型／ハイライト）とVisual Worldへ適用し、共通ボタンのタップ波紋と拡大も段階的に強めた。5〜7は従来の3つの光。Reduce Motion／scene非active／非表示では連続Canvas更新を停止し、装飾はhit testing対象外。選曲上限10は維持。generic iPhone／Watch Simulator build成功、実ソースの8〜15静止描画を確認。実機での動き・重なり・負荷は未確認。詳細はsessions/2026-10-16-preference-effects-deploy.md。
 
 2026-10-16: 豪華なGood演出を含むMyMusicをVesperaへDebug build・install成功。当初の画面ロック解除後、19:55 JSTにmaruyama.MyMusicのLaunch成功を確認。実機演出の目視確認は未実施。
+
+
+## Preferences差分Preview Beta（2026-10-16）
+
+評価JSONの読み込み前に、曲ごとの評価とハートの「現在→読み込み後」を確認できる。更新予定・変更なし・未照合の件数を表示し、変更なしは任意表示。未照合は適用しない。Preview／キャンセルは保存せず、確認後に対象曲の評価／ハートや照合状態が変わった場合は再確認を要求する。HomeStereoはtransaction内で再照合し、拒否時に未送信情報を保持。JSON／DB形式は変更しない。VesperaへのDebug build・install・launch、HomeStereo正式配置・起動（build 20261016214812）は成功。実機での差分画面の目視・実ユーザーJSON往復は未確認。詳細はsessions/2026-10-16-preference-import-preview.md。
