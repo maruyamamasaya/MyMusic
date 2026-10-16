@@ -460,3 +460,7 @@ Beta の操作と制約は [README.md](README.md)、特徴量の contract は [D
 ## Analyzer embedding保全 Beta（2026-10-08）
 
 Semantic CLIのcache backup/restoreを追加。SQLite index、NPZ、profile、scope、outputを検証付きarchiveに保管し、復元先は新規workspaceだけを許可する。アプリ/NPZのデータ構造は変更しない。Analyzer test 40件成功。実cache全量/外部disk試験は未実施。手順は[Semantic README](analyzer/SEMANTIC_README.md)。MyMusic外部backupの履歴sidecar不足は本番Serviceの隔離実行で再現済み、ユーザー指示により修正保留。詳細は[現行データ地図](Documentation/CurrentDataPreservationMap.md)。
+
+## チューニング切り替え後のホーム更新 Beta
+
+チューニング／全曲表示の絞り込み完了後、ホームの代表曲・画像とMIXを引き直す。ホームsnapshot反映後に「○○に切り替えました」を2秒表示し、即時の確認アラートを廃止した。連続変更でcancelされたfilterは完了通知を発行しない。再生queueと保存形式は維持する。実機表示は未確認。検証はsessions/2026-10-16-tuning-home-refresh.md参照。

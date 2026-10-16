@@ -16,6 +16,8 @@ final class LibraryStore {
     private(set) var tracks: [Track] = []
     private(set) var storageSummary = LibraryStorageSummary.empty
     private(set) var homePresentationRevision = 0
+    private(set) var completedTuningID: UUID?
+    private(set) var completedTuningName: String?
     private(set) var albums: [Album] = []
     private(set) var artists: [Artist] = []
     private(set) var genres: [Genre] = []
@@ -198,7 +200,9 @@ final class LibraryStore {
         applyGenreFilter()
     }
     func showAllGenres() {
-        setEnabledGenres(Set(selectableGenreOptions.map(\.id)))
+        disabledGenreNames = []
+        saveDisabledGenres()
+        applyGenreFilter(tuningName: "全曲表示")
     }
     var areAllGenresEnabled: Bool {
         selectableGenreOptions.allSatisfy { isGenreEnabled($0.id) }
@@ -229,7 +233,7 @@ final class LibraryStore {
         disabledGenreNames = Set(selectableGenreOptions.map(\.id))
             .subtracting(enabledGenreKeys(for: preset).union(alwaysEnabledAvailableGenreNames))
         saveDisabledGenres()
-        applyGenreFilter()
+        applyGenreFilter(tuningName: preset.name)
     }
     func updateGenreDisplayPreset(_ preset: GenreDisplayPreset, name: String, enabledGenreNames: Set<String>) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -449,7 +453,7 @@ final class LibraryStore {
         }
         applyGenreFilter()
     }
-    private func applyGenreFilter() {
+    private func applyGenreFilter(tuningName: String? = nil) {
         guard let genreFilterIndex else { return }
         genreFilterTask?.cancel()
         let requestID = UUID()
@@ -465,6 +469,10 @@ final class LibraryStore {
                 )
                 try Task.checkCancellation()
                 guard let self, self.genreFilterRequestID == requestID else { return }
+                if let tuningName {
+                    self.completedTuningName = tuningName
+                    self.completedTuningID = requestID
+                }
                 self.apply(snapshot)
             } catch is CancellationError {
                 return

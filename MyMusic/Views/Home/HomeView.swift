@@ -44,6 +44,9 @@ struct HomeView: View {
     @State private var presentsPlayerAfterMixDismissal = false
     @State private var mixSelectionSeed: UInt64 = 0
     @State private var mixDay: Date?
+    @State private var handledTuningID: UUID?
+    @State private var pendingTuningName: String?
+    @State private var tuningNotice: String?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
     @State private var homeSnapshotTask: Task<Void, Never>?
@@ -140,6 +143,24 @@ struct HomeView: View {
                 )
                 await task?.value
             }
+            .overlay(alignment: .top) {
+                if let tuningNotice {
+                    Text(tuningNotice)
+                        .font(.subheadline)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.top, 8)
+                        .allowsHitTesting(false)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+            .task(id: tuningNotice) {
+                guard tuningNotice != nil else { return }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                tuningNotice = nil
+            }
             .themeScreen()
             .navigationTitle("ホーム")
             .navigationBarTitleDisplayMode(.inline)
@@ -207,6 +228,12 @@ struct HomeView: View {
                 }
             }
             .onChange(of: libraryStore.homePresentationRevision) {
+                if handledTuningID != libraryStore.completedTuningID {
+                    handledTuningID = libraryStore.completedTuningID
+                    pendingTuningName = libraryStore.completedTuningName
+                    tuningNotice = nil
+                    mixSelectionSeed = UInt64.random(in: 1...UInt64.max)
+                }
                 refreshPlaylistPresentations()
                 refreshHomeSnapshot()
             }
@@ -380,6 +407,7 @@ struct HomeView: View {
         isRotationOnly: Bool = false
     ) -> Task<Void, Never>? {
         guard isActive else { return nil }
+        let tuningName = pendingTuningName
         let request = HomePerformanceSnapshotRequest(
             tracks: libraryStore.tracks,
             albums: libraryStore.albums,
@@ -395,8 +423,8 @@ struct HomeView: View {
             representativeDestinations: Set(myMusicDestinations),
             previousPresentations: destinationPresentations,
             previousHighlightArtworkIdentifier: highlightArtworkIdentifier,
-            rotatesRepresentatives: rotatingRepresentatives,
-            includesMixes: includesMixes,
+            rotatesRepresentatives: rotatingRepresentatives || tuningName != nil,
+            includesMixes: includesMixes || tuningName != nil,
             includesTodayPlaybackSummary: includesTodayPlaybackSummary,
             now: Date(),
             mixSelectionSeed: mixSelectionSeed
@@ -418,8 +446,12 @@ struct HomeView: View {
                todayPlaybackSummary != summary {
                 todayPlaybackSummary = summary
             }
+            if let tuningName {
+                pendingTuningName = nil
+                tuningNotice = "「\(tuningName)」に切り替えました"
+            }
         }
-        if isRotationOnly {
+        if isRotationOnly && tuningName == nil {
             rotationSnapshotTask?.cancel()
             rotationSnapshotTask = task
         } else {
@@ -554,8 +586,6 @@ private struct HomeTuningSection: View {
     let onShowAllGenres: () -> Void
     let onApply: (GenreDisplayPreset) -> Void
 
-    @State private var appliedPresetName: String?
-
     private let spacing: CGFloat = 10
     private let horizontalPadding: CGFloat = 16
 
@@ -585,7 +615,6 @@ private struct HomeTuningSection: View {
                 LazyHStack(spacing: spacing) {
                     Button {
                         onShowAllGenres()
-                        appliedPresetName = "全曲表示"
                     } label: {
                         HomeTuningTag(title: "全曲表示", isActive: allGenresAreEnabled, paletteIndex: 0)
                     }
@@ -594,7 +623,6 @@ private struct HomeTuningSection: View {
                     ForEach(presets) { preset in
                         Button {
                             onApply(preset)
-                            appliedPresetName = preset.name
                         } label: {
                             HomeTuningTag(
                                 title: preset.name,
@@ -612,13 +640,6 @@ private struct HomeTuningSection: View {
             .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .alert("設定しました", isPresented: appliedPresetIsPresented) {
-            Button("OK", role: .cancel) { appliedPresetName = nil }
-        } message: {
-            if let appliedPresetName {
-                Text("「\(appliedPresetName)」を設定しました。")
-            }
-        }
     }
 
     private var activePresetName: String? {
@@ -628,13 +649,6 @@ private struct HomeTuningSection: View {
 
     private func paletteIndex(for preset: GenreDisplayPreset) -> Int {
         1 + preset.id.uuidString.utf8.reduce(0) { ($0 + Int($1)) % 6 }
-    }
-
-    private var appliedPresetIsPresented: Binding<Bool> {
-        Binding(
-            get: { appliedPresetName != nil },
-            set: { if !$0 { appliedPresetName = nil } }
-        )
     }
 }
 

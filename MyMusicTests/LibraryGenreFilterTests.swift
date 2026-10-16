@@ -69,8 +69,12 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.album(containing: ambient.id)?.trackIDs, [ambient.id])
         XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
 
-        store.setEnabledGenres(["Ambient"])
-        store.setEnabledGenres(["Rock"])
+        let ambientPreset = GenreDisplayPreset(id: UUID(), name: "Ambient", enabledGenreNames: ["Ambient"], includesUnassignedGenreSetting: true)
+        let rockPreset = GenreDisplayPreset(id: UUID(), name: "Rock", enabledGenreNames: ["Rock"], includesUnassignedGenreSetting: true)
+        store.applyGenreDisplayPreset(ambientPreset)
+        store.applyGenreDisplayPreset(rockPreset)
+        XCTAssertNil(store.completedTuningID)
+        XCTAssertNil(store.completedTuningName)
 
         try await waitUntil { store.tracks.map(\.id) == [rock.id] }
         XCTAssertEqual(store.albums.flatMap(\.trackIDs), [rock.id])
@@ -80,6 +84,14 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertNil(store.artist(containing: ambient.id))
         XCTAssertEqual(store.album(containing: rock.id)?.trackIDs, [rock.id])
         XCTAssertEqual(store.artist(containing: rock.id)?.trackIDs, [rock.id])
+        XCTAssertEqual(store.completedTuningName, "Rock")
+        let completedID = try XCTUnwrap(store.completedTuningID)
+
+        store.showAllGenres()
+        XCTAssertEqual(store.completedTuningID, completedID)
+        try await waitUntil { store.completedTuningID != completedID }
+        XCTAssertEqual(store.completedTuningName, "全曲表示")
+        XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id])
     }
 
     func testDedicatedPlaybackGenresAreFixedOutsideRegularGenreFilter() async throws {
