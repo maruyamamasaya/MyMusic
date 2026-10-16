@@ -15,6 +15,16 @@ final class PlaybackBehaviorScoringTests: XCTestCase {
         XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: -3), 0.20)
     }
 
+    func testGoodAboveTenDoesNotIncreaseSelectionWeight() {
+        for value in 10...15 {
+            XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: value), 42)
+            XCTAssertEqual(PlaybackSelectionPolicy.shuffleWeight(playbackPreference: value, overplayScore: 0.4),
+                           PlaybackSelectionPolicy.shuffleWeight(playbackPreference: 10, overplayScore: 0.4))
+            XCTAssertEqual(PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: value, overplayScore: 0.4, playCount: 7),
+                           PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: 10, overplayScore: 0.4, playCount: 7))
+        }
+    }
+
     func testOverplayIsLowWhenRecentVolumeMatchesBaseline() {
         XCTAssertLessThanOrEqual(OverplayScoring.score(recentPlayCount: 8, baselinePlayCount: 64).score, 0.2)
     }

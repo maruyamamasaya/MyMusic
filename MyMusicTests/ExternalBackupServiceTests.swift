@@ -4,6 +4,34 @@ import Testing
 @testable import MyMusic
 
 struct ExternalBackupServiceTests {
+    @Test @MainActor func preferenceRangeSurvivesLegacyAndCurrentBackupRestore() async throws {
+        for version in [1, 2] {
+            let fixture = try Fixture()
+            let persistence = TrackPreferencePersistenceService(applicationDirectory: fixture.applicationRoot)
+            let values = [-10, 0, 10, 11, 15].map {
+                TrackPreference(trackID: UUID(), playbackPreference: $0, favorite: true)
+            }
+            try await persistence.save(values)
+            let current = try fixture.service.createBackup(at: fixture.destination)
+            if version == 1 {
+                let legacy = ExternalBackupManifest(formatVersion: current.formatVersion, schemaVersion: 1,
+                    appVersion: current.appVersion, createdAt: current.createdAt,
+                    files: current.files.map { ExternalBackupManifest.FileEntry(path: $0.path, byteCount: $0.byteCount) })
+                try JSONEncoder.iso8601.encode(legacy).write(to: fixture.latest.appending(path: "manifest.json"))
+            }
+            try await persistence.save([])
+            _ = try fixture.service.restore(from: fixture.latest)
+            #expect(try fixture.service.applyPendingRestoreIfNeeded())
+            let store = TrackPreferenceStore(persistence: persistence)
+            await store.loadIfNeeded(legacyHistory: [:])
+            #expect(store.isLoaded)
+            for value in values {
+                #expect(store.playbackPreference(for: value.trackID) == value.playbackPreference)
+                #expect(store.isFavorite(trackID: value.trackID))
+            }
+        }
+    }
+
     @Test func emptyBackupHasValidManifestAndSettings() throws {
         let fixture = try Fixture()
         let manifest = try fixture.service.createBackup(at: fixture.destination)

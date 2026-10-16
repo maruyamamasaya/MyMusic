@@ -42,7 +42,7 @@
     } else if (kind === "preferences") {
       if (![1,2].includes(doc.schemaVersion)) fail(`Playback Preferences の未対応schemaVersionです（${String(doc.schemaVersion)}）。`);
       date(doc.exportedAt,"exportedAt");
-      result.items=array(doc.tracks,"tracks").map((p,i)=>{ text(p.trackId,`tracks[${i}].trackId`); if(!Number.isInteger(p.playbackPreference)||p.playbackPreference < -10||p.playbackPreference>10) fail(`tracks[${i}].playbackPreference が不正です。`); return {...p}; });
+      result.items=array(doc.tracks,"tracks").map((p,i)=>{ text(p.trackId,`tracks[${i}].trackId`); if(!Number.isInteger(p.playbackPreference)||p.playbackPreference < -10||p.playbackPreference>15) fail(`tracks[${i}].playbackPreference が不正です。`); return {...p}; });
     } else if (kind === "features") {
       version(doc.version,1,"Track Features"); date(doc.exportedAt,"exportedAt"); result.items=array(doc.tracks,"tracks").map((f,i)=>{ text(f.trackID,`tracks[${i}].trackID`); if(!f.features||typeof f.features!=="object"||Array.isArray(f.features)) fail(`tracks[${i}].features が不正です。`); return {...f}; });
     } else if (["volume","playlists"].includes(kind)) { version(doc.version,1,kind); result.items=array(kind==="playlists"?doc.playlists:doc.tracks,kind); }

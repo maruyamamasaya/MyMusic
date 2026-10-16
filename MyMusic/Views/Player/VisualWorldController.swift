@@ -48,7 +48,7 @@ struct VisualWorldController: View {
                         enabled: canRate, action: increasePreference)
                     .overlay {
                         if canRate && preference >= 5 {
-                            PreferenceSparklesView()
+                            PreferenceSparklesView(level: preference)
                         }
                     }
                     .accessibilityValue(preference > 0 ? "\(preference)" : "未評価")

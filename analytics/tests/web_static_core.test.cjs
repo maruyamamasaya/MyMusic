@@ -49,3 +49,14 @@ test('keeps the existing eight Analytics JSON contracts', () => {
   }
   assert.equal(data.sources.length,4);
 });
+
+
+test('preference range preserves fifteen and rejects out of range', () => {
+  const document = value => ({schemaVersion:2,exportedAt:'2026-10-16T00:00:00Z',tracks:[{trackId:'t1',playbackPreference:value,favorite:true}]});
+  for (const value of [-10,0,10,11,15]) {
+    const data=core.createData(); core.merge(data,core.parseDocument(document(value),'preferences.json'));
+    core.merge(data,core.parseDocument({version:1,tracks:[{trackID:'t1',title:'Song',artist:'Artist',duration:180}]},'library.json'));
+    assert.equal(core.normalize(data).tracks[0].preference.playbackPreference,value);
+  }
+  for (const value of [-11,16]) assert.throws(()=>core.parseDocument(document(value),'preferences.json'));
+});

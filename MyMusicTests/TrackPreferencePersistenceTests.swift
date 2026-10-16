@@ -4,6 +4,25 @@ import XCTest
 
 @MainActor
 final class TrackPreferencePersistenceTests: XCTestCase {
+    func testExpandedRangePersistsAndKeepsNegativeLimit() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = TrackPreferencePersistenceService(applicationDirectory: directory)
+        let store = TrackPreferenceStore(persistence: persistence)
+        let id = UUID()
+        await store.loadIfNeeded(legacyHistory: [:])
+        for _ in 0..<20 { store.increasePlaybackPreference(for: id) }
+        await store.waitForPendingSave()
+        XCTAssertEqual(store.playbackPreference(for: id), 15)
+        let loaded = TrackPreferenceStore(persistence: persistence)
+        await loaded.loadIfNeeded(legacyHistory: [:])
+        XCTAssertEqual(loaded.playbackPreference(for: id), 15)
+        XCTAssertEqual(try TrackPreferenceImportService().parse(data: document(id: id, preference: 15, favorite: true)).first?.playbackPreference, 15)
+        for _ in 0..<30 { loaded.decreasePlaybackPreference(for: id) }
+        await loaded.waitForPendingSave()
+        XCTAssertEqual(loaded.playbackPreference(for: id), -10)
+    }
+
     func testLegacyHistoryMigratesOnceAndSurvivesReload() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "track-preference-tests-\(UUID().uuidString)")
@@ -131,7 +150,7 @@ final class TrackPreferencePersistenceTests: XCTestCase {
         ])
 
         XCTAssertThrowsError(try TrackPreferenceImportService().parse(
-            data: document(id: id, preference: 11, favorite: true)
+            data: document(id: id, preference: 16, favorite: true)
         ))
         XCTAssertThrowsError(try TrackPreferenceImportService().parse(data: Data("""
             {"schemaVersion":2,"exportedAt":"2026-09-02T12:00:00Z","tracks":[

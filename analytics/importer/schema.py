@@ -106,7 +106,7 @@ class PlaybackPreferenceV1(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     track_id: str = Field(alias="trackId", min_length=1, max_length=256)
-    playback_preference: int = Field(alias="playbackPreference", ge=-10, le=10)
+    playback_preference: int = Field(alias="playbackPreference", ge=-10, le=15)
     favorite: bool | None = None
 
 
@@ -128,7 +128,7 @@ class PlaybackPreferencesExportV1(BaseModel):
 
 class PlaybackPreferenceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    playbackPreference: int = Field(ge=-10, le=10)
+    playbackPreference: int = Field(ge=-10, le=15)
     favorite: bool
 
 

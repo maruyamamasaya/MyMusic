@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaybackPreferenceButton: View {
     @Environment(TrackPreferenceStore.self) private var preferenceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let track: Track
     let direction: Direction
@@ -33,20 +34,12 @@ struct PlaybackPreferenceButton: View {
     var body: some View {
         Button(action: updatePreference) {
             ZStack(alignment: .topTrailing) {
-                if isBursting {
-                    Circle()
-                        .stroke(usesGradient ? AnyShapeStyle(effectGradient) : AnyShapeStyle(effectColor.opacity(0.75)), lineWidth: 2.5)
-                        .frame(width: compact ? 28 : 36, height: compact ? 28 : 36)
-                        .scaleEffect(1.85)
-                        .opacity(0)
-                        .transition(.identity)
-                }
 
                 preferenceImage
                     .font(compact ? .body : .title3)
                     .frame(width: compact ? 30 : 42, height: 36)
                     .symbolEffect(.bounce, options: .speed(1.5), value: effectTrigger)
-                    .scaleEffect(isBursting ? 1.24 : 1)
+                    .scaleEffect(isBursting && !reduceMotion ? (direction == .increase && level >= 8 ? 1.24 + Double(level - 7) * 0.025 : 1.24) : 1)
 
                 if isActive {
                     Text("\(level)")
@@ -63,13 +56,30 @@ struct PlaybackPreferenceButton: View {
         }
         .overlay {
             if direction == .increase && level >= 5 {
-                PreferenceSparklesView()
+                PreferenceSparklesView(level: level)
+            }
+        }
+        .overlay {
+            if !reduceMotion && direction == .increase && level >= 8 {
+                Circle()
+                    .stroke(effectGradient, lineWidth: 1.5 + Double(level - 7) * 0.2)
+                    .frame(width: compact ? 28 : 36, height: compact ? 28 : 36)
+                    .keyframeAnimator(initialValue: 1.0, trigger: effectTrigger) { content, progress in
+                        content
+                            .scaleEffect(1 + progress * (0.5 + Double(level - 7) * 0.13))
+                            .opacity(1 - progress)
+                    } keyframes: { _ in
+                        MoveKeyframe(0)
+                        LinearKeyframe(1, duration: 0.55 + Double(level - 7) * 0.035)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(PreferenceButtonStyle(circular: circularBackground))
         .sensoryFeedback(.impact(weight: .light, intensity: min(1, 0.35 + Double(level) * 0.06)), trigger: effectTrigger)
         .accessibilityLabel(direction.accessibilityLabel)
-        .accessibilityValue(preference == 0 ? "未評価" : "\(preference > 0 ? "プラス" : "マイナス")\(abs(preference))、10段階中")
+        .accessibilityValue(preference == 0 ? "未評価" : "\(preference > 0 ? "プラス" : "マイナス")\(abs(preference))、上限15、選曲への効果は10で最大")
     }
 
     @ViewBuilder
@@ -90,7 +100,7 @@ struct PlaybackPreferenceButton: View {
     }
 
     private var gradientColors: [Color] {
-        switch level {
+        switch min(level, 10) {
         case 3: [.cyan, .teal, .blue, .cyan]
         case 4: [.green, .mint, .cyan, .green]
         case 5: [.yellow, .green, .orange, .yellow]
@@ -105,7 +115,7 @@ struct PlaybackPreferenceButton: View {
 
     private var effectColor: Color {
         guard isActive else { return .secondary }
-        let progress = Double(level) / Double(TrackPreferenceStore.maximumPreference)
+        let progress = Double(min(level, 10)) / 10
         if direction == .increase {
             return Color(
                 hue: 0.56 + progress * 0.16,

@@ -4,7 +4,8 @@ import Observation
 @MainActor
 @Observable
 final class TrackPreferenceStore {
-    static let maximumPreference = PlaybackPreferenceWeightPolicy.maximumPreference
+    static let maximumPreference = TrackPreferenceRange.maximum
+    static let minimumPreference = TrackPreferenceRange.minimum
 
     private(set) var entries: [Track.ID: TrackPreference] = [:]
     private(set) var homePresentationRevision = 0
@@ -52,7 +53,7 @@ final class TrackPreferenceStore {
             }
             var merged: [Track.ID: TrackPreference] = [:]
             for preference in loaded {
-                guard (-Self.maximumPreference ... Self.maximumPreference)
+                guard (Self.minimumPreference ... Self.maximumPreference)
                     .contains(preference.playbackPreference) else {
                     throw CocoaError(.fileReadCorruptFile)
                 }
@@ -173,7 +174,7 @@ final class TrackPreferenceStore {
         }
     }
 
-    private static func clamped(_ value: Int) -> Int { min(max(value, -maximumPreference), maximumPreference) }
+    private static func clamped(_ value: Int) -> Int { min(max(value, minimumPreference), maximumPreference) }
     private static func sort(_ lhs: TrackPreference, _ rhs: TrackPreference) -> Bool {
         lhs.trackID.uuidString < rhs.trackID.uuidString
     }

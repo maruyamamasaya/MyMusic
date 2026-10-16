@@ -135,7 +135,7 @@ Import履歴の「取込データをクリア」は、確認後にSQLite内の�
 | --- | --- | --- |
 | `MyMusic-Playback-Events.json` | `schemaVersion: 1` + `events` | 追記型のRaw再生イベント。`eventId`で重複排除 |
 | `MyMusic-Library.json` | `version: 1` + `tracks` | 曲名、Artist、Album、Genre、年、長さ、Format、作成済み音声Fingerprint等のLibrary snapshot。旧Favorite fieldは互換入力として受理 |
-| `MyMusic-Playback-Preferences.json` | `schemaVersion: 2` + `tracks[].playbackPreference/favorite` | Track IDごとの現在のGood／Bad値（-10〜+10）と曲Favorite。schema v1も後方互換で受理 |
+| `MyMusic-Playback-Preferences.json` | `schemaVersion: 2` + `tracks[].playbackPreference/favorite` | Track IDごとの現在のGood／Bad値（-10〜+15）と曲Favorite。schema v1も後方互換で受理 |
 | `MyMusic-Track-Features.json` | `version: 1` + `tracks[].features` | Track IDごとの音楽特徴量と解析情報 |
 | `MyMusic-Volume-Normalization.json` | `version: 1` + `isEnabled` + `tracks` | Track IDごとのLUFS、True Peak、補正Gain |
 | `MyMusic-Playlists.json` | `version: 1` + `playlists` | Playlist metadata、タグ、収録曲とLibrary照合状況 |
@@ -148,7 +148,7 @@ Track FeaturesはTrack ID単位でmergeし、部分JSONにない既存特徴量�
 
 Data Sourcesの音楽特徴量tableは、Import済みTrack Features全件の`features`に実在するkeyを列として表示します。既知keyはTEMPO／ENERGY、Semantic特徴、音量特徴の順に並べ、BPM・LUFS・dBTP・dBの単位を付けます。曲ごとに存在しないkeyは`—`とし、未知keyも既知列の後ろへ表示するため、Analyzerが追加した値を捨てません。
 
-Tracks画面ではImport済みPreferenceのFavoriteと-10〜+10のGood／Badを編集できます。Goodは1回につき+1、Badは1回につき-1とし、上限／下限では該当ボタンを無効化します。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
+Tracks画面ではImport済みPreferenceのFavoriteと-10〜+15のGood／Badを編集できます。Goodは1回につき+1、Badは1回につき-1とし、上限／下限では該当ボタンを無効化します。編集は`playback_preferences`だけを更新し、Library、Playback Events、Features等には触れません。「再生傾向を書き出す」は、現在Libraryに存在してTrack IDが有効なUUIDであるPreferenceだけを`MyMusic-Playback-Preferences.json`（schema v2）へ出力します。古い、未照合、UUIDでない行はSQLiteに保持したままExport対象外とし、アプリ側でもLibrary照合を再実施します。
 
 有効な文書原本は`imports/`へ衝突しない名前で保存し、受理した各項目のRaw JSONもSQLiteへ保持します。不正な文書はデータを保存しませんが、失敗したImport履歴は記録します。
 
@@ -221,3 +221,5 @@ node --test tests/controls.test.cjs
 ```
 
 ブラウザ回帰テストはPlaywrightとインストール済みChromeを利用します。テスト用のコピーまたは一時DBでサーバーを起動し、`ANALYTICS_TEST_URL=http://127.0.0.1:8877 node tests/browser_ux.cjs`を実行してください。Playwrightを共通runtimeに配置している場合は`NODE_PATH`で指定できます。テストは取込・編集・削除APIを呼ばず、検索・競合・エラーの一部をブラウザ内で模擬します。
+
+2026-10-16: 評価11〜15は記録用の拡張で選曲効果は10で最大。旧版の受信側は11以上を拒否するため更新が必要。既存値は再換算しない。

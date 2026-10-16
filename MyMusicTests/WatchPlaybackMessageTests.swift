@@ -12,6 +12,14 @@ final class WatchPlaybackMessageTests: XCTestCase {
         XCTAssertEqual(WatchPlaybackState(message: expected.message), expected)
     }
 
+    func testExpandedPreferenceRoundTrip() {
+        for value in [-10, 0, 10, 11, 15] {
+            var state = WatchPlaybackState.empty
+            state.playbackPreference = value
+            XCTAssertEqual(WatchPlaybackState(message: state.message)?.playbackPreference, value)
+        }
+    }
+
     func testAllCommandsRoundTrip() {
         for command in WatchPlaybackCommand.allCases {
             XCTAssertEqual(

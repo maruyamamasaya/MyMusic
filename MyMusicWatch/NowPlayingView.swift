@@ -190,7 +190,7 @@ struct NowPlayingView: View {
 
     private func preferenceAccessibilityValue(for state: WatchPlaybackState) -> String {
         guard state.playbackPreference != 0 else { return "未評価" }
-        return "\(state.playbackPreference > 0 ? "グッド" : "バッド") \(abs(state.playbackPreference))、10段階中"
+        return "\(state.playbackPreference > 0 ? "グッド" : "バッド") \(abs(state.playbackPreference))、評価範囲マイナス10からプラス15、選曲への効果は10で最大"
     }
 
     private func playPauseButton(for state: WatchPlaybackState, diameter: CGFloat) -> some View {

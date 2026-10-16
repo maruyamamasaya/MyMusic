@@ -266,7 +266,7 @@ class AnalyticsAPITests(unittest.TestCase):
     def test_preferences_import_is_detected_saved_updated_and_validated(self):
         payload = preferences_document([
             {"trackId": "track-1", "playbackPreference": 4},
-            {"trackId": "track-bad", "playbackPreference": 11},
+            {"trackId": "track-bad", "playbackPreference": 16},
         ])
         first = self.upload(payload, "MyMusic-Playback-Preferences.json").json()
         self.assertEqual(first["dataKind"], "playback_preferences")
@@ -1139,7 +1139,7 @@ class AnalyticsAPITests(unittest.TestCase):
 
         response = self.client.put(
             f"/api/preferences/{track_id}",
-            json={"playbackPreference": 6, "favorite": True},
+            json={"playbackPreference": 15, "favorite": True},
         )
         self.assertEqual(response.status_code, 200)
         exported = self.client.get("/api/preferences/export")
@@ -1151,7 +1151,7 @@ class AnalyticsAPITests(unittest.TestCase):
         payload = exported.json()
         self.assertEqual(payload["schemaVersion"], 2)
         self.assertEqual(payload["tracks"], [{
-            "trackId": track_id, "playbackPreference": 6, "favorite": True,
+            "trackId": track_id, "playbackPreference": 15, "favorite": True,
         }])
         round_trip = self.upload(payload, "MyMusic-Playback-Preferences.json").json()
         self.assertEqual(round_trip["errorCount"], 0)
@@ -1166,7 +1166,7 @@ class AnalyticsAPITests(unittest.TestCase):
             ).fetchone()
         finally:
             connection.close()
-        self.assertEqual(saved, (6, 1))
+        self.assertEqual(saved, (15, 1))
 
     def test_preference_edit_rejects_missing_row_and_invalid_values(self):
         self.assertEqual(self.client.put(
@@ -1175,7 +1175,7 @@ class AnalyticsAPITests(unittest.TestCase):
         ).status_code, 404)
         self.assertEqual(self.client.put(
             "/api/preferences/missing",
-            json={"playbackPreference": 11, "favorite": False},
+            json={"playbackPreference": 16, "favorite": False},
         ).status_code, 422)
 
     def test_clear_imported_data_keeps_schema_archives_and_allows_reimport(self):

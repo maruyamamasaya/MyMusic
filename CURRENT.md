@@ -464,3 +464,15 @@ Semantic CLIのcache backup/restoreを追加。SQLite index、NPZ、profile、sc
 ## チューニング切り替え後のホーム更新 Beta
 
 チューニング／全曲表示の絞り込み完了後、ホームの代表曲・画像とMIXを引き直す。ホームsnapshot反映後に「○○に切り替えました」を2秒表示し、即時の確認アラートを廃止した。連続変更でcancelされたfilterは完了通知を発行しない。再生queueと保存形式は維持する。実機表示は未確認。検証はsessions/2026-10-16-tuning-home-refresh.md参照。
+
+
+## 評価上限15・選曲効果10で最大 Beta（2026-10-16）
+
+保存・編集・交換範囲を-10〜15へ拡張。従来-10〜10の選曲weightを維持し、11〜15は10と同じ効果。Watch、HomeStereo、Local/Desktop/Static Analyticsを対応。HomeStereoはSQLite v15へ移行し旧v14保存状態backupの復元を維持。旧受信アプリへ11以上を渡す互換性はない。実機への導入・実ユーザーDBでの移行／復元操作は未実施。検証はsessions/2026-10-16-preference-range.mdを参照。
+
+
+## Good 8〜15の豪華な演出 Beta（2026-10-16）
+
+MyMusicだけでGood 8〜15に段階別の星・光・周回する輪・虹色を追加。星は7〜21個、装飾はボタン外へ6〜20pt広がる。共通評価ボタン（通常／小型／ハイライト）とVisual Worldへ適用し、共通ボタンのタップ波紋と拡大も段階的に強めた。5〜7は従来の3つの光。Reduce Motion／scene非active／非表示では連続Canvas更新を停止し、装飾はhit testing対象外。選曲上限10は維持。generic iPhone／Watch Simulator build成功、実ソースの8〜15静止描画を確認。実機での動き・重なり・負荷は未確認。詳細はsessions/2026-10-16-preference-effects-deploy.md。
+
+2026-10-16: 豪華なGood演出を含むMyMusicをVesperaへDebug build・install成功。当初の画面ロック解除後、19:55 JSTにmaruyama.MyMusicのLaunch成功を確認。実機演出の目視確認は未実施。

@@ -30,7 +30,7 @@ fingerprint、feature sourceのcontentHash、Import原本のSHA-256、Analyzer p
 | Track Identity／fingerprint | `track-identities.json` | Track UUIDと上記Record。fingerprint生成と移動照合 | 含む |
 | Library metadata | `library-index.json` cache v2 | folderごとのTrack。Album/Artist/Genre/Composer等は復元時に再構築 | 含まない。再scanとIdentity再接続の確認が必要 |
 | Playlist | `playlists.json` | Playlist UUID、順序付きTrack UUID、日時、description、artworkIdentifier、searchDefinition、kind、tags | JSONは含む。artwork参照先の実体は別確認が必要 |
-| 曲のお気に入り／Good・Bad | `track-preferences.json` schemaVersion 2 | Track UUID、favorite Bool、playbackPreference -10…10 | 含む |
+| 曲のお気に入り／Good・Bad | `track-preferences.json` schemaVersion 2 | Track UUID、favorite Bool、playbackPreference -10…15 | 含む |
 | Album/Artistのお気に入り | `library-favorites.json` | Album/Artist UUID集合。曲Favoriteとは別 | 含む。再構築後の分類IDとの一致は未検証 |
 | 再生履歴 | `playback-history.sqlite3` schema v4 | Track UUID、累計、日別、入口、実聴時間、skip等とString event IDの詳細Events | DBは含む。起動時正本判定に問題あり |
 | 履歴移行状態／旧データ | `playback-history-migration-state.json`、旧`playback-history.json`、`Backups/Migration/…` | sidecarとDB内metadataのverifiedを確認して正本を選ぶ。旧JSON移行は全Model read-back比較 | 含まない |

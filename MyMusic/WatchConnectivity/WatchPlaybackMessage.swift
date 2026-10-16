@@ -80,7 +80,7 @@ struct WatchPlaybackState: Equatable, Sendable {
         self.currentTime = currentTime
         self.duration = duration
         self.isFavorite = isFavorite
-        self.playbackPreference = min(max(playbackPreference, -10), 10)
+        self.playbackPreference = min(max(playbackPreference, -10), 15)
         self.hasArtwork = hasArtwork
         self.artworkIdentifier = artworkIdentifier
     }

@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_library_album ON library_tracks(album);
 
 CREATE TABLE IF NOT EXISTS playback_preferences (
     track_id TEXT PRIMARY KEY,
-    playback_preference INTEGER NOT NULL CHECK (playback_preference BETWEEN -10 AND 10),
+    playback_preference INTEGER NOT NULL CHECK (playback_preference BETWEEN -10 AND 15),
     favorite INTEGER CHECK (favorite IS NULL OR favorite IN (0, 1)),
     exported_at TEXT NOT NULL,
     imported_at TEXT NOT NULL,
@@ -152,6 +152,18 @@ class Database:
             preference_columns = {row[1] for row in connection.execute("PRAGMA table_info(playback_preferences)")}
             if "favorite" not in preference_columns:
                 connection.execute("ALTER TABLE playback_preferences ADD COLUMN favorite INTEGER")
+            # Rebuild the existing table transactionally; retain every column and raw JSON.
+            preference_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='playback_preferences'"
+            ).fetchone()[0]
+            if "BETWEEN -10 AND 10" in preference_sql:
+                connection.execute("SAVEPOINT expand_preference_range")
+                connection.execute(preference_sql.replace("playback_preferences", "playback_preferences_expanded", 1)
+                                   .replace("BETWEEN -10 AND 10", "BETWEEN -10 AND 15"))
+                connection.execute("INSERT INTO playback_preferences_expanded SELECT * FROM playback_preferences")
+                connection.execute("DROP TABLE playback_preferences")
+                connection.execute("ALTER TABLE playback_preferences_expanded RENAME TO playback_preferences")
+                connection.execute("RELEASE SAVEPOINT expand_preference_range")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_library_fingerprint ON library_tracks(audio_fingerprint)"
             )

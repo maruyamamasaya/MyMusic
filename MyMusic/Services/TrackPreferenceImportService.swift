@@ -18,7 +18,7 @@ enum TrackPreferenceImportError: LocalizedError, Equatable {
         case let .duplicateTrackID(id):
             "同じTrack IDが重複しています: \(id.uuidString)"
         case let .outOfRangePreference(id):
-            "再生傾向が-10〜+10の範囲外です: \(id.uuidString)"
+            "再生傾向が-10〜+15の範囲外です: \(id.uuidString)"
         }
     }
 }
@@ -60,8 +60,8 @@ struct TrackPreferenceImportService {
             guard ids.insert(id).inserted else {
                 throw TrackPreferenceImportError.duplicateTrackID(id)
             }
-            guard (PlaybackPreferenceWeightPolicy.minimumPreference ...
-                   PlaybackPreferenceWeightPolicy.maximumPreference)
+            guard (TrackPreferenceRange.minimum ...
+                   TrackPreferenceRange.maximum)
                 .contains(item.playbackPreference) else {
                 throw TrackPreferenceImportError.outOfRangePreference(id)
             }
