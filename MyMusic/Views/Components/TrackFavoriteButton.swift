@@ -8,6 +8,7 @@ struct TrackFavoriteButton: View {
     var font: Font = .body
     var width: CGFloat = 32
     var favoriteColor: Color = .pink
+    var inactiveColor: Color? = nil
 
     @State private var effectTrigger = 0
     @State private var showsBurst = false
@@ -28,7 +29,7 @@ struct TrackFavoriteButton: View {
                         }
                         Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .font(font)
-                            .foregroundStyle(isFavorite ? favoriteColor : ThemePalette.resolve(appTheme).accent)
+                            .foregroundStyle(isFavorite ? favoriteColor : (inactiveColor ?? ThemePalette.resolve(appTheme).accent))
                             .symbolEffect(.bounce, options: .speed(1.6), value: effectTrigger)
                             .scaleEffect(showsBurst ? 1.22 : 1)
                             .frame(width: width, height: 36)

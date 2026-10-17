@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A compact game-style BGM credit; no audio analysis or animation timer.
+/// A compact smoked-display BGM panel; playback and persistence remain outside the view.
 struct SceneryBGMOverlay: View {
     @Environment(PlayerStore.self) private var music
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -9,6 +9,12 @@ struct SceneryBGMOverlay: View {
     @Binding var isCollapsed: Bool
 
     @ScaledMetric(relativeTo: .body) private var artworkSize = 36
+    @ScaledMetric(relativeTo: .caption) private var titleSize = 12
+    @ScaledMetric(relativeTo: .caption) private var titleHeight = 15
+    @ScaledMetric(relativeTo: .caption2) private var artistSize = 11
+    @ScaledMetric(relativeTo: .caption2) private var artistHeight = 13
+    @ScaledMetric(relativeTo: .caption2) private var labelSize = 9
+    @ScaledMetric(relativeTo: .caption2) private var labelHeight = 11
 
     var body: some View {
         Group {
@@ -27,22 +33,20 @@ struct SceneryBGMOverlay: View {
                 }
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(SceneryPlayerAppearance.display)
         .padding(.vertical, isCollapsed ? 2 : 4)
         .padding(.horizontal, 12)
         .background {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.black.opacity(reduceTransparency ? 1 : 0.58))
+            ScenerySmokedPanel(opaque: reduceTransparency)
         }
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.15)))
         .overlay(alignment: .bottom) {
-            if !isCollapsed {
-                playbackProgress
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 3)
-            }
+            playbackProgress
+                .padding(.horizontal, 12)
+                .padding(.bottom, 2)
         }
-        .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : (isCollapsed ? 270 : 410), alignment: .leading)
+        .overlay { if !reduceTransparency { SceneryGlassReflection() } }
+        .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : (isCollapsed ? 270 : 390), alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var progress: Double {
@@ -52,14 +56,25 @@ struct SceneryBGMOverlay: View {
     }
 
     private var playbackProgress: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.14))
-                Capsule().fill(.white.opacity(0.65))
-                    .frame(width: geometry.size.width * progress)
+        Canvas { context, size in
+            let start: CGFloat = 5
+            let end = max(start, size.width - 1)
+            let playhead = start + (end - start) * progress
+            var remaining = Path()
+            for x in stride(from: start, through: end, by: 3) where x > playhead {
+                remaining.addEllipse(in: CGRect(x: x - 0.4, y: 1.1, width: 0.8, height: 0.8))
             }
+            context.fill(remaining, with: .color(SceneryPlayerAppearance.display.opacity(0.28)))
+            if progress > 0 {
+                let elapsed = Path(roundedRect: CGRect(x: start, y: 1, width: playhead - start, height: 1), cornerRadius: 0.5)
+                context.fill(elapsed, with: .color(SceneryPlayerAppearance.display.opacity(0.85)))
+                context.fill(Path(ellipseIn: CGRect(x: playhead - 0.8, y: 0.7, width: 1.6, height: 1.6)),
+                             with: .color(SceneryPlayerAppearance.display))
+            }
+            context.fill(Path(ellipseIn: CGRect(x: 0, y: 0.75, width: 1.5, height: 1.5)),
+                         with: .color(SceneryPlayerAppearance.display.opacity(music.isPlaying ? 0.95 : 0.3)))
         }
-        .frame(height: 1)
+        .frame(height: 3)
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("曲の再生位置")
@@ -68,68 +83,70 @@ struct SceneryBGMOverlay: View {
     }
 
     private var trackCredit: some View {
-        HStack(spacing: 9) {
-            Button(action: onReturn) {
-                AlbumArtworkView(artworkIdentifier: music.currentTrack?.artworkIdentifier)
-                    .frame(width: artworkSize, height: artworkSize)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .accessibilityHidden(true)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("通常の再生画面へ戻る")
-            .accessibilityHint("車窓モードを閉じます")
-            if isCollapsed {
-                Button { isCollapsed = false } label: { trackText }
+        GeometryReader { geometry in
+            let textWidth = max(0, geometry.size.width - max(44, artworkSize) - 9)
+            HStack(spacing: 9) {
+                Button(action: onReturn) {
+                    AlbumArtworkView(artworkIdentifier: music.currentTrack?.artworkIdentifier)
+                        .frame(width: artworkSize, height: artworkSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .accessibilityHidden(true)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("通常の再生画面へ戻る")
+                .accessibilityHint("車窓モードを閉じます")
+                Button { isCollapsed.toggle() } label: { trackText(width: textWidth) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(music.currentTrack?.title ?? "未再生")、\(music.currentTrack?.artistName ?? "")")
-                    .accessibilityHint("再生操作を展開します")
-            } else {
-                trackText
+                    .accessibilityHint(isCollapsed ? "再生操作を展開します" : "再生表示を縮小します")
             }
         }
+        .frame(height: max(44, artworkSize, labelHeight + titleHeight + artistHeight + 2))
     }
 
-    private var trackText: some View {
+    private func trackText(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(music.isPlaying ? "NOW PLAYING" : "PAUSED")
-                .font(.system(.caption2, design: .monospaced).weight(.medium))
+                .font(.custom("DotGothic16-Regular", fixedSize: labelSize))
                 .tracking(1)
-                .foregroundStyle(.white.opacity(0.6))
-            Text(music.currentTrack?.title ?? "未再生")
-                .font(.system(.caption, design: .rounded).weight(.semibold))
-                .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-            Text(music.currentTrack?.artistName ?? "")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.65))
-                .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                .frame(height: labelHeight, alignment: .leading)
+                .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
+            HStack(spacing: 3) {
+                SceneryDotRecord().frame(width: titleHeight - 1, height: titleHeight - 1)
+                SceneryDisplayText(text: music.currentTrack?.title ?? "未再生", fontSize: titleSize, lineHeight: titleHeight)
+            }
+            SceneryDisplayText(text: music.currentTrack?.artistName ?? "", fontSize: artistSize, lineHeight: artistHeight)
+                .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.8))
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(width: width, alignment: .leading)
+        .frame(minHeight: 44)
+        .clipped()
         .contentShape(Rectangle())
     }
 
     private var playbackButtons: some View {
         HStack(spacing: 0) {
-            Button { isCollapsed = true } label: {
-                Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("再生表示を縮小")
             if let track = music.currentTrack, track.isEligibleForRegularPlayback {
-                TrackFavoriteButton(track: track, font: .caption, width: 36, favoriteColor: .red)
-                PlaybackPreferenceButton(track: track, direction: .increase, compact: true)
+                TrackFavoriteButton(track: track, font: .caption, width: 36, favoriteColor: .red, inactiveColor: SceneryPlayerAppearance.display)
+                PlaybackPreferenceButton(track: track, direction: .increase, compact: true, inactiveColor: SceneryPlayerAppearance.display)
                     .padding(.horizontal, 5)
             }
             Button { music.togglePlayPause() } label: {
                 Image(systemName: music.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 14, weight: .semibold))
                     .frame(width: 44, height: 44)
             }
+            .buttonStyle(SceneryMetalPlaybackStyle(diameter: 36))
             .disabled(music.currentTrack == nil || music.isLoading)
             .accessibilityLabel(music.isPlaying ? "音楽を一時停止" : "音楽を再生")
             Button { music.next() } label: {
-                Image(systemName: "forward.end.fill").frame(width: 44, height: 44)
+                Image(systemName: "forward.end.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(SceneryMetalPlaybackStyle(diameter: 29))
             .disabled(!music.hasNext)
             .accessibilityLabel("次の曲")
         }

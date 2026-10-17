@@ -9,6 +9,10 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
+2026-10-18: ユーザーがVesperaでドット文字の見た目を確認。追加でHUDに光沢のある金属縁と静的なガラス反射を重ね、再生／次曲ボタンを立体的な金属表現へ調整。残りの進捗を微小ドット、左端を再生状態ドットとし、曲名横に傾いたドットレコードを追加。寸法・操作・動画再生方針は維持。iPhone／Watch buildと実Viewのサンプル描画確認成功。この追加版もVesperaへDebug build・install・launch成功。ガラスの透明感とメタリックボタンの見た目はユーザー実機確認済み。追加で展開幅410→390pt、再生ボタンの金属面32→36pt、次送り32→29ptへ調整（タップ領域44ptを維持）。この寸法調整は未デプロイ・実機未確認。詳細は[sessions/2026-10-18-scenery-glass-finish.md](sessions/2026-10-18-scenery-glass-finish.md)。
+
+2026-10-17: 車窓HUDをスモーク液晶風パネルと白青いDotGothic16（漢字・かな対応）へ変更。曲名／Artistは固定表示窓で、長い場合のみ先頭1.8秒停止→左スクロール→末尾1秒停止→先頭へ復帰を繰り返す。縮小矢印は外し、文字部分tapで縮小／展開、Artworkで戻る。再生／一時停止と次曲だけメタリック、グッド／ハートは背景なし。縮小時もNOW PLAYINGと1pt進捗を維持。最大幅410／270pt、Artwork36ptとpaddingは維持。iPhone／Watch build、字体coverageとサンプル描画確認成功。2026-10-18にVesperaへDebug build・install・launch成功。ドット文字の見た目はユーザー実機確認済み。スクロール・全操作の個別確認は未記録。詳細は[sessions/2026-10-17-scenery-retro-display.md](sessions/2026-10-17-scenery-retro-display.md)。
+
 2026-10-17: ×を廃止し、BGMのアートワーク（画像なしは音符）で通常画面へ戻る。内向き矢印でアートワーク・NOW PLAYING／PAUSED・曲名・Artistの縮小表示にし、曲名／Artistタップで展開する。縮小中もNOW PLAYING／PAUSEDを残し、評価・再生・進捗を隠す。背景tapで表示を切り替えても縮小状態を保持し、再入場時は展開から開始。iPhone／Watch Simulator build成功、最終版をVesperaへDebug build・install・launch成功。縮小中もNOW PLAYING／PAUSEDを残す追加調整版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで縮小中のNOW PLAYING表示・アートワークで戻る・縮小と展開の動作を問題なしと実機確認。
 
 2026-10-17: BGMパネル左端の白いaccent線を削除。音楽のpause／stop／曲切替に関係なく、車窓が前面・scene activeなら動画を継続する。設定で複数動画を追加・保存し、一覧から流す1本を選択できる。個別解除は元動画を残し、選択中を解除した場合は残りの先頭を選ぶ。旧1本の登録は引き継ぐ。iPhone／Watch buildと複数保存・選択・削除・旧形式移行の統合チェック成功。この版も2026-10-17にVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の選択切り替えと音楽停止後の映像継続を問題なしと実機確認。詳細は[sessions/2026-10-17-scenery-video-collection.md](sessions/2026-10-17-scenery-video-collection.md)。

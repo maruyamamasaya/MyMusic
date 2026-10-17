@@ -8,6 +8,7 @@ struct PlaybackPreferenceButton: View {
     let direction: Direction
     var compact = false
     var circularBackground = false
+    var inactiveColor: Color? = nil
 
     @State private var effectTrigger = 0
     @State private var isBursting = false
@@ -90,7 +91,7 @@ struct PlaybackPreferenceButton: View {
         if usesGradient {
             image.foregroundStyle(effectGradient)
         } else {
-            image.foregroundStyle(isActive ? effectColor : .secondary)
+            image.foregroundStyle(isActive ? effectColor : (inactiveColor ?? .secondary))
         }
     }
 
