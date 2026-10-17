@@ -135,13 +135,14 @@ struct SceneryBGMOverlay: View {
     private func statusRow(compact: Bool) -> some View {
         HStack(spacing: 4) {
             Text(music.isPlaying ? "NOW PLAYING" : "PAUSED")
-                .font(.custom("DotGothic16-Regular", fixedSize: compact ? labelSize * 0.8 : labelSize))
+                .font(.custom("DotGothic16-Regular", fixedSize: compact ? labelSize * 0.7 : labelSize))
                 .tracking(compact ? 0 : 1)
                 .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
                 .fixedSize()
             Spacer(minLength: 2)
-            SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.8 : labelSize)
+            SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.7 : labelSize)
                 .fixedSize()
+            SceneryClock(fontSize: compact ? labelSize * 0.7 : labelSize)
         }
     }
 
