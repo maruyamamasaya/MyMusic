@@ -37,3 +37,17 @@
 - Vespera（iPhone 17e）、UDID 00008150-000C54280E33401C。
 - Debug Build／Install／Launchすべて成功。ログ: /tmp/mymusic-scenery-clock-blink-deploy.log。
 - デプロイ記録と実機確認記録を現在時刻・コロン実装と合わせてコミットする。
+
+## コロン実機確認と時計・電池の並び替え
+- 2026-10-18、ユーザーがコロン点滅と縮小中の表示を問題なしと実機確認。
+- 追加依頼でNOW PLAYING行の時計と電池を交換。展開・縮小とも時計→電池の順。幅、文字サイズ、更新方針、操作は維持。
+- 今回確認済みなのは並び替え前のコロン・縮小表示。並び替え版の実機確認は未実施、Reduce Motionの確認も未報告。
+
+## 並び替え版の検証・デプロイ
+- iPhone／Watch generic Simulator Debug build成功: /tmp/mymusic-scenery-status-order-build.log。
+- git status確認→check-iphone.sh成功→deploy-iphone.sh実行。
+- MyMusic.xcodeproj／MyMusic scheme／MyMusic.app、Bundle ID maruyama.MyMusic。
+- Vespera（iPhone 17e）、UDID 00008150-000C54280E33401C。
+- Debug Build／Install／Launchすべて成功: /tmp/mymusic-scenery-status-order-deploy.log。
+- git diff --check成功。XCTest未実行、test端末作成0／削除0、XCTestDevices既存合計12K。Xcode data削除なし。
+- 実機確認済みのコロン・縮小表示と、未確認の並び替えを区別し、デプロイ後にコミットする。

@@ -140,9 +140,9 @@ struct SceneryBGMOverlay: View {
                 .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
                 .fixedSize()
             Spacer(minLength: 2)
+            SceneryClock(fontSize: compact ? labelSize * 0.7 : labelSize)
             SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.7 : labelSize)
                 .fixedSize()
-            SceneryClock(fontSize: compact ? labelSize * 0.7 : labelSize)
         }
     }
 
