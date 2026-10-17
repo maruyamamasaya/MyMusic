@@ -3,6 +3,8 @@ import SwiftUI
 /// A compact smoked-display BGM panel; playback and persistence remain outside the view.
 struct SceneryBGMOverlay: View {
     @Environment(PlayerStore.self) private var music
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var battery = SceneryBatteryService()
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let onReturn: () -> Void
@@ -47,6 +49,10 @@ struct SceneryBGMOverlay: View {
         .overlay { if !reduceTransparency { SceneryGlassReflection() } }
         .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : (isCollapsed ? 270 : 390), alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { battery.start() } else { battery.stop() }
+        }
+        .onDisappear { battery.stop() }
     }
 
     private var progress: Double {
@@ -108,11 +114,11 @@ struct SceneryBGMOverlay: View {
 
     private func trackText(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(music.isPlaying ? "NOW PLAYING" : "PAUSED")
-                .font(.custom("DotGothic16-Regular", fixedSize: labelSize))
-                .tracking(1)
-                .frame(height: labelHeight, alignment: .leading)
-                .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
+            ViewThatFits(in: .horizontal) {
+                statusRow(compact: false)
+                statusRow(compact: true)
+            }
+            .frame(height: labelHeight, alignment: .leading)
             HStack(spacing: 3) {
                 SceneryDotRecord().frame(width: titleHeight - 1, height: titleHeight - 1)
                 SceneryDisplayText(text: music.currentTrack?.title ?? "未再生", fontSize: titleSize, lineHeight: titleHeight)
@@ -126,12 +132,23 @@ struct SceneryBGMOverlay: View {
         .contentShape(Rectangle())
     }
 
+    private func statusRow(compact: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(music.isPlaying ? "NOW PLAYING" : "PAUSED")
+                .font(.custom("DotGothic16-Regular", fixedSize: compact ? labelSize * 0.8 : labelSize))
+                .tracking(compact ? 0 : 1)
+                .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
+                .fixedSize()
+            Spacer(minLength: 2)
+            SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.8 : labelSize)
+                .fixedSize()
+        }
+    }
+
     private var playbackButtons: some View {
         HStack(spacing: 0) {
             if let track = music.currentTrack, track.isEligibleForRegularPlayback {
-                TrackFavoriteButton(track: track, font: .caption, width: 36, favoriteColor: .red, inactiveColor: SceneryPlayerAppearance.display)
-                PlaybackPreferenceButton(track: track, direction: .increase, compact: true, inactiveColor: SceneryPlayerAppearance.display)
-                    .padding(.horizontal, 5)
+                SceneryPreferenceControls(track: track)
             }
             Button { music.togglePlayPause() } label: {
                 Image(systemName: music.isPlaying ? "pause.fill" : "play.fill")
