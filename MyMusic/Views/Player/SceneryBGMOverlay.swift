@@ -26,10 +26,6 @@ struct SceneryBGMOverlay: View {
                 .fill(.black.opacity(reduceTransparency ? 1 : 0.58))
         }
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.15)))
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 1).fill(.white.opacity(0.65))
-                .frame(width: 2, height: 30)
-        }
         .overlay(alignment: .bottom) {
             playbackProgress
                 .padding(.horizontal, 12)

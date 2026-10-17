@@ -9,6 +9,8 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
+2026-10-17: BGMパネル左端の白いaccent線を削除。音楽のpause／stop／曲切替に関係なく、車窓が前面・scene activeなら動画を継続する。設定で複数動画を追加・保存し、一覧から流す1本を選択できる。個別解除は元動画を残し、選択中を解除した場合は残りの先頭を選ぶ。旧1本の登録は引き継ぐ。iPhone／Watch buildと複数保存・選択・削除・旧形式移行の統合チェック成功。この版も2026-10-17にVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の選択切り替えと音楽停止後の映像継続を問題なしと実機確認。詳細は[sessions/2026-10-17-scenery-video-collection.md](sessions/2026-10-17-scenery-video-collection.md)。
+
 2026-10-17: 追加調整でNOW PLAYING（停止中PAUSED）表記を復活。パネルの上下paddingを8→4pt、画面下余白を12→4ptとして少し低く・下側へ配置。動画だけに8%の黒を重ね、わずかに暗くした。端末の画面輝度は変更しない。この調整もVesperaへDebug build・install・launch成功。InstrumentsのOfflineはMobileDeviceのsession開始エラー（kAMDNotConnectedError）を確認。Instrumentsの初回画面完了・Xcode Devices表示後にOnlineへ復旧し、ユーザーもUSBを再接続した。Power ProfilerでUSB安定接続下の通常・車窓を各30秒比較。画面輝度26%、thermalは両方Fair。CPU電力影響スコアは通常約0.10／車窓約0.35だが、充電中のSystem Power Usageは両方0%/hrのため電池消費差は判断できない。続いて非充電・無線で各30秒の比較も完了。輝度25%、開始後5〜30秒の端末全体推定消費率は通常約7.5%/hr／車窓約9.9%/hr、CPU影響は約0.03／0.10、thermalは両方Fair。通常再生の短時間観測では目立つCPU負荷・通信量・thermal悪化なし。各1回の短時間Debug計測であり、長時間消費や全体品質の保証ではない。結果は[sessions/2026-10-17-scenery-battery-analysis.md](sessions/2026-10-17-scenery-battery-analysis.md)。
 
 2026-10-17: 追加要望でBGM表記を短縮し、Artworkを36pt基準へ縮小、余白を詰めた。共通のグッド評価と赤いお気に入りハートを追加。BGMパネル下端に曲の再生位置を示す1ptの細いラインを追加（操作なし・時間表示なし）。車窓画面内の設定入口を削除し、通常の設定へ集約。iPhone／Watch build成功。BGMパネルを右下へ配置し、この追加調整版も2026-10-17にVesperaへDebug build・install・launch成功。コンパクト表示・グッド／ハート・細い進捗ライン・右下配置の実機確認はこれから。
@@ -17,9 +19,9 @@ updated: 2026-10-08
 
 2026-10-17: Vesperaへ現在の作業ツリーでDebug build・install・launch成功。保存対応版の実機確認結果は下記を参照。画質・負荷の個別評価は未記録。
 
-通常再生画面の電車ボタンから全画面で開き、Files／iCloud Driveで選んだ動画1本をApplication Support/MyMusic/SceneryVideoへ元のままコピーして登録する。次回から保存済み動画を自動復元し、毎回ランダム位置から無音・18fps設定で再生する。動画名・容量の確認、変更、登録解除は「設定 → 車窓モード」へ移動。車窓画面の歯車・設定sheetは削除し、アプリ通常の設定からのみ管理する。変更はコピー・映像検証・manifestのatomic保存後に確定し、コピー／検証失敗では旧動画を保持する。解除はアプリ内のコピーだけを削除し、元動画は変更しない。
+通常再生画面の電車ボタンから全画面で開き、Files／iCloud Driveで選んだ動画をApplication Support/MyMusic/SceneryVideoへ元のままコピーして複数登録できる。次回から設定で選択した保存済み動画を自動復元し、毎回ランダム位置から無音・18fps設定で再生する。動画名・容量の確認、変更、登録解除は「設定 → 車窓モード」へ移動。車窓画面の歯車・設定sheetは削除し、アプリ通常の設定からのみ管理する。追加はコピー・映像検証・manifestのatomic保存後に確定し、コピー／検証失敗では既存動画を保持する。選択変更はコピーなしでmanifestへ保存する。解除はアプリ内のコピーだけを削除し、元動画は変更しない。
 
-iPhoneでは開くと横向き、閉じると縦向きへのgeometry更新を要求する（通常画面の対応方向は元へ戻す）。自動回転追加後のiPhone／Watch Simulator build成功。自動回転を含むUI更新版を2026-10-17にVesperaへデプロイ済み。自動回転はユーザー実機確認済み。曲変更では映像を維持し、音楽一時停止・background・Files表示中は映像も休止、閉じると再生資源を解放する。終端は先頭へ戻る。iPhone／Watch Simulator Debug build、macOS合成動画のコピーbytes一致・新instance復元・変更失敗時保全・旧コピー削除・解除の統合チェック成功。2026-10-17に保存対応版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の保存、開き直したときのランダム再生、動画変更、登録解除の4項目をすべて問題なく動作すると確認。iCloud未取得動画、5時間動画、実機の表示・音楽同時再生・発熱・電池消費は未検証。18fps設定はデコード負荷削減の保証ではない。アプリ独自の外部backupには動画を含めない。詳細は[sessions/2026-10-17-scenery-video-persistence.md](sessions/2026-10-17-scenery-video-persistence.md)。
+iPhoneでは開くと横向き、閉じると縦向きへのgeometry更新を要求する（通常画面の対応方向は元へ戻す）。自動回転追加後のiPhone／Watch Simulator build成功。自動回転を含むUI更新版を2026-10-17にVesperaへデプロイ済み。自動回転はユーザー実機確認済み。曲変更・音楽の一時停止／停止でも映像を維持し、backgroundでは映像を休止、車窓を閉じると再生資源を解放する。終端は先頭へ戻る。iPhone／Watch Simulator Debug build、macOS合成動画のコピーbytes一致・新instance復元・変更失敗時保全・旧コピー削除・解除の統合チェック成功。2026-10-17に保存対応版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の保存、開き直したときのランダム再生、動画変更、登録解除の4項目をすべて問題なく動作すると確認。iCloud未取得動画、5時間動画、実機の表示・音楽同時再生・発熱・電池消費は未検証。18fps設定はデコード負荷削減の保証ではない。アプリ独自の外部backupには動画を含めない。詳細は[sessions/2026-10-17-scenery-video-persistence.md](sessions/2026-10-17-scenery-video-persistence.md)。
 
 ## 実機検証の方針と次回チェックリスト
 

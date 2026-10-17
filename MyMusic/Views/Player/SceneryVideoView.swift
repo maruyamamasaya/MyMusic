@@ -4,12 +4,11 @@ import AVFoundation
 struct SceneryVideoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(PlayerStore.self) private var music
     @State private var store = SceneryVideoStore()
     @State private var controlsVisible = true
     @State private var orientationError: String?
 
-    private var active: Bool { scenePhase == .active && music.isPlaying && store.isReady }
+    private var active: Bool { scenePhase == .active && store.isReady }
 
     var body: some View {
         ZStack {

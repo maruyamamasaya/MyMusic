@@ -8,6 +8,7 @@ final class SceneryVideoStore {
     private let library: SceneryVideoLibraryService
     private(set) var isLoading = false
     private(set) var isReady = false
+    private(set) var registeredVideos: [RegisteredSceneryVideo] = []
     private(set) var registeredVideo: RegisteredSceneryVideo?
     private(set) var errorMessage: String?
     private var request = UUID()
@@ -30,6 +31,7 @@ final class SceneryVideoStore {
         service.stop()
         errorMessage = nil
         do {
+            registeredVideos = try await library.videos()
             if let source {
                 do { registeredVideo = try await library.register(source) }
                 catch {
@@ -41,6 +43,7 @@ final class SceneryVideoStore {
             } else {
                 registeredVideo = try await library.current()
             }
+            registeredVideos = try await library.videos()
             try Task.checkCancellation()
             guard request == id else { return }
             if preparesPlayback, let registeredVideo {
@@ -58,6 +61,27 @@ final class SceneryVideoStore {
         isLoading = false
     }
 
+    func select(_ video: RegisteredSceneryVideo) async {
+        await updateRegistration(video, removes: false)
+    }
+
+    func remove(_ video: RegisteredSceneryVideo) async {
+        await updateRegistration(video, removes: true)
+    }
+
+    private func updateRegistration(_ video: RegisteredSceneryVideo, removes: Bool) async {
+        guard !isLoading else { return }
+        isLoading = true
+        errorMessage = nil
+        do {
+            if removes { try await library.remove(video) }
+            else { try await library.select(video) }
+            registeredVideos = try await library.videos()
+            registeredVideo = try await library.current()
+        } catch { errorMessage = error.localizedDescription }
+        isLoading = false
+    }
+
     func unregister() async {
         guard !isLoading else { return }
         let id = UUID()
@@ -69,6 +93,7 @@ final class SceneryVideoStore {
         do {
             try await library.unregister()
             registeredVideo = nil
+            registeredVideos = []
         } catch {
             errorMessage = "登録解除に失敗しました。\(error.localizedDescription)"
             registeredVideo = try? await library.current()

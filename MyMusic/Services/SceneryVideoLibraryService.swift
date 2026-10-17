@@ -12,15 +12,59 @@ actor SceneryVideoLibraryService {
 
     private var manifest: URL { root.appendingPathComponent("current.json") }
 
+    private func collection() throws -> SceneryVideoCollection {
+        guard files.fileExists(atPath: manifest.path) else { return SceneryVideoCollection() }
+        let data = try Data(contentsOf: manifest)
+        let result: SceneryVideoCollection
+        if let document = try? JSONDecoder().decode(SceneryVideoCollection.self, from: data) {
+            guard document.version == 2 else { throw LibraryError.invalidLibrary }
+            result = document
+        } else {
+            // Preserve the existing single-video registration without copying or deleting its file.
+            let legacy = try JSONDecoder().decode(RegisteredSceneryVideo.self, from: data)
+            result = SceneryVideoCollection(videos: [legacy], selectedFileName: legacy.fileName)
+        }
+        guard Set(result.videos.map(\.fileName)).count == result.videos.count,
+              result.selectedFileName == nil || result.videos.contains(where: { $0.fileName == result.selectedFileName }),
+              result.videos.allSatisfy({ $0.fileName == URL(fileURLWithPath: $0.fileName).lastPathComponent
+                  && !$0.fileName.hasPrefix(".") && $0.byteCount > 0 }) else {
+            throw LibraryError.invalidLibrary
+        }
+        return result
+    }
+
+    func videos() throws -> [RegisteredSceneryVideo] { try collection().videos }
+
     func current() throws -> RegisteredSceneryVideo? {
-        guard files.fileExists(atPath: manifest.path) else { return nil }
-        let video = try JSONDecoder().decode(RegisteredSceneryVideo.self, from: Data(contentsOf: manifest))
-        guard video.fileName == URL(fileURLWithPath: video.fileName).lastPathComponent,
-              !video.fileName.hasPrefix("."), video.byteCount > 0,
-              files.fileExists(atPath: root.appendingPathComponent(video.fileName).path) else {
+        let document = try collection()
+        guard let video = document.videos.first(where: { $0.fileName == document.selectedFileName }) else { return nil }
+        guard files.fileExists(atPath: root.appendingPathComponent(video.fileName).path) else {
             throw LibraryError.missingVideo
         }
         return video
+    }
+
+    private func save(_ document: SceneryVideoCollection) throws {
+        try JSONEncoder().encode(document).write(to: manifest, options: .atomic)
+    }
+
+    func select(_ video: RegisteredSceneryVideo) throws {
+        var document = try collection()
+        guard document.videos.contains(where: { $0.fileName == video.fileName }),
+              files.fileExists(atPath: root.appendingPathComponent(video.fileName).path) else {
+            throw LibraryError.missingVideo
+        }
+        document.selectedFileName = video.fileName
+        try save(document)
+    }
+
+    func remove(_ video: RegisteredSceneryVideo) throws {
+        var document = try collection()
+        guard document.videos.contains(where: { $0.fileName == video.fileName }) else { return }
+        document.videos.removeAll { $0.fileName == video.fileName }
+        if document.selectedFileName == video.fileName { document.selectedFileName = document.videos.first?.fileName }
+        try save(document)
+        cleanup(keeping: Set(document.videos.map(\.fileName)))
     }
 
     func url(for video: RegisteredSceneryVideo) -> URL { root.appendingPathComponent(video.fileName) }
@@ -59,9 +103,12 @@ actor SceneryVideoLibraryService {
         let video = RegisteredSceneryVideo(fileName: name, originalName: source.lastPathComponent,
                                            byteCount: size.int64Value)
         // Persist only after a complete copy and validation; a failed write leaves the old selection.
-        try JSONEncoder().encode(video).write(to: manifest, options: .atomic)
+        var document = try collection()
+        document.videos.append(video)
+        document.selectedFileName = name
+        try save(document)
         committed = true
-        cleanup(except: name)
+        cleanup(keeping: Set(document.videos.map(\.fileName)))
         return video
     }
 
@@ -71,17 +118,18 @@ actor SceneryVideoLibraryService {
         if files.fileExists(atPath: root.path) { try files.removeItem(at: root) }
     }
 
-    private func cleanup(except name: String) {
+    private func cleanup(keeping names: Set<String>) {
         guard let contents = try? files.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
-        for url in contents where url.lastPathComponent != name && url.lastPathComponent != "current.json" {
+        for url in contents where !names.contains(url.lastPathComponent) && url.lastPathComponent != "current.json" {
             try? files.removeItem(at: url)
         }
     }
 
     private enum LibraryError: LocalizedError {
-        case missingVideo, invalidVideo
+        case missingVideo, invalidVideo, invalidLibrary
         var errorDescription: String? {
             switch self {
+            case .invalidLibrary: "動画の登録情報を読み込めませんでした。登録情報は変更していません。"
             case .missingVideo: "保存した動画が見つかりません。動画を再登録するか、登録を解除してください。"
             case .invalidVideo: "このファイルには再生できる映像がありません。別の動画を選んでください。"
             }
