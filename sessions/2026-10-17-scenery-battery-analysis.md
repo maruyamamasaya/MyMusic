@@ -2,7 +2,9 @@
 
 ## 結論
 
-今回取得した短時間データでは、車窓モードは通常再生よりMyMusicのCPU Power Impactが高い。温度状態の悪化は観測されなかった。ただしUSB充電中のため端末全体の消費率が0と記録され、実際のバッテリー消費増加量は判定できない。電池への影響なし・軽微とは結論しない。計測データの分析は完了し、非充電での再測定は残る検証とする。
+非充電で追加計測できた。輝度25%・各30秒の記録のうち5〜30秒で、端末全体の推定消費率は通常約7.5%/hr／車窓約9.9%/hr。車窓で約2.3ポイント/時高かった。CPU Power Impactも通常約0.03／車窓0.10へ増加したが、thermalは両方Fair、アプリの通信量カウンターは0だった。
+
+通常再生は、この短時間観測ではCPUの大きな持続負荷・thermal悪化・アプリ通信量の増加を観測しなかった。アプリ全機能や長時間の電池持ちが良好だと保証する検証ではない。端末全体消費は背景処理も含み、各条件1回の短いDebug計測なので差の再現性・長期平均は未確認。以下のUSB測定に加え、末尾に非充電の最終結果を記録する。
 
 ## 測定条件と結果
 
@@ -34,4 +36,34 @@ CoreDevice／devicectlとXcodeのDevicesはVesperaを認識したが、Instrumen
 - 元trace／XMLは一時領域のみで、Gitには含めない。長期保存された生データではないため、再現時は再採取が必要。
 - [Apple Power Profiler](https://developer.apple.com/documentation/xcode/measuring-your-app-s-power-use-with-power-profiler)と[WWDC25](https://developer.apple.com/videos/play/wwdc2025/226/)のSystem Power Usage／アプリ別impact scoreの区別に沿って解釈した。
 
-非充電・同じ動画区間／音楽／輝度で比較する検証と、長時間の発熱・電池消費は未実施。今回の依頼の区切りでは、取得済みデータの分析と未判定範囲を記録してコミットする。
+USB計測時点では非充電比較は未実施だったが、後述の追加計測で実施できた。同じ動画区間／音楽への固定と長時間の発熱・電池消費の検証は引き続き未実施。
+
+
+## 非充電・無線での最終比較 — 2026-10-17
+
+コミット・デプロイ完了後にユーザーからUSB取り外しと通常再生の返信が届いたため、同じデプロイ済みコードのまま検証を継続した。通常再生そのものの負荷確認も依頼された。通常→車窓の各状態をユーザーに確認し、無線Power Profilerを各30秒実行。車窓の名前指定attachは失敗したが、動作中の実PIDへ指定し直して成功した。
+
+| 指標 | 通常再生 | 車窓モード |
+| --- | --- | --- |
+| trace実時間 | 31.85秒 | 31.73秒 |
+| 比較区間 | 開始後5〜30秒 | 開始後5〜30秒 |
+| System Power Usageの区間平均 | 約7.52%/hr | 約9.85%/hr |
+| CPU Power Impactの区間平均 | 約0.029 | 0.100 |
+| CPU Power Impact最大（全期間） | 1.0 | 0.1 |
+| Display Brightness | 25% | 25% |
+| Charger Connectedの記録行 | 0 | 0 |
+| thermal state | 全期間Fair | 全期間Fair |
+| process bytesカウンター4列の合計 | すべて0 | すべて0 |
+
+計測開始直後を避け、同じ5〜30秒の区間を切り出した。XMLのid/refを解決し、各rowの開始・durationで区間を積分して時間加重平均した。重複区間は後から始まった値を優先する。両方とも比較対象区間は約25秒分得られた。全有効区間での平均も通常7.94%/hr・車窓10.03%/hrで、増加方向は同じ。
+
+推定消費率の差は約2.34ポイント/時。ただし30秒記録からのrateで、1時間実際に再生して7.52%／9.85%減ったという結果ではない。動画区間・曲を同一に固定した測定ではなく、OSの背景処理、無線プロファイル、Debug版の影響も含む。通常再生の最大CPU score 1.0は平均0.029に対して一時的で、持続的な高負荷は今回観測されなかった。通信量0はこのtraceのMyMusic用カウンター上の結果であり、端末全体の通信なしを意味しない。
+
+8%暗幕の節電効果は、暗幕有無の比較をしていないため不明。長時間の温度・電池持ちと異なる素材での再現性は未確認。
+
+生データ（Git対象外）:
+- /tmp/mymusic-power-normal-unplugged.trace、/tmp/mymusic-power-normal-unplugged-data.xml
+- /tmp/mymusic-power-scenery-unplugged-pid.trace、/tmp/mymusic-power-scenery-unplugged-data.xml
+- 集計手順: /tmp/mymusic-power-unplugged-summary.py、結果: /tmp/mymusic-power-unplugged-summary.json
+
+追加作業はCURRENTと本記録の更新のみ。アプリコードは変更せず、同じコードのデプロイは繰り返さない。build／XCTest追加実行なし、test端末作成0／削除0、Xcode data削除なし。git diff --checkで確認し、前のコミット依頼の続きとして検証記録をコミット・pushする。

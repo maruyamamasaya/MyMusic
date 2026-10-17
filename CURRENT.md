@@ -9,7 +9,7 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
-2026-10-17: 追加調整でNOW PLAYING（停止中PAUSED）表記を復活。パネルの上下paddingを8→4pt、画面下余白を12→4ptとして少し低く・下側へ配置。動画だけに8%の黒を重ね、わずかに暗くした。端末の画面輝度は変更しない。この調整もVesperaへDebug build・install・launch成功。InstrumentsのOfflineはMobileDeviceのsession開始エラー（kAMDNotConnectedError）を確認。Instrumentsの初回画面完了・Xcode Devices表示後にOnlineへ復旧し、ユーザーもUSBを再接続した。Power ProfilerでUSB安定接続下の通常・車窓を各30秒比較。画面輝度26%、thermalは両方Fair。CPU電力影響スコアは通常約0.10／車窓約0.35だが、充電中のSystem Power Usageは両方0%/hrのため電池消費差は判断できない。短時間比較の分析は完了。非充電での実消費率比較は未実施のまま制約として残す。結果は[sessions/2026-10-17-scenery-battery-analysis.md](sessions/2026-10-17-scenery-battery-analysis.md)。
+2026-10-17: 追加調整でNOW PLAYING（停止中PAUSED）表記を復活。パネルの上下paddingを8→4pt、画面下余白を12→4ptとして少し低く・下側へ配置。動画だけに8%の黒を重ね、わずかに暗くした。端末の画面輝度は変更しない。この調整もVesperaへDebug build・install・launch成功。InstrumentsのOfflineはMobileDeviceのsession開始エラー（kAMDNotConnectedError）を確認。Instrumentsの初回画面完了・Xcode Devices表示後にOnlineへ復旧し、ユーザーもUSBを再接続した。Power ProfilerでUSB安定接続下の通常・車窓を各30秒比較。画面輝度26%、thermalは両方Fair。CPU電力影響スコアは通常約0.10／車窓約0.35だが、充電中のSystem Power Usageは両方0%/hrのため電池消費差は判断できない。続いて非充電・無線で各30秒の比較も完了。輝度25%、開始後5〜30秒の端末全体推定消費率は通常約7.5%/hr／車窓約9.9%/hr、CPU影響は約0.03／0.10、thermalは両方Fair。通常再生の短時間観測では目立つCPU負荷・通信量・thermal悪化なし。各1回の短時間Debug計測であり、長時間消費や全体品質の保証ではない。結果は[sessions/2026-10-17-scenery-battery-analysis.md](sessions/2026-10-17-scenery-battery-analysis.md)。
 
 2026-10-17: 追加要望でBGM表記を短縮し、Artworkを36pt基準へ縮小、余白を詰めた。共通のグッド評価と赤いお気に入りハートを追加。BGMパネル下端に曲の再生位置を示す1ptの細いラインを追加（操作なし・時間表示なし）。車窓画面内の設定入口を削除し、通常の設定へ集約。iPhone／Watch build成功。BGMパネルを右下へ配置し、この追加調整版も2026-10-17にVesperaへDebug build・install・launch成功。コンパクト表示・グッド／ハート・細い進捗ライン・右下配置の実機確認はこれから。
 
