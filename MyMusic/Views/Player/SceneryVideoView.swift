@@ -6,6 +6,7 @@ struct SceneryVideoView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var store = SceneryVideoStore()
     @State private var controlsVisible = true
+    @State private var isBGMCollapsed = false
     @State private var orientationError: String?
 
     private var active: Bool { scenePhase == .active && store.isReady }
@@ -34,23 +35,10 @@ struct SceneryVideoView: View {
             }
             if controlsVisible || !store.isReady {
                 VStack(alignment: .leading) {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundStyle(.white.opacity(0.55))
-                                .frame(width: 44, height: 44)
-                                .background(.black.opacity(0.22), in: Circle())
-                        }
-                        .accessibilityLabel("車窓モードを閉じる")
-                        Spacer()
-                    }
                     Spacer(minLength: 12)
                     if let orientationError { Text(orientationError).font(.caption) }
-                    if store.isReady {
-                        SceneryBGMOverlay()
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                    SceneryBGMOverlay(onReturn: { dismiss() }, isCollapsed: $isBGMCollapsed)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -64,6 +52,7 @@ struct SceneryVideoView: View {
             SceneryOrientationHost { orientationError = $0 }
                 .allowsHitTesting(false)
         }
+        .accessibilityAction(.escape) { dismiss() }
         .preferredColorScheme(.dark)
         .task {
             await store.open()

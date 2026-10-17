@@ -384,3 +384,6 @@ loadは非同期、generationとTask cancellationで置換・終了後の古い�
 
 
 車窓動画のcurrent.jsonはschema v2のSceneryVideoCollection（version、videos、selectedFileName）を保存する。旧単一RegisteredSceneryVideoは1本の一覧として読み、次回の追加・選択・解除時にのみatomic保存で移行する。動画file名をIDとし、登録順を保持する。追加は既存動画を残し、新規動画を選択状態にする。設定Storeは一覧と選択を保持し、動画の追加／選択／個別解除をServiceへ委譲する。設定の選択は車窓を次に開いた時に反映する。playlist／連続自動切替は実装しない。HUD左端のaccent線は削除し、1ptの再生進捗ラインは維持する。
+
+
+車窓の終了はSceneryBGMOverlayのArtworkボタンからonReturn closureを通して親Viewのdismissへ接続し、×は表示しない。未登録／読み込み失敗でもHUDを表示し、Artwork placeholderから戻れる。VoiceOverのescape actionもdismissへ接続する。SceneryVideoViewが一時的なisBGMCollapsedを所有してHUDへBindingで渡し、表示／非表示で状態を失わない。内向き矢印で縮小するとArtwork＋NOW PLAYING／PAUSED＋曲名＋Artistにし、文字部分のButtonで展開する。通常の評価・再生操作・進捗は展開時だけ表示する。縮小状態は永続化せず、再入場で展開へ戻る。再生・保存・回転の責務は変更しない。

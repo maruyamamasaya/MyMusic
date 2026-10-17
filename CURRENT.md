@@ -9,6 +9,8 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
+2026-10-17: ×を廃止し、BGMのアートワーク（画像なしは音符）で通常画面へ戻る。内向き矢印でアートワーク・NOW PLAYING／PAUSED・曲名・Artistの縮小表示にし、曲名／Artistタップで展開する。縮小中もNOW PLAYING／PAUSEDを残し、評価・再生・進捗を隠す。背景tapで表示を切り替えても縮小状態を保持し、再入場時は展開から開始。iPhone／Watch Simulator build成功、最終版をVesperaへDebug build・install・launch成功。縮小中もNOW PLAYING／PAUSEDを残す追加調整版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで縮小中のNOW PLAYING表示・アートワークで戻る・縮小と展開の動作を問題なしと実機確認。
+
 2026-10-17: BGMパネル左端の白いaccent線を削除。音楽のpause／stop／曲切替に関係なく、車窓が前面・scene activeなら動画を継続する。設定で複数動画を追加・保存し、一覧から流す1本を選択できる。個別解除は元動画を残し、選択中を解除した場合は残りの先頭を選ぶ。旧1本の登録は引き継ぐ。iPhone／Watch buildと複数保存・選択・削除・旧形式移行の統合チェック成功。この版も2026-10-17にVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の選択切り替えと音楽停止後の映像継続を問題なしと実機確認。詳細は[sessions/2026-10-17-scenery-video-collection.md](sessions/2026-10-17-scenery-video-collection.md)。
 
 2026-10-17: 追加調整でNOW PLAYING（停止中PAUSED）表記を復活。パネルの上下paddingを8→4pt、画面下余白を12→4ptとして少し低く・下側へ配置。動画だけに8%の黒を重ね、わずかに暗くした。端末の画面輝度は変更しない。この調整もVesperaへDebug build・install・launch成功。InstrumentsのOfflineはMobileDeviceのsession開始エラー（kAMDNotConnectedError）を確認。Instrumentsの初回画面完了・Xcode Devices表示後にOnlineへ復旧し、ユーザーもUSBを再接続した。Power ProfilerでUSB安定接続下の通常・車窓を各30秒比較。画面輝度26%、thermalは両方Fair。CPU電力影響スコアは通常約0.10／車窓約0.35だが、充電中のSystem Power Usageは両方0%/hrのため電池消費差は判断できない。続いて非充電・無線で各30秒の比較も完了。輝度25%、開始後5〜30秒の端末全体推定消費率は通常約7.5%/hr／車窓約9.9%/hr、CPU影響は約0.03／0.10、thermalは両方Fair。通常再生の短時間観測では目立つCPU負荷・通信量・thermal悪化なし。各1回の短時間Debug計測であり、長時間消費や全体品質の保証ではない。結果は[sessions/2026-10-17-scenery-battery-analysis.md](sessions/2026-10-17-scenery-battery-analysis.md)。
