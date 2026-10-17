@@ -1,4 +1,4 @@
-// macOS integration check. Compile with RegisteredSceneryVideo.swift, SceneryVideoService.swift and SceneryVideoLibraryService.swift.
+// macOS integration check. Compile with RegisteredSceneryVideo.swift, SceneryVideoService.swift and SceneryVideoLibraryService.swift and SceneryVideoStore.swift.
 import AVFoundation
 
 @main struct Check {
@@ -73,12 +73,23 @@ import AVFoundation
         precondition(!FileManager.default.fileExists(atPath: saved.path))
         let secondURL = await library.url(for: second)
         precondition(tryData(secondURL) == originalBytes)
-        try await library.unregister()
+        let settings = SceneryVideoStore(library: library)
+        await settings.open(preparesPlayback: false)
+        precondition(settings.registeredVideo?.fileName == second.fileName)
+        precondition(!settings.isReady && settings.player.currentItem == nil)
+        await settings.open(moved, preparesPlayback: false)
+        precondition(settings.errorMessage == nil && settings.player.currentItem == nil)
+        let scenery = SceneryVideoStore(library: library)
+        await scenery.open()
+        precondition(scenery.isReady && scenery.player.currentItem != nil)
+        scenery.stop()
+        await settings.unregister()
+        precondition(settings.registeredVideo == nil && settings.errorMessage == nil)
         let removed = try await library.current()
         precondition(removed == nil)
         precondition(!FileManager.default.fileExists(atPath: secondURL.path))
         precondition(tryData(moved) == originalBytes)
-        print("PASS: random bounds, silent 18fps playback, pause, cleanup, invalid file, byte-exact copy, disk restore after source move, failed replacement preservation, replacement cleanup, unregister with source intact")
+        print("PASS: random bounds, silent 18fps playback, pause, cleanup, invalid file, byte-exact copy, disk restore after source move, failed replacement preservation, replacement cleanup, unregister with source intact, settings metadata and registration without playback, scenery reopening after settings")
     }
 
     static func tryData(_ url: URL) -> Data? { try? Data(contentsOf: url) }

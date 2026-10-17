@@ -7,6 +7,11 @@ struct SettingsView: View {
         List {
             Section("デザイン") {
                 NavigationLink {
+                    SceneryVideoSettingsView()
+                } label: {
+                    Label("車窓モード", systemImage: "tram.fill")
+                }
+                NavigationLink {
                     ThemeSettingsView()
                 } label: {
                     Label("テーマ", systemImage: "sparkles")

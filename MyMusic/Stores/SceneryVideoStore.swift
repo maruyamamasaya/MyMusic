@@ -5,7 +5,7 @@ import Observation
 @Observable
 final class SceneryVideoStore {
     private let service = SceneryVideoService()
-    private let library = SceneryVideoLibraryService()
+    private let library: SceneryVideoLibraryService
     private(set) var isLoading = false
     private(set) var isReady = false
     private(set) var registeredVideo: RegisteredSceneryVideo?
@@ -13,7 +13,8 @@ final class SceneryVideoStore {
     private var request = UUID()
     var player: AVPlayer { service.player }
 
-    init() {
+    init(library: SceneryVideoLibraryService = SceneryVideoLibraryService()) {
+        self.library = library
         service.onFailure = { [weak self] message in
             self?.errorMessage = message
             self?.isReady = false
@@ -21,7 +22,7 @@ final class SceneryVideoStore {
     }
 
     /// Passing a URL registers a copy; nil restores the previous registration.
-    func open(_ source: URL? = nil) async {
+    func open(_ source: URL? = nil, preparesPlayback: Bool = true) async {
         let id = UUID()
         request = id
         isLoading = true
@@ -42,7 +43,7 @@ final class SceneryVideoStore {
             }
             try Task.checkCancellation()
             guard request == id else { return }
-            if let registeredVideo {
+            if preparesPlayback, let registeredVideo {
                 let url = await library.url(for: registeredVideo)
                 try await service.load(url)
                 guard request == id else { return }
