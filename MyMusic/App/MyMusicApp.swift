@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MyMusicApp: App {
+    @UIApplicationDelegateAdaptor(MyMusicAppDelegate.self) private var appDelegate
     @State private var hiResPlayerStore: HiResDirectOutputProbeStore
     @State private var playerStore: PlayerStore
     @State private var playbackHistoryStore: PlaybackHistoryStore

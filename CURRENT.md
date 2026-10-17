@@ -7,6 +7,14 @@ updated: 2026-10-08
 
 2026-10-08: 現在の作業ツリーをVesperaへDebug build・install・launchした。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、識別子・署名設定は変更しない。デプロイ成功はTea Proの全rate切替や実データrestore成功の確認を意味しない。詳細は[sessions/2026-10-08-deploy-and-push.md](sessions/2026-10-08-deploy-and-push.md)。
 
+## 車窓モード Beta
+
+2026-10-17: Vesperaへ現在の作業ツリーでDebug build・install・launch成功。保存対応版の実機確認結果は下記を参照。画質・負荷の個別評価は未記録。
+
+通常再生画面の電車ボタンから全画面で開き、Files／iCloud Driveで選んだ動画1本をApplication Support/MyMusic/SceneryVideoへ元のままコピーして登録する。次回から保存済み動画を自動復元し、毎回ランダム位置から無音・18fps設定で再生する。管理メニューから動画名・容量の確認、変更、登録解除ができる。変更はコピー・映像検証・manifestのatomic保存後に確定し、コピー／検証失敗では旧動画を保持する。解除はアプリ内のコピーだけを削除し、元動画は変更しない。
+
+iPhoneでは開くと横向き、閉じると縦向きへのgeometry更新を要求する（通常画面の対応方向は元へ戻す）。自動回転追加後のiPhone／Watch Simulator build成功。自動回転は実機未確認・未デプロイ。曲変更では映像を維持し、音楽一時停止・background・Files表示中は映像も休止、閉じると再生資源を解放する。終端は先頭へ戻る。iPhone／Watch Simulator Debug build、macOS合成動画のコピーbytes一致・新instance復元・変更失敗時保全・旧コピー削除・解除の統合チェック成功。2026-10-17に保存対応版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで動画の保存、開き直したときのランダム再生、動画変更、登録解除の4項目をすべて問題なく動作すると確認。iCloud未取得動画、5時間動画、実機の表示・音楽同時再生・発熱・電池消費は未検証。18fps設定はデコード負荷削減の保証ではない。アプリ独自の外部backupには動画を含めない。詳細は[sessions/2026-10-17-scenery-video-persistence.md](sessions/2026-10-17-scenery-video-persistence.md)。
+
 ## 実機検証の方針と次回チェックリスト
 
 個人の日常利用で使えているため、大規模ライブラリの定量計測は現時点で急がない。未計測を性能不良とは扱わず、具体的な支障が出た場合や配布範囲を広げる前に対象を選ぶ。次のテスト内容を聞かれた場合は[実機検証チェックリスト](Documentation/DeviceValidationChecklist.md)を最初に参照する。ハイレゾは素の音を聴くためEQ・音量補正等を加えない独立経路を維持し、操作性・経路切り替え・実出力を別に確認する。

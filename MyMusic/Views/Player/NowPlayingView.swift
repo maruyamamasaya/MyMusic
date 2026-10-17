@@ -11,13 +11,14 @@ struct NowPlayingView: View {
     @State private var isAddToPlaylistPresented = false
     @State private var artworkDisplayState = ArtworkDisplayState.artwork
     @State private var showsVisualWorld = false
+    @State private var showsSceneryVideo = false
 
     var body: some View {
         NavigationStack {
             Group {
                 if showsVisualWorld {
                     NowPlayingVisualWorldView(
-                        isFrontmost: !isQueuePresented && !isEqualizerPresented && !isAddToPlaylistPresented
+                        isFrontmost: !isQueuePresented && !isEqualizerPresented && !isAddToPlaylistPresented && !showsSceneryVideo
                     )
                 } else {
                     ViewThatFits(in: .vertical) {
@@ -30,6 +31,9 @@ struct NowPlayingView: View {
             .navigationTitle(showsVisualWorld ? "" : "再生中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("車窓モード", systemImage: "tram.fill") { showsSceneryVideo = true }
+                }
                 if showsVisualWorld {
                     ToolbarItem(placement: .topBarLeading) {
                         Menu {
@@ -62,6 +66,7 @@ struct NowPlayingView: View {
                     .accessibilityLabel(showsVisualWorld ? "通常の再生画面へ" : "アート画面へ")
                 }
             }
+            .fullScreenCover(isPresented: $showsSceneryVideo) { SceneryVideoView() }
             .sheet(isPresented: $isQueuePresented) {
                 QueueView()
             }
