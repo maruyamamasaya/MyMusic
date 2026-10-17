@@ -9,7 +9,7 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
-2026-10-18: NOW PLAYING行の右端に白青いドット風の電池アイコンと残量％を追加。縮小時も表示し、取得不可は--%。充電中／満充電で電源接続中は白青いドット風の小さな雷を追加し、battery state通知で更新する。車窓だけの評価UIへ分離し、ハート・グッドは選択後も白青色、グッド数値もDotGothic16、評価アニメーションなし。既存の評価Storeと永続化を使用し、通常画面の色・演出は維持。iPhone／Watch buildとサンプル残量78%・評価15の展開／縮小描画確認成功。VesperaへDebug build・install・launch成功。雷表示追加版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで充電中の雷表示・ケーブルを抜いたときの消灯・縮小中の見え方を問題なしと実機確認。青い評価UIの個別操作確認は未記録。詳細は[sessions/2026-10-18-scenery-battery-indicator.md](sessions/2026-10-18-scenery-battery-indicator.md)。
+2026-10-18: NOW PLAYING行の右端に白青いドット風の電池アイコンと残量％を追加。縮小時も表示し、取得不可は--%。充電中／満充電で電源接続中は白青いドット風の小さな雷を追加し、battery state通知で更新する。車窓だけの評価UIへ分離し、ハート・グッドは選択後も白青色、グッド数値もDotGothic16、評価アニメーションなし。既存の評価Storeと永続化を使用し、通常画面の色・演出は維持。iPhone／Watch buildとサンプル残量78%・評価15の展開／縮小描画確認成功。VesperaへDebug build・install・launch成功。雷表示追加版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで充電中の雷表示・ケーブルを抜いたときの消灯・縮小中の見え方を問題なしと実機確認。青いハートとグッド数値の表示・操作も、ユーザーがVesperaで問題なしと実機確認。詳細は[sessions/2026-10-18-scenery-battery-indicator.md](sessions/2026-10-18-scenery-battery-indicator.md)。
 
 2026-10-18: ユーザーがVesperaでドット文字の見た目を確認。追加でHUDに光沢のある金属縁と静的なガラス反射を重ね、再生／次曲ボタンを立体的な金属表現へ調整。残りの進捗を微小ドット、左端を再生状態ドットとし、曲名横に傾いたドットレコードを追加。寸法・操作・動画再生方針は維持。iPhone／Watch buildと実Viewのサンプル描画確認成功。この追加版もVesperaへDebug build・install・launch成功。ガラスの透明感とメタリックボタンの見た目はユーザー実機確認済み。追加で展開幅410→390pt、再生ボタンの金属面32→36pt、次送り32→29ptへ調整（タップ領域44ptを維持）。この寸法調整もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaでタイトル幅と再生・次送りボタンの大きさを良好と実機確認。詳細は[sessions/2026-10-18-scenery-glass-finish.md](sessions/2026-10-18-scenery-glass-finish.md)。
 
