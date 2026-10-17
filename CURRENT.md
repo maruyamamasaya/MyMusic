@@ -9,7 +9,7 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
-2026-10-18: ユーザーがVesperaでドット文字の見た目を確認。追加でHUDに光沢のある金属縁と静的なガラス反射を重ね、再生／次曲ボタンを立体的な金属表現へ調整。残りの進捗を微小ドット、左端を再生状態ドットとし、曲名横に傾いたドットレコードを追加。寸法・操作・動画再生方針は維持。iPhone／Watch buildと実Viewのサンプル描画確認成功。この追加版もVesperaへDebug build・install・launch成功。ガラスの透明感とメタリックボタンの見た目はユーザー実機確認済み。追加で展開幅410→390pt、再生ボタンの金属面32→36pt、次送り32→29ptへ調整（タップ領域44ptを維持）。この寸法調整は未デプロイ・実機未確認。詳細は[sessions/2026-10-18-scenery-glass-finish.md](sessions/2026-10-18-scenery-glass-finish.md)。
+2026-10-18: ユーザーがVesperaでドット文字の見た目を確認。追加でHUDに光沢のある金属縁と静的なガラス反射を重ね、再生／次曲ボタンを立体的な金属表現へ調整。残りの進捗を微小ドット、左端を再生状態ドットとし、曲名横に傾いたドットレコードを追加。寸法・操作・動画再生方針は維持。iPhone／Watch buildと実Viewのサンプル描画確認成功。この追加版もVesperaへDebug build・install・launch成功。ガラスの透明感とメタリックボタンの見た目はユーザー実機確認済み。追加で展開幅410→390pt、再生ボタンの金属面32→36pt、次送り32→29ptへ調整（タップ領域44ptを維持）。この寸法調整もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaでタイトル幅と再生・次送りボタンの大きさを良好と実機確認。詳細は[sessions/2026-10-18-scenery-glass-finish.md](sessions/2026-10-18-scenery-glass-finish.md)。
 
 2026-10-17: 車窓HUDをスモーク液晶風パネルと白青いDotGothic16（漢字・かな対応）へ変更。曲名／Artistは固定表示窓で、長い場合のみ先頭1.8秒停止→左スクロール→末尾1秒停止→先頭へ復帰を繰り返す。縮小矢印は外し、文字部分tapで縮小／展開、Artworkで戻る。再生／一時停止と次曲だけメタリック、グッド／ハートは背景なし。縮小時もNOW PLAYINGと1pt進捗を維持。最大幅410／270pt、Artwork36ptとpaddingは維持。iPhone／Watch build、字体coverageとサンプル描画確認成功。2026-10-18にVesperaへDebug build・install・launch成功。ドット文字の見た目はユーザー実機確認済み。スクロール・全操作の個別確認は未記録。詳細は[sessions/2026-10-17-scenery-retro-display.md](sessions/2026-10-17-scenery-retro-display.md)。
 
