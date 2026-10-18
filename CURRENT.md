@@ -9,6 +9,8 @@ updated: 2026-10-08
 
 ## 車窓モード Beta
 
+2026-10-19: 電池残量の数値％を展開・縮小とも非表示にし、残量に応じたドット電池アイコンと充電中の雷だけを表示する。VoiceOverでは残量％と充電状態の読み上げを維持。時計→電池の順序、時計のコロン点滅、既存操作は維持。iPhone／Watch build成功。VesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで電池アイコンと雷だけの表示・縮小中の見え方を問題なしと実機確認。詳細は[sessions/2026-10-19-scenery-battery-icon.md](sessions/2026-10-19-scenery-battery-icon.md)。
+
 2026-10-18: 現在時刻（24時間HH:mm）を追加し、上段はNOW PLAYING→時計→電池の順に配置して、展開・縮小で維持。白青いDotGothic16、TimelineViewで分ごとに更新し、非active／HUD非表示で更新を停止する。幅不足時は上段のみ小さい文字へ切り替え、パネル寸法と既存操作を維持。iPhone／Watch build・100%充電／グッド15のサンプル描画確認成功。VesperaへDebug build・install・launch成功。ユーザーが時刻表示・縮小中の見え方・分更新を実機で問題なしと確認。追加でコロンのみ1秒ごとに点灯／消灯し、Reduce Motionでは常時点灯へ変更。点滅版もVesperaへDebug build・install・launch成功。ユーザーがコロン点滅・縮小中の表示も問題なしと実機確認。追加依頼で時計と電池の並びを交換し、この版もVesperaへDebug build・install・launch成功。並び替え後の実機確認は未実施。詳細は[sessions/2026-10-18-scenery-clock.md](sessions/2026-10-18-scenery-clock.md)。
 
 2026-10-18: NOW PLAYING行の右端に白青いドット風の電池アイコンと残量％を追加。縮小時も表示し、取得不可は--%。充電中／満充電で電源接続中は白青いドット風の小さな雷を追加し、battery state通知で更新する。車窓だけの評価UIへ分離し、ハート・グッドは選択後も白青色、グッド数値もDotGothic16、評価アニメーションなし。既存の評価Storeと永続化を使用し、通常画面の色・演出は維持。iPhone／Watch buildとサンプル残量78%・評価15の展開／縮小描画確認成功。VesperaへDebug build・install・launch成功。雷表示追加版もVesperaへDebug build・install・launch成功。同日、ユーザーがVesperaで充電中の雷表示・ケーブルを抜いたときの消灯・縮小中の見え方を問題なしと実機確認。青いハートとグッド数値の表示・操作も、ユーザーがVesperaで問題なしと実機確認。詳細は[sessions/2026-10-18-scenery-battery-indicator.md](sessions/2026-10-18-scenery-battery-indicator.md)。

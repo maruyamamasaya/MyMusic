@@ -42,9 +42,6 @@ struct SceneryBatteryIndicator: View {
                 }
                 .frame(width: fontSize * 0.6, height: fontSize * 0.8)
             }
-            Text(percentage.map { "\($0)%" } ?? "--%")
-                .font(.custom("DotGothic16-Regular", fixedSize: fontSize))
-                .fixedSize()
         }
         .foregroundStyle(SceneryPlayerAppearance.display)
         .opacity(0.75)
