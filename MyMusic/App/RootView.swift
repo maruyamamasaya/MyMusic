@@ -47,8 +47,8 @@ struct RootView: View {
             Tab("設定", systemImage: "gearshape", value: .settings) {
                 NavigationStack {
                     SettingsView()
+                        .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
             }
         }
         .modifier(MiniPlayerAccessoryModifier(

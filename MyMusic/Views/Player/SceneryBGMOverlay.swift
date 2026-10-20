@@ -53,7 +53,7 @@ struct SceneryBGMOverlay: View {
         .padding(.vertical, isCollapsed ? 2 : 4)
         .padding(.horizontal, 12)
         .background {
-            ScenerySmokedPanel(opaque: reduceTransparency, glassOpacity: isMiniPlayer ? 0.82 : 1,
+            ScenerySmokedPanel(opaque: reduceTransparency, glassOpacity: isMiniPlayer ? 0.90 : 1,
                                cornerRadius: isMiniPlayer ? 1000 : 10)
         }
         .overlay(alignment: .bottom) {
