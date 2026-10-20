@@ -41,6 +41,8 @@ struct HomeView: View {
     @State private var deepDiveOptions: [DeepDiveKind: [DeepDiveOption]] = [:]
     @State private var showsDeepDive = false
     @State private var showsMoodMix = false
+    @State private var showsSceneryVideo = false
+    @State private var showsSceneryPlaybackUnavailable = false
     @State private var presentsPlayerAfterMixDismissal = false
     @State private var mixSelectionSeed: UInt64 = 0
     @State private var mixDay: Date?
@@ -165,6 +167,16 @@ struct HomeView: View {
             .navigationTitle("ホーム")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    HomeThemeCycleButton()
+                    Button("車窓モード", systemImage: "tram.fill", action: openScenery)
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
+                        .buttonStyle(.plain)
+                        .accessibilityHint("再生中でなければクイック再生を始めて車窓を開きます")
+                        .disabled(playerStore.isLoading)
+                }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .topBarTrailing) {
                     Text(todayPlaybackSummary.compactText)
                         .font(.caption2.weight(.medium))
@@ -175,6 +187,14 @@ struct HomeView: View {
                         .accessibilityLabel("本日の再生回数 \(todayPlaybackSummary.playCount)回、再生時間 \(todayPlaybackSummary.compactDuration)")
                 }
                 .sharedBackgroundVisibility(.hidden)
+            }
+            .alert("クイック再生できる曲がありません", isPresented: $showsSceneryPlaybackUnavailable) {
+                Button("閉じる", role: .cancel) {}
+            } message: {
+                Text("ライブラリに音楽フォルダを追加するか、再生対象の曲を確認してください。")
+            }
+            .fullScreenCover(isPresented: $showsSceneryVideo) {
+                SceneryVideoView()
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 HomeDestinationView(destination: destination, onPresentNowPlaying: onPresentNowPlaying)
@@ -347,7 +367,22 @@ struct HomeView: View {
         destinationPresentations[destination]?.instantPlaybackIsAvailable ?? false
     }
 
+    private func openScenery() {
+        guard !playerStore.isLoading else { return }
+        if !playerStore.isPlaying {
+            guard startImmediatePlayback(.quickPlay) else {
+                showsSceneryPlaybackUnavailable = true
+                return
+            }
+        }
+        showsSceneryVideo = true
+    }
+
     private func playImmediately(_ destination: HomeDestination) {
+        if startImmediatePlayback(destination) { onPresentNowPlaying() }
+    }
+
+    private func startImmediatePlayback(_ destination: HomeDestination) -> Bool {
         let shuffledTracks: [Track]
         switch destination {
         case .quickPlay:
@@ -363,21 +398,21 @@ struct HomeView: View {
                 trackPreferenceStore.favoriteTracks(from: libraryStore.tracks)
             )
         default:
-            return
+            return false
         }
 
         let tracks = HomeRepresentativeTrackPolicy.placingRepresentativeFirst(
             representativeTrack(for: destination),
             in: shuffledTracks
         )
-        guard !tracks.isEmpty else { return }
+        guard !tracks.isEmpty else { return false }
         playerStore.playQueue(
             tracks,
             startingAt: 0,
             presentationMode: .standard,
             startContext: PlaybackStartContext(kind: .manual, source: source(for: destination))
         )
-        onPresentNowPlaying()
+        return true
     }
 
     private func source(for destination: HomeDestination) -> PlaybackStartSource {

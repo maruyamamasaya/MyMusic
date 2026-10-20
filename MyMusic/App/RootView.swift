@@ -30,29 +30,31 @@ struct RootView: View {
                     returnsHomeAfterNowPlaying = true
                     isNowPlayingPresented = true
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
             }
-            Tab("ライブラリ", systemImage: "music.note.list", value: .library) { LibraryView() }
-            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) { PlaylistView() }
-            Tab("検索", systemImage: "magnifyingglass", value: .search) { SearchView() }
+            Tab("ライブラリ", systemImage: "music.note.list", value: .library) {
+                LibraryView()
+                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+            }
+            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) {
+                PlaylistView()
+                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+            }
+            Tab("検索", systemImage: "magnifyingglass", value: .search) {
+                SearchView()
+                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+            }
             Tab("設定", systemImage: "gearshape", value: .settings) {
                 NavigationStack {
                     SettingsView()
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
             }
         }
         .modifier(MiniPlayerAccessoryModifier(
-            isPresented: (hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil)
-                || (playerStore.currentTrack != nil && !isHomeHighlightPresented),
+            isPresented: hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil,
             hiResStore: hiResPlayerStore
-        ) {
-            if playerStore.presentationMode == .highlight {
-                selectedTab = .home
-                isHomeHighlightPresented = true
-            } else {
-                returnsHomeAfterNowPlaying = false
-                isNowPlayingPresented = true
-            }
-        })
+        ))
         .animation(.default, value: playerStore.currentTrack?.id)
         .sheet(isPresented: $isNowPlayingPresented, onDismiss: handleNowPlayingDismissal) {
             Group {
@@ -116,6 +118,22 @@ struct RootView: View {
         .task { await trackFeatureStore.loadIfNeeded() }
         .onChange(of: playbackHistoryStore.homePresentationRevision) {
             reconcileListenLater()
+        }
+    }
+
+    @ViewBuilder
+    private var regularMiniPlayer: some View {
+        if !(hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil),
+           playerStore.currentTrack != nil, !isHomeHighlightPresented {
+            MiniPlayerView {
+                if playerStore.presentationMode == .highlight {
+                    selectedTab = .home
+                    isHomeHighlightPresented = true
+                } else {
+                    returnsHomeAfterNowPlaying = false
+                    isNowPlayingPresented = true
+                }
+            }
         }
     }
 
@@ -196,18 +214,13 @@ private enum RootTab: Hashable {
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isPresented: Bool
     let hiResStore: HiResDirectOutputProbeStore
-    let onOpen: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isPresented {
             content.tabViewBottomAccessory {
-                if hiResStore.hasActiveSession, hiResStore.currentTrack != nil {
-                    HiResMiniPlayerView(store: hiResStore) {
-                        hiResStore.isNowPlayingPresented = true
-                    }
-                } else {
-                    MiniPlayerView(onOpen: onOpen)
+                HiResMiniPlayerView(store: hiResStore) {
+                    hiResStore.isNowPlayingPresented = true
                 }
             }
         } else {

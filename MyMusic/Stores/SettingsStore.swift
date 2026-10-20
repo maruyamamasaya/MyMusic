@@ -73,6 +73,12 @@ final class SettingsStore {
         sourceSampleRateController?.setSourceSampleRateMatchingEnabled(sourceSampleRateMatchingEnabled)
     }
 
+    func cycleTheme() {
+        let themes = AppTheme.allCases
+        let index = themes.firstIndex(of: theme) ?? 0
+        setTheme(themes[(index + 1) % themes.count])
+    }
+
     func setTheme(_ theme: AppTheme) {
         self.theme = theme
         defaults.set(theme.rawValue, forKey: "appearance.theme")

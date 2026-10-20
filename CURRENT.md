@@ -1,11 +1,23 @@
 ---
 status: active
-updated: 2026-10-08
+updated: 2026-10-20
 ---
 
 # MyMusic の現在状態
 
 2026-10-08: 現在の作業ツリーをVesperaへDebug build・install・launchした。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、識別子・署名設定は変更しない。デプロイ成功はTea Proの全rate切替や実データrestore成功の確認を意味しない。詳細は[sessions/2026-10-08-deploy-and-push.md](sessions/2026-10-08-deploy-and-push.md)。
+
+2026-10-20: ユーザー承認でwatchOS 26.5（23T570、arm64）runtimeを復元し、VesperaへのDebug実機Build・Install・Launchがすべて成功。通常ミニプレイヤーのガラスデザイン、ホームのテーマ循環・車窓ショートカットを含む。これらの型検証は実機buildで通過したが、画面と操作の実機確認は未実施。署名・project設定変更なし。XCTest未実行。[記録](sessions/2026-10-20-deploy-attempt.md)。
+
+2026-10-20: 未コミットのUI変更を含めVesperaへのテストデプロイを試行。端末チェック成功、実機BuildはwatchOS 26.5 platform不足エラーで停止。Install／Launch未実行。[記録](sessions/2026-10-20-deploy-attempt.md)。
+
+## ホーム操作・通常ミニプレイヤー Beta
+
+2026-10-20: ホームtitleの左側にテーマ循環と車窓アイコンを配置。テーマは1 シンプルダーク→2 Living Aurora→3 Pulse Neon→4 Blue Cosmos→1で循環し、既存設定へ保存する。車窓は再生中なら同じ曲・位置を維持し、停止／一時停止中なら既存クイック再生を開始して開く。候補snapshotで入口を無効化せず、候補0件は案内する。読み込み中は操作を抑止する。
+
+通常ミニは車窓HUDの金属枠・スモークガラス・白青いドット文字・操作を共用し、時計・電池表示／電池監視は省く。標準高52pt、下部メニューバー同様のカプセル形で、iPhone 17eでは左右余白20ptで幅を揃える。背景係数0.82（実不透明度約74〜78％）、Reduce Transparencyでは不透明。幅不足時はグッドのみ省略してハートを保持。各tabのsafeAreaInsetに配置し、システムaccessoryのclipによる左右の線を回避。ハイレゾ専用miniは既存accessoryを維持する。
+
+iPhone／Watch Simulator Debug build成功。本体Simulator＋合成WAV2曲で停止／一時停止／再生中の車窓表示、ホーム復帰、テーマ循環、mini枠・幅・ハート・次曲を実操作確認。最終52ptカプセル版の描画も本体Simulatorで確認した。Vesperaへ最終版のDebug Build・Install・Launch成功。実機での表示・操作、別画面幅・大きいDynamic Type、この回の映像再生は未確認。XCTest未実行。経緯は[再点検](sessions/2026-10-20-player-home-audit.md)、最終形状とデプロイは[カプセル形](sessions/2026-10-20-mini-player-capsule.md)。
 
 ## 車窓モード Beta
 

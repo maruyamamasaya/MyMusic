@@ -6,15 +6,17 @@ enum SceneryPlayerAppearance {
 
 struct ScenerySmokedPanel: View {
     let opaque: Bool
+    var glassOpacity: Double = 1
+    var cornerRadius: CGFloat = 10
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(LinearGradient(colors: [Color(red: 0.16, green: 0.19, blue: 0.21).opacity(opaque ? 1 : 0.95),
-                                          Color(red: 0.025, green: 0.045, blue: 0.055).opacity(opaque ? 1 : 0.9),
-                                          Color(red: 0.065, green: 0.085, blue: 0.10).opacity(opaque ? 1 : 0.94)],
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(LinearGradient(colors: [Color(red: 0.16, green: 0.19, blue: 0.21).opacity(opaque ? 1 : 0.95 * glassOpacity),
+                                          Color(red: 0.025, green: 0.045, blue: 0.055).opacity(opaque ? 1 : 0.9 * glassOpacity),
+                                          Color(red: 0.065, green: 0.085, blue: 0.10).opacity(opaque ? 1 : 0.94 * glassOpacity)],
                                  startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(LinearGradient(stops: [.init(color: .white.opacity(0.85), location: 0),
                                                          .init(color: Color(white: 0.48), location: 0.18),
                                                          .init(color: Color(white: 0.15), location: 0.48),
@@ -23,11 +25,11 @@ struct ScenerySmokedPanel: View {
                                                  startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.3)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 8.5).inset(by: 1.6)
+                RoundedRectangle(cornerRadius: max(0, cornerRadius - 1.5)).inset(by: 1.6)
                     .strokeBorder(.black.opacity(0.8), lineWidth: 0.8)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 8).inset(by: 2.5)
+                RoundedRectangle(cornerRadius: max(0, cornerRadius - 2)).inset(by: 2.5)
                     .strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .clear, .white.opacity(0.05)],
                                                  startPoint: .top, endPoint: .bottom), lineWidth: 0.5)
             }
@@ -36,6 +38,7 @@ struct ScenerySmokedPanel: View {
 
 /// A static sheet of faint reflected light over the display, not a live blur or a hit target.
 struct SceneryGlassReflection: View {
+    var cornerRadius: CGFloat = 10
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
@@ -54,7 +57,7 @@ struct SceneryGlassReflection: View {
                 .fill(LinearGradient(colors: [.white.opacity(0.04), .clear], startPoint: .topLeading, endPoint: .bottomTrailing))
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

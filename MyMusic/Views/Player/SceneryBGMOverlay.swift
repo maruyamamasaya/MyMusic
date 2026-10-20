@@ -9,6 +9,7 @@ struct SceneryBGMOverlay: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let onReturn: () -> Void
     @Binding var isCollapsed: Bool
+    var isMiniPlayer = false
 
     @ScaledMetric(relativeTo: .body) private var artworkSize = 36
     @ScaledMetric(relativeTo: .caption) private var titleSize = 12
@@ -20,7 +21,20 @@ struct SceneryBGMOverlay: View {
 
     var body: some View {
         Group {
-            if isCollapsed {
+            if isMiniPlayer {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) {
+                        trackCredit.frame(minWidth: 160, maxWidth: .infinity)
+                        playbackControls(showsGood: true)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    HStack(spacing: 4) {
+                        trackCredit.frame(minWidth: 0, maxWidth: .infinity)
+                        playbackControls(showsGood: false)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+            } else if isCollapsed {
                 trackCredit
             } else {
                 ViewThatFits(in: .horizontal) {
@@ -39,18 +53,19 @@ struct SceneryBGMOverlay: View {
         .padding(.vertical, isCollapsed ? 2 : 4)
         .padding(.horizontal, 12)
         .background {
-            ScenerySmokedPanel(opaque: reduceTransparency)
+            ScenerySmokedPanel(opaque: reduceTransparency, glassOpacity: isMiniPlayer ? 0.82 : 1,
+                               cornerRadius: isMiniPlayer ? 1000 : 10)
         }
         .overlay(alignment: .bottom) {
             playbackProgress
-                .padding(.horizontal, 12)
+                .padding(.horizontal, isMiniPlayer ? 26 : 12)
                 .padding(.bottom, 2)
         }
-        .overlay { if !reduceTransparency { SceneryGlassReflection() } }
-        .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : (isCollapsed ? 270 : 390), alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay { if !reduceTransparency { SceneryGlassReflection(cornerRadius: isMiniPlayer ? 1000 : 10) } }
+        .frame(maxWidth: isMiniPlayer || typeSize.isAccessibilitySize ? .infinity : (isCollapsed ? 270 : 390), alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: isMiniPlayer ? 1000 : 10))
         .onChange(of: scenePhase, initial: true) { _, phase in
-            if phase == .active { battery.start() } else { battery.stop() }
+            if phase == .active && !isMiniPlayer { battery.start() } else { battery.stop() }
         }
         .onDisappear { battery.stop() }
     }
@@ -101,12 +116,14 @@ struct SceneryBGMOverlay: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("通常の再生画面へ戻る")
-                .accessibilityHint("車窓モードを閉じます")
-                Button { isCollapsed.toggle() } label: { trackText(width: textWidth) }
+                .accessibilityLabel(isMiniPlayer ? "再生画面を開く" : "通常の再生画面へ戻る")
+                .accessibilityHint(isMiniPlayer ? "再生中の画面を表示します" : "車窓モードを閉じます")
+                Button {
+                    if isMiniPlayer { onReturn() } else { isCollapsed.toggle() }
+                } label: { trackText(width: textWidth) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(music.currentTrack?.title ?? "未再生")、\(music.currentTrack?.artistName ?? "")")
-                    .accessibilityHint(isCollapsed ? "再生操作を展開します" : "再生表示を縮小します")
+                    .accessibilityHint(isMiniPlayer ? "再生中の画面を表示します" : (isCollapsed ? "再生操作を展開します" : "再生表示を縮小します"))
             }
         }
         .frame(height: max(44, artworkSize, labelHeight + titleHeight + artistHeight + 2))
@@ -140,21 +157,33 @@ struct SceneryBGMOverlay: View {
                 .foregroundStyle(SceneryPlayerAppearance.display.opacity(0.75))
                 .fixedSize()
             Spacer(minLength: 2)
-            SceneryClock(fontSize: compact ? labelSize * 0.7 : labelSize)
-            SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.7 : labelSize)
-                .fixedSize()
+            if !isMiniPlayer {
+                SceneryClock(fontSize: compact ? labelSize * 0.7 : labelSize)
+                SceneryBatteryIndicator(percentage: battery.percentage, isCharging: battery.isCharging, fontSize: compact ? labelSize * 0.7 : labelSize)
+                    .fixedSize()
+            }
         }
     }
 
     private var playbackButtons: some View {
+        playbackControls(showsGood: true)
+    }
+
+    private func playbackControls(showsGood: Bool) -> some View {
         HStack(spacing: 0) {
             if let track = music.currentTrack, track.isEligibleForRegularPlayback {
-                SceneryPreferenceControls(track: track)
+                SceneryPreferenceControls(track: track, showsGood: showsGood)
             }
             Button { music.togglePlayPause() } label: {
-                Image(systemName: music.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 44, height: 44)
+                Group {
+                    if music.isLoading {
+                        ProgressView().tint(SceneryPlayerAppearance.display)
+                    } else {
+                        Image(systemName: music.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                }
+                .frame(width: 44, height: 44)
             }
             .buttonStyle(SceneryMetalPlaybackStyle(diameter: 36))
             .disabled(music.currentTrack == nil || music.isLoading)
