@@ -30,25 +30,25 @@ struct RootView: View {
                     returnsHomeAfterNowPlaying = true
                     isNowPlayingPresented = true
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+                .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
             }
             Tab("ライブラリ", systemImage: "music.note.list", value: .library) {
                 LibraryView()
-                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
             }
             Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) {
                 PlaylistView()
-                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
             }
             Tab("検索", systemImage: "magnifyingglass", value: .search) {
                 SearchView()
-                    .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
             }
             Tab("設定", systemImage: "gearshape", value: .settings) {
                 NavigationStack {
                     SettingsView()
-                        .safeAreaInset(edge: .bottom, spacing: 0) { regularMiniPlayer }
                 }
+                .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
             }
         }
         .modifier(MiniPlayerAccessoryModifier(
@@ -225,6 +225,18 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+/// Reserve actual layout space so navigation destinations cannot extend beneath the player.
+private struct BottomPlayerLayout<Bar: View>: ViewModifier {
+    let bar: Bar
+
+    func body(content: Content) -> some View {
+        VStack(spacing: 0) {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            bar.fixedSize(horizontal: false, vertical: true)
         }
     }
 }

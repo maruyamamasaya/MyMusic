@@ -11,6 +11,10 @@ updated: 2026-10-20
 
 2026-10-20: 未コミットのUI変更を含めVesperaへのテストデプロイを試行。端末チェック成功、実機BuildはwatchOS 26.5 platform不足エラーで停止。Install／Launch未実行。[記録](sessions/2026-10-20-deploy-attempt.md)。
 
+## 全タブのミニプレイヤー領域分離
+
+2026-10-20: 他画面でも下部操作を遮る報告を受け、通常miniを各tabのsafeAreaInsetから共通BottomPlayerLayoutへ変更。NavigationStack全体とminiをVStackの別領域へ置き、詳細画面を含め内容の高さからmini領域を確保する。設定詳細でもminiは表示するが重ねない。iPhone／Watch build成功。本体Simulatorでライブラリ末尾のフォルダ追加、プレイリスト一覧／詳細、検索結果、設定末尾のデータ管理を確認。ハイレゾは一時的な初期navigationと合成音源自動再生を使い、mini表示中の末尾192kHzボタンtapと診断表示を確認。一時コードは除去済み。ホーム末尾の実scrollは自動操作が機能せず未確認、ハイレゾ以外の全詳細画面・長い検索結果・Dynamic Type大も網羅していない。main上で修正、後続の明示依頼でVesperaへのDebug Build・Install・Launch成功。ユーザーがVesperaで下部をタッチできることを実機確認。[記録](sessions/2026-10-20-all-tabs-mini-layout.md)。
+
 ## 設定末尾のミニプレイヤー重なり修正
 
 2026-10-20: 再生中、設定末尾の「データの読み込み・書き出し」がmini裏に残り最大scrollでもtapできない現象を本体Simulatorで再現。設定tabのmini用safeAreaInsetをNavigationStack外からSettingsView側へ移した。設定トップはminiの高さを考慮してscrollし、詳細画面にはminiを重ねない。iPhone／Watch build成功。本体iPhone 17e Simulatorで末尾行の表示と座標tapによるデータ管理への遷移、詳細末尾の表示を確認。main上で修正し、後続の明示依頼でVesperaへのDebug Build・Install・Launch成功。ユーザーがVesperaでデータ管理を開けることを実機確認。[記録](sessions/2026-10-20-settings-mini-inset.md)。
