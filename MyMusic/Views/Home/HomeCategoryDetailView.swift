@@ -161,18 +161,21 @@ private struct HomeTuningListView: View {
     @Environment(LibraryStore.self) private var libraryStore
 
     var body: some View {
-        List(libraryStore.genreDisplayPresets) { preset in
-            Button {
-                libraryStore.applyGenreDisplayPreset(preset)
-            } label: {
-                HStack {
-                    Label(preset.name, systemImage: "tuningfork")
-                    Spacer()
-                    if libraryStore.isGenreDisplayPresetActive(preset) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(ThemePalette.resolve(appTheme).accent)
+        List {
+            Button("全曲表示", action: libraryStore.showAllGenres)
+            ForEach(libraryStore.genreDisplayPresets) { preset in
+                Button {
+                    libraryStore.toggleGenreDisplayPreset(preset)
+                } label: {
+                    HStack {
+                        Label(preset.name, systemImage: "tuningfork")
+                        Spacer()
+                        if libraryStore.isGenreDisplayPresetActive(preset) {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(ThemePalette.resolve(appTheme).accent)
+                        }
                     }
+                    .foregroundStyle(.primary)
                 }
-                .foregroundStyle(.primary)
             }
         }
         .themeScreen()

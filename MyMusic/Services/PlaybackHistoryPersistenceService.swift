@@ -1,6 +1,6 @@
 import Foundation
 
-protocol PlaybackHistoryPersistenceServicing: Sendable {
+nonisolated protocol PlaybackHistoryPersistenceServicing: Sendable {
     func load() async throws -> [PlaybackHistory]
     func save(_ history: [PlaybackHistory]) async throws
     func save(_ entry: PlaybackHistory) async throws

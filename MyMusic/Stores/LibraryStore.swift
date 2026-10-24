@@ -33,6 +33,7 @@ final class LibraryStore {
     private(set) var scanTotalCount: Int?
     private(set) var errorMessage: String?
     private(set) var isInitialLoadComplete = false
+    private(set) var selectedGenrePresetIDs: Set<UUID> = []
     private(set) var genreDisplayPresets: [GenreDisplayPreset]
 
     var availableGenreOptions: [GenreDisplayOption] {
@@ -66,6 +67,7 @@ final class LibraryStore {
     private var genreFilterTask: Task<Void, Never>?
     private var genreFilterRequestID = UUID()
     private static let disabledGenresKey = "library.disabledGenreNames"
+    private static let selectedPresetsKey = "library.selectedGenrePresetIDs"
     private static let genrePresetsKey = "library.genreDisplayPresets"
     private static let unassignedGenreKey = "maruyama.MyMusic.genre.unassigned"
 
@@ -86,6 +88,29 @@ final class LibraryStore {
             .subtracting([Track.workPlaybackGenre, Track.hiResPlaybackGenre])
         self.genreDisplayPresets = userDefaults.data(forKey: Self.genrePresetsKey)
             .flatMap { try? JSONDecoder().decode([GenreDisplayPreset].self, from: $0) } ?? []
+    }
+
+    var tuningSelectionName: String {
+        let selected = genreDisplayPresets.filter { selectedGenrePresetIDs.contains($0.id) }
+        if selected.count > 1 { return "\(selected.count)件選択中" }
+        return selected.first?.name ?? (areAllGenresEnabled ? "全曲表示" : "未選択")
+    }
+
+    func toggleGenreDisplayPreset(_ preset: GenreDisplayPreset) {
+        guard genreDisplayPresets.contains(where: { $0.id == preset.id }) else { return }
+        if !selectedGenrePresetIDs.insert(preset.id).inserted {
+            selectedGenrePresetIDs.remove(preset.id)
+        }
+        applySelectedGenrePresets()
+    }
+
+    private func applySelectedGenrePresets() {
+        let selected = genreDisplayPresets.filter { selectedGenrePresetIDs.contains($0.id) }
+        selectedGenrePresetIDs = Set(selected.map(\.id))
+        let enabled = selected.reduce(into: Set<String>()) { $0.formUnion(enabledGenreKeys(for: $1)) }
+        disabledGenreNames = selected.isEmpty ? [] : Set(selectableGenreOptions.map(\.id)).subtracting(enabled)
+        saveDisabledGenres()
+        applyGenreFilter(tuningName: tuningSelectionName)
     }
 
     func restoreAndLoadIfNeeded() async {
@@ -186,6 +211,7 @@ final class LibraryStore {
     }
     func setGenre(_ genreName: String, isEnabled: Bool) {
         guard !isGenreAlwaysEnabled(genreName) else { return }
+        selectedGenrePresetIDs = []
         if isEnabled {
             disabledGenreNames.remove(genreName)
         } else {
@@ -195,11 +221,13 @@ final class LibraryStore {
         applyGenreFilter()
     }
     func setEnabledGenres(_ genreNames: Set<String>) {
+        selectedGenrePresetIDs = []
         disabledGenreNames = Set(selectableGenreOptions.map(\.id)).subtracting(genreNames)
         saveDisabledGenres()
         applyGenreFilter()
     }
     func showAllGenres() {
+        selectedGenrePresetIDs = []
         disabledGenreNames = []
         saveDisabledGenres()
         applyGenreFilter(tuningName: "全曲表示")
@@ -228,8 +256,10 @@ final class LibraryStore {
             ))
         }
         saveGenreDisplayPresets()
+        if !selectedGenrePresetIDs.isEmpty { applySelectedGenrePresets() }
     }
     func applyGenreDisplayPreset(_ preset: GenreDisplayPreset) {
+        selectedGenrePresetIDs = [preset.id]
         disabledGenreNames = Set(selectableGenreOptions.map(\.id))
             .subtracting(enabledGenreKeys(for: preset).union(alwaysEnabledAvailableGenreNames))
         saveDisabledGenres()
@@ -243,6 +273,7 @@ final class LibraryStore {
         genreDisplayPresets[index].enabledGenreNames = enabledGenreNames.union(alwaysEnabledAvailableGenreNames)
         genreDisplayPresets[index].includesUnassignedGenreSetting = true
         saveGenreDisplayPresets()
+        if !selectedGenrePresetIDs.isEmpty { applySelectedGenrePresets() }
     }
     func moveGenreDisplayPresets(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard !offsets.isEmpty,
@@ -263,6 +294,7 @@ final class LibraryStore {
     func deleteGenreDisplayPreset(_ preset: GenreDisplayPreset) {
         genreDisplayPresets.removeAll { $0.id == preset.id }
         saveGenreDisplayPresets()
+        if !selectedGenrePresetIDs.isEmpty { applySelectedGenrePresets() }
     }
     @discardableResult
     func importGenreDisplayPresets(_ importedPresets: [GenreDisplayPreset]) -> (added: Int, updated: Int) {
@@ -288,13 +320,11 @@ final class LibraryStore {
             }
         }
         saveGenreDisplayPresets()
+        if !selectedGenrePresetIDs.isEmpty { applySelectedGenrePresets() }
         return (added, updated)
     }
     func isGenreDisplayPresetActive(_ preset: GenreDisplayPreset) -> Bool {
-        let availableKeys = Set(selectableGenreOptions.map(\.id))
-        let currentEnabledKeys = availableKeys.filter(isGenreEnabled)
-        let presetEnabledKeys = enabledGenreKeys(for: preset).intersection(availableKeys)
-        return currentEnabledKeys == presetEnabledKeys
+        selectedGenrePresetIDs.contains(preset.id)
     }
     func enabledGenreCount(for preset: GenreDisplayPreset) -> Int {
         enabledGenreKeys(for: preset).intersection(selectableGenreOptions.map(\.id)).count
@@ -488,6 +518,7 @@ final class LibraryStore {
     }
     private func saveDisabledGenres() {
         userDefaults.set(disabledGenreNames.sorted(), forKey: Self.disabledGenresKey)
+        userDefaults.set(selectedGenrePresetIDs.map(\.uuidString).sorted(), forKey: Self.selectedPresetsKey)
     }
     private func cacheGenreOptions() {
         selectableGenreOptions = allGenres
@@ -499,6 +530,24 @@ final class LibraryStore {
             selectableGenreOptions.append(
                 GenreDisplayOption(id: Self.unassignedGenreKey, name: "ジャンル未設定")
             )
+        }
+
+        if let saved = userDefaults.stringArray(forKey: Self.selectedPresetsKey) {
+            selectedGenrePresetIDs = Set(saved.compactMap(UUID.init(uuidString:)))
+                .intersection(genreDisplayPresets.map(\.id))
+        } else if !areAllGenresEnabled, let matching = genreDisplayPresets.first(where: {
+            enabledGenreKeys(for: $0).intersection(selectableGenreOptions.map(\.id))
+                == Set(selectableGenreOptions.map(\.id).filter(isGenreEnabled))
+        }) {
+            selectedGenrePresetIDs = [matching.id]
+        }
+
+        if !selectedGenrePresetIDs.isEmpty {
+            let enabled = genreDisplayPresets
+                .filter { selectedGenrePresetIDs.contains($0.id) }
+                .reduce(into: Set<String>()) { $0.formUnion(enabledGenreKeys(for: $1)) }
+            disabledGenreNames = Set(selectableGenreOptions.map(\.id)).subtracting(enabled)
+            saveDisabledGenres()
         }
 
         fixedGenreOptions = []

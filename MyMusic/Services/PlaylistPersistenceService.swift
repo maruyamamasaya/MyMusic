@@ -1,6 +1,6 @@
 import Foundation
 
-protocol PlaylistPersistenceServicing: Sendable {
+nonisolated protocol PlaylistPersistenceServicing: Sendable {
     func load() async throws -> [Playlist]
     func save(_ playlists: [Playlist]) async throws
 }

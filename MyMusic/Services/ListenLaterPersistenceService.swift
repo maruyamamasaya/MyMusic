@@ -1,6 +1,6 @@
 import Foundation
 
-protocol ListenLaterPersistenceServicing: Sendable {
+nonisolated protocol ListenLaterPersistenceServicing: Sendable {
     func load() async throws -> [ListenLaterEntry]
     func save(_ entries: [ListenLaterEntry]) async throws
 }

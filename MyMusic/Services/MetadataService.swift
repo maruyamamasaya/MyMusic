@@ -3,7 +3,7 @@ import AudioToolbox
 import CryptoKit
 import Foundation
 
-protocol MetadataServicing: Sendable {
+nonisolated protocol MetadataServicing: Sendable {
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track
 }
 

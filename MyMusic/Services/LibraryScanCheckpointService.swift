@@ -5,7 +5,7 @@ nonisolated struct LibraryScanCheckpointEntry: Codable, Sendable {
     let refreshedAt: Date
 }
 
-protocol LibraryScanCheckpointServicing: Sendable {
+nonisolated protocol LibraryScanCheckpointServicing: Sendable {
     func recentEntries(for folderURL: URL, since cutoff: Date) async -> [String: LibraryScanCheckpointEntry]
     func append(_ entries: [String: LibraryScanCheckpointEntry], for folderURL: URL) async
     func remove(for folderURL: URL) async

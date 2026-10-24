@@ -1,6 +1,6 @@
 import Foundation
 
-protocol TrackPlaybackAdjustmentPersistenceServicing: Sendable {
+nonisolated protocol TrackPlaybackAdjustmentPersistenceServicing: Sendable {
     func load(trackID: Track.ID) async throws -> TrackPlaybackAdjustment?
     func save(_ adjustment: TrackPlaybackAdjustment) async throws
 }

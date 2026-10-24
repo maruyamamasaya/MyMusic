@@ -2,7 +2,7 @@ import AVFoundation
 import CryptoKit
 import Foundation
 
-protocol TrackIdentityServicing: Sendable {
+nonisolated protocol TrackIdentityServicing: Sendable {
     func prepareForScan(relativePaths: Set<String>) async
     func finishScan() async
     func abortScan() async

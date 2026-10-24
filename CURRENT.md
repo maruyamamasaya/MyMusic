@@ -533,3 +533,13 @@ MyMusicだけでGood 8〜15に段階別の星・光・周回する輪・虹色�
 ## Preferences差分Preview Beta（2026-10-16）
 
 評価JSONの読み込み前に、曲ごとの評価とハートの「現在→読み込み後」を確認できる。更新予定・変更なし・未照合の件数を表示し、変更なしは任意表示。未照合は適用しない。Preview／キャンセルは保存せず、確認後に対象曲の評価／ハートや照合状態が変わった場合は再確認を要求する。HomeStereoはtransaction内で再照合し、拒否時に未送信情報を保持。JSON／DB形式は変更しない。VesperaへのDebug build・install・launch、HomeStereo正式配置・起動（build 20261016214812）は成功。実機での差分画面の目視・実ユーザーJSON往復は未確認。詳細はsessions/2026-10-16-preference-import-preview.md。
+
+## チューニング複数選択 Beta（2026-10-24）
+
+ホームのチューニングはタップで追加／解除し、選択したプリセットの有効ジャンルを合算する。最後の解除または「全曲表示」でリセットする。設定中は単独なら名前、複数なら「N件選択中」。対象ジャンルが全種類になっても選択タグのチェックを維持する。選択IDをUserDefaultsへ保存し、再起動時に復元する。設定画面のプリセット適用は従来どおり単独適用。再生中の曲・queue、専用BGM／ハイレゾ、プリセット交換JSONは変更しない。Metal Toolchain導入とXcode 27.1向け型推論／protocol隔離の明示後、指定Simulator向けiPhone／Watch build成功。対象XCTest 7件とサービス関連回帰48件が成功。Device Hubで確認用プリセットA・Bの複数チェック、件数表示、解除、全曲リセットを確認。同日ユーザーがVesperaで複数選択・解除・全曲表示でのリセットを問題なしと実機確認。[作業記録](sessions/2026-10-24-multiple-tunings.md)。
+
+## Xcode検証環境（2026-10-24）
+
+Xcode 27.1（27A9275）にMetal Toolchain 27A266aを導入済み。既存iPhone 17e／iOS 26.5の画面はDevice Hubから確認できる。RootViewの複雑な生成式を分割し、Sendable＋asyncの非UIサービスprotocol 10個にnonisolatedを明示して、別moduleのtest actorが適合できるようにした。サービス実装actorの隔離は維持。指定Simulator buildと対象／関連XCTest計55件成功。Simulator・runtimeの追加なし。[環境記録](sessions/2026-10-24-xcode-validation-environment.md)。
+
+2026-10-24: チューニング複数選択とXcode検証環境対応を含む現在の作業ツリーを、明示依頼によりVespera（iPhone 17e）へDebug Build・Install・Launch成功。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、署名・project設定は変更しない。同日ユーザーが複数選択・解除・全曲表示でのリセットを問題なしと実機確認。[デプロイ記録](sessions/2026-10-24-vespera-multiple-tunings-deploy.md)。

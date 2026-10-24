@@ -171,6 +171,51 @@ final class LibraryGenreFilterTests: XCTestCase {
         XCTAssertEqual(store.workLibraryCatalog.tracks.map(\.id), [work.id])
     }
 
+    func testMultipleTuningsUnionToggleResetAndRestore() async throws {
+        let suiteName = "MultipleTunings-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let ambient = makeTrack(title: "Ambient", genre: "Ambient")
+        let rock = makeTrack(title: "Rock", genre: "Rock")
+        let other = makeTrack(title: "Other", genre: "Pop")
+        func makeStore() -> LibraryStore {
+            LibraryStore(service: GenreFilterLibraryService(tracks: [ambient, rock, other]),
+                fileImportService: GenreFilterFileImport(folders: [URL(fileURLWithPath: "/tmp/multiple-tunings")]),
+                persistence: GenreFilterLibraryPersistence(), userDefaults: defaults)
+        }
+        let store = makeStore()
+        await store.restoreAndLoadIfNeeded()
+        store.saveGenreDisplayPreset(named: "A", enabledGenreNames: ["Ambient"])
+        store.saveGenreDisplayPreset(named: "B", enabledGenreNames: ["Rock", "Ambient"])
+        let a = store.genreDisplayPresets[0]
+        let b = store.genreDisplayPresets[1]
+        store.toggleGenreDisplayPreset(a)
+        store.toggleGenreDisplayPreset(b)
+        await store.waitForPendingGenreFilter()
+        XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id])
+        XCTAssertEqual(store.tracks.count, 2)
+        XCTAssertEqual(store.tuningSelectionName, "2件選択中")
+        XCTAssertTrue(store.isGenreDisplayPresetActive(a))
+        XCTAssertTrue(store.isGenreDisplayPresetActive(b))
+        let restored = makeStore()
+        await restored.restoreAndLoadIfNeeded()
+        XCTAssertEqual(restored.selectedGenrePresetIDs, [a.id, b.id])
+        XCTAssertEqual(restored.tuningSelectionName, "2件選択中")
+        store.toggleGenreDisplayPreset(b)
+        await store.waitForPendingGenreFilter()
+        XCTAssertEqual(store.tracks.map(\.id), [ambient.id])
+        XCTAssertEqual(store.tuningSelectionName, "A")
+        store.toggleGenreDisplayPreset(a)
+        await store.waitForPendingGenreFilter()
+        XCTAssertTrue(store.areAllGenresEnabled)
+        XCTAssertEqual(store.tuningSelectionName, "全曲表示")
+        store.toggleGenreDisplayPreset(a)
+        store.showAllGenres()
+        await store.waitForPendingGenreFilter()
+        XCTAssertTrue(store.selectedGenrePresetIDs.isEmpty)
+        XCTAssertEqual(Set(store.tracks.map(\.id)), [ambient.id, rock.id, other.id])
+    }
+
     func testCacheFailureDoesNotAutomaticallyScan() async throws {
         let folder = URL(fileURLWithPath: "/tmp/cache-failure-library")
         let suiteName = "LibraryStartupTests-\(UUID())"

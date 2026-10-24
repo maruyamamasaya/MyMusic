@@ -8,7 +8,7 @@ nonisolated struct MusicLibrary: Codable, Sendable {
     let composers: [Composer]
 }
 
-protocol MusicLibraryServicing: Sendable {
+nonisolated protocol MusicLibraryServicing: Sendable {
     func loadLibrary(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibrary
     func loadLibraryReport(from folderURL: URL, previousTracks: [Track]) async throws -> MusicLibraryScanResult
     func loadLibraryReport(

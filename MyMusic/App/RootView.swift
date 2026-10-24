@@ -21,16 +21,7 @@ struct RootView: View {
         @Bindable var hiResPlayerStore = hiResPlayerStore
         TabView(selection: $selectedTab) {
             Tab("ホーム", systemImage: "house", value: .home) {
-                HomeView(
-                    isActive: selectedTab == .home
-                        && !isNowPlayingPresented
-                        && scenePhase == .active,
-                    isHighlightPresented: $isHomeHighlightPresented
-                ) {
-                    returnsHomeAfterNowPlaying = true
-                    isNowPlayingPresented = true
-                }
-                .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+                homeTabContent
             }
             Tab("ライブラリ", systemImage: "music.note.list", value: .library) {
                 LibraryView()
@@ -119,6 +110,20 @@ struct RootView: View {
         .onChange(of: playbackHistoryStore.homePresentationRevision) {
             reconcileListenLater()
         }
+    }
+
+    private var homeTabContent: some View {
+        HomeView(
+            isActive: selectedTab == .home && !isNowPlayingPresented && scenePhase == .active,
+            isHighlightPresented: $isHomeHighlightPresented,
+            onPresentNowPlaying: presentNowPlayingFromHome
+        )
+        .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+    }
+
+    private func presentNowPlayingFromHome() {
+        returnsHomeAfterNowPlaying = true
+        isNowPlayingPresented = true
     }
 
     @ViewBuilder

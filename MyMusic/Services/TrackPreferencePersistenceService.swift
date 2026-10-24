@@ -1,6 +1,6 @@
 import Foundation
 
-protocol TrackPreferencePersistenceServicing: Sendable {
+nonisolated protocol TrackPreferencePersistenceServicing: Sendable {
     func load() async throws -> [TrackPreference]?
     func save(_ preferences: [TrackPreference]) async throws
 }

@@ -71,10 +71,11 @@ struct HomeView: View {
                             if !libraryStore.genreDisplayPresets.isEmpty {
                                 HomeTuningSection(
                                     presets: libraryStore.genreDisplayPresets,
-                                    allGenresAreEnabled: libraryStore.areAllGenresEnabled,
+                                    allGenresAreEnabled: libraryStore.selectedGenrePresetIDs.isEmpty && libraryStore.areAllGenresEnabled,
+                                    selectionName: libraryStore.tuningSelectionName,
                                     isActive: libraryStore.isGenreDisplayPresetActive,
                                     onShowAllGenres: libraryStore.showAllGenres,
-                                    onApply: libraryStore.applyGenreDisplayPreset
+                                    onApply: libraryStore.toggleGenreDisplayPreset
                                 )
                             }
                         }
@@ -617,6 +618,7 @@ private struct HomeHighlightTile: View {
 private struct HomeTuningSection: View {
     let presets: [GenreDisplayPreset]
     let allGenresAreEnabled: Bool
+    let selectionName: String
     let isActive: (GenreDisplayPreset) -> Bool
     let onShowAllGenres: () -> Void
     let onApply: (GenreDisplayPreset) -> Void
@@ -638,7 +640,7 @@ private struct HomeTuningSection: View {
                     Text("設定中")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Text(activePresetName ?? "未選択")
+                    Text(selectionName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                 }
@@ -661,7 +663,7 @@ private struct HomeTuningSection: View {
                         } label: {
                             HomeTuningTag(
                                 title: preset.name,
-                                isActive: !allGenresAreEnabled && isActive(preset),
+                                isActive: isActive(preset),
                                 paletteIndex: paletteIndex(for: preset)
                             )
                         }
@@ -675,11 +677,6 @@ private struct HomeTuningSection: View {
             .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var activePresetName: String? {
-        if allGenresAreEnabled { return "全曲表示" }
-        return presets.first(where: isActive)?.name
     }
 
     private func paletteIndex(for preset: GenreDisplayPreset) -> Int {

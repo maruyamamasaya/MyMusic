@@ -1,6 +1,6 @@
 import Foundation
 
-protocol LibraryPersistenceServicing: Sendable {
+nonisolated protocol LibraryPersistenceServicing: Sendable {
     func load(for folderURL: URL) async throws -> MusicLibrary?
     func load(for folderURLs: [URL]) async throws -> [String: MusicLibrary]
     func save(_ library: MusicLibrary, for folderURL: URL) async throws
