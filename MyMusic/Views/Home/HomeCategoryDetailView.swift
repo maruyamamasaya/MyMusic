@@ -80,6 +80,14 @@ struct HomeDestinationView: View {
         switch destination {
         case .quickPlay:
             QuickPlayView(tracks: playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks))
+        case .rediscoverPlay:
+            GeneratedQueueView(
+                title: "発掘する音楽",
+                emptyTitle: "対象の曲はありません",
+                emptyDescription: "直近24時間に再生していない曲が候補になります。",
+                systemImage: "sparkle.magnifyingglass",
+                tracks: playbackHistoryStore.rediscoverPlayTracks(from: libraryStore.tracks)
+            )
         case .discoveryPlay:
             GeneratedQueueView(
                 title: "未発見再生",
@@ -138,6 +146,8 @@ struct HomeDestinationView: View {
             GenresView(genres: libraryStore.genres)
         case .composers:
             ComposersView(composers: libraryStore.composers)
+        case .artistRanking:
+            ArtistRankingView()
         case .analytics:
             AnalyticsView()
         case .musicHistory:

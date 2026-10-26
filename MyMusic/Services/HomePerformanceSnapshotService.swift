@@ -64,6 +64,11 @@ actor HomePerformanceSnapshotWorker {
         )
         let sourceTracks: [HomeDestination: [Track]] = [
             .quickPlay: eligibleTracks,
+            .rediscoverPlay: eligibleTracks.filter {
+                PlaybackHistoryStore.isEligibleForRediscovery(
+                    lastPlayedAt: request.histories[$0.id]?.lastPlayedAt, now: request.now
+                )
+            },
             .selectiveRandomPlay: eligibleTracks.filter { !$0.normalizedGenreNames.isEmpty },
             .discoveryPlay: eligibleTracks.filter { (request.histories[$0.id]?.playCount ?? 0) == 0 },
             .listenLater: request.listenLaterEntries.compactMap { tracksByID[$0.trackID] },

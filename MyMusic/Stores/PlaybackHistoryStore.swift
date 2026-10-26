@@ -334,7 +334,20 @@ final class PlaybackHistoryStore {
             .map(\.track)
     }
 
-    func quickPlayTracks(from tracks: [Track], limit: Int = 30, now: Date = Date()) -> [Track] {
+    /// Apply the rolling 24-hour exclusion before the existing quick-play selection.
+    func rediscoverPlayTracks(from tracks: [Track], limit: Int = 60, now: Date = Date()) -> [Track] {
+        let candidates = tracks.filter {
+            Self.isEligibleForRediscovery(lastPlayedAt: entries[$0.id]?.lastPlayedAt, now: now)
+        }
+        return quickPlayTracks(from: candidates, limit: limit, now: now)
+    }
+
+    nonisolated static func isEligibleForRediscovery(lastPlayedAt: Date?, now: Date) -> Bool {
+        guard let lastPlayedAt else { return true }
+        return lastPlayedAt < now.addingTimeInterval(-24 * 60 * 60)
+    }
+
+    func quickPlayTracks(from tracks: [Track], limit: Int = 60, now: Date = Date()) -> [Track] {
         guard limit > 0 else { return [] }
 
         let shuffleEligibleTracks = tracks.filter { isEligibleForRegularShuffle($0, now: now) }
@@ -373,7 +386,7 @@ final class PlaybackHistoryStore {
         }, uniquingKeysWith: { first, _ in first })
     }
 
-    func discoveryPlayTracks(from tracks: [Track], limit: Int = 30) -> [Track] {
+    func discoveryPlayTracks(from tracks: [Track], limit: Int = 60) -> [Track] {
         Array(preferenceOnlyWeightedShuffle(
             tracks.filter { playCount(for: $0.id) == 0 && isEligibleForRegularShuffle($0) }
         ).prefix(limit))

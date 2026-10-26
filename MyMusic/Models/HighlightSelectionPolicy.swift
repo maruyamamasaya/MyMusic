@@ -23,7 +23,7 @@ enum HighlightSelectionMode: String, CaseIterable, Identifiable, Sendable {
 /// Highlight-only adjustments layered on top of regular shuffle's Preference and Overplay weight.
 nonisolated enum HighlightSelectionPolicy {
     static let candidatePoolLimit = 150
-    static let generatedQueueLimit = 40
+    static let generatedQueueLimit = 100
     static let modeBandWidth = 0.05
     static let randomJitterRange = 0.01
     static let artistImmediatePenalty = 4

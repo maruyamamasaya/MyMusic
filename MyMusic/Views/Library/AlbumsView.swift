@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AlbumsView: View {
+    @Environment(LibraryStore.self) private var libraryStore
     @State private var query = ""
     @AppStorage("library.albumsDisplayMode") private var displayMode = LibraryDisplayMode.artwork
 
@@ -34,8 +35,12 @@ struct AlbumsView: View {
         .navigationTitle("アルバム")
         .searchable(text: $query, prompt: "アルバム、アーティスト")
         .navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
-        .toolbar {
-            LibraryDisplayModeMenu(selection: $displayMode)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LibraryPlaybackBar(
+                tracks: libraryStore.tracks(for: displayedAlbums.flatMap(\.trackIDs))
+            ) {
+                LibraryDisplayModeMenu(selection: $displayMode)
+            }
         }
     }
 

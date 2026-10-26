@@ -14,6 +14,7 @@ struct LibraryFolder: Identifiable, Hashable {
 @Observable
 final class LibraryStore {
     private(set) var tracks: [Track] = []
+    private(set) var years: [LibraryYear] = []
     private(set) var storageSummary = LibraryStorageSummary.empty
     private(set) var homePresentationRevision = 0
     private(set) var completedTuningID: UUID?
@@ -577,6 +578,7 @@ final class LibraryStore {
         lookupIndex = LibraryLookupIndex(library: library)
         tracks = library.tracks; albums = library.albums; artists = library.artists
         genres = library.genres; composers = library.composers
+        years = LibraryYearService.groups(tracks: library.tracks)
         workLibraryCatalog = snapshot.workLibraryCatalog
         hiResLibraryCatalog = snapshot.hiResLibraryCatalog
         homePresentationRevision &+= 1

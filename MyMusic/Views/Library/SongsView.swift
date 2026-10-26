@@ -59,14 +59,10 @@ struct SongsView: View {
         .themeScreen()
         .navigationTitle(title)
         .searchable(text: $query, prompt: "曲、アーティスト、アルバム、ジャンル")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LibraryPlaybackBar(tracks: arrangedTracks, isPreparing: isPreparingTracks) {
                 LibraryDisplayModeMenu(selection: $displayMode)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 filterMenu
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
             }
         }

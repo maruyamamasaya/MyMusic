@@ -84,6 +84,17 @@ MyMusic／HomeStereo間の連携変更では、[共通データ交換・保全�
 - `MyMusic.xcodeproj/project.pbxproj` の不要な変更を避け、Xcode File System Synchronized Groups を尊重します。
 - ソース、設定、schema、小さな意図的 fixture は追跡対象です。
 
+## このMacでのiOS検証端末（2026-10-23追記）
+
+- Simulator は既存の **iPhone 17e / iOS 26.5 / UDID `EB3A49ED-6553-4D7E-B933-387951643EAB`** に統一します。Simulatorでのbuild・起動・testでは必ずこのUDIDを明示し、既存端末を再利用します。名前による選択、`booted`、generic destinationによる代用はしません。
+- build・testのdestinationは `-destination 'platform=iOS Simulator,id=EB3A49ED-6553-4D7E-B933-387951643EAB'`、起動・install等の`xcrun simctl`操作も同じUDIDを指定します。
+- Apple Watchの検証モデルは **Apple Watch SE（第2世代／SE 2）** とします。Watch Simulatorでの起動・testには既存のSE 2端末を再利用し、利用前にモデル・watchOS・UDIDと、連携検証時は指定iPhone Simulatorとのpairingを確認して、Watch操作にも対象UDIDを明示します。サイズ・watchOS・UDIDは現時点で未指定のため推測で固定しません。該当端末がない、候補を一意に選べない、互換性やpairingに問題がある場合は、端末作成・runtime追加・pairing変更を自動で行わず、理由と必要な対応を報告します。Watchにも既存アプリ・test dataの保護と並列testの無効化を適用します。
+- testは `-parallel-testing-enabled NO -maximum-parallel-testing-workers 1 -maximum-concurrent-test-simulator-destinations 1` を指定し、並列testによる端末の複製を避けます。
+- 別のSimulator端末の作成・cloneや、OS runtimeの追加・更新・downloadを自動で行いません。指定端末が存在しない、利用不可、またはXcode／projectと互換性がない場合は、代替端末を作らず停止し、理由と必要な対応を報告します。埋め込みWatch target等のplatform不足でも自動追加しません。
+- 既存Simulator内のアプリ・test dataは、明示依頼なく初期化・削除しません。`simctl erase`、端末削除、アプリのuninstall、data containerの削除を検証準備や復旧のために自動実行しません。
+- 実機確認が必要な場合は、接続されている **iPhone 12 mini・iPhone 13・iPhone 17e** を使用します。実際の端末名・UDID・接続状態を確認し、下記の実機デプロイ手順と明示依頼の条件を維持します。機種名から`Vespera`等の端末名との対応を推測しません。
+- この節は以下のストレージ管理・標準コマンドを具体化するものです。既存端末や既存データを保護する条件を優先します。
+
 ## Xcode のストレージ管理
 
 iOS / macOS プロジェクトの検証では、Mac のストレージ消費を最小限にします。
@@ -118,7 +129,7 @@ iOS / macOS プロジェクトの検証では、Mac のストレージ消費を�
 
 ```sh
 xcodebuild -project MyMusic.xcodeproj -scheme MyMusic \
-  -destination 'generic/platform=iOS Simulator' \
+  -destination 'platform=iOS Simulator,id=EB3A49ED-6553-4D7E-B933-387951643EAB' \
   -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
 PYTHONPATH=analyzer python -m unittest discover -s analyzer/tests -v

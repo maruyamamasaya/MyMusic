@@ -20,6 +20,7 @@
 | ライブラリ | アーティスト | `library-artists.jpg` |
 | ライブラリ | ジャンル | `library-genres.jpg` |
 | ライブラリ | 作曲者 | `library-composers.jpg` |
+| アクティビティ | ランキング | `activity-ranking.png` |
 | アクティビティ | 再生分析 | `activity-analytics.jpg` |
 | アクティビティ | 音楽史 | `activity-music-history.jpg` |
 | ステーション | 気分を伝えて再生 | `station-background.jpg` |

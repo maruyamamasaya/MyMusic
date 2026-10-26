@@ -43,6 +43,7 @@ struct HomeView: View {
     @State private var showsMoodMix = false
     @State private var showsSceneryVideo = false
     @State private var showsSceneryPlaybackUnavailable = false
+    @State private var showsRediscoveryUnavailable = false
     @State private var presentsPlayerAfterMixDismissal = false
     @State private var mixSelectionSeed: UInt64 = 0
     @State private var mixDay: Date?
@@ -67,7 +68,7 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                     }
                     ForEach(HomeCategory.all.filter { $0.id != .playback }) { category in
-                        if category.id == .myMusic, destinationHasContent(.quickPlay) {
+                        if category.id == .explore {
                             if !libraryStore.genreDisplayPresets.isEmpty {
                                 HomeTuningSection(
                                     presets: libraryStore.genreDisplayPresets,
@@ -78,6 +79,23 @@ struct HomeView: View {
                                     onApply: libraryStore.toggleGenreDisplayPreset
                                 )
                             }
+                        }
+                        if category.id == .hiRes,
+                           let workCategory = HomeCategory.all.first(where: { $0.id == .playback }) {
+                            HomeWorkSection(
+                                category: workCategory,
+                                playlists: Array(
+                                    homeWorkPlaylists.prefix(HomeWorkTileLayout.maximumPlaylistCount)
+                                ),
+                                showsMore: HomeWorkTileLayout.showsContinuationTile(
+                                    for: homeWorkPlaylists.count
+                                ),
+                                artworkIdentifier: artworkIdentifier,
+                                tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
+                                artworkForPlaylist: { playlistArtworkIdentifiers[$0.id] },
+                                canPlayTracks: { !playbackHistoryStore.workPlaybackTracks(from: $0).isEmpty },
+                                onPlayPlaylist: playPlaylist
+                            )
                         }
                         HomeCarouselSection(
                             category: category,
@@ -114,23 +132,6 @@ struct HomeView: View {
                                 StationEntryView()
                             }
                             .padding(.horizontal, 16)
-
-                            if let workCategory = HomeCategory.all.first(where: { $0.id == .playback }) {
-                                HomeWorkSection(
-                                    category: workCategory,
-                                    playlists: Array(
-                                        homeWorkPlaylists.prefix(HomeWorkTileLayout.maximumPlaylistCount)
-                                    ),
-                                    showsMore: HomeWorkTileLayout.showsContinuationTile(
-                                        for: homeWorkPlaylists.count
-                                    ),
-                                    artworkIdentifier: artworkIdentifier,
-                                    tracksForPlaylist: { playlistTracks[$0.id] ?? [] },
-                                    artworkForPlaylist: { playlistArtworkIdentifiers[$0.id] },
-                                    canPlayTracks: { !playbackHistoryStore.workPlaybackTracks(from: $0).isEmpty },
-                                    onPlayPlaylist: playPlaylist
-                                )
-                            }
                         }
                     }
                 }
@@ -193,6 +194,11 @@ struct HomeView: View {
                 Button("閉じる", role: .cancel) {}
             } message: {
                 Text("ライブラリに音楽フォルダを追加するか、再生対象の曲を確認してください。")
+            }
+            .alert("発掘する音楽の対象曲がありません", isPresented: $showsRediscoveryUnavailable) {
+                Button("閉じる", role: .cancel) {}
+            } message: {
+                Text("現在のチューニングと選曲条件で、直近24時間に再生していない曲が候補になります。")
             }
             .fullScreenCover(isPresented: $showsSceneryVideo) {
                 SceneryVideoView()
@@ -380,7 +386,11 @@ struct HomeView: View {
     }
 
     private func playImmediately(_ destination: HomeDestination) {
-        if startImmediatePlayback(destination) { onPresentNowPlaying() }
+        if startImmediatePlayback(destination) {
+            onPresentNowPlaying()
+        } else if destination == .rediscoverPlay {
+            showsRediscoveryUnavailable = true
+        }
     }
 
     private func startImmediatePlayback(_ destination: HomeDestination) -> Bool {
@@ -388,6 +398,8 @@ struct HomeView: View {
         switch destination {
         case .quickPlay:
             shuffledTracks = playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
+        case .rediscoverPlay:
+            shuffledTracks = playbackHistoryStore.rediscoverPlayTracks(from: libraryStore.tracks)
         case .discoveryPlay:
             shuffledTracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
         case .recentlyAddedPlay:
@@ -402,8 +414,13 @@ struct HomeView: View {
             return false
         }
 
+        let representative = representativeTrack(for: destination)
+        // A snapshot representative may have been played since the snapshot was built.
+        let eligibleRepresentative = destination == .rediscoverPlay
+            ? representative.flatMap { candidate in shuffledTracks.first { $0.id == candidate.id } }
+            : representative
         let tracks = HomeRepresentativeTrackPolicy.placingRepresentativeFirst(
-            representativeTrack(for: destination),
+            eligibleRepresentative,
             in: shuffledTracks
         )
         guard !tracks.isEmpty else { return false }
@@ -428,7 +445,7 @@ struct HomeView: View {
     }
 
     private var myMusicDestinations: [HomeDestination] {
-        HomeCategory.all.first(where: { $0.id == .myMusic })?.items.map(\.destination) ?? []
+        HomeCategory.all.filter { $0.id == .myMusic || $0.id == .explore }.flatMap { $0.items.map(\.destination) }
     }
 
     private func representativeTrack(for destination: HomeDestination) -> Track? {
@@ -541,7 +558,6 @@ struct HomeView: View {
 private struct HomeHighlightTile: View {
     let artworkIdentifier: String?
     let width: CGFloat
-    @State private var localBackgroundImage: UIImage?
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -565,7 +581,7 @@ private struct HomeHighlightTile: View {
 
                 Spacer(minLength: 10)
 
-                Text("ハイライト再生")
+                Text("ハイライト")
                     .font(.headline)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -586,20 +602,11 @@ private struct HomeHighlightTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
         .accessibilityHint("ハイライト再生画面を開きます")
-        .task {
-            localBackgroundImage = HomeTileBackgroundImage.load(
-                named: HomeTileBackgroundImage.highlightImageName
-            )
-        }
     }
 
     @ViewBuilder
     private var background: some View {
-        if let localBackgroundImage {
-            Image(uiImage: localBackgroundImage)
-                .resizable()
-                .scaledToFill()
-        } else if let artworkIdentifier {
+        if let artworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
         } else {
             LinearGradient(
@@ -1237,7 +1244,7 @@ private struct HomeCarouselSection: View {
 
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: spacing) {
-                        if category.id == .myMusic {
+                        if category.id == .explore {
                             Button(action: onOpenHighlight) {
                                 HomeHighlightTile(
                                     artworkIdentifier: highlightArtworkIdentifier,
@@ -1315,7 +1322,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .discoveryPlay, .recentlyAddedPlay, .repeatPlay, .favorites:
+        case .quickPlay, .rediscoverPlay, .discoveryPlay, .recentlyAddedPlay, .repeatPlay, .favorites:
             true
         default:
             false
@@ -1388,10 +1395,10 @@ private struct HomeItemTile: View {
                     .clipped()
             }
             .overlay(localImageReadabilityMask)
-        } else if categoryID == .myMusic, let artworkIdentifier {
+        } else if (categoryID == .myMusic || categoryID == .explore), let artworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
                 .overlay(playlistStyleReadabilityMask)
-        } else if categoryID == .myMusic {
+        } else if (categoryID == .myMusic || categoryID == .explore) {
             playlistStyleFallbackBackground
                 .overlay(playlistStyleReadabilityMask)
         } else if let artworkIdentifier {
@@ -1542,7 +1549,7 @@ private struct HomeItemTile: View {
 
     private var contentColor: Color {
         if localBackgroundImage != nil { return .white }
-        if categoryID == .myMusic { return .white }
+        if (categoryID == .myMusic || categoryID == .explore) { return .white }
         if artworkIdentifier != nil {
             return colorScheme == .dark ? .white : .black
         }

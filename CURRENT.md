@@ -543,3 +543,32 @@ MyMusicだけでGood 8〜15に段階別の星・光・周回する輪・虹色�
 Xcode 27.1（27A9275）にMetal Toolchain 27A266aを導入済み。既存iPhone 17e／iOS 26.5の画面はDevice Hubから確認できる。RootViewの複雑な生成式を分割し、Sendable＋asyncの非UIサービスprotocol 10個にnonisolatedを明示して、別moduleのtest actorが適合できるようにした。サービス実装actorの隔離は維持。指定Simulator buildと対象／関連XCTest計55件成功。Simulator・runtimeの追加なし。[環境記録](sessions/2026-10-24-xcode-validation-environment.md)。
 
 2026-10-24: チューニング複数選択とXcode検証環境対応を含む現在の作業ツリーを、明示依頼によりVespera（iPhone 17e）へDebug Build・Install・Launch成功。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、署名・project設定は変更しない。同日ユーザーが複数選択・解除・全曲表示でのリセットを問題なしと実機確認。[デプロイ記録](sessions/2026-10-24-vespera-multiple-tunings-deploy.md)。
+
+
+## ライブラリ一覧の共通操作行 Beta（2026-10-26）
+
+曲・アルバム・アーティスト・ジャンル一覧上部に、ランダム再生と既存の表示操作を横1行にまとめた。曲は表示形式／絞り込み／表示順、アルバム・アーティストは表示形式を右側へ配置し、ジャンルは検索と件数表示を追加。ランダム再生は検索・絞り込み後の全対象（曲の100件ページングに限定しない）から通常ランダム再生対象曲だけを重複なく集め、先頭もランダムに選ぶ。幅不足は横スクロールする。指定iPhone 17e Simulator向けiPhone／Watch Debug build成功。実画面の表示・操作確認は未実施、XCTest未実行。[作業記録](sessions/2026-10-26-library-playback-bar.md)。
+
+## 発掘するホームセクション Beta（2026-10-26）
+
+チューニングとマイミュージックの間へ「発掘する」を追加。ハイライト、クイック再生、新規の発掘する音楽、未発見を横スクロールで配置し、残りはマイミュージックへ維持。画像はライブラリのアートワーク（ない場合は既存fallback）を使用する。発掘する音楽は生成時刻から24時間以内（境界を含む）のlastPlayedAtを除外後、既存クイック再生の選曲を使う。未再生曲限定ではない。ユーザー指定によりbuild・test・deploy未実施。詳細は[sessions/2026-10-26-home-explore.md](sessions/2026-10-26-home-explore.md)。
+
+2026-10-26: 発掘するセクションの生成上限をハイライト100曲、クイック再生・発掘する音楽・未発見60曲へ変更。クイック系の1:1選曲と候補不足時の減少は維持。ユーザー指定によりbuild・test・deploy未実施。
+
+## アーティストランキング Beta（2026-10-26）
+
+ホームのアクティビティへ「ランキング」を追加。HomeStereoのインスト／ボーカル各100位、総合・回数・実聴時間切替、王冠付き1位・順位別配色・Artworkカードと4項目内訳をiPhone向けに実装。部門設定はランキング内で開き端末内UserDefaultsへ保存。全期間の通常曲が対象、全登録曲から補正分母を算出する。回数はMyMusic累計、時間は確定した詳細PlaybackEvent、評価とFavoriteはTrackPreferenceStoreを使う。部門設定の共有とキュー追加は含めず、詳細から対象部門の曲を再生できる。build・test・画面検証・deployはユーザー方針により未実施。[記録](sessions/2026-10-26-artist-ranking.md)。
+
+2026-10-26: ホームの発掘するセクション、100／60曲の生成上限、アーティストランキングおよび既存の未コミット変更を含む作業ツリーをVespera（iPhone 17e、00008150-000C54280E33401C）へDebug build・install・launch成功。MyMusic.xcodeproj／MyMusic scheme／MyMusic product／maruyama.MyMusic。埋め込みWatchを含む実機build成功、署名・project設定変更なし。XCTest・実機画面／操作確認は未実施。詳細は[sessions/2026-10-26-ranking-deploy.md](sessions/2026-10-26-ranking-deploy.md)。
+
+2026-10-27: ランキング入口タイルへ抽象的な金属波形・光柱の専用背景activity-ranking.pngを追加。既存HomeTileBackgroundImageで読み込む。既存画像と同様にローカル画像はGit追跡対象外。画像生成・参照追加のみ、build・deploy未実施。
+
+
+## ホームの作業用配置（2026-10-27）
+
+「作業用」をハイレゾの直上へ移動。ステーション以降はライブラリ → アクティビティ → 作業用 → ハイレゾの順。表示順のみ変更し、再生・保存処理は維持する。Simulator接続が制限されておりbuild・画面確認は未実施。
+
+
+## ライブラリのタグ年別表示（2026-10-27）
+
+ライブラリに「年」を追加。現在表示対象の曲をTrack.yearで新しい年順に分類し、未設定・範囲外（1〜9999以外）は末尾の「年不明」へまとめる。各年から既存の曲一覧へ進み、検索・並べ替え・再生できる。発売年の正確性を保証せず、追加年とは区別する。分類の単独Swiftチェック2件と構文parse成功。Simulator接続不可とZIPFoundation取得時のDNS失敗によりiPhone／Watch build・画面確認は未完了。

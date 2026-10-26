@@ -32,8 +32,12 @@ struct ArtistsView: View {
         .navigationTitle("アーティスト")
         .searchable(text: $query, prompt: "アーティスト")
         .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
-        .toolbar {
-            LibraryDisplayModeMenu(selection: $displayMode)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LibraryPlaybackBar(
+                tracks: libraryStore.tracks(for: displayedArtists.flatMap(\.trackIDs))
+            ) {
+                LibraryDisplayModeMenu(selection: $displayMode)
+            }
         }
     }
 
