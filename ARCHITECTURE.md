@@ -435,7 +435,7 @@ HomeCategory.exploreへクイック再生・発掘する音楽・未発見を定
 
 ## アーティストランキング（2026-10-26）
 
-ArtistRankingView → ArtistRankingStore → nonisolated ArtistRankingService。ViewがLibraryStore.unfilteredTracks・PlaybackHistoryStore.entries・TrackPreferenceStore.entriesを値入力として渡し、Storeがcancel／世代確認付きのbackground集計結果を公開する。ServiceはHomeStereoと同じ部門分類・全登録曲数分母・40/10/30/20の項目正規化とtop100を計算し、3方式のソート結果を保持。部門／方式の切替では再集計しない。入力変化およびpull-to-refreshで更新する。詳細は既存PlayerStore.playQueueを使用し、独自のAVFoundation操作を持たない。部門設定は端末内UserDefaultsのranking.artist-divisions.v1へCodable保存、破損時は明示保存まで元bytesを保持する。既存JSON・backup対象・HomeStereo側は変更しない。
+ArtistRankingView → ArtistRankingStore → nonisolated ArtistRankingService。ViewがLibraryStore.unfilteredTracks・PlaybackHistoryStore.entries・TrackPreferenceStore.entriesを値入力として渡し、Storeがcancel／世代確認付きのbackground集計結果を公開する。ServiceはHomeStereoと同じ部門分類・全登録曲数分母・40/10/30/20の項目正規化とtop100を計算し、3方式のソート結果を保持。部門／方式の切替では再集計しない。画面表示時のtaskおよびpull-to-refreshでのみ更新する。入力をtask IDとして監視せず、表示中の履歴・評価・ライブラリ・部門設定変更では再集計しない。詳細は既存PlayerStore.playQueueを使用し、独自のAVFoundation操作を持たない。部門設定は端末内UserDefaultsのranking.artist-divisions.v1へCodable保存、破損時は明示保存まで元bytesを保持する。既存JSON・backup対象・HomeStereo側は変更しない。
 
 
 ## ライブラリの年別分類

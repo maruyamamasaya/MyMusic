@@ -26,7 +26,7 @@ struct ArtistRankingView: View {
                 Picker("方式", selection: $metric) {
                     ForEach(ArtistRankingMetric.allCases, id: \.self) { Text($0.title).tag($0) }
                 }.pickerStyle(.segmented)
-                Text("全期間・各部門100位まで。作業用BGMとハイレゾを除く通常曲が対象です。実聴時間は詳細履歴が残っている分を集計します。")
+                Text("全期間・各部門100位まで。作業用BGMとハイレゾを除く通常曲が対象です。実聴時間は詳細履歴が残っている分を集計します。画面を開いたときと、下に引いて更新したときに集計します。")
                     .font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("総合点の計算方法") {
                     Text("回数40％＋時間10％＋Good30％＋お気に入り20％。回数と時間はアーティストの全登録曲数の平方根（最低4曲）で割り、各項目の部門内最大値を100点に換算します。Goodは正の現在評価値の合計、お気に入りは曲数です。単純な回数・時間の順位には補正しません。総合1位が必ず100点になるわけではありません。")
@@ -62,7 +62,7 @@ struct ArtistRankingView: View {
                 Button("部門設定", systemImage: "slider.horizontal.3") { showsSettings = true }
             }
         }
-        .task(id: input) { await store.refresh(input) }
+        .task { await store.refresh(input) }
         .refreshable { await store.refresh(input) }
         .sheet(isPresented: $showsSettings) {
             ArtistRankingSettingsView(store: store, tracks: library.unfilteredTracks)

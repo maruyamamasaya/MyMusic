@@ -576,3 +576,7 @@ Xcode 27.1（27A9275）にMetal Toolchain 27A266aを導入済み。既存iPhone 
 ## ライブラリのタグ年別表示（2026-10-27）
 
 ライブラリに「年」を追加。現在表示対象の曲をTrack.yearで新しい年順に分類し、未設定・範囲外（1〜9999以外）は末尾の「年不明」へまとめる。各年から既存の曲一覧へ進み、検索・並べ替え・再生できる。発売年の正確性を保証せず、追加年とは区別する。分類の単独Swiftチェック2件と構文parse成功。Simulator接続不可とZIPFoundation取得時のDNS失敗によりiPhone／Watch build・画面確認は未完了。
+
+2026-10-27: アーティストランキングの再集計を画面表示時と手動のpull-to-refreshだけに限定。表示中の履歴・評価・ライブラリ・部門設定変更は次の表示／手動更新時に反映する。指定Simulator向けDebug build成功、XCTest・実機deploy未実施。[記録](sessions/2026-10-27-ranking-refresh.md)。
+
+2026-10-27: ランキングの表示時／手動更新時だけの集計変更を含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。Bundle IDはmaruyama.MyMusic。実機操作は未確認。[記録](sessions/2026-10-27-ranking-refresh.md)。
