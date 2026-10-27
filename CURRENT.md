@@ -5,6 +5,10 @@ updated: 2026-10-20
 
 # MyMusic の現在状態
 
+2026-10-27: Good倍率再配分を含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。project／scheme／productはMyMusic、Bundle IDはmaruyama.MyMusic。実機の選曲体感は未確認。[記録](sessions/2026-10-27-preference-weights.md)。
+
+2026-10-27: Good選曲weightを再配分。+5〜+15は10/12/14/16/18/21/25/29/33/37/42倍。負評価・0〜+4・Overplay・保存値／schemaは維持。詳細と検証は[sessions/2026-10-27-preference-weights.md](sessions/2026-10-27-preference-weights.md)。
+
 2026-10-08: 現在の作業ツリーをVesperaへDebug build・install・launchした。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、識別子・署名設定は変更しない。デプロイ成功はTea Proの全rate切替や実データrestore成功の確認を意味しない。詳細は[sessions/2026-10-08-deploy-and-push.md](sessions/2026-10-08-deploy-and-push.md)。
 
 2026-10-20: ユーザー承認でwatchOS 26.5（23T570、arm64）runtimeを復元し、VesperaへのDebug実機Build・Install・Launchがすべて成功。通常ミニプレイヤーのガラスデザイン、ホームのテーマ循環・車窓ショートカットを含む。これらの型検証は実機buildで通過したが、画面と操作の実機確認は未実施。署名・project設定変更なし。XCTest未実行。[記録](sessions/2026-10-20-deploy-attempt.md)。

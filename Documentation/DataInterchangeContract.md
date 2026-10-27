@@ -1,7 +1,7 @@
 # MyMusic / HomeStereo データ交換・保全契約
 
 契約ID: `mymusic-homestereo-interchange`
-文書revision: 5 / 更新日: 2026-10-16
+文書revision: 6 / 更新日: 2026-10-27
 状態: 共通設計方針。既存wire形式を変更しない。未実装の保全要件は下記に区別する。
 
 ## 目的と責務
@@ -30,9 +30,9 @@ Features・音量解析・ジャンルプリセット等は個別の既存契約
 ## Preferencesの評価範囲（2026-10-16）
 
 - 保存・編集・交換の範囲は整数`-10...15`。既存値は再換算せず保持し、`favorite`は独立したBoolを維持する。
-- 選曲への効果は10で頭打ち。MyMusicは従来の-10〜10のweight表を維持し10〜15は42。HomeStereoは従来の`1 + max(0, min(10, value))`を維持し10〜15は11。両アプリの式を統一しない。
+- 2026-10-27 Beta: 両アプリのGood選曲weightは0で1、+1〜+15で1.8/3.2/5.5/8.5/10/12/14/16/18/21/25/29/33/37/42。負評価の既存式は個別に維持する（MyMusicは-10で0.01の表、HomeStereoは`1 / (1 - value)`）。MyMusicのOverplay等の補正、HomeStereoの候補数が枠内の場合の表示順維持も変更しない。
 - Preferences JSONのfield構造とschemaVersion 2は維持する。旧文書は読めるが、旧版アプリ／Analyticsは11以上を拒否する。受信側を更新してから11以上を交換し、無言の10への丸めや対象曲の除外をしない。
-- 15からBadを押すと14となり、9で初めて選曲weightが下がる。評価別表示・評価順では生の値を使う。両端末のクリック数を加算する契約ではない。
+- 15からBadを押すと14となり、選曲weightも42から37へ下がる。評価別表示・評価順では生の値を使う。両端末のクリック数を加算する契約ではない。
 - HomeStereoはDB schema v15で評価2テーブルのCHECK制約をtransaction内で移行し、ID・値・日時・Favorite・未送信tokenを維持する。保存状態backup v2のDB schema v14とv15を受け付け、旧v14は復元後のrepository openで移行する。未知の将来schemaは拒否する。
 - MyMusicの保存／backup形式は維持する。旧backupを新アプリで読む互換性と、新しい15を含むbackupを旧アプリで読む互換性は異なり、後者は保証しない。
 

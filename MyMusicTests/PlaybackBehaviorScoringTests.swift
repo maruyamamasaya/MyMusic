@@ -6,23 +6,27 @@ final class PlaybackBehaviorScoringTests: XCTestCase {
     func testPreferenceWeightTable() {
         let expected = [
             0.01, 0.015, 0.02, 0.03, 0.05, 0.08, 0.12, 0.20, 0.35, 0.60,
-            1.00, 1.8, 3.2, 5.5, 8.5, 12, 16, 21, 27, 34, 42
+            1.00, 1.8, 3.2, 5.5, 8.5, 10, 12, 14, 16, 18, 21, 25, 29, 33, 37, 42
         ]
-        XCTAssertEqual((-10...10).map { PlaybackPreferenceWeightPolicy.weight(for: $0) }, expected)
+        XCTAssertEqual((-10...15).map { PlaybackPreferenceWeightPolicy.weight(for: $0) }, expected)
         XCTAssertGreaterThan(PlaybackPreferenceWeightPolicy.weight(for: -10), 0)
         XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: 0), 1)
         XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: 3), 5.5)
         XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: -3), 0.20)
     }
 
-    func testGoodAboveTenDoesNotIncreaseSelectionWeight() {
-        for value in 10...15 {
-            XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: value), 42)
+    func testHighGoodWeightsPreserveBehaviorCorrections() {
+        for (value, weight) in zip(10...15, [21.0, 25, 29, 33, 37, 42]) {
             XCTAssertEqual(PlaybackSelectionPolicy.shuffleWeight(playbackPreference: value, overplayScore: 0.4),
-                           PlaybackSelectionPolicy.shuffleWeight(playbackPreference: 10, overplayScore: 0.4))
+                           weight * (1 - 0.875 * 0.4 * 0.4), accuracy: 0.000001)
             XCTAssertEqual(PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: value, overplayScore: 0.4, playCount: 7),
-                           PlaybackSelectionPolicy.quickPlayWeight(playbackPreference: 10, overplayScore: 0.4, playCount: 7))
+                           weight * 0.4, accuracy: 0.000001)
         }
+    }
+
+    func testPreferenceWeightsClampOutsideSupportedRange() {
+        XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: Int.min), 0.01)
+        XCTAssertEqual(PlaybackPreferenceWeightPolicy.weight(for: Int.max), 42)
     }
 
     func testOverplayIsLowWhenRecentVolumeMatchesBaseline() {
