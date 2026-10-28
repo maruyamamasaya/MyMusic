@@ -301,6 +301,18 @@ final class PlaybackHistoryStore {
             && !isHiddenFromShuffle(trackID: track.id, now: now)
     }
 
+    func pianoPlayTracks(from tracks: [Track], features: [Track.ID: TrackFeature]) -> [Track] {
+        PianoSelectionPolicy.candidates(from: tracks, features: features)
+            .filter { isEligibleForRegularShuffle($0) }
+            .shuffled()
+    }
+
+    func ambientPlayTracks(from tracks: [Track], features: [Track.ID: TrackFeature]) -> [Track] {
+        AmbientSelectionPolicy.candidates(from: tracks, features: features)
+            .filter { isEligibleForRegularShuffle($0) }
+            .shuffled()
+    }
+
     /// Returns every track once, ordered by a preference-weighted random draw.
     /// Positive preferences are more likely to appear early, while negative
     /// preferences use the reciprocal weight and remain eligible for playback.
@@ -334,17 +346,17 @@ final class PlaybackHistoryStore {
             .map(\.track)
     }
 
-    /// Apply the rolling 24-hour exclusion before the existing quick-play selection.
-    func rediscoverPlayTracks(from tracks: [Track], limit: Int = 60, now: Date = Date()) -> [Track] {
+    /// Apply the rolling exclusion interval before the existing quick-play selection.
+    func rediscoverPlayTracks(from tracks: [Track], limit: Int = 60, now: Date = Date(), exclusionInterval: TimeInterval = 24 * 60 * 60) -> [Track] {
         let candidates = tracks.filter {
-            Self.isEligibleForRediscovery(lastPlayedAt: entries[$0.id]?.lastPlayedAt, now: now)
+            Self.isEligibleForRediscovery(lastPlayedAt: entries[$0.id]?.lastPlayedAt, now: now, exclusionInterval: exclusionInterval)
         }
         return quickPlayTracks(from: candidates, limit: limit, now: now)
     }
 
-    nonisolated static func isEligibleForRediscovery(lastPlayedAt: Date?, now: Date) -> Bool {
+    nonisolated static func isEligibleForRediscovery(lastPlayedAt: Date?, now: Date, exclusionInterval: TimeInterval = 24 * 60 * 60) -> Bool {
         guard let lastPlayedAt else { return true }
-        return lastPlayedAt < now.addingTimeInterval(-24 * 60 * 60)
+        return lastPlayedAt < now.addingTimeInterval(-exclusionInterval)
     }
 
     func quickPlayTracks(from tracks: [Track], limit: Int = 60, now: Date = Date()) -> [Track] {

@@ -5,9 +5,131 @@ updated: 2026-10-20
 
 # MyMusic の現在状態
 
+2026-10-28: ステーションのBeta表記撤去・背景3枚ランダム表示を含む現在版をVesperaへDebug Build・Install・Launch成功。実機の外観・操作は確認待ち。[記録](sessions/2026-10-28-station-art-rotation.md)。
+
+2026-10-28: ユーザー承認で気分ステーションのBeta表記を撤去。既存画像＋同系統の生成画像2枚をランダム表示し、ホーム更新では直前以外へ切替。選曲仕様は維持。実機未反映。[記録](sessions/2026-10-28-station-art-rotation.md)。
+
+2026-10-28: ピアノの水晶画像・アンビエントの生成した湖画像と最新のタイル配置を含む現在版をVesperaへDebug Build・Install・Launch成功。実機の外観・選曲体感は確認待ち。[記録](sessions/2026-10-28-piano-crystal-ambient-art.md)。
+
+2026-10-28: 「ピアノを聴く」のタイルを指定の虹色水晶ピアノ画像へ変更。選曲条件は維持。アンビエント背景は候補を生成し、採用前は曲Artwork表示を維持。実機未反映。[記録](sessions/2026-10-28-piano-crystal-ambient-art.md)。
+
+2026-10-28: 発掘する音楽の一番右へ「アンビエントを聴く」Betaを追加。チューニング後の通常ランダム再生対象から有効なambient特徴量0.5以上を抽選し、候補曲Artworkを表示。条件を緩めるfallbackなし。実機未反映。[記録](sessions/2026-10-28-ambient-play.md)。
+
+2026-10-28: 「ピアノを聴く」を発掘する音楽の末尾（一番右）へ移動。実機未反映。[記録](sessions/2026-10-28-piano-tile-location.md)。
+
+2026-10-28: 手動キュー編集・追加先選択・マイミュージック先頭への移動・3背景ランダム表示・ガラスレコードAppIcon・ピアノを聴くBetaを含む現在版をVesperaへDebug Build・Install・Launch成功。実機での外観・選曲体感は確認待ち。[記録](sessions/2026-10-28-piano-queue-vespera-deploy.md)。
+
+2026-10-28: 発掘する音楽へ「ピアノを聴く」Betaを追加。チューニング後の通常ランダム再生対象から、有効なpiano特徴量0.5以上を満たす曲だけを抽選。ボーカル・他楽器を除外せず、未解析曲・条件外は補完しない。候補曲Artworkを使用。実機未反映。[記録](sessions/2026-10-28-piano-play.md)。
+
+2026-10-28: 添付のガラスレコード画像をAppIconに設定。「次に再生する」は新規生成した選曲カード・カセット・音符の3画像をランダム表示し、ホーム更新時は直前以外へ切替。実機未反映。[記録](sessions/2026-10-28-records-icon-tile-options.md)。
+
+2026-10-28: 「次に再生する」を発掘する音楽からマイミュージックの先頭へ移動。内容有無による非表示から除外し入口を維持。実機未反映。[記録](sessions/2026-10-28-manual-queue-location.md)。
+
+2026-10-28: 手動キューの候補行へ「次に再生」「最後に追加」のiconを追加、候補の時間表示を省略。曲名タップは末尾追加を維持。実機未反映。[記録](sessions/2026-10-28-manual-queue-actions.md)。
+
+2026-10-28: 「次に再生する」の待機曲にスワイプ取消と編集による並べ替えを追加。取消曲は再追加可能。青紫のガラスのレコードを並べた生成画像をタイル背景に設定。関連35テスト成功、今回変更は実機未反映。[記録](sessions/2026-10-28-manual-queue-edit.md)。
+
+2026-10-28: 「次に再生する」Betaを含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機での外観・選曲操作はユーザー確認待ち。[記録](sessions/2026-10-28-manual-queue.md)。
+
+2026-10-28: 発掘する音楽へ「次に再生する」Betaを追加。ランダム最大30曲から最初の1曲で既存queueを置換し、以降はタップ順に追加。候補の手動更新・追加済み表示・全曲終了後の追加再開に対応。ページ離脱後も再生queueは維持し、再入場時は新しい選曲として開始する。実機・実画面の確認は未実施。[記録](sessions/2026-10-28-manual-queue.md)。
+
+2026-10-27: 墨和紙の隷書体・黎明の太字明朝とハイライトのフル再生アイコンをVesperaへDebug Build・Install・Launch成功。説明resource名競合は固有名へのrenameで解消。実機外観・操作は確認待ち。[記録](sessions/2026-10-27-japanese-theme-fonts.md)。
+
+2026-10-27: 墨和紙の見出し／曲名を青柳隷書しも、黎明を太字明朝へ変更。隷書OTFと配布説明書を同梱しUIAppFontsへ登録。指定Simulatorで登録確認を含むテーマ5テスト成功。実機未反映。[記録](sessions/2026-10-27-japanese-theme-fonts.md)。
+
+2026-10-27: 墨和紙・黎明と採用した4番目の黎明背景／明朝書体を含む現在版をVesperaへDebug Build・Install・Launch成功。外観・操作は実機確認待ち。[記録](sessions/2026-10-27-reimei-theme.md)。
+
+2026-10-27: 黎明の背景だけを改訂。紺色の上空に細かな星、雲と谷の霞へ広がる自然なオレンジの朝焼けを追加。フォント・icon・配置は維持、実機未反映。[記録](sessions/2026-10-27-reimei-theme.md)。
+
+2026-10-27: 夜明け前の空・霞・朱色の地平線の「黎明」を7番目のthemeに追加。黎明のみホーム見出し・曲名等を明朝寄りの書体へ。指定Simulatorでテーマ4テスト成功（7テーマ保存／描画含む）。実機未反映。[記録](sessions/2026-10-27-reimei-theme.md)。
+
+2026-10-27: 黒ベースの和紙「墨和紙」を6番目のテーマへ追加。銀色accent・無彩色背景・生成した和紙iconを使用。フォントは維持。指定Simulatorでテーマ4テスト成功（6テーマの保存／描画含む）、実機未反映。[記録](sessions/2026-10-27-sumi-washi-theme.md)。
+
+2026-10-27: 年ページを正方形Artworkの3列タイルへ変更。各年の先頭の画像あり曲を代表にし、年・曲数と既存曲一覧への導線を維持。指定Simulator向けbuild成功、実表示・実機未確認。[記録](sessions/2026-10-27-year-grid.md)。
+
+2026-10-27: もっと見る／ハイレゾ画像・チューニング下地撤去・ハイライト上部整理とArtwork拡大の現在版をVesperaへDebug Build・Install・Launch成功。実機外観・操作は確認待ち。[記録](sessions/2026-10-27-more-hires-highlight-layout.md)。
+
+2026-10-27: もっと見る・ハイレゾタイルへ生成画像を追加。チューニングの黒下地を撤去。ハイライトは上部案内を削除、選曲タブを上へ、reshuffleを下へ移動しArtworkを拡大。iPhone／Watch build成功、実機未反映。[記録](sessions/2026-10-27-more-hires-highlight-layout.md)。
+
+2026-10-27: チューニング短いfade・ハイライト外観統一・nativeヘッダー背景・青金ピアノアイコンを含む現在版をVesperaへDebug Build・Install・Launch成功。外観・操作は実機確認待ち。[記録](sessions/2026-10-27-highlight-style-gold-icon-header.md)。
+
+2026-10-27: チューニングのフェードを6pt／内容内へ縮小。ハイライトは配置・機能を保ち通常再生のtheme背景・黒60%情報帯へ統一。青金ピアノ画像をcropしてアプリアイコン更新。大見出しを覆うヘッダーoverlayを撤去してnative背景へ変更。iPhone／Watch build成功、実画面・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-highlight-style-gold-icon-header.md)。
+
+2026-10-27: ホーム余白統一・下部背景切り出しを含む現在版をVesperaへDebug Build・Install・Launch成功。実機外観はユーザー確認待ち。[記録](sessions/2026-10-27-theme-home-spacing.md)。
+
+2026-10-27: ホームの非simpleDarkテーマだけにあった各section上下12ptを除去。シンプルダークと同じ内容高・セクション間隔へ統一し、黒60%下地とfadeは背景のみとして維持。実機未反映。[記録](sessions/2026-10-27-theme-home-spacing.md)。
+
+2026-10-27: 背景を全画面global座標で共通化し、mini領域・下部メニュー背面にも同倍率・同位置の下端を切り出して表示。iPhone／Watch build成功、Auroraホームで上下端・tab barの背景連続確認。mini表示中・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-bottom-background-crop.md)。
+
+2026-10-27: 36ptの車窓アイコン・ホーム見出しアクセント／ハイライト配置修正を含む現在版をVesperaへDebug Build・Install・Launch成功。外観は実機確認待ち。[記録](sessions/2026-10-27-scenery-icon.md)。
+
+2026-10-27: 車窓アイコンを36ptへ拡大し、窓の下枠・取っ手・流れる遠景を画像生成で追加。設定は28pt。実機未反映。[記録](sessions/2026-10-27-scenery-icon.md)。
+
+2026-10-27: ホーム各sectionの黒60%帯も再生中と同様に上下16ptを透明へなじませるgradientへ変更。配置・操作・シンプルダーク時の非表示・アクセシビリティ時の不透明表示を維持。指定Simulator向けbuild成功、実表示未確認・実機未反映。[記録](sessions/2026-10-27-home-backdrop-fade.md)。
+
+2026-10-27: 再生中の暗幕上下fadeを含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機外観はユーザー確認待ち。[記録](sessions/2026-10-27-player-backdrop-fade.md)。
+
+2026-10-27: 車窓モード入口を生成した銀色の窓・月・遠景の透過アイコンへ更新。ホーム／再生中／設定／動画未登録状態で共用。実機未反映。[記録](sessions/2026-10-27-scenery-icon.md)。
+
+2026-10-27: 通常／作業用／HiRes再生中の曲情報下地を、中央の黒60%を維持して上下16ptだけ透明へ抜ける暗幕へ変更。配置・操作・blurなし・アクセシビリティ時の不透明表示を維持。指定Simulator向けbuild成功、実表示・実機未確認。[記録](sessions/2026-10-27-player-backdrop-fade.md)。
+
+2026-10-27: ホーム先頭文字アクセントを副題から見出しへ訂正（チューニング除外）。「発掘する音楽」へ名称修正。ハイライト内のicon／title／description配置を他のタイルへ統一。実機未反映。[記録](sessions/2026-10-27-home-heading-highlight.md)。
+
+2026-10-27: Amber Lounge・緑Neon・副題先頭accent・固定背景ヘッダーの現在版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機外観・スクロールはユーザー確認待ち。[記録](sessions/2026-10-27-amber-fixed-header.md)。
+
+2026-10-27: 生成背景・炎アイコンのAmber Loungeを5番目のテーマとして追加。ヘッダーは背景と同寸法・同位置の上端画像を固定表示する方式へ変更（blurなし）。指定Simulatorでテーマ4テスト成功、5テーマの通常／大文字描画を含む。スクロール中の実表示・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-amber-fixed-header.md)。
+
+2026-10-27: ホームsection副題の先頭1文字をテーマaccentへ変更。Pulse Neonはaccent／lightと背景の色相を緑基調へ調整。新テーマは提案のみ。実機未反映。[記録](sessions/2026-10-27-subtitle-green-neon.md)。
+
+2026-10-27: miniの透け感を維持する指示によりHiRes miniを黒40%へ復元。通常miniの既存透明度は維持し、黒60%化はホーム帯と再生中曲情報／評価欄だけへ適用。実機未反映。[記録](sessions/2026-10-27-black-backing-60.md)。
+
+2026-10-27: ホーム見出し／タイル群・再生中の曲情報／評価欄・HiRes miniの黒下地を40%→60%に調整。ぼかしなし・全幅帯とアクセシビリティ時の不透明表示を維持。実機未反映。[記録](sessions/2026-10-27-black-backing-60.md)。
+
+2026-10-27: シークバー位置調整・追加blur撤去・黒40%下地の現在版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の外観と操作はユーザー確認待ち。[記録](sessions/2026-10-27-player-seek-spacing.md)。
+
+2026-10-27: 通常／作業用／HiResの再生中画面で評価欄とシークバー間の伸縮余白を再生操作下へ移し、シークバー・再生操作を上へ寄せた。実機未反映。[記録](sessions/2026-10-27-player-seek-spacing.md)。
+
+2026-10-27: ユーザー再指定で今回追加したグレーの素材・弱いblurもすべて撤去。ホーム見出し／タイル群と再生中曲情報／評価欄は左右いっぱい・角丸なしの黒40%下地だけへ修正。通常miniは追加blur前の表示へ復元。実機未反映。[記録](sessions/2026-10-27-black-only-backing.md)。
+
+2026-10-27: 添付の虹色水晶ピアノ画像をiPhoneアプリアイコンへ反映。弱いぼかし・従来ヘッダー復元を含む現在版をVesperaへDebug Build・Install・Launch成功。実機表示はユーザー確認待ち。[記録](sessions/2026-10-27-crystal-piano-icon-deploy.md)。
+
+2026-10-27: 今回追加したグレーのmaterialをホーム・mini・再生情報欄すべてで弱い8%進行のblur＋黒い下地へ置換。ヘッダーは従来黒gradient／標準タイミングへ復元。iPhone／Watch build成功、Auroraホーム表示確認済み。Library／Playlistタイトル・再生画面の実表示は未確認、実機未反映。[記録](sessions/2026-10-27-subtle-blur-header-restore.md)。
+
+2026-10-27: 再生情報グラスとホーム／miniの背面ぼかしを含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。外観・操作はユーザー実機確認待ち。[記録](sessions/2026-10-27-playback-metadata-glass.md)。
+
+2026-10-27: 通常／作業用の再生中に曲情報〜評価操作列をまとめる黒40%のぼかしグラスを追加。HiResは既存の曲情報欄へ適用。実画面・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-playback-metadata-glass.md)。
+
+2026-10-27: ホームの黒40%帯と通常／ハイレゾminiの背面へ薄いmaterialのぼかしを追加。通常mini領域にもテーマ背景を敷く。実機未反映。[記録](sessions/2026-10-27-home-player-backdrop-blur.md)。
+
+2026-10-27: 背景黒20%・スモークヘッダー・ホーム全面幅黒40%の帯を含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の見え方・スクロール中の挙動は確認待ち。[記録](sessions/2026-10-27-smoked-header-home.md)。
+
+2026-10-27: ホームの黒40%下地を角丸パネルから左右いっぱいの帯へ変更。カルーセルと見出しの既存横余白・操作は維持。[記録](sessions/2026-10-27-smoked-header-home.md)。
+
+2026-10-27: 生成背景を黒20%で減光、ヘッダーを薄いガラス素材、ホームの見出し＋タイル群背面を黒40%へ変更。iPhone／Watch build成功、指定SimulatorのAuroraホーム静止画確認済み。スクロール中・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-smoked-header-home.md)。
+
+2026-10-27: 3テーマの生成背景テクスチャ版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。スクロール時ヘッダーの黒gradientは現状維持、背景を連続させる案を提案。実機の見え方は確認待ち。[記録](sessions/2026-10-27-theme-textures.md)。
+
+2026-10-27: シンプルダーク以外の3テーマ背景を生成テクスチャへ更新（天の川／オーロラ／光学ガラス）。既存配色・操作・保存と純黒accessibility fallbackを維持。実機未反映。[記録](sessions/2026-10-27-theme-textures.md)。
+
+2026-10-27: 画像生成したテーマアイコン版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の見え方・操作感はユーザー確認待ち。[記録](sessions/2026-10-27-generated-theme-icons.md)。
+
+2026-10-27: ホームテーマ切替の4アイコンを画像生成したモノトーン透過PNGに置換。パネルの奥行き・spring設定は維持。実機未反映。[記録](sessions/2026-10-27-generated-theme-icons.md)。
+
+2026-10-27: テーマ切替アイコンパネルを含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の見え方・操作感は未確認。[記録](sessions/2026-10-27-theme-icon-panel.md)。
+
+2026-10-27: ホーム左上のテーマ番号を、現在と次のテーマのモノトーンアイコンを重ねた半透明パネルへ変更。タップ時にspringで入れ替え、Reduce Motionでは静止切替。検証は[sessions/2026-10-27-theme-icon-panel.md](sessions/2026-10-27-theme-icon-panel.md)。
+
 2026-10-27: Good倍率再配分を含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。project／scheme／productはMyMusic、Bundle IDはmaruyama.MyMusic。実機の選曲体感は未確認。[記録](sessions/2026-10-27-preference-weights.md)。
 
 2026-10-27: Good選曲weightを再配分。+5〜+15は10/12/14/16/18/21/25/29/33/37/42倍。負評価・0〜+4・Overplay・保存値／schemaは維持。詳細と検証は[sessions/2026-10-27-preference-weights.md](sessions/2026-10-27-preference-weights.md)。
+
+2026-10-27: M4A年タグ対応を含む現在の作業ツリーをVespera（iPhone 17e）へDebug Build・Install・Launch成功。project／schemeはMyMusic、Bundle IDはmaruyama.MyMusic。実データでの年補完結果は未確認。[記録](sessions/2026-10-27-m4a-year.md)。
+
+2026-10-27: M4Aの年タグ取得Betaを追加。iTunes ©dayを読み、quick同期では既存の年不明・未確認M4Aだけを年専用処理で補完。有効年・UUID・他metadataを保持し、global revisionは3のまま。指定Simulatorで合成M4A読取を含む対象25テストとbuild成功。実ライブラリ同期・実機デプロイは未実施。[記録](sessions/2026-10-27-m4a-year.md)。
+
+2026-10-27: MP3の年タグ取得Betaを追加。ID3 TYER→TDRCを読み、原発売年等は代用しない。次のクイック同期で変更のない年不明MP3だけを年専用処理で補完し、有効年・UUID・他metadataを保持。global metadata revisionは3のまま。指定Simulatorの対象20テストとbuild成功。実際の問題音源・実機は未確認、未デプロイ。[記録](sessions/2026-10-27-mp3-year.md)。
+
+2026-10-27: 指定iPhone 17e Simulatorで全テスト成功（XCTest 365件＋Swift Testing 12件）。ホーム構成・参照保持exportの既存変更にテスト期待値を追従し、音響情報描画テストへ不足したPlayerStoreを注入。Vespera（実機iPhone 17e）へのDebug Build・Install・Launch成功。画面・操作の実機確認は未実施。[記録](sessions/2026-10-27-test-and-deploy.md)。
 
 2026-10-08: 現在の作業ツリーをVesperaへDebug build・install・launchした。MyMusic.xcodeproj／MyMusic scheme／maruyama.MyMusicを使用し、識別子・署名設定は変更しない。デプロイ成功はTea Proの全rate切替や実データrestore成功の確認を意味しない。詳細は[sessions/2026-10-08-deploy-and-push.md](sessions/2026-10-08-deploy-and-push.md)。
 
@@ -576,6 +698,30 @@ Xcode 27.1（27A9275）にMetal Toolchain 27A266aを導入済み。既存iPhone 
 ## ライブラリのタグ年別表示（2026-10-27）
 
 ライブラリに「年」を追加。現在表示対象の曲をTrack.yearで新しい年順に分類し、未設定・範囲外（1〜9999以外）は末尾の「年不明」へまとめる。各年から既存の曲一覧へ進み、検索・並べ替え・再生できる。発売年の正確性を保証せず、追加年とは区別する。分類の単独Swiftチェック2件と構文parse成功。Simulator接続不可とZIPFoundation取得時のDNS失敗によりiPhone／Watch build・画面確認は未完了。
+
+2026-10-27: 発掘する音楽を①（直近24時間除外）・②（直近168時間＝7日間除外）の2タイルに分割。①の隣に②を配置。両方とも最大60曲、既存quickPlayTracksの選曲条件を共用する。未再生限定ではなく、境界時刻ちょうども除外する。今回build・test・deploy未実施。
+
+2026-10-27: 発掘する音楽①（24時間）・②（168時間）を含む現在の作業ツリーをVesperaへDebug build・install・launch成功。MyMusic.xcodeproj／MyMusic scheme／MyMusic product／maruyama.MyMusic。署名設定変更なし。今回XCTestと実機画面・選曲動作の確認は未実施。
+
+2026-10-27: 再生分析・音楽史・最近の音楽傾向・作業用BGM再生のタイルへ統一感のある抽象画像4枚を設定。既存画像を保持し、新しいファイル名で参照。画像は従来のHomeTileImages運用でGit対象外。build・test・deploy未実施。
+
+2026-10-27: ホームのライブラリへ「年」タイルを追加し、既存YearsViewへ接続。青紫・琥珀色の砂時計とレコードを描いたlibrary-years.pngを設定。以前の年別表示を含む実機デプロイ成功ログを確認したが、この追加分はcheck-iphone.shのCoreDevice一覧取得タイムアウトでデプロイ未実施。
+
+2026-10-27: ハイライトとRediscovery Mixへ文字なしの専用抽象背景を追加。ハイライトは金属とクリスタルの光環、Rediscoveryは青い結晶と再び灯る光。画像なし時のArtwork fallbackを保持。ローカル画像は既存Git対象外運用。build・test・deploy未実施。
+
+2026-10-27: ハイライト背景を鮮やかなcoral／ocean／violet／limeの4枚へ変更。ホーム生成時に抽選、pull-to-refreshで前回以外へ変更する。選曲・再生状態は変更しない。画像は既存のローカルGit対象外運用。build・test・deploy未実施。
+
+2026-10-27: ハイライト4種の更新時切替、Rediscovery Mix、再生分析・音楽史・最近の音楽傾向・作業用BGMの画像を含む作業ツリーをVesperaへDebug build・install・launch成功。生成app内に対象9画像の存在を確認。実機でのcrop・更新操作は未確認、XCTest未実行。
+
+2026-10-27: ホームのライブラリ5タイル（曲・アルバム・アーティスト・ジャンル・作曲者）を年タイルと同じ濃紺・青紫ガラス・琥珀光のv2画像へ更新。旧jpgは保持し、参照名と既存テストの期待値を更新。単独Swift実行で6タイルの画像参照一致を確認、構文parse・diff check成功。build・XCTest・実機デプロイと画面crop確認は今回未実施。
+
+2026-10-27: Rediscovery Mix背景をmix-rediscovery-v2.pngへ差し替え。青緑・金の色味と金属質感を維持し、ほかの抽象画像と揃う流れる曲線へ調整。旧画像保持、build・deploy未実施。
+
+2026-10-27: ライブラリ5画像更新版のVesperaへのデプロイを試行。check-iphone.shでCoreDevice一覧取得が15秒timeoutとなり停止。今回Build／Install／Launch未実行。詳細はsessions/2026-10-27-library-artwork-deploy.md。
+
+2026-10-27: Rediscovery Mixを全体を金属と青緑の波が埋めるムーディーなv3背景へ更新。旧画像保持。build・test・deploy未実施。
+
+2026-10-27: Rediscovery Mixの全画面を埋めるv3画像を含む現在の作業ツリーをVesperaへDebug build・install・launch成功。生成app内のv3 PNGを確認。実機の画像表示・cropは未確認、今回XCTest未実行。
 
 2026-10-27: アーティストランキングの再集計を画面表示時と手動のpull-to-refreshだけに限定。表示中の履歴・評価・ライブラリ・部門設定変更は次の表示／手動更新時に反映する。指定Simulator向けDebug build成功、XCTest・実機deploy未実施。[記録](sessions/2026-10-27-ranking-refresh.md)。
 

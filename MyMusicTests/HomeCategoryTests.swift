@@ -5,17 +5,17 @@ final class HomeCategoryTests: XCTestCase {
     func testActivityContainsAnalyticsMusicHistoryAndTrendsTiles() throws {
         let activity = try XCTUnwrap(HomeCategory.all.first { $0.id == .activity })
 
-        XCTAssertEqual(activity.items.map(\.destination), [.analytics, .musicHistory, .recentMusicTrends])
-        XCTAssertEqual(activity.items.map(\.title), ["再生分析", "音楽史", "最近の音楽傾向"])
+        XCTAssertEqual(activity.items.map(\.destination), [.artistRanking, .analytics, .musicHistory, .recentMusicTrends])
+        XCTAssertEqual(activity.items.map(\.title), ["ランキング", "再生分析", "音楽史", "最近の音楽傾向"])
     }
 
-    func testListenLaterTileFollowsDiscoveryPlay() throws {
+    func testExploreOwnsDiscoveryAndMyMusicStartsWithManualQueue() throws {
+        let explore = try XCTUnwrap(HomeCategory.all.first { $0.id == .explore })
+        XCTAssertEqual(explore.items.map(\.destination), [.quickPlay, .rediscoverPlay, .rediscoverWeekPlay, .discoveryPlay, .pianoPlay, .ambientPlay])
         let myMusic = try XCTUnwrap(HomeCategory.all.first { $0.id == .myMusic })
-        let discoveryIndex = try XCTUnwrap(myMusic.items.firstIndex { $0.destination == .discoveryPlay })
-
-        XCTAssertEqual(myMusic.items[discoveryIndex + 1].destination, .listenLater)
-        XCTAssertEqual(myMusic.items[discoveryIndex + 1].title, "あとで聴く")
-        XCTAssertEqual(myMusic.items[discoveryIndex + 2].destination, .recentlyAddedPlay)
+        XCTAssertEqual(myMusic.items.first?.destination, .manualQueue)
+        XCTAssertEqual(myMusic.items.first?.title, "次に再生する")
+        XCTAssertEqual(myMusic.items.dropFirst().first?.destination, .listenLater)
     }
 
     func testLibraryAndActivityTilesHaveStableLocalImageNames() throws {
@@ -25,16 +25,17 @@ final class HomeCategoryTests: XCTestCase {
         XCTAssertEqual(
             library.items.map(\.localBackgroundImageName),
             [
-                "library-songs",
-                "library-albums",
-                "library-artists",
-                "library-genres",
-                "library-composers"
+                "library-songs-v2",
+                "library-albums-v2",
+                "library-artists-v2",
+                "library-genres-v2",
+                "library-composers-v2",
+                "library-years"
             ]
         )
         XCTAssertEqual(
             activity.items.map(\.localBackgroundImageName),
-            ["activity-analytics", "activity-music-history", nil]
+            ["activity-ranking", "activity-analytics-v2", "activity-music-history-v2", "activity-music-trends"]
         )
     }
 
@@ -44,7 +45,12 @@ final class HomeCategoryTests: XCTestCase {
             .flatMap(\.items)
             .map(\.destination)
 
-        XCTAssertTrue(destinations.allSatisfy { $0.localBackgroundImageName == nil })
+        XCTAssertEqual(HomeDestination.ambientPlay.localBackgroundImageName, "ambient-crystal-lake-v1")
+        XCTAssertEqual(HomeDestination.pianoPlay.localBackgroundImageName, "piano-crystal-v1")
+        XCTAssertEqual(HomeDestination.manualQueue.localBackgroundImageName, "manual-queue-v1")
+        XCTAssertEqual(HomeDestination.workSizePlay.localBackgroundImageName, "work-bgm-background")
+        XCTAssertEqual(HomeDestination.hiResLibrary.localBackgroundImageName, "library-hires-v1")
+        XCTAssertTrue(destinations.filter { $0 != .workSizePlay && $0 != .hiResLibrary && $0 != .manualQueue && $0 != .pianoPlay && $0 != .ambientPlay }.allSatisfy { $0.localBackgroundImageName == nil })
     }
 
     func testStationHasStableLocalBackgroundImageName() {
@@ -76,7 +82,7 @@ final class HomeCategoryTests: XCTestCase {
 
         XCTAssertEqual(
             visibleItems.map(\.destination),
-            [.quickPlay, .listenLater, .favorites]
+            [.manualQueue, .listenLater, .favorites]
         )
     }
 

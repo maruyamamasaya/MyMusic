@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct HiResMiniPlayerView: View {
-    @Environment(\.appTheme) private var theme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
     let store: HiResDirectOutputProbeStore
     let onOpen: () -> Void
@@ -56,7 +57,9 @@ struct HiResMiniPlayerView: View {
                 .accessibilityLabel("ハイレゾ再生位置")
                 .accessibilityValue("\(Int(progress * 100)) percent")
         }
-        .background(ThemePalette.resolve(theme).surface)
+        .background {
+            Color.black.opacity(reduceTransparency || contrast == .increased ? 1 : 0.40)
+        }
         .overlay(alignment: .top) { Divider() }
     }
 

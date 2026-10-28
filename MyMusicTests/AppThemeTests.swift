@@ -1,9 +1,14 @@
 import XCTest
 import SwiftUI
+import UIKit
 @testable import MyMusic
 
 @MainActor
 final class AppThemeTests: XCTestCase {
+    func testReishoFontIsRegisteredFromAppBundle() throws {
+        _ = try XCTUnwrap(UIFont(name: "aoyagireisyo2", size: 20))
+    }
+
     func testPreferenceRoundTripAndUnknownValueFallback() throws {
         let suite = "AppThemeTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -1,0 +1,11 @@
+# ミニプレイヤー・下部メニューの背景切り出し
+
+Context Guard MATCH、Git root確認。既存未コミット変更を保持。
+
+ユーザー指示は、画面全体の背景の同じ場所をヘッダー同様に切り出して、通常miniと下部メニューの背面にも表示すること。RootViewのThemeViewportModifierがsafe areaを含む背景領域のglobal CGRectを計測し、Environmentへ共有する。ThemeBackgroundはその共通領域の倍率で画像を描き、自身のglobal位置差でoffsetして、自分の領域だけclipする。Rootの下端背景とBottomPlayerLayoutの背面へも同じ画像構成を敷く。headerも共通基準を利用する。既存背景黒20%／Neon色相／accessibility fallbackを共用。
+
+miniと内容のVStackによる領域分離、miniのスモーク透明度、native tab barを維持。新しいblur・黒下地を追加しない。RootViewの型推論エラーを受けmainTabsとthemedTabsへ式分割。画面操作・Store・再生・保存変更なし。
+
+指定iPhone 17e Simulator向けDebug build成功（iPhone／Watch）。既存端末へ上書きinstall・launch成功。初回screenshotでsource領域にsafe areaが含まれず上下端に黒帯が出ることを検出し、geometry計測をignoresSafeAreaの内側へ移動して修正。再build成功、Auroraホームの最終screenshot（/tmp/mymusic-bottom-theme-crop-final.png）で上下端と下部メニューへの背景連続を目視確認。
+
+今回のSimulatorではmini表示中・全テーマ・横画面・sheet／詳細遷移・scroll中は未確認。実機未デプロイ。XCTest未実行（表示配置のみ）。test端末作成0／削除0、XCTestDevices未操作・容量未計測。git diff --check成功。

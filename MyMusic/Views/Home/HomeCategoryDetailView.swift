@@ -71,6 +71,7 @@ struct HomeCategoryDetailView: View {
 struct HomeDestinationView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
+    @Environment(TrackFeatureStore.self) private var trackFeatureStore
 
     let destination: HomeDestination
     var onPresentNowPlaying: () -> Void = {}
@@ -78,15 +79,47 @@ struct HomeDestinationView: View {
     @ViewBuilder
     var body: some View {
         switch destination {
+        case .manualQueue:
+            ManualQueueView()
+        case .ambientPlay:
+            GeneratedQueueView(
+                title: "アンビエントを聴く",
+                emptyTitle: "対象の曲がありません",
+                emptyDescription: "現在のチューニングで、アンビエントの特徴量が条件を満たす曲がありません。",
+                systemImage: "waveform.path",
+                tracks: playbackHistoryStore.ambientPlayTracks(
+                    from: libraryStore.tracks, features: trackFeatureStore.featureSnapshot
+                )
+            )
+        case .pianoPlay:
+            GeneratedQueueView(
+                title: "ピアノを聴く",
+                emptyTitle: "対象の曲がありません",
+                emptyDescription: "現在のチューニングで、ピアノの特徴量が条件を満たす曲がありません。",
+                systemImage: "pianokeys",
+                tracks: playbackHistoryStore.pianoPlayTracks(
+                    from: libraryStore.tracks, features: trackFeatureStore.featureSnapshot
+                )
+            )
         case .quickPlay:
             QuickPlayView(tracks: playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks))
         case .rediscoverPlay:
             GeneratedQueueView(
-                title: "発掘する音楽",
+                title: "発掘する音楽①",
                 emptyTitle: "対象の曲はありません",
                 emptyDescription: "直近24時間に再生していない曲が候補になります。",
                 systemImage: "sparkle.magnifyingglass",
                 tracks: playbackHistoryStore.rediscoverPlayTracks(from: libraryStore.tracks)
+            )
+        case .rediscoverWeekPlay:
+            GeneratedQueueView(
+                title: "発掘する音楽②",
+                emptyTitle: "対象の曲はありません",
+                emptyDescription: "直近7日間に再生していない曲が候補になります。",
+                systemImage: "sparkle.magnifyingglass",
+                tracks: playbackHistoryStore.rediscoverPlayTracks(
+                    from: libraryStore.tracks, exclusionInterval: 7 * 24 * 60 * 60
+                )
             )
         case .discoveryPlay:
             GeneratedQueueView(
@@ -146,6 +179,8 @@ struct HomeDestinationView: View {
             GenresView(genres: libraryStore.genres)
         case .composers:
             ComposersView(composers: libraryStore.composers)
+        case .years:
+            YearsView()
         case .artistRanking:
             ArtistRankingView()
         case .analytics:

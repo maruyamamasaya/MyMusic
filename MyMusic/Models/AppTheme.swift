@@ -6,6 +6,9 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
     case livingAurora = "living-aurora"
     case pulseNeon = "pulse-neon"
     case blueCosmos = "blue-cosmos"
+    case amberLounge = "amber-lounge"
+    case sumiWashi = "sumi-washi"
+    case reimei = "reimei"
 
     var id: String { rawValue }
 }

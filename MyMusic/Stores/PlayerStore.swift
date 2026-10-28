@@ -31,6 +31,7 @@ final class PlayerStore {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var queue: [Track] = []
+    private var hasFinishedQueue = false
     private(set) var currentIndex: Int?
     private(set) var playbackOrder: [Int] = [] {
         didSet {
@@ -295,6 +296,7 @@ final class PlayerStore {
             if tracks.isEmpty { stop() }
             return
         }
+        hasFinishedQueue = false
         self.presentationMode = presentationMode
         queue = tracks
         currentIndex = nil
@@ -333,6 +335,33 @@ final class PlayerStore {
             transitionReason: transitionReason,
             startContext: startContext
         )
+    }
+
+    /// Starts a manually assembled queue in selection order, without looping.
+    func startManualQueue(with track: Track) {
+        setShuffleEnabled(false)
+        repeatMode = .off
+        playQueue([track], startingAt: 0,
+                  startContext: PlaybackStartContext(kind: .manual, source: .queue))
+    }
+
+    /// Appending while paused keeps the pause; appending after exhaustion starts the new item.
+    func appendToManualQueue(_ track: Track, playNext: Bool = false) {
+        guard currentIndex != nil else {
+            startManualQueue(with: track)
+            return
+        }
+        let index = queue.count
+        queue.append(track)
+        if playNext, let position = currentPlaybackPosition {
+            playbackOrder.insert(index, at: position + 1)
+        } else {
+            playbackOrder.append(index)
+        }
+        if hasFinishedQueue {
+            playQueueItem(at: index)
+        }
+        updateRemoteCommandAvailability()
     }
 
     /// Removes queue entries at positions in the currently displayed playback order.
@@ -538,6 +567,7 @@ final class PlayerStore {
         audioInformationTask = nil
         playbackRequestID = UUID()
         audioPlayer.stop()
+        hasFinishedQueue = false
         queue = []
         playbackOrder = []
         currentIndex = nil
@@ -587,6 +617,7 @@ final class PlayerStore {
         outgoingEndKind: PlaybackEndKind = .other
     ) {
         guard queue.indices.contains(index), playbackOrderPositions[index] != nil else { return }
+        hasFinishedQueue = false
         let previousOutputTasks = prepareOutputHandoff()
         finalizeCurrentPlaybackSession(endKind: outgoingEndKind)
         if savesPreviousPosition { persistCurrentPlaybackPosition(force: true) }
@@ -748,6 +779,7 @@ final class PlayerStore {
 
         guard let nextPosition = nextPlaybackPosition(wrapping: repeatMode == .all) else {
             isPlaying = false
+            hasFinishedQueue = true
             return
         }
         startPlayback(
@@ -778,7 +810,10 @@ final class PlayerStore {
             }
         case let .playingChanged(isPlaying):
             self.isPlaying = isPlaying
-            if isPlaying { recordPlaybackStartIfNeeded() }
+            if isPlaying {
+                hasFinishedQueue = false
+                recordPlaybackStartIfNeeded()
+            }
             lastObservedPlaybackTime = isPlaying ? currentTime : nil
             nowPlayingService.updatePlayback(elapsedTime: currentTime, isPlaying: isPlaying)
             updateRemoteCommandAvailability()

@@ -4,7 +4,18 @@ import CryptoKit
 import Foundation
 
 nonisolated protocol MetadataServicing: Sendable {
+    func mp3Year(for fileURL: URL) async throws -> Int?
+    func m4aYear(for fileURL: URL) async throws -> Int?
     func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track
+}
+
+extension MetadataServicing {
+    func m4aYear(for fileURL: URL) async throws -> Int? {
+        throw CocoaError(.featureUnsupported)
+    }
+    func mp3Year(for fileURL: URL) async throws -> Int? {
+        throw CocoaError(.featureUnsupported)
+    }
 }
 
 nonisolated final class MetadataService: MetadataServicing, Sendable {
@@ -70,6 +81,17 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
             duration: duration.isFinite ? duration : 0,
             discoveredAt: discoveredAt
         )
+        let year: Int?
+        switch fileURL.pathExtension.lowercased() {
+        case "mp3": year = try await mp3Year(for: fileURL)
+        case "m4a":
+            if let taggedYear = try await Self.m4aYear(in: metadata) {
+                year = taggedYear
+            } else {
+                year = await yearValue(in: metadata)
+            }
+        default: year = await yearValue(in: metadata)
+        }
         let artworkIdentifier = await cacheArtwork(in: metadata, trackID: identity.id)
         return Track(
             id: identity.id,
@@ -86,12 +108,55 @@ nonisolated final class MetadataService: MetadataServicing, Sendable {
             artworkIdentifier: artworkIdentifier,
             trackNumber: await integerValue(for: .iTunesMetadataTrackNumber, in: metadata),
             discNumber: await integerValue(for: .iTunesMetadataDiscNumber, in: metadata),
-            year: await yearValue(in: metadata),
+            year: year,
+            mp3YearRevision: fileURL.pathExtension.lowercased() == "mp3" ? 1 : nil,
+            m4aYearRevision: fileURL.pathExtension.lowercased() == "m4a" ? 1 : nil,
             genre: genre,
             composer: composer,
             audioFormat: audioFormat,
             metadataRevision: Self.currentMetadataRevision
         )
+    }
+
+    /// Reads the M4A editor's Year/date atom without artwork or identity work.
+    func m4aYear(for fileURL: URL) async throws -> Int? {
+        let asset = AVURLAsset(url: fileURL)
+        let items = try await asset.loadMetadata(for: .iTunesMetadata)
+        return try await Self.m4aYear(in: items)
+    }
+
+    static func m4aYear(in items: [AVMetadataItem]) async throws -> Int? {
+        for item in AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .iTunesMetadataReleaseDate) {
+            if let value = try await item.load(.stringValue), let year = parseTagYear(value) { return year }
+        }
+        return nil
+    }
+
+    /// Reads only the MP3 editor's Year fields, without artwork or identity work.
+    func mp3Year(for fileURL: URL) async throws -> Int? {
+        let asset = AVURLAsset(url: fileURL)
+        let items = try await asset.loadMetadata(for: .id3Metadata)
+        return try await Self.mp3Year(in: items)
+    }
+
+    static func mp3Year(in items: [AVMetadataItem]) async throws -> Int? {
+        // ID3v2.3 Year, then the ID3v2.4 field used by tag editors for Year.
+        // Original-release and release-time fields are deliberately excluded.
+        for identifier: AVMetadataIdentifier in [.id3MetadataYear, .id3MetadataRecordingTime] {
+            for item in AVMetadataItem.metadataItems(from: items, filteredByIdentifier: identifier) {
+                if let value = try await item.load(.stringValue), let year = parseTagYear(value) { return year }
+            }
+        }
+        return nil
+    }
+
+    static func parseTagYear(_ value: String) -> Int? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = text.prefix(4)
+        guard digits.count == 4, digits.allSatisfy({ $0.isASCII && $0.isNumber }),
+              let year = Int(digits), (1...9999).contains(year),
+              text.count == 4 || text.dropFirst(4).first == "-" else { return nil }
+        return year
     }
 
     private func cacheArtwork(in items: [AVMetadataItem], trackID: Track.ID) async -> String? {

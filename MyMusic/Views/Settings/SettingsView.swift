@@ -9,7 +9,7 @@ struct SettingsView: View {
                 NavigationLink {
                     SceneryVideoSettingsView()
                 } label: {
-                    Label("車窓モード", systemImage: "tram.fill")
+                    Label { Text("車窓モード") } icon: { SceneryModeIcon(size: 28) }
                 }
                 NavigationLink {
                     ThemeSettingsView()

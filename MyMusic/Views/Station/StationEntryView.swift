@@ -4,6 +4,8 @@ import SwiftUI
 struct StationEntryView: View {
     @Environment(\.appTheme) private var appTheme
     @Environment(StationStore.self) private var store
+    var refreshSeed: UInt64 = 0
+    @State private var backgroundImageName: String?
     @State private var showsQuestions = false
     @State private var backgroundImage: UIImage?
 
@@ -18,13 +20,10 @@ struct StationEntryView: View {
                         Image(systemName: "dot.radiowaves.left.and.right")
                             .font(.title2)
                         Spacer()
-                        Text("BETA").font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(foregroundColor.opacity(0.12), in: Capsule())
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("気分を伝えて再生").font(.title3.bold())
-                        Text("2〜3問で、今のあなたに合う音楽を。")
+                        Text("2問で、今のあなたに合う音楽を。")
                             .font(.subheadline)
                             .foregroundStyle(foregroundColor.opacity(0.82))
                     }
@@ -57,7 +56,17 @@ struct StationEntryView: View {
             }
         }
         .sheet(isPresented: $showsQuestions) { StationQuestionView() }
-        .task { backgroundImage = HomeTileBackgroundImage.load(named: HomeTileBackgroundImage.stationImageName) }
+        .task(id: refreshSeed) {
+            let names = HomeTileBackgroundImage.stationVariantNames
+                .filter { $0 != backgroundImageName }.shuffled()
+            for name in names {
+                if let image = HomeTileBackgroundImage.load(named: name) {
+                    backgroundImageName = name
+                    backgroundImage = image
+                    break
+                }
+            }
+        }
     }
 
     private var foregroundColor: Color {

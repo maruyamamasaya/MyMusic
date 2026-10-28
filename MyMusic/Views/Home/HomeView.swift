@@ -17,7 +17,7 @@ enum HomeCarouselContentPolicy {
         destinationHasContent: (HomeDestination) -> Bool
     ) -> [HomeCategoryItem] {
         guard category.id == .myMusic else { return category.items }
-        return category.items.filter { destinationHasContent($0.destination) }
+        return category.items.filter { $0.destination == .manualQueue || destinationHasContent($0.destination) }
     }
 }
 
@@ -43,7 +43,10 @@ struct HomeView: View {
     @State private var showsMoodMix = false
     @State private var showsSceneryVideo = false
     @State private var showsSceneryPlaybackUnavailable = false
+    @State private var showsAmbientUnavailable = false
+    @State private var showsPianoUnavailable = false
     @State private var showsRediscoveryUnavailable = false
+    @State private var rediscoveryUnavailablePeriod = "24時間"
     @State private var presentsPlayerAfterMixDismissal = false
     @State private var mixSelectionSeed: UInt64 = 0
     @State private var mixDay: Date?
@@ -52,6 +55,8 @@ struct HomeView: View {
     @State private var tuningNotice: String?
     @State private var todayPlaybackSummary = TodayPlaybackSummary(playCount: 0, listenedSeconds: 0)
     @State private var highlightArtworkIdentifier: String?
+    @State private var manualQueueImageName = HomeTileBackgroundImage.manualQueueVariantNames.randomElement() ?? "manual-queue-cards"
+    @State private var highlightImageName = HomeTileBackgroundImage.highlightVariantNames.randomElement() ?? "highlight-vivid-coral"
     @State private var homeSnapshotTask: Task<Void, Never>?
     @State private var rotationSnapshotTask: Task<Void, Never>?
 
@@ -96,12 +101,15 @@ struct HomeView: View {
                                 canPlayTracks: { !playbackHistoryStore.workPlaybackTracks(from: $0).isEmpty },
                                 onPlayPlaylist: playPlaylist
                             )
+                            .homeSectionBackdrop()
                         }
                         HomeCarouselSection(
                             category: category,
                             artworkIdentifier: artworkIdentifier,
                             destinationHasContent: destinationHasContent,
                             highlightArtworkIdentifier: highlightArtworkIdentifier,
+                            highlightImageName: highlightImageName,
+                            manualQueueImageName: manualQueueImageName,
                             onOpenHighlight: {
                                 if playerStore.presentationMode != .highlight {
                                     highlightStore.resetRandomSelection()
@@ -110,6 +118,7 @@ struct HomeView: View {
                             },
                             onInstantPlay: playImmediately
                         )
+                        .homeSectionBackdrop()
                         if category.id == .myMusic {
                             HomeMixSection(
                                 queues: mixQueues,
@@ -117,6 +126,7 @@ struct HomeView: View {
                                 onOpenDeepDive: openDeepDive,
                                 onOpenMoodMix: { showsMoodMix = true }
                             )
+                            .homeSectionBackdrop()
                             if !homePlaylists.isEmpty {
                                 HomePlaylistSection(
                                     playlists: Array(homePlaylists.prefix(12)),
@@ -126,19 +136,25 @@ struct HomeView: View {
                                     canPlayTracks: { $0.contains(where: playbackHistoryStore.isEligibleForRegularShuffle) },
                                     onPlay: playPlaylist
                                 )
+                                .homeSectionBackdrop()
                             }
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("ステーション").font(.title3.bold())
-                                StationEntryView()
+                                HomeSectionTitle("ステーション").font(.title3.bold())
+                                StationEntryView(refreshSeed: mixSelectionSeed)
                             }
                             .padding(.horizontal, 16)
+                            .homeSectionBackdrop()
                         }
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 0)
                 .padding(.bottom, 12)
             }
             .refreshable {
+                manualQueueImageName = HomeTileBackgroundImage.manualQueueVariantNames
+                    .filter { $0 != manualQueueImageName }.randomElement() ?? manualQueueImageName
+                highlightImageName = HomeTileBackgroundImage.highlightVariantNames
+                    .filter { $0 != highlightImageName }.randomElement() ?? highlightImageName
                 mixSelectionSeed = UInt64.random(in: 1...UInt64.max)
                 let task = refreshHomeSnapshot(
                     rotatingRepresentatives: true,
@@ -171,8 +187,8 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     HomeThemeCycleButton()
-                    Button("車窓モード", systemImage: "tram.fill", action: openScenery)
-                        .labelStyle(.iconOnly)
+                    Button(action: openScenery) { SceneryModeIcon() }
+                        .accessibilityLabel("車窓モード")
                         .frame(width: 44, height: 44)
                         .buttonStyle(.plain)
                         .accessibilityHint("再生中でなければクイック再生を始めて車窓を開きます")
@@ -195,10 +211,20 @@ struct HomeView: View {
             } message: {
                 Text("ライブラリに音楽フォルダを追加するか、再生対象の曲を確認してください。")
             }
+            .alert("アンビエントを聴く対象曲がありません", isPresented: $showsAmbientUnavailable) {
+                Button("閉じる", role: .cancel) {}
+            } message: {
+                Text("現在のチューニングで、アンビエントの特徴量が条件を満たす曲がありません。特徴量の取り込みやチューニングを確認してください。")
+            }
+            .alert("ピアノを聴く対象曲がありません", isPresented: $showsPianoUnavailable) {
+                Button("閉じる", role: .cancel) {}
+            } message: {
+                Text("現在のチューニングで、ピアノの特徴量が条件を満たす曲がありません。特徴量の取り込みやチューニングを確認してください。")
+            }
             .alert("発掘する音楽の対象曲がありません", isPresented: $showsRediscoveryUnavailable) {
                 Button("閉じる", role: .cancel) {}
             } message: {
-                Text("現在のチューニングと選曲条件で、直近24時間に再生していない曲が候補になります。")
+                Text("現在のチューニングと選曲条件で、直近\(rediscoveryUnavailablePeriod)に再生していない曲が候補になります。")
             }
             .fullScreenCover(isPresented: $showsSceneryVideo) {
                 SceneryVideoView()
@@ -388,7 +414,12 @@ struct HomeView: View {
     private func playImmediately(_ destination: HomeDestination) {
         if startImmediatePlayback(destination) {
             onPresentNowPlaying()
-        } else if destination == .rediscoverPlay {
+        } else if destination == .ambientPlay {
+            showsAmbientUnavailable = true
+        } else if destination == .pianoPlay {
+            showsPianoUnavailable = true
+        } else if destination == .rediscoverPlay || destination == .rediscoverWeekPlay {
+            rediscoveryUnavailablePeriod = destination == .rediscoverWeekPlay ? "7日間" : "24時間"
             showsRediscoveryUnavailable = true
         }
     }
@@ -396,10 +427,22 @@ struct HomeView: View {
     private func startImmediatePlayback(_ destination: HomeDestination) -> Bool {
         let shuffledTracks: [Track]
         switch destination {
+        case .ambientPlay:
+            shuffledTracks = playbackHistoryStore.ambientPlayTracks(
+                from: libraryStore.tracks, features: trackFeatureStore.featureSnapshot
+            )
+        case .pianoPlay:
+            shuffledTracks = playbackHistoryStore.pianoPlayTracks(
+                from: libraryStore.tracks, features: trackFeatureStore.featureSnapshot
+            )
         case .quickPlay:
             shuffledTracks = playbackHistoryStore.quickPlayTracks(from: libraryStore.tracks)
         case .rediscoverPlay:
             shuffledTracks = playbackHistoryStore.rediscoverPlayTracks(from: libraryStore.tracks)
+        case .rediscoverWeekPlay:
+            shuffledTracks = playbackHistoryStore.rediscoverPlayTracks(
+                from: libraryStore.tracks, exclusionInterval: 7 * 24 * 60 * 60
+            )
         case .discoveryPlay:
             shuffledTracks = playbackHistoryStore.discoveryPlayTracks(from: libraryStore.tracks)
         case .recentlyAddedPlay:
@@ -416,7 +459,7 @@ struct HomeView: View {
 
         let representative = representativeTrack(for: destination)
         // A snapshot representative may have been played since the snapshot was built.
-        let eligibleRepresentative = destination == .rediscoverPlay
+        let eligibleRepresentative = (destination == .ambientPlay || destination == .pianoPlay || destination == .rediscoverPlay || destination == .rediscoverWeekPlay)
             ? representative.flatMap { candidate in shuffledTracks.first { $0.id == candidate.id } }
             : representative
         let tracks = HomeRepresentativeTrackPolicy.placingRepresentativeFirst(
@@ -557,7 +600,9 @@ struct HomeView: View {
 
 private struct HomeHighlightTile: View {
     let artworkIdentifier: String?
+    let imageName: String
     let width: CGFloat
+    @State private var tileImage: UIImage?
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -572,8 +617,7 @@ private struct HomeHighlightTile: View {
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 6) {
-                Spacer()
+            VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: "sparkles.rectangle.stack.fill")
                     .font(.title2.weight(.semibold))
                     .frame(width: 46, height: 46)
@@ -581,14 +625,20 @@ private struct HomeHighlightTile: View {
 
                 Spacer(minLength: 10)
 
-                Text("ハイライト")
-                    .font(.headline)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text("曲のおいしいところを、次々と")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("ハイライト")
+                        .font(.headline)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+                    Text("曲のおいしいところを、次々と")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
+                }
+                .frame(height: 71, alignment: .topLeading)
             }
             .foregroundStyle(.white)
             .padding(14)
@@ -602,11 +652,17 @@ private struct HomeHighlightTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
         .accessibilityHint("ハイライト再生画面を開きます")
+        .task(id: imageName) { tileImage = HomeTileBackgroundImage.load(named: imageName) }
     }
 
     @ViewBuilder
     private var background: some View {
-        if let artworkIdentifier {
+        if let tileImage {
+            GeometryReader { proxy in
+                Image(uiImage: tileImage).resizable().scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+            }
+        } else if let artworkIdentifier {
             HomeTileArtworkBackground(artworkIdentifier: artworkIdentifier)
         } else {
             LinearGradient(
@@ -777,7 +833,7 @@ private struct HomeWorkSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(category.title)
+                HomeSectionTitle(category.title)
                     .font(.title3.weight(.bold))
                 Text(category.description)
                     .font(.caption)
@@ -874,7 +930,7 @@ private struct HomeMixSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("MIX").font(.title3.bold())
+                HomeSectionTitle("MIX").font(.title3.bold())
                 Text("今のあなたに合わせた再生")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -978,10 +1034,16 @@ private struct HomeMixTile: View {
     let firstTrack: Track?
     let count: Int
     let width: CGFloat
+    @State private var tileImage: UIImage?
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if let artworkName = kind.artworkName {
+            if let tileImage {
+                GeometryReader { proxy in
+                    Image(uiImage: tileImage).resizable().scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                }
+            } else if let artworkName = kind.artworkName {
                 Image(artworkName)
                     .resizable()
                     .scaledToFill()
@@ -1021,6 +1083,10 @@ private struct HomeMixTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
         .accessibilityHint(count == 0 ? "再生できる曲がありません" : "先頭の曲からMIXを再生")
+        .task(id: kind) {
+            tileImage = kind == .rediscovery
+                ? HomeTileBackgroundImage.load(named: "mix-rediscovery-v3") : nil
+        }
     }
 }
 
@@ -1039,7 +1105,7 @@ private struct HomePlaylistSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("プレイリスト")
+                HomeSectionTitle("プレイリスト")
                     .font(.title3.weight(.bold))
                 Text("プレイリストをランダムに表示・再生")
                     .font(.caption)
@@ -1164,6 +1230,7 @@ private struct HomePlaylistMoreTile: View {
     let width: CGFloat
     var title = "もっと見る"
     var subtitle = "すべてのプレイリスト"
+    @State private var backgroundImage: UIImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1180,16 +1247,23 @@ private struct HomePlaylistMoreTile: View {
         .foregroundStyle(.white)
         .padding(14)
         .frame(width: width, height: 168, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [Color(red: 0.30, green: 0.24, blue: 0.62), Color(red: 0.08, green: 0.10, blue: 0.20)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay(LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.42)], startPoint: .top, endPoint: .bottom))
-        )
+        .background {
+            if let backgroundImage {
+                GeometryReader { proxy in
+                    Image(uiImage: backgroundImage).resizable().scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                }
+                .overlay(LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.65)],
+                                        startPoint: .top, endPoint: .bottom))
+            } else {
+                LinearGradient(colors: [Color(red: 0.30, green: 0.24, blue: 0.62),
+                                        Color(red: 0.08, green: 0.10, blue: 0.20)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .contentShape(RoundedRectangle(cornerRadius: 18))
+        .task { backgroundImage = HomeTileBackgroundImage.load(named: "playlist-more-v1") }
     }
 }
 
@@ -1220,6 +1294,8 @@ private struct HomeCarouselSection: View {
     let artworkIdentifier: (HomeDestination) -> String?
     let destinationHasContent: (HomeDestination) -> Bool
     let highlightArtworkIdentifier: String?
+    let highlightImageName: String
+    let manualQueueImageName: String
     let onOpenHighlight: () -> Void
     let onInstantPlay: (HomeDestination) -> Void
 
@@ -1230,7 +1306,7 @@ private struct HomeCarouselSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(category.title)
+                HomeSectionTitle(category.title)
                     .font(.title3.weight(.bold))
                 Text(category.description)
                     .font(.caption)
@@ -1248,6 +1324,7 @@ private struct HomeCarouselSection: View {
                             Button(action: onOpenHighlight) {
                                 HomeHighlightTile(
                                     artworkIdentifier: highlightArtworkIdentifier,
+                                    imageName: highlightImageName,
                                     width: tileWidth
                                 )
                             }
@@ -1283,7 +1360,8 @@ private struct HomeCarouselSection: View {
                     item: item,
                     categoryID: category.id,
                     artworkIdentifier: artworkIdentifier(item.destination),
-                    width: width
+                    width: width,
+                    imageNameOverride: item.destination == .manualQueue ? manualQueueImageName : nil
                 )
             }
             .buttonStyle(.plain)
@@ -1293,7 +1371,8 @@ private struct HomeCarouselSection: View {
                     item: item,
                     categoryID: category.id,
                     artworkIdentifier: artworkIdentifier(item.destination),
-                    width: width
+                    width: width,
+                    imageNameOverride: item.destination == .manualQueue ? manualQueueImageName : nil
                 )
             }
             .buttonStyle(.plain)
@@ -1322,7 +1401,7 @@ private struct HomeCarouselSection: View {
 
     private func isInstantPlaybackDestination(_ destination: HomeDestination) -> Bool {
         switch destination {
-        case .quickPlay, .rediscoverPlay, .discoveryPlay, .recentlyAddedPlay, .repeatPlay, .favorites:
+        case .ambientPlay, .pianoPlay, .quickPlay, .rediscoverPlay, .rediscoverWeekPlay, .discoveryPlay, .recentlyAddedPlay, .repeatPlay, .favorites:
             true
         default:
             false
@@ -1339,6 +1418,7 @@ private struct HomeItemTile: View {
     let categoryID: HomeCategory.ID
     let artworkIdentifier: String?
     let width: CGFloat
+    var imageNameOverride: String? = nil
     @State private var localBackgroundImage: UIImage?
 
     var body: some View {
@@ -1381,7 +1461,7 @@ private struct HomeItemTile: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .combine)
-        .task { loadLocalBackgroundImage() }
+        .task(id: imageNameOverride ?? item.localBackgroundImageName) { loadLocalBackgroundImage() }
     }
 
     @ViewBuilder
@@ -1558,7 +1638,7 @@ private struct HomeItemTile: View {
     }
 
     private func loadLocalBackgroundImage() {
-        guard let imageName = item.localBackgroundImageName else {
+        guard let imageName = imageNameOverride ?? item.localBackgroundImageName else {
             localBackgroundImage = nil
             return
         }

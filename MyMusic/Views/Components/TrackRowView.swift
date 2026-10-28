@@ -3,6 +3,7 @@ import SwiftUI
 struct TrackRowView: View {
     let track: Track
     var showsArtwork = true
+    var showsDuration = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -14,7 +15,9 @@ struct TrackRowView: View {
                 Text([track.artistName, track.albumTitle].compactMap { $0 }.joined(separator: " • ")).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Text(TimeFormatter.string(from: track.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            if showsDuration {
+                Text(TimeFormatter.string(from: track.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
         }
     }
 }

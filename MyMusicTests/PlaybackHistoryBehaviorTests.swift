@@ -513,6 +513,149 @@ final class PlaybackHistoryBehaviorTests: XCTestCase {
         XCTAssertEqual(historyStore.entries[second.id]?.playbackEvents.first?.startKind, .userAdvanced)
     }
 
+    func testManualQueueReplacesOldQueueAndPreservesSelectionOrder() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let old = makeTrack("Old"), first = makeTrack("First"), second = makeTrack("Second")
+        player.play(old)
+        try await waitUntil { player.isPlaying }
+        player.setShuffleEnabled(true)
+        player.cycleRepeatMode()
+        let selection = ManualQueueStore()
+        selection.select(first, player: player)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == first.id }
+        selection.select(second, player: player)
+        selection.select(second, player: player)
+        XCTAssertEqual(player.queue.map(\.id), [first.id, second.id])
+        XCTAssertEqual(player.currentTrack?.id, first.id)
+        XCTAssertFalse(player.isShuffleEnabled)
+        XCTAssertEqual(player.repeatMode, .off)
+        audio.send(.ended)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == second.id }
+        audio.send(.ended)
+        XCTAssertFalse(player.isPlaying)
+        let third = makeTrack("Third")
+        selection.select(third, player: player)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == third.id }
+        XCTAssertEqual(player.queue.map(\.id), [first.id, second.id, third.id])
+    }
+
+    func testManualQueuePauseRefreshAndReentry() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let tracks = (0..<40).map { makeTrack("Candidate \($0)") }
+        let selection = ManualQueueStore()
+        selection.refresh(from: tracks, history: history)
+        XCTAssertEqual(selection.candidates.count, 30)
+        XCTAssertEqual(Set(selection.candidates.map(\.id)).count, 30)
+        selection.select(tracks[0], player: player)
+        try await waitUntil { player.isPlaying }
+        player.pause()
+        selection.select(tracks[1], player: player)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(player.currentTrack?.id, tracks[0].id)
+        selection.refresh(from: tracks, history: history)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0].id, tracks[1].id])
+        XCTAssertEqual(selection.selectedIDs, Set([tracks[0].id, tracks[1].id]))
+        selection.resetSelection()
+        XCTAssertEqual(player.queue.count, 2)
+        XCTAssertFalse(selection.hasStarted)
+        selection.select(tracks[2], player: player)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == tracks[2].id }
+        XCTAssertEqual(player.queue.map(\.id), [tracks[2].id])
+        audio.send(.ended)
+        player.resume()
+        try await waitUntil { player.isPlaying }
+        selection.select(tracks[3], player: player)
+        XCTAssertEqual(player.currentTrack?.id, tracks[2].id)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[2].id, tracks[3].id])
+        selection.refresh(from: [], history: history)
+        XCTAssertTrue(selection.candidates.isEmpty)
+    }
+
+    func testManualQueueRemovalAllowsReaddingWithoutInterruptingPlayback() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let selection = ManualQueueStore()
+        let tracks = (0..<4).map { makeTrack("Edit \($0)") }
+        selection.select(tracks[0], player: player)
+        try await waitUntil { player.isPlaying }
+        tracks.dropFirst().forEach { selection.select($0, player: player) }
+        audio.send(.timeChanged(20))
+        selection.removeUpcoming(atOffsets: IndexSet([0, 2]), player: player)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0].id, tracks[2].id])
+        XCTAssertFalse(selection.selectedIDs.contains(tracks[1].id))
+        XCTAssertTrue(selection.selectedIDs.contains(tracks[0].id))
+        XCTAssertEqual(player.currentTrack?.id, tracks[0].id)
+        XCTAssertEqual(player.currentTime, 20)
+        XCTAssertTrue(player.isPlaying)
+        selection.select(tracks[1], player: player)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0].id, tracks[2].id, tracks[1].id])
+        player.pause()
+        selection.removeUpcoming(atOffsets: IndexSet([0, 1]), player: player)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0].id])
+        XCTAssertTrue(selection.hasStarted)
+        selection.select(tracks[3], player: player)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0].id, tracks[3].id])
+    }
+
+    func testManualQueueReordersOnlyUpcomingAndKeepsAppending() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let selection = ManualQueueStore()
+        let tracks = (0..<6).map { makeTrack("Move \($0)") }
+        selection.select(tracks[0], player: player)
+        try await waitUntil { player.isPlaying }
+        tracks[1...4].forEach { selection.select($0, player: player) }
+        audio.send(.ended)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == tracks[1].id }
+        audio.send(.timeChanged(15))
+        selection.moveUpcoming(fromOffsets: IndexSet(integer: 2), toOffset: 0, player: player)
+        XCTAssertEqual(player.queue.map(\.id), [tracks[0], tracks[1], tracks[4], tracks[2], tracks[3]].map(\.id))
+        XCTAssertEqual(player.currentTime, 15)
+        XCTAssertEqual(player.currentTrack?.id, tracks[1].id)
+        selection.moveUpcoming(fromOffsets: IndexSet(integer: 0), toOffset: 3, player: player)
+        XCTAssertEqual(selection.upcomingTracks(player: player).map(\.id), [tracks[2], tracks[3], tracks[4]].map(\.id))
+        selection.select(tracks[5], player: player)
+        XCTAssertEqual(player.queue.map(\.id), tracks.map(\.id))
+        selection.moveUpcoming(fromOffsets: IndexSet([1, 2]), toOffset: 0, player: player)
+        XCTAssertEqual(selection.upcomingTracks(player: player).map(\.id), [tracks[3], tracks[4], tracks[2], tracks[5]].map(\.id))
+        audio.send(.ended)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == tracks[3].id }
+    }
+
+    func testManualQueueCanInsertNextAndAppendLast() async throws {
+        let audio = PlaybackHistoryAudioPlayerSpy()
+        let history = PlaybackHistoryStore(persistence: PlaybackHistoryBehaviorPersistence())
+        let player = makePlayerStore(player: audio, history: history)
+        let selection = ManualQueueStore()
+        let tracks = (0..<5).map { makeTrack("Insert \($0)") }
+        selection.select(tracks[0], player: player, playNext: true)
+        try await waitUntil { player.isPlaying }
+        selection.select(tracks[1], player: player)
+        audio.send(.timeChanged(20))
+        selection.select(tracks[2], player: player, playNext: true)
+        selection.select(tracks[3], player: player, playNext: true)
+        selection.select(tracks[4], player: player)
+        XCTAssertEqual(selection.upcomingTracks(player: player).map(\.id),
+                       [tracks[3], tracks[2], tracks[1], tracks[4]].map(\.id))
+        XCTAssertEqual(player.currentTrack?.id, tracks[0].id)
+        XCTAssertEqual(player.currentTime, 20)
+        selection.removeUpcoming(atOffsets: IndexSet(integer: 1), player: player)
+        XCTAssertFalse(selection.selectedIDs.contains(tracks[2].id))
+        audio.send(.ended)
+        try await waitUntil { player.isPlaying && player.currentTrack?.id == tracks[3].id }
+        player.pause()
+        selection.select(tracks[2], player: player, playNext: true)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(selection.upcomingTracks(player: player).first?.id, tracks[2].id)
+    }
+
     private func makeTrack(_ title: String) -> Track {
         Track(
             id: UUID(),

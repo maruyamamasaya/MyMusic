@@ -406,6 +406,38 @@ nonisolated final class MusicLibraryService: MusicLibraryServicing, Sendable {
                 existing.fileURL = file
                 existing.fileSize = fileSize
                 existing.modificationDate = modificationDate
+                if file.pathExtension.lowercased() == "mp3",
+                   !(existing.year.map { (1...9999).contains($0) } ?? false),
+                   existing.mp3YearRevision != 1 {
+                    do {
+                        let year = try await metadataService.mp3Year(for: file)
+                        try Task.checkCancellation()
+                        existing.year = year
+                        existing.mp3YearRevision = 1
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        notices.append(.metadataReadFailed(
+                            relativePath: relativePath, detail: error.localizedDescription
+                        ))
+                    }
+                }
+                if file.pathExtension.lowercased() == "m4a",
+                   !(existing.year.map { (1...9999).contains($0) } ?? false),
+                   existing.m4aYearRevision != 1 {
+                    do {
+                        let year = try await metadataService.m4aYear(for: file)
+                        try Task.checkCancellation()
+                        existing.year = year
+                        existing.m4aYearRevision = 1
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        notices.append(.metadataReadFailed(
+                            relativePath: relativePath, detail: error.localizedDescription
+                        ))
+                    }
+                }
                 tracks.append(existing)
                 await progress(LibraryScanProgress(
                     completedCount: index + 1,

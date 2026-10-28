@@ -7,6 +7,7 @@ struct SceneryBGMOverlay: View {
     @State private var battery = SceneryBatteryService()
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
     let onReturn: () -> Void
     @Binding var isCollapsed: Bool
     var isMiniPlayer = false
@@ -53,7 +54,8 @@ struct SceneryBGMOverlay: View {
         .padding(.vertical, isCollapsed ? 2 : 4)
         .padding(.horizontal, 12)
         .background {
-            ScenerySmokedPanel(opaque: reduceTransparency, glassOpacity: isMiniPlayer ? 0.90 : 1,
+            ScenerySmokedPanel(opaque: reduceTransparency || (isMiniPlayer && contrast == .increased),
+                               glassOpacity: isMiniPlayer ? 0.90 : 1,
                                cornerRadius: isMiniPlayer ? 1000 : 10)
         }
         .overlay(alignment: .bottom) {

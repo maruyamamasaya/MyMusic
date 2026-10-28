@@ -168,6 +168,7 @@ final class TrackFeatureDisplayIntegrationTests: XCTestCase {
                 onShowArtwork: {}
             )
             .environment(store)
+            .environment(PlayerStore(audioInformationService: nil))
             .environment(\.colorScheme, .light)
             .frame(width: 360, height: 360)
             .background(Color.white)

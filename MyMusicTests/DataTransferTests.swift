@@ -42,7 +42,7 @@ final class AnalysisDataExportTests: XCTestCase {
         XCTAssertTrue(text.contains("- FirstSeenAt: \n"))
     }
 
-    func testPlaylistExportsPreserveCombinedReferencesAndSeparateByGenre() throws {
+    func testPlaylistExportsPreserveReferencesAndSeparateByPlaylistKind() throws {
         let regular = makeTrack(title: "Regular")
         var work = makeTrack(title: "Work")
         work.genre = Track.workPlaybackGenre
@@ -96,7 +96,8 @@ final class AnalysisDataExportTests: XCTestCase {
 
         XCTAssertEqual(workOnly.filename, "MyMusic-Work-Playlists.json")
         XCTAssertEqual(try playlistKinds(in: workOnly), [.work])
-        XCTAssertEqual(try trackIDs(inPlaylists: workOnly), [work.id])
+        // Export preserves every reference even when a track's genre changed.
+        XCTAssertEqual(try trackIDs(inPlaylists: workOnly), [work.id, longRegular.id])
     }
 
     func testPlaybackEventsExportMatchesAnalyticsV1Contract() throws {

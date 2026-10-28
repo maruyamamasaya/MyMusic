@@ -2,28 +2,45 @@ import SwiftUI
 
 struct YearsView: View {
     @Environment(LibraryStore.self) private var libraryStore
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
 
     var body: some View {
-        List {
-            Section {
-                ForEach(libraryStore.years) { group in
-                    NavigationLink {
-                        SongsView(
-                            tracks: libraryStore.tracks(for: group.trackIDs),
-                            title: title(for: group)
-                        )
-                    } label: {
-                        HStack {
-                            Label(title(for: group), systemImage: "calendar")
-                            Spacer()
-                            Text("\(group.trackIDs.count)曲")
-                                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                    ForEach(libraryStore.years) { group in
+                        let tracks = libraryStore.tracks(for: group.trackIDs)
+                        NavigationLink {
+                            SongsView(
+                                tracks: tracks,
+                                title: title(for: group)
+                            )
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                AlbumArtworkView(
+                                    artworkIdentifier: tracks.lazy.compactMap(\.artworkIdentifier).first
+                                )
+                                .accessibilityHidden(true)
+                                Text(title(for: group))
+                                    .font(.headline)
+                                Text("\(group.trackIDs.count)曲")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(.primary)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .combine)
                     }
                 }
-            } footer: {
-                Text("音源のタグに記録された年で分類しています。年が未設定、または無効な曲は「年不明」に表示します。")
+                if !libraryStore.years.isEmpty {
+                    Text("音源のタグに記録された年で分類しています。年が未設定、または無効な曲は「年不明」に表示します。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .padding()
         }
         .overlay {
             if libraryStore.years.isEmpty {

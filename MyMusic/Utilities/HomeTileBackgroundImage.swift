@@ -1,7 +1,12 @@
 import UIKit
 
 enum HomeTileBackgroundImage {
+    static let manualQueueVariantNames = ["manual-queue-cards", "manual-queue-cassettes", "manual-queue-notes"]
     static let stationImageName = "station-background"
+    static let stationVariantNames = [stationImageName, "station-golden-island", "station-golden-spiral"]
+    static let highlightVariantNames = [
+        "highlight-vivid-coral", "highlight-vivid-ocean", "highlight-vivid-violet", "highlight-vivid-lime"
+    ]
     static let highlightImageName = "highlight-background"
     static let supportedExtensions = ["jpg", "jpeg", "png", "heic"]
 

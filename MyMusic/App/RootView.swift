@@ -19,34 +19,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var hiResPlayerStore = hiResPlayerStore
-        TabView(selection: $selectedTab) {
-            Tab("ホーム", systemImage: "house", value: .home) {
-                homeTabContent
-            }
-            Tab("ライブラリ", systemImage: "music.note.list", value: .library) {
-                LibraryView()
-                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
-            }
-            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) {
-                PlaylistView()
-                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
-            }
-            Tab("検索", systemImage: "magnifyingglass", value: .search) {
-                SearchView()
-                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
-            }
-            Tab("設定", systemImage: "gearshape", value: .settings) {
-                NavigationStack {
-                    SettingsView()
-                }
-                .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
-            }
-        }
-        .modifier(MiniPlayerAccessoryModifier(
-            isPresented: hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil,
-            hiResStore: hiResPlayerStore
-        ))
-        .animation(.default, value: playerStore.currentTrack?.id)
+        themedTabs
         .sheet(isPresented: $isNowPlayingPresented, onDismiss: handleNowPlayingDismissal) {
             Group {
                 if playerStore.presentationMode == .workSize {
@@ -109,6 +82,42 @@ struct RootView: View {
         .task { await trackFeatureStore.loadIfNeeded() }
         .onChange(of: playbackHistoryStore.homePresentationRevision) {
             reconcileListenLater()
+        }
+    }
+
+    private var themedTabs: some View {
+        mainTabs
+        .modifier(MiniPlayerAccessoryModifier(
+            isPresented: hiResPlayerStore.hasActiveSession && hiResPlayerStore.currentTrack != nil,
+            hiResStore: hiResPlayerStore
+        ))
+        .modifier(ThemeViewportModifier())
+        .animation(.default, value: playerStore.currentTrack?.id)
+    }
+
+    private var mainTabs: some View {
+        TabView(selection: $selectedTab) {
+            Tab("ホーム", systemImage: "house", value: .home) {
+                homeTabContent
+            }
+            Tab("ライブラリ", systemImage: "music.note.list", value: .library) {
+                LibraryView()
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+            }
+            Tab("プレイリスト", systemImage: "list.bullet.rectangle", value: .playlist) {
+                PlaylistView()
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+            }
+            Tab("検索", systemImage: "magnifyingglass", value: .search) {
+                SearchView()
+                    .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+            }
+            Tab("設定", systemImage: "gearshape", value: .settings) {
+                NavigationStack {
+                    SettingsView()
+                }
+                .modifier(BottomPlayerLayout(bar: regularMiniPlayer))
+            }
         }
     }
 
@@ -236,6 +245,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
 
 /// Reserve actual layout space so navigation destinations cannot extend beneath the player.
 private struct BottomPlayerLayout<Bar: View>: ViewModifier {
+    @Environment(\.appTheme) private var theme
     let bar: Bar
 
     func body(content: Content) -> some View {
@@ -243,5 +253,6 @@ private struct BottomPlayerLayout<Bar: View>: ViewModifier {
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
             bar.fixedSize(horizontal: false, vertical: true)
         }
+        .background { ThemeBackground(theme: theme) }
     }
 }

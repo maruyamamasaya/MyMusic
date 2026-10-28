@@ -22,6 +22,10 @@ nonisolated struct Track: Identifiable, Codable, Hashable, Sendable {
     var trackNumber: Int? = nil
     var discNumber: Int? = nil
     var year: Int? = nil
+    // Successful MP3-only Year inspection, including a confirmed absent Year.
+    var mp3YearRevision: Int? = nil
+    // Independent from the global metadata and MP3 Year migrations.
+    var m4aYearRevision: Int? = nil
     var genre: String? = nil
     var composer: String? = nil
     var audioFormat: AudioFormat? = nil

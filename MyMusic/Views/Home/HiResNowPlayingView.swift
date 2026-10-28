@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HiResNowPlayingView: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(\.dismiss) private var dismiss
 
@@ -36,8 +37,7 @@ struct HiResNowPlayingView: View {
                 }
 
             trackInformation
-
-            Spacer(minLength: 8)
+                .playbackMetadataBackdrop()
 
             ProgressBarView(
                 currentTime: store.currentTime,
@@ -46,6 +46,8 @@ struct HiResNowPlayingView: View {
             )
 
             playbackControls
+
+            Spacer(minLength: 8)
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
@@ -85,7 +87,7 @@ struct HiResNowPlayingView: View {
             VStack(alignment: .leading, spacing: 3) {
                 MarqueeText(
                     text: store.currentTrack?.title ?? "未再生",
-                    font: .title2.bold(),
+                    font: ThemeTypography.trackTitle(for: appTheme),
                     lineHeight: 30
                 )
                 MarqueeText(

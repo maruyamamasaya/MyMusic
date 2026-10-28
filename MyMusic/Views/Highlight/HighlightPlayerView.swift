@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HighlightPlayerView: View {
+    @Environment(\.appTheme) private var theme
     @Environment(HighlightPlayerStore.self) private var highlightStore
     @Environment(LibraryStore.self) private var libraryStore
     @State private var visibleTrackID: Track.ID?
@@ -19,7 +20,7 @@ struct HighlightPlayerView: View {
                 highlightFeed
             }
         }
-        .background(Color.black)
+        .background { ThemeBackground(theme: theme) }
         .task(id: libraryStore.tracks.map(\.id)) {
             highlightStore.updateLibrary(libraryStore.tracks)
             highlightStore.startIfNeeded()
@@ -118,6 +119,7 @@ struct HighlightPlayerView: View {
 }
 
 private struct HighlightTrackPage: View {
+    @Environment(\.appTheme) private var theme
     @Environment(PlayerStore.self) private var playerStore
     @Environment(PlaybackHistoryStore.self) private var playbackHistoryStore
     @Environment(TrackPreferenceStore.self) private var preferenceStore
@@ -148,24 +150,8 @@ private struct HighlightTrackPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black
-
-                AlbumArtworkView(artworkIdentifier: track.artworkIdentifier)
-                    .frame(width: proxy.size.width, height: proxy.size.width)
-                    .scaleEffect(1.35)
-                    .blur(radius: 54)
-                    .opacity(0.44)
-
-                LinearGradient(
-                    colors: [.black.opacity(0.18), .black.opacity(0.12), .black.opacity(0.88)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-
                 VStack(spacing: 14) {
                     header
-
-                    Spacer(minLength: 0)
 
                     Button(action: togglePlaybackFromArtwork) {
                         AlbumArtworkView(
@@ -173,7 +159,6 @@ private struct HighlightTrackPage: View {
                             displayMode: .fitWithBlurredBackground
                         )
                         .frame(width: artworkSize(in: proxy.size), height: artworkSize(in: proxy.size))
-                        .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -181,13 +166,16 @@ private struct HighlightTrackPage: View {
                     .accessibilityLabel(playerStore.isPlaying ? "一時停止" : "再生")
                     .accessibilityHint("ジャケットをタップして再生状態を切り替えます")
 
-                    trackDetails
-                    actionBar
+                    VStack(spacing: 14) {
+                        trackDetails
+                        actionBar
+                    }
+                    .playbackMetadataBackdrop(verticalPadding: 0, horizontalOutset: 20)
                     playbackButtons
                     progressBar
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, max(proxy.safeAreaInsets.top, 16) + 12)
+                .padding(.top, 8)
                 .padding(.bottom, 14)
             }
             .clipped()
@@ -197,40 +185,24 @@ private struct HighlightTrackPage: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("ハイライト")
-                        .font(.headline)
-                    Text("上へスワイプして次の曲")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-                Spacer()
-                Button("シャッフルし直す", systemImage: "shuffle", action: onReshuffle)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(HighlightCircleButtonStyle())
+        Picker("選曲モード", selection: Binding(get: { selectionMode }, set: onSelectMode)) {
+            ForEach(HighlightSelectionMode.allCases) { mode in
+                Text(mode.title).tag(mode)
             }
-
-            Picker("選曲モード", selection: Binding(get: { selectionMode }, set: onSelectMode)) {
-                ForEach(HighlightSelectionMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .colorScheme(.dark)
         }
+        .pickerStyle(.segmented)
+        .colorScheme(.dark)
     }
 
     private var trackDetails: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(track.title)
-                .font(.title2.bold())
+                .font(ThemeTypography.trackTitle(for: theme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
             Text(track.artistName)
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
             HStack(spacing: 6) {
                 Label(
@@ -257,7 +229,7 @@ private struct HighlightTrackPage: View {
                 preferenceStore.toggleFavorite(trackID: track.id)
             } label: {
                 Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .foregroundStyle(isFavorite ? .pink : .white)
+                    .foregroundStyle(isFavorite ? .red : .white)
             }
             .accessibilityLabel(isFavorite ? "お気に入りから削除" : "お気に入りに追加")
 
@@ -272,8 +244,10 @@ private struct HighlightTrackPage: View {
             }
             .accessibilityLabel(isListenLater ? "あとで聴くから削除" : "あとで聴くに追加")
 
-            PlaybackPreferenceButton(track: track, direction: .increase, circularBackground: true)
-            PlaybackPreferenceButton(track: track, direction: .decrease, circularBackground: true)
+            PlaybackPreferenceButton(track: track, direction: .increase, circularBackground: false)
+                .frame(width: 42, height: 42)
+            PlaybackPreferenceButton(track: track, direction: .decrease, circularBackground: false)
+                .frame(width: 42, height: 42)
 
             Button("プレイリストに追加", systemImage: "text.badge.plus", action: onAddToPlaylist)
             Button("曲情報", systemImage: "ellipsis", action: onShowInformation)
@@ -289,10 +263,17 @@ private struct HighlightTrackPage: View {
 
     private var playbackButtons: some View {
         HStack(spacing: 8) {
-            Button("フルで再生", systemImage: "music.note", action: onFullPlayback)
-                .buttonStyle(HighlightCapsuleButtonStyle())
+            Button("フルで再生", systemImage: "play.rectangle.fill", action: onFullPlayback)
+                .labelStyle(.iconOnly)
+                .buttonStyle(HighlightCircleButtonStyle())
+                .accessibilityLabel("曲の最初からフルで再生")
+                .accessibilityHint("ハイライトを終了し、通常の再生画面を開きます")
 
             Spacer()
+
+            Button("シャッフルし直す", systemImage: "shuffle", action: onReshuffle)
+                .labelStyle(.iconOnly)
+                .buttonStyle(HighlightCircleButtonStyle())
 
             Button("再生キュー", systemImage: "list.bullet", action: onShowQueue)
                 .labelStyle(.iconOnly)
@@ -301,7 +282,7 @@ private struct HighlightTrackPage: View {
 
             Button(action: onShowEqualizer) {
                 Image(systemName: "slider.vertical.3")
-                    .foregroundStyle(settingsStore.equalizer.isEnabled ? Color.cyan : Color.white)
+                    .foregroundStyle(settingsStore.equalizer.isEnabled ? ThemePalette.resolve(theme).accent : Color.secondary)
             }
                 .buttonStyle(HighlightCircleButtonStyle())
                 .accessibilityLabel("イコライザ設定を表示")
@@ -327,7 +308,7 @@ private struct HighlightTrackPage: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.24))
-                Capsule().fill(.white).frame(width: proxy.size.width * progress)
+                Capsule().fill(ThemePalette.resolve(theme).accent).frame(width: proxy.size.width * progress)
             }
         }
         .frame(height: 4)
@@ -350,7 +331,7 @@ private struct HighlightTrackPage: View {
     }
 
     private func artworkSize(in size: CGSize) -> CGFloat {
-        min(max(size.width - 44, 180), size.height * 0.46, 440)
+        min(max(size.width - 40, 180), size.height * 0.54, 440)
     }
 }
 
@@ -497,7 +478,6 @@ private struct HighlightCircleButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .frame(width: 42, height: 42)
-            .background(.ultraThinMaterial, in: Circle())
             .opacity(configuration.isPressed ? 0.65 : 1)
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
     }
@@ -513,7 +493,6 @@ private struct HighlightCapsuleButtonStyle: ButtonStyle {
             .frame(height: 42)
             .background(prominent ? Color.white : Color.clear)
             .foregroundStyle(prominent ? Color.black : Color.white)
-            .background(.ultraThinMaterial, in: Capsule())
             .clipShape(Capsule())
             .opacity(configuration.isPressed ? 0.7 : 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)

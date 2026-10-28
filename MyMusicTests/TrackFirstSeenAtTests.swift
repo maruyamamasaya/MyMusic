@@ -3,6 +3,110 @@ import XCTest
 @testable import MyMusic
 
 final class TrackFirstSeenAtTests: XCTestCase {
+    func testQuickScanBackfillsOnlyMissingMP3YearAndPreservesTrack() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.mp3")
+        try Data("fixture".utf8).write(to: file)
+        let values = try file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let previous = Track(id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.mp3", fileSize: Int64(values.fileSize!),
+            modificationDate: values.contentModificationDate, firstSeenAt: .distantPast,
+            artworkIdentifier: "keep", metadataRevision: MetadataService.currentMetadataRevision)
+        let metadata = YearOnlyMetadataStub()
+        let service = MusicLibraryService(fileImportService: FirstSeenFileImportStub(files: [file]),
+            metadataService: metadata, identityService: FirstSeenIdentityStub())
+        let first = try await service.loadLibraryReport(from: directory, previousTracks: [previous], depth: .quick)
+        var expected = previous
+        expected.year = 2001
+        expected.mp3YearRevision = 1
+        XCTAssertEqual(first.library.tracks, [expected])
+        _ = try await service.loadLibraryReport(from: directory, previousTracks: first.library.tracks, depth: .quick)
+        var valid = previous
+        valid.year = 1990
+        let retained = try await service.loadLibraryReport(from: directory, previousTracks: [valid], depth: .quick)
+        XCTAssertEqual(retained.library.tracks, [valid])
+        let count = await metadata.calls
+        XCTAssertEqual(count, 1)
+    }
+
+    func testQuickScanRemembersAbsentYearAndRetriesReadFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.mp3")
+        try Data("fixture".utf8).write(to: file)
+        let values = try file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let previous = Track(id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.mp3", fileSize: Int64(values.fileSize!),
+            modificationDate: values.contentModificationDate, metadataRevision: MetadataService.currentMetadataRevision)
+        for fails in [false, true] {
+            let metadata = YearOnlyMetadataStub(year: nil, fails: fails)
+            let service = MusicLibraryService(fileImportService: FirstSeenFileImportStub(files: [file]),
+                metadataService: metadata, identityService: FirstSeenIdentityStub())
+            let first = try await service.loadLibraryReport(from: directory, previousTracks: [previous], depth: .quick)
+            XCTAssertNil(first.library.tracks.first?.year)
+            XCTAssertEqual(first.library.tracks.first?.mp3YearRevision, fails ? nil : 1)
+            _ = try await service.loadLibraryReport(from: directory, previousTracks: first.library.tracks, depth: .quick)
+            let calls = await metadata.calls
+            XCTAssertEqual(calls, fails ? 2 : 1)
+            if fails { XCTAssertEqual(first.library.tracks, [previous]) }
+        }
+    }
+
+    func testQuickScanBackfillsOnlyMissingM4AYearAndPreservesTrack() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.m4a")
+        try Data("fixture".utf8).write(to: file)
+        let values = try file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let previous = Track(id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.m4a", fileSize: Int64(values.fileSize!),
+            modificationDate: values.contentModificationDate, firstSeenAt: .distantPast,
+            artworkIdentifier: "keep", metadataRevision: MetadataService.currentMetadataRevision)
+        let metadata = YearOnlyMetadataStub()
+        let service = MusicLibraryService(fileImportService: FirstSeenFileImportStub(files: [file]),
+            metadataService: metadata, identityService: FirstSeenIdentityStub())
+        let first = try await service.loadLibraryReport(from: directory, previousTracks: [previous], depth: .quick)
+        var expected = previous
+        expected.year = 2001
+        expected.m4aYearRevision = 1
+        XCTAssertEqual(first.library.tracks, [expected])
+        _ = try await service.loadLibraryReport(from: directory, previousTracks: first.library.tracks, depth: .quick)
+        var valid = previous
+        valid.year = 1990
+        let retained = try await service.loadLibraryReport(from: directory, previousTracks: [valid], depth: .quick)
+        XCTAssertEqual(retained.library.tracks, [valid])
+        let count = await metadata.calls
+        XCTAssertEqual(count, 1)
+    }
+
+    func testM4AQuickScanRemembersAbsentYearAndRetriesReadFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "song.m4a")
+        try Data("fixture".utf8).write(to: file)
+        let values = try file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let previous = Track(id: UUID(), title: "Cached", artistName: "Artist", duration: 180,
+            fileURL: file, relativePath: "song.m4a", fileSize: Int64(values.fileSize!),
+            modificationDate: values.contentModificationDate, metadataRevision: MetadataService.currentMetadataRevision)
+        for fails in [false, true] {
+            let metadata = YearOnlyMetadataStub(year: nil, fails: fails)
+            let service = MusicLibraryService(fileImportService: FirstSeenFileImportStub(files: [file]),
+                metadataService: metadata, identityService: FirstSeenIdentityStub())
+            let first = try await service.loadLibraryReport(from: directory, previousTracks: [previous], depth: .quick)
+            XCTAssertNil(first.library.tracks.first?.year)
+            XCTAssertEqual(first.library.tracks.first?.m4aYearRevision, fails ? nil : 1)
+            _ = try await service.loadLibraryReport(from: directory, previousTracks: first.library.tracks, depth: .quick)
+            let calls = await metadata.calls
+            XCTAssertEqual(calls, fails ? 2 : 1)
+            if fails { XCTAssertEqual(first.library.tracks, [previous]) }
+        }
+    }
+
     @MainActor
     func testRecentlyAddedExcludesUnknownFutureWorkAndVeryShortTracks() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -516,4 +620,23 @@ private actor FirstSeenIdentityStub: TrackIdentityServicing {
     func registerExistingTracks(_ tracks: [Track], in folderURL: URL) async {}
     func fingerprints(for trackIDs: [Track.ID]) async -> [Track.ID: String] { [:] }
     func buildFingerprint(for track: Track, in folderURL: URL, allowDownloading: Bool) async -> TrackFingerprintBuildResult { .unavailable }
+}
+
+private actor YearOnlyMetadataStub: MetadataServicing {
+    var calls = 0
+    let year: Int?
+    let fails: Bool
+    init(year: Int? = 2001, fails: Bool = false) { self.year = year; self.fails = fails }
+    func m4aYear(for fileURL: URL) async throws -> Int? {
+        try await mp3Year(for: fileURL)
+    }
+    func mp3Year(for fileURL: URL) async throws -> Int? {
+        calls += 1
+        if fails { throw CocoaError(.fileReadUnknown) }
+        return year
+    }
+    func metadata(for fileURL: URL, relativeTo libraryFolder: URL, discoveredAt: Date) async throws -> Track {
+        XCTFail("Year repair must not reload full metadata")
+        throw CocoaError(.fileReadUnknown)
+    }
 }

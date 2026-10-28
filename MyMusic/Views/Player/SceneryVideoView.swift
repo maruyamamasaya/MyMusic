@@ -25,7 +25,7 @@ struct SceneryVideoView: View {
                     if store.isLoading {
                         ProgressView("動画を準備中…")
                     } else {
-                        Image(systemName: "tram.fill").font(.largeTitle)
+                        SceneryModeIcon(size: 48)
                         Text("車窓モード").font(.title2)
                         Text(store.errorMessage ?? "設定 → 車窓モードで動画を登録してください。")
                             .multilineTextAlignment(.center)

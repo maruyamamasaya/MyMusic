@@ -32,7 +32,9 @@ struct NowPlayingView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("車窓モード", systemImage: "tram.fill") { showsSceneryVideo = true }
+                    Button { showsSceneryVideo = true } label: { SceneryModeIcon() }
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("車窓モード")
                 }
                 if showsVisualWorld {
                     ToolbarItem(placement: .topBarLeading) {
@@ -103,49 +105,50 @@ struct NowPlayingView: View {
                 min(availableWidth, 360)
             }
 
-            trackInformation
+            VStack(spacing: 18) {
+                trackInformation
 
-            if let track = playerStore.currentTrack {
-                HStack(spacing: 18) {
-                    PlaybackPreferenceButton(track: track, direction: .decrease)
-                    PlaybackPreferenceButton(track: track, direction: .increase)
-                    BoredomButton(track: track)
-                    Button {
-                        isAddToPlaylistPresented = true
-                    } label: {
-                        Image(systemName: "text.badge.plus")
-                            .font(.title3)
-                            .frame(width: 42, height: 36)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("プレイリストに追加")
-                    Button {
-                        isQueuePresented = true
-                    } label: {
-                        Image(systemName: "list.bullet")
-                            .font(.title3)
-                            .frame(width: 42, height: 36)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("再生キューを表示")
+                if let track = playerStore.currentTrack {
+                    HStack(spacing: 18) {
+                        PlaybackPreferenceButton(track: track, direction: .decrease)
+                        PlaybackPreferenceButton(track: track, direction: .increase)
+                        BoredomButton(track: track)
+                        Button {
+                            isAddToPlaylistPresented = true
+                        } label: {
+                            Image(systemName: "text.badge.plus")
+                                .font(.title3)
+                                .frame(width: 42, height: 36)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("プレイリストに追加")
+                        Button {
+                            isQueuePresented = true
+                        } label: {
+                            Image(systemName: "list.bullet")
+                                .font(.title3)
+                                .frame(width: 42, height: 36)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("再生キューを表示")
 
-                    Button {
-                        isEqualizerPresented = true
-                    } label: {
-                        Image(systemName: "slider.vertical.3")
-                            .font(.title3)
-                            .frame(width: 42, height: 36)
-                            .foregroundStyle(settingsStore.equalizer.isEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
+                        Button {
+                            isEqualizerPresented = true
+                        } label: {
+                            Image(systemName: "slider.vertical.3")
+                                .font(.title3)
+                                .frame(width: 42, height: 36)
+                                .foregroundStyle(settingsStore.equalizer.isEnabled ? ThemePalette.resolve(appTheme).accent : Color.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("イコライザ設定を表示")
+                        .accessibilityValue(settingsStore.equalizer.isEnabled ? "オン" : "オフ")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("イコライザ設定を表示")
-                    .accessibilityValue(settingsStore.equalizer.isEnabled ? "オン" : "オフ")
                 }
             }
-
-            Spacer(minLength: 8)
+            .playbackMetadataBackdrop()
 
             ProgressBarView(
                 currentTime: playerStore.currentTime,
@@ -168,6 +171,8 @@ struct NowPlayingView: View {
             )
             .padding(.top, -15)
 
+            Spacer(minLength: 8)
+
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
@@ -180,7 +185,7 @@ struct NowPlayingView: View {
             VStack(alignment: .leading, spacing: 3) {
                 MarqueeText(
                     text: playerStore.currentTrack?.title ?? "未再生",
-                    font: .title2.bold(),
+                    font: ThemeTypography.trackTitle(for: appTheme),
                     lineHeight: 30
                 )
                 if let artist = currentArtist {

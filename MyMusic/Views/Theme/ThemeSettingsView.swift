@@ -47,7 +47,7 @@ struct ThemeCatalogView: View {
                         .font(.title2).foregroundStyle(selected ? palette.accent : .secondary)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(palette.title).font(.title2.weight(.semibold))
+                    Text(palette.title).font(ThemeTypography.themeTitle(for: theme))
                     Text(palette.subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 12) {

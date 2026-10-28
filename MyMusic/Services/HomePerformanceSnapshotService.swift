@@ -63,6 +63,8 @@ actor HomePerformanceSnapshotWorker {
             tracksByID: tracksByID
         )
         let sourceTracks: [HomeDestination: [Track]] = [
+            .ambientPlay: AmbientSelectionPolicy.candidates(from: eligibleTracks, features: request.features),
+            .pianoPlay: PianoSelectionPolicy.candidates(from: eligibleTracks, features: request.features),
             .quickPlay: eligibleTracks,
             .rediscoverPlay: eligibleTracks.filter {
                 PlaybackHistoryStore.isEligibleForRediscovery(
@@ -70,6 +72,12 @@ actor HomePerformanceSnapshotWorker {
                 )
             },
             .selectiveRandomPlay: eligibleTracks.filter { !$0.normalizedGenreNames.isEmpty },
+            .rediscoverWeekPlay: eligibleTracks.filter {
+                PlaybackHistoryStore.isEligibleForRediscovery(
+                    lastPlayedAt: request.histories[$0.id]?.lastPlayedAt, now: request.now,
+                    exclusionInterval: 7 * 24 * 60 * 60
+                )
+            },
             .discoveryPlay: eligibleTracks.filter { (request.histories[$0.id]?.playCount ?? 0) == 0 },
             .listenLater: request.listenLaterEntries.compactMap { tracksByID[$0.trackID] },
             .recentlyAddedPlay: eligibleTracks.filter {
