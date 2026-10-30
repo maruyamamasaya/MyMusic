@@ -77,6 +77,7 @@ struct HomeCategory: Identifiable, Hashable {
             description: "再生履歴・再生回数・よく聴く音楽を確認します",
             systemImage: "chart.bar.xaxis",
             items: [
+                HomeCategoryItem(title: "Weekly", description: "今週・先週・先々週のアーティスト上位100組（Beta）", systemImage: "calendar", destination: .weeklyRanking),
                 HomeCategoryItem(title: "ランキング", description: "インスト・ボーカルのアーティスト上位100組", systemImage: "trophy.fill", destination: .artistRanking),
                 HomeCategoryItem(title: "再生分析", description: "履歴、再生回数、よく聴く曲をまとめて表示", systemImage: "chart.xyaxis.line", destination: .analytics),
                 HomeCategoryItem(title: "音楽史", description: "年・月・日の記録から聴いてきた音楽を振り返る", systemImage: "calendar.badge.clock", destination: .musicHistory),
@@ -138,6 +139,7 @@ nonisolated enum HomeDestination: Hashable, Sendable {
     case composers
     case years
     case analytics
+    case weeklyRanking
     case artistRanking
     case musicHistory
     case recentMusicTrends
@@ -155,6 +157,7 @@ nonisolated enum HomeDestination: Hashable, Sendable {
         case .years: "library-years"
         case .hiResLibrary: "library-hires-v1"
         case .artistRanking: "activity-ranking"
+        case .weeklyRanking: "activity-weekly-ranking-v1"
         case .analytics: "activity-analytics-v2"
         case .musicHistory: "activity-music-history-v2"
         case .recentMusicTrends: "activity-music-trends"

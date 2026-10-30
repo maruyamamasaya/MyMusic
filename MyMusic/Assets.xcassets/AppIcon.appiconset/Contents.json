@@ -1,7 +1,7 @@
 {
   "images": [
     {
-      "filename": "glass-records-v1.jpeg",
+      "filename": "glass-records-centered.jpeg",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"
@@ -13,7 +13,7 @@
           "value": "dark"
         }
       ],
-      "filename": "glass-records-v1.jpeg",
+      "filename": "glass-records-centered.jpeg",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"
@@ -25,7 +25,7 @@
           "value": "tinted"
         }
       ],
-      "filename": "glass-records-v1.jpeg",
+      "filename": "glass-records-centered.jpeg",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"

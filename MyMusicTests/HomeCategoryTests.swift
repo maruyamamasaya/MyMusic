@@ -5,8 +5,8 @@ final class HomeCategoryTests: XCTestCase {
     func testActivityContainsAnalyticsMusicHistoryAndTrendsTiles() throws {
         let activity = try XCTUnwrap(HomeCategory.all.first { $0.id == .activity })
 
-        XCTAssertEqual(activity.items.map(\.destination), [.artistRanking, .analytics, .musicHistory, .recentMusicTrends])
-        XCTAssertEqual(activity.items.map(\.title), ["ランキング", "再生分析", "音楽史", "最近の音楽傾向"])
+        XCTAssertEqual(activity.items.map(\.destination), [.weeklyRanking, .artistRanking, .analytics, .musicHistory, .recentMusicTrends])
+        XCTAssertEqual(activity.items.map(\.title), ["Weekly", "ランキング", "再生分析", "音楽史", "最近の音楽傾向"])
     }
 
     func testExploreOwnsDiscoveryAndMyMusicStartsWithManualQueue() throws {
@@ -35,7 +35,7 @@ final class HomeCategoryTests: XCTestCase {
         )
         XCTAssertEqual(
             activity.items.map(\.localBackgroundImageName),
-            ["activity-ranking", "activity-analytics-v2", "activity-music-history-v2", "activity-music-trends"]
+            ["activity-weekly-ranking-v1", "activity-ranking", "activity-analytics-v2", "activity-music-history-v2", "activity-music-trends"]
         )
     }
 

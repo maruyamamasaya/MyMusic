@@ -530,3 +530,29 @@ HomeDestination.ambientPlayを発掘する音楽の末尾へ追加。AmbientSele
 ピアノtileの表示背景はユーザー指定のHomeTileImages/piano-crystal-v1.jpgをHomeDestination画像mappingから既存loaderで読む。候補曲Artworkは画像未配置時のfallbackとし、選曲・代表曲の条件は維持する。
 
 アンビエントtileもHomeDestinationの画像mappingからambient-crystal-lake-v1.jpgを既存loaderで読む。曲Artworkは未配置時のfallback。選曲条件は維持。
+
+2026-10-28: 手動キュー候補行の末尾追加buttonを撤去。曲名タップを末尾追加、右のtitle2 semibold iconを次再生として表示。44pt操作領域を維持し、Storeと再生APIは変更しない。
+
+HomePlaylistEmptyTileはoptional backgroundImageNameを受け取り、作業用リスト作成だけwork-playlist-create-v1を既存loaderで表示。画像名をtask IDとして読み込み、未指定／失敗は従来gradient。表示のみでplaylist操作・保存は変更しない。
+
+
+## Weeklyランキング（2026-10-29 Beta）
+
+HomeDestination.weeklyRanking → ArtistRankingView(weekly: true)から既存Store／Serviceへoptional DateIntervalを渡す。端末Calendar・timezoneの月曜0時から翌月曜0時未満を今週／先週として生成。全ジャンルの通常再生対象を一群として既存の正規化・配点・top100を共用する。開始日が期間内の詳細eventを集計し、回数はlistenedSecondsがmin(30秒, duration×0.5)以上の件数、時間は同eventの有限な実聴秒数。累計回数や日別開始回数を週の完了閾値回数へ代用しない。WeeklyのGood／favoriteは集計対象外（2026-10-29の配点改訂）。画面表示／週切替／pull-to-refresh時に集計、結果と期間を同時公開する。詳細は部門optionalで合算表示と既存queue再生を共用。保存形式・HomeStereo契約の変更なし。
+
+
+## 再生中の接続方式表示（2026-10-29）
+
+AudioPlayerServiceのoutputChangedとAudioInformationServiceの出力通知・初期情報に、AVAudioSession.currentRoute.outputs先頭のportType.rawValueを追加。PlayerStoreがAudioInformation.outputPortTypeへ保持し、非同期metadata取得後も最新routeを維持する。HiResは既存snapshot.outputPortTypeを使用。PlaybackOutputLabelは接続方式と機器名を常時表示する。通常／作業用／HiResのtoolbar principal（従来の再生中title）へ配置。safeAreaInsetは使わずArtwork位置を維持。200pt幅に接続方式9pt＋機器名10pt・最大2行・最小70%縮小で表示し、操作とpopoverを持たない。出力情報が未取得なら従来titleを表示。Viewでsession操作は行わず、出力先変更・永続化・JSON契約は追加しない。BluetoothではOSのport種別からspeaker／headphonesの機器形状まで断定しない。
+
+
+Weeklyの前週比はArtistRankingStoreのbackground処理で、表示対象週とその直前週を同じlibrary／history／preference snapshotから集計する。ArtistRankingService.movementsが方式別top100内のartist ID順位を比較し、差分（前週順位−対象週順位）またはnewEntryを返す。Storeはページ／期間／方式別差分を同時公開し、既存のcancel／世代検証を共用する。今週／先週／先々週の3週を閲覧し、各表示週の直前週と比較する。metric切替時に再集計せず、全期間への更新で差分を消去。Viewはカードに記号と色、VoiceOverに変動の説明を表示。履歴snapshot保存やJSON変更なし。
+
+
+Weeklyの最新配点はcountPoints×0.5＋timePoints×0.3＋dayPoints×0.2。ArtistRankingRow.isWeeklyをServiceで設定し、評価とfavoriteはWeeklyで加算しない。全期間の既存4項目配点・全登録曲数分母・正規化は維持。対象週／前週とも同じ新配点で順位比較する。詳細Viewはrow.isWeeklyから3項目の内訳を描画。WeeklyArtistRankingRowViewが全順位共通の横長2行カードを担当し、ArtistRankingViewはWeeklyのみLazyVStackへ切替。文字はDynamic Typeに追従し、曲名は1行省略、VoiceOverに全文と前週比を提供。保存形式変更なし。
+
+WeeklyのlisteningDaysは、同artistの全対象曲に跨る週内eventのうち通常の再生計上閾値を満たした開始日をCalendar.currentのstartOfDayでSet化して数える。dayPointsは日数÷7×100（0〜7に制限）で相対正規化しない。毎日聴けば20点、今週も7日固定分母。表示は最初20組、追加buttonで20組ずつ最大100組、LazyVStackで遅延描画する。週／方式切替・更新時に20組へ戻す。集計top100と前週比較は維持し、方式切替／追加表示では再集計しない。
+
+Weekly期間はArtistRankingFormattingの共用DateFormatter（ja_JP／Gregorian、yyyy年M月d日（E））で日本語固定表示する。時間帯は端末現地時刻。
+
+Weeklyの説明は既存DisclosureGroup（初期閉）へ対象・前週比・計算方法を集約する。WeeklyArtistRankingRowViewはrank別に装飾色・gradient濃度・順位icon・Artwork倍率・縦paddingを決定。1〜3位は段階的、4〜10位は共通の軽い強調、11位以降は既存値。ArtistRankingViewがLazyVStackのカード下余白を順位に応じて16／14／12／10ptで設定する。集計・保存・20組追加表示は変更なし。

@@ -61,3 +61,7 @@ Rediscovery Mixは現在`mix-rediscovery-v3.png`を使用。青緑と金の金�
 2026-10-28: 「アンビエントを聴く」は生成した湖・ガラスの波・オーロラのambient-crystal-lake-v1.jpg（768px JPEG）を使用。原本とプロンプトはsessions/2026-10-28-piano-crystal-ambient-art.mdを参照。未配置時は曲Artworkへfallback。
 
 2026-10-28: ステーションは既存station-background.jpgとStationImages内のstation-golden-island.jpg／station-golden-spiral.jpgから初回抽選。ホーム更新で直前以外へ切替。生成画像は元画像の濃紺・金色の波・モザイク都市を参照。
+
+2026-10-28: 「作業用リストを作成」はwork-playlist-create-v1.jpg（ユーザー指定画像、768px JPEG）を使用。画像がない場合は従来gradient。通常のプレイリスト作成tileには適用しない。
+
+2026-10-29: Weekly専用背景は`activity-weekly-ranking-v1.png`。7日間のガラスのカレンダー・レコードの表彰台・王冠を青紫と金で生成。通常ランキングの画像は維持。

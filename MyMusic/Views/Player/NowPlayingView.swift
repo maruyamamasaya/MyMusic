@@ -28,9 +28,18 @@ struct NowPlayingView: View {
                     .themeScreen()
                 }
             }
-            .navigationTitle(showsVisualWorld ? "" : "再生中")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if !showsVisualWorld {
+                    ToolbarItem(placement: .principal) {
+                        PlaybackOutputLabel(
+                            outputName: playerStore.audioInformation.outputName,
+                            portType: playerStore.audioInformation.outputPortType,
+                            fallbackTitle: "再生中"
+                        )
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showsSceneryVideo = true } label: { SceneryModeIcon() }
                         .frame(width: 44, height: 44)

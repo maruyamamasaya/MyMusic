@@ -864,6 +864,7 @@ private struct HomeWorkSection: View {
                                 HomePlaylistEmptyTile(
                                     width: width,
                                     title: "作業用リストを作成",
+                                    backgroundImageName: "work-playlist-create-v1",
                                     subtitle: "作業用の曲をまとめる",
                                     systemImage: "timer"
                                 )
@@ -1270,6 +1271,8 @@ private struct HomePlaylistMoreTile: View {
 private struct HomePlaylistEmptyTile: View {
     let width: CGFloat
     var title = "プレイリストを作成"
+    var backgroundImageName: String? = nil
+    @State private var backgroundImage: UIImage?
     var subtitle = "曲をまとめて楽しむ"
     var systemImage = "plus.circle.fill"
 
@@ -1283,9 +1286,24 @@ private struct HomePlaylistEmptyTile: View {
         .foregroundStyle(.white)
         .padding(14)
         .frame(width: width, height: 168, alignment: .leading)
-        .background(LinearGradient(colors: [Color.indigo, Color.black.opacity(0.84)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .background {
+            if let backgroundImage {
+                GeometryReader { proxy in
+                    Image(uiImage: backgroundImage).resizable().scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                }
+                .overlay(LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.7)],
+                                        startPoint: .top, endPoint: .bottom))
+            } else {
+                LinearGradient(colors: [Color.indigo, Color.black.opacity(0.84)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .contentShape(RoundedRectangle(cornerRadius: 18))
+        .task(id: backgroundImageName) {
+            backgroundImage = backgroundImageName.flatMap { HomeTileBackgroundImage.load(named: $0) }
+        }
     }
 }
 

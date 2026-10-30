@@ -13,6 +13,7 @@ struct AudioInformation: Equatable, Sendable {
     var bitRate: Int?
     var channels: Int?
     var outputName = "Unknown"
+    var outputPortType: String?
     var outputSampleRate: Double?
 
     static let unknown = AudioInformation()

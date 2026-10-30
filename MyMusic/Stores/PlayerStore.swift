@@ -163,9 +163,10 @@ final class PlayerStore {
         (resolvedPlayer as? VisualWorldAudioControlling)?.visualAudioHandler = { [weak self] frame in
             self?.visualAudioFrame = frame
         }
-        self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate in
+        self.audioInformationService?.outputChangeHandler = { [weak self] name, sampleRate, portType in
             self?.audioInformation.outputName = name
             self?.audioInformation.outputSampleRate = sampleRate
+            self?.audioInformation.outputPortType = portType
         }
         self.remoteCommandService.configure(actions: RemoteCommandActions(
             play: { [weak self] in self?.resume() },
@@ -726,6 +727,7 @@ final class PlayerStore {
             var information = await audioInformationService.information(for: track)
             guard !Task.isCancelled, self?.currentTrack?.id == track.id else { return }
             if let current = self?.audioInformation, current.outputName != "Unknown" {
+                information.outputPortType = current.outputPortType
                 information.outputName = current.outputName
                 information.outputSampleRate = current.outputSampleRate
             }
@@ -838,7 +840,8 @@ final class PlayerStore {
             wasPlayingBeforeInterruption = false
         case .oldAudioDeviceUnavailable:
             if isPlaying { pause() }
-        case let .outputChanged(name, sampleRate):
+        case let .outputChanged(name, sampleRate, portType):
+            audioInformation.outputPortType = portType
             audioInformation.outputName = name
             audioInformation.outputSampleRate = sampleRate
         }

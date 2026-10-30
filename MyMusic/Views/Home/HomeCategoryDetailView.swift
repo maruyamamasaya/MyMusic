@@ -181,6 +181,8 @@ struct HomeDestinationView: View {
             ComposersView(composers: libraryStore.composers)
         case .years:
             YearsView()
+        case .weeklyRanking:
+            ArtistRankingView(weekly: true)
         case .artistRanking:
             ArtistRankingView()
         case .analytics:

@@ -6,6 +6,7 @@ nonisolated struct ArtistRankingInput: Equatable, Sendable {
     let histories: [Track.ID: PlaybackHistory]
     let preferences: [Track.ID: TrackPreference]
     let settings: ArtistRankingSettings
+    var week: DateInterval? = nil
 }
 
 @MainActor
@@ -13,6 +14,8 @@ nonisolated struct ArtistRankingInput: Equatable, Sendable {
 final class ArtistRankingStore {
     private(set) var settings = ArtistRankingSettings()
     private(set) var pages: [ArtistRankingDivision: ArtistRankingPage] = [:]
+    private(set) var movements: [ArtistRankingMetric: [String: ArtistRankingMovement]] = [:]
+    private(set) var week: DateInterval?
     private(set) var isComputing = false
     private(set) var errorMessage: String?
     private var generation = 0
@@ -44,8 +47,19 @@ final class ArtistRankingStore {
         let requestedGeneration = generation
         isComputing = true
         let work = Task.detached(priority: .userInitiated) {
-            ArtistRankingService.pages(tracks: input.tracks, histories: input.histories,
-                                       preferences: input.preferences, settings: input.settings)
+            let pages = ArtistRankingService.pages(tracks: input.tracks, histories: input.histories,
+                                       preferences: input.preferences, settings: input.settings, week: input.week)
+            var movements: [ArtistRankingMetric: [String: ArtistRankingMovement]] = [:]
+            if let week = input.week, !Task.isCancelled {
+                let previousWeek = ArtistRankingService.week(containing: week.start.addingTimeInterval(-1))
+                let previous = ArtistRankingService.pages(tracks: input.tracks, histories: input.histories,
+                    preferences: input.preferences, settings: input.settings, week: previousWeek)
+                for metric in ArtistRankingMetric.allCases {
+                    movements[metric] = ArtistRankingService.movements(
+                        current: pages[.instrumental]?[metric] ?? [], previous: previous[.instrumental]?[metric] ?? [])
+                }
+            }
+            return (pages, movements)
         }
         let result = await withTaskCancellationHandler {
             await work.value
@@ -53,7 +67,9 @@ final class ArtistRankingStore {
             work.cancel()
         }
         guard !Task.isCancelled, generation == requestedGeneration else { return }
-        pages = result
+        week = input.week
+        pages = result.0
+        movements = result.1
         isComputing = false
     }
 }

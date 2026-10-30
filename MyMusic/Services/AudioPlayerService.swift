@@ -11,7 +11,7 @@ enum AudioPlaybackEvent {
     case interruptionBegan
     case interruptionEnded(shouldResume: Bool)
     case oldAudioDeviceUnavailable
-    case outputChanged(name: String, sampleRate: Double?)
+    case outputChanged(name: String, sampleRate: Double?, portType: String? = nil)
 }
 
 enum AudioPlayerServiceError: LocalizedError {
@@ -616,7 +616,8 @@ final class AudioPlayerService: AudioPlayerServicing, PlaybackTransitionAudioCon
         let names = session.currentRoute.outputs.map(\.portName).filter { !$0.isEmpty }
         eventHandler?(.outputChanged(
             name: names.isEmpty ? "Unknown" : names.joined(separator: ", "),
-            sampleRate: session.sampleRate > 0 ? session.sampleRate : nil
+            sampleRate: session.sampleRate > 0 ? session.sampleRate : nil,
+            portType: session.currentRoute.outputs.first?.portType.rawValue
         ))
     }
 

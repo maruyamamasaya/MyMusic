@@ -4,13 +4,13 @@ import Foundation
 
 @MainActor
 protocol AudioInformationServicing: AnyObject {
-    var outputChangeHandler: ((String, Double?) -> Void)? { get set }
+    var outputChangeHandler: ((String, Double?, String?) -> Void)? { get set }
     func information(for track: Track) async -> AudioInformation
 }
 
 @MainActor
 final class AudioInformationService: AudioInformationServicing {
-    var outputChangeHandler: ((String, Double?) -> Void)?
+    var outputChangeHandler: ((String, Double?, String?) -> Void)?
 
     private let fileImportService: FileImportServicing
     private var routeChangeToken: NSObjectProtocol?
@@ -26,7 +26,7 @@ final class AudioInformationService: AudioInformationServicing {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let output = self.currentOutput()
-                self.outputChangeHandler?(output.name, output.sampleRate)
+                self.outputChangeHandler?(output.name, output.sampleRate, output.portType)
             }
         }
     }
@@ -37,7 +37,7 @@ final class AudioInformationService: AudioInformationServicing {
 
     func information(for track: Track) async -> AudioInformation {
         let output = currentOutput()
-        var information = AudioInformation(outputName: output.name, outputSampleRate: output.sampleRate)
+        var information = AudioInformation(outputName: output.name, outputPortType: output.portType, outputSampleRate: output.sampleRate)
         let folders = (try? fileImportService.restoreLibraryFolders()) ?? []
         let scopeURL = folders.first {
             track.fileURL.standardizedFileURL.pathComponents.starts(with: $0.standardizedFileURL.pathComponents)
@@ -68,10 +68,10 @@ final class AudioInformationService: AudioInformationServicing {
         return information
     }
 
-    private func currentOutput() -> (name: String, sampleRate: Double?) {
+    private func currentOutput() -> (name: String, sampleRate: Double?, portType: String?) {
         let session = AVAudioSession.sharedInstance()
         let names = session.currentRoute.outputs.map(\.portName).filter { !$0.isEmpty }
-        return (names.isEmpty ? "Unknown" : names.joined(separator: ", "), session.sampleRate > 0 ? session.sampleRate : nil)
+        return (names.isEmpty ? "Unknown" : names.joined(separator: ", "), session.sampleRate > 0 ? session.sampleRate : nil, session.currentRoute.outputs.first?.portType.rawValue)
     }
 
     private nonisolated static func validBitRate(_ value: Float?) -> Int? {

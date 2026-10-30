@@ -16,9 +16,16 @@ struct HiResNowPlayingView: View {
                 ScrollView { content }
             }
             .themeScreen()
-            .navigationTitle("ハイレゾ再生中")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    PlaybackOutputLabel(
+                        outputName: store.snapshot?.outputName ?? "Unknown",
+                        portType: store.snapshot?.outputPortType,
+                        fallbackTitle: "ハイレゾ再生中"
+                    )
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { dismiss() }
                 }

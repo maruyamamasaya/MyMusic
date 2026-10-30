@@ -11,6 +11,7 @@ struct ManualQueueView: View {
             selection.select(track, player: playerStore, playNext: playNext)
         } label: {
             Image(systemName: symbol)
+                .font(.title2.weight(.semibold))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -72,7 +73,6 @@ struct ManualQueueView: View {
                                 .accessibilityLabel("追加済み")
                         } else if selection.hasStarted {
                             queueButton(track, title: "次に再生", symbol: "text.line.first.and.arrowtriangle.forward", playNext: true)
-                            queueButton(track, title: "最後に追加", symbol: "text.line.last.and.arrowtriangle.forward", playNext: false)
                         }
                     }
                 }
@@ -80,7 +80,7 @@ struct ManualQueueView: View {
                 Text(selection.hasStarted ? "次に聴く曲を選択" : "最初に再生する曲を選択")
             } footer: {
                 Text(selection.hasStarted
-                     ? "右のアイコンで次に再生するか、最後に追加するかを選べます。曲名のタップは最後に追加します。"
+                     ? "右のアイコンで次に再生します。曲名のタップは最後に追加します。"
                      : "最初の1曲を選ぶと、現在のキューをリセットして再生します。")
             }
         }

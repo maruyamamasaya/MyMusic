@@ -27,9 +27,16 @@ struct WorkSizeNowPlayingView: View {
                 }
             }
             .themeScreen()
-            .navigationTitle("作業用再生中")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    PlaybackOutputLabel(
+                        outputName: playerStore.audioInformation.outputName,
+                        portType: playerStore.audioInformation.outputPortType,
+                        fallbackTitle: "作業用再生中"
+                    )
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { dismiss() }
                         .accessibilityLabel("再生画面を閉じる")

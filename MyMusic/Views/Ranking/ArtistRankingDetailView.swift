@@ -5,7 +5,7 @@ struct ArtistRankingDetailView: View {
     @Environment(PlayerStore.self) private var player
     @Environment(LibraryStore.self) private var library
     let row: ArtistRankingRow
-    let division: ArtistRankingDivision
+    let division: ArtistRankingDivision?
     let metric: ArtistRankingMetric
     @ScaledMetric private var minimumTileWidth = 140
 
@@ -23,24 +23,28 @@ struct ArtistRankingDetailView: View {
                         AlbumArtworkView(artworkIdentifier: row.artworkIdentifier).frame(width: 76)
                         VStack(alignment: .leading, spacing: 6) {
                             Text(row.title).font(.title2.bold())
-                            Text(division.title).foregroundStyle(.secondary)
+                            Text((division?.title ?? "Weekly・全部門")).foregroundStyle(.secondary)
                             Text(ArtistRankingFormatting.value(row, metric: metric)).font(.headline)
                         }
                     }
                     Text("総合 \(row.score.formatted(.number.precision(.fractionLength(1)))) / 100点")
                         .font(.title3.bold())
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: minimumTileWidth))], spacing: 12) {
-                        points("再生回数", points: row.countPoints, weight: 0.4, detail: "\(row.playCount)回")
-                        points("実聴時間", points: row.timePoints, weight: 0.1,
+                        points("再生回数", points: row.countPoints, weight: row.isWeekly ? 0.5 : 0.4, detail: "\(row.playCount)回")
+                        points("実聴時間", points: row.timePoints, weight: row.isWeekly ? 0.3 : 0.1,
                                detail: ArtistRankingFormatting.duration(row.seconds))
+                        if row.isWeekly {
+                            points("聴いた日数", points: row.dayPoints, weight: 0.2, detail: "\(row.listeningDays) / 7日")
+                        } else {
                         points("Good", points: row.goodPoints, weight: 0.3, detail: "評価合計 \(row.good)")
                         points("お気に入り", points: row.favoritePoints, weight: 0.2, detail: "\(row.favorites)曲")
+                        }
                     }
-                    Text("全登録\(row.totalTrackCount)曲・部門内\(row.trackIDs.count)曲\n回数・時間の補正分母：\(row.divisor.formatted(.number.precision(.fractionLength(2))))")
+                    Text("全登録\(row.totalTrackCount)曲・対象\(row.trackIDs.count)曲\n回数・時間の補正分母：\(row.divisor.formatted(.number.precision(.fractionLength(2))))")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("\(division.title)の曲").font(.headline)
+                    Text("\((division?.title ?? "Weekly・全部門"))の曲").font(.headline)
                     let members = memberTracks
-                    Button("この部門の曲を再生", systemImage: "play.fill") { play(members, at: 0) }
+                    Button("対象の曲を再生", systemImage: "play.fill") { play(members, at: 0) }
                         .buttonStyle(.borderedProminent).disabled(members.isEmpty)
                     LazyVStack(spacing: 0) {
                         ForEach(Array(members.enumerated()), id: \.element.id) { index, track in

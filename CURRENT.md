@@ -5,6 +5,70 @@ updated: 2026-10-20
 
 # MyMusic の現在状態
 
+2026-10-29: Weeklyの今週／先週／先々週切替を含む現在版をVesperaへDebug Build・Install・Launch成功。実機の表示・操作は確認待ち。[記録](sessions/2026-10-29-weekly-three-weeks-vespera-deploy.md)。
+
+
+2026-10-29: Weeklyの週切替へ「先々週」を追加し、今週／先週／先々週の3週を閲覧可能にした。既存の月曜〜日曜区切り・配点・20組表示を共用、先々週の前週比はその直前週と比較。実機未反映。[記録](sessions/2026-10-29-weekly-two-weeks-ago.md)。
+
+
+2026-10-29: 再生中タイトル領域の接続方式・機器名を左揃えにした現在版をVesperaへDebug Build・Install・Launch成功。Artwork位置維持、実機外観は確認待ち。[記録](sessions/2026-10-29-playback-output-leading.md)。
+
+2026-10-29: 再生中タイトル領域の接続方式・機器名を左揃えへ変更。表示幅・文字サイズ・Artwork位置は維持。実機未反映。[記録](sessions/2026-10-29-playback-output-leading.md)。
+
+2026-10-29: 全期間ランキング説明の折りたたみを含む現在版をVesperaへDebug Build・Install・Launch成功。実機外観は確認待ち。[記録](sessions/2026-10-29-ranking-collapse-vespera-deploy.md)。
+
+
+2026-10-29: アートワーク位置を維持する指定により、出力先のsafeAreaInsetを撤去し元の配置へ復元。「再生中」のタイトル領域に接続方式9pt＋機器名10pt（最大2行・長い名前は縮小）を常時表示。指定Simulatorで標準／accessibility2の長い名前を描画確認、test成功。実機未反映。[記録](sessions/2026-10-29-playback-output-title.md)。
+
+2026-10-29: 全期間ランキングの上部説明も「総合点の計算方法」内へ移動し初期折りたたみ。集計・カード・部門／方式切替は維持。実機未反映。[記録](sessions/2026-10-29-ranking-description-collapse.md)。
+
+
+2026-10-29: 出力先文字がtoolbar内でclipされる問題を指定Simulator上の再生画面描画で再現・修正。通常／作業用／HiResの出力先をnavigation bar直下の全幅safeAreaInsetへ移動し、機器名の行数制限を撤去。長い名前の標準／アクセシビリティサイズ描画テスト成功、画像確認済み。今回の変更は実機未反映。[記録](sessions/2026-10-29-playback-output-clipping.md)。
+
+2026-10-29: Weeklyの説明折りたたみ・1〜10位の段階装飾／高さ／間隔と出力先常時表示を含む現在版をVesperaへDebug Build・Install・Launch成功。実機外観は確認待ち。[記録](sessions/2026-10-29-weekly-decoration-vespera-deploy.md)。
+
+
+2026-10-29: Weekly上部の対象・前週比・計算説明を閉じた「総合点の計算方法」へ集約。1位は王冠・金色系、2位は銀青、3位は銅色、4〜10位は薄い紫の装飾。Artwork・縦余白・カード間隔を1〜3位で段階的に調整、4〜10位は少し広め、11位以降は既存のカード寸法・間隔・外観を維持。指定Simulator build成功、実機未反映。[記録](sessions/2026-10-29-weekly-ranking-decoration.md)。
+
+
+2026-10-29: 再生中の出力先をボタンから常時表示へ変更。popoverとtoolbarのglass背景を撤去し、機器名を最大2行・幅160ptへ拡張。実機未反映。[記録](sessions/2026-10-29-playback-output-static.md)。
+
+2026-10-29: Weeklyの横長1列・20組ずつ表示・前週比・50/30/20配点（日数加点）・日本語期間を含む現在版をVesperaへDebug Build・Install・Launch成功。実機外観・操作は確認待ち。[記録](sessions/2026-10-29-weekly-ranking-rows-vespera-deploy.md)。
+
+
+2026-10-29: Weeklyを全順位共通の横長カード1列へ変更。順位・Artwork・アーティスト名／前週比と、2行目の点数を表示。Weeklyだけ回数50％・実聴時間30％・聴いた日数20％へ変更しGood／お気に入りを除外、詳細内訳と前週比較にも適用。全期間のUI・40/10/30/20配点は維持。Weeklyは最初20組、追加操作で20組ずつ最大100組。期間は日本語の年月日・曜日で表示。実機未反映。[記録](sessions/2026-10-29-weekly-ranking-rows.md)。
+
+
+2026-10-29: Weeklyの各順位カードに前週比（↑上昇／↓下降／→同順位／NEW）を追加。3方式ごとに比較し、先週画面は先々週と比較。今週途中経過と前週全体の比較であること、NEWは前週100位圏外または対象データなしであることを表示。実機未反映。[記録](sessions/2026-10-29-weekly-ranking-movement.md)。
+
+
+2026-10-29: 接続方式＋機器名の2段表示と機器名popoverを含む現在版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の外観・接続別表示は確認待ち。[記録](sessions/2026-10-29-playback-output-kind.md)。
+
+2026-10-29: 再生中の出力表示を接続方式＋機器名の2段へ拡張。Bluetooth／AirPlay／有線ヘッドホン／USB等をOSのportTypeで区別し、タップで機器名全文を確認。切替操作なし。指定Simulator build成功、今回の変更は実機未反映。[記録](sessions/2026-10-29-playback-output-kind.md)。
+
+2026-10-29: Weeklyランキング（今週／先週）と専用背景を含む現在版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機での外観・操作は確認待ち。[記録](sessions/2026-10-29-weekly-ranking-vespera-deploy.md)。
+
+
+2026-10-29: Weeklyタイルへ専用生成背景（7日間のカレンダー・ガラスのレコード表彰台と王冠）を設定。通常ランキング背景・集計は維持。実機未反映。[記録](sessions/2026-10-29-weekly-ranking-art.md)。
+
+
+2026-10-29: アクティビティへWeeklyランキングBetaタイルを追加。今週（途中経過）／先週の月曜〜日曜を切替、インスト／ボーカル合算。既存の3方式・配点・全登録曲数分母・top100・詳細／再生を共用。回数は週内開始の詳細eventが通常の計上閾値に到達した件数、時間は同eventの実聴時間。Good／お気に入りは現在値。詳細履歴なし／未確定再生は含まない。実機未反映。[記録](sessions/2026-10-29-weekly-ranking.md)。
+
+
+2026-10-29: 再生中画面の出力先表示を含む現在版をVespera（iPhone 17e）へDebug Build・Install・Launch成功。実機の表示と出力先切替追従は確認待ち。[記録](sessions/2026-10-29-playback-output-label.md)。
+
+2026-10-29: 通常・作業用・ハイレゾの再生中画面左上に、小さなスピーカーiconと現在の音声出力先名を追加。既存Storeの出力先情報を使用し、長い名前は末尾省略、未取得時は非表示。通常のアート画面は既存palette操作を維持。指定Simulator向けbuild成功、実表示・実機未確認、未デプロイ。[記録](sessions/2026-10-29-playback-output-label.md)。
+
+2026-10-28: 「作業用リストを作成」の指定画像を含む現在版をVesperaへDebug Build・Install・Launch成功。実機外観は確認待ち。[記録](sessions/2026-10-28-work-playlist-create-art.md)。
+
+2026-10-28: 「作業用リストを作成」tileへ指定のデスク・ヘッドホン画像を設定。通常のプレイリスト作成tileは維持。実機未反映。[記録](sessions/2026-10-28-work-playlist-create-art.md)。
+
+2026-10-28: 手動キュー候補行の末尾追加icon撤去・次再生icon拡大を含む現在版をVesperaへDebug Build・Install・Launch成功。実機操作・外観は確認待ち。[記録](sessions/2026-10-28-manual-queue-single-icon.md)。
+
+2026-10-28: 手動キュー候補行の末尾追加iconを撤去し、次再生iconをtitle2 semiboldへ拡大。曲名タップの末尾追加は維持。実機未反映。[記録](sessions/2026-10-28-manual-queue-single-icon.md)。
+
+2026-10-28: AppIconの既存ガラスレコード画像を、右手前のレコードの中心が中央に来る正方形へcrop。元画像保持、実機未反映。[記録](sessions/2026-10-28-centered-record-icon.md)。
+
 2026-10-28: ステーションのBeta表記撤去・背景3枚ランダム表示を含む現在版をVesperaへDebug Build・Install・Launch成功。実機の外観・操作は確認待ち。[記録](sessions/2026-10-28-station-art-rotation.md)。
 
 2026-10-28: ユーザー承認で気分ステーションのBeta表記を撤去。既存画像＋同系統の生成画像2枚をランダム表示し、ホーム更新では直前以外へ切替。選曲仕様は維持。実機未反映。[記録](sessions/2026-10-28-station-art-rotation.md)。
